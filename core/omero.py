@@ -1,51 +1,86 @@
-"""
-Describes interaction with Omero, including the Dataset and Database.
-"""
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+#
+# Copyright (C) 2014 University of Dundee & Open Microscopy Environment.
+#                    All Rights Reserved.
+# Use is subject to license terms supplied in LICENSE.txt
 
 
-# TODO Fake Database interface based on filesystem organisation and local
-#  configuration files
+USERNAME = 'upload'
+PASSWORD = '***REMOVED***'
+HOST = 'sce-bio-c04287.bio.ed.ac.uk'
+PORT = 4064
+from omero.gateway import BlitzGateway
 
-# TODO ImageCache as a transparent object? Dataset + Timelapse + Results can
-#  be linked to local file structure instead of OmeroDatabase.
-
+from utils import repr_obj
 
 class Database:
-    """
-    Interface to the Omero Database.
-    """
+    def __init__(self):
+        self.conn = BlitzGateway(USERNAME, PASSWORD, host=HOST, port=PORT)
 
-    def __init__(self, server):
-        self.server = server
-        self._init_connection()
+    def __repr__(self):
+        return repr_obj(self.conn)
+        _
+    def connect(self):
+        connected = self.conn.connect()
 
-    def _init_connection(self):
-        pass
+        # Check if you are connected
+        # ==========================
+        if not connected:
+            import sys
+            sys.stderr.write(
+                "Error: Connection not available, please check your user name and"
+                " password.\n")
+            sys.exit(1)
+
+        # Using secure connection
+        # =======================
+        # By default, once we have logged in, data transfer is not encrypted
+        # (faster)
+        # To use a secure connection, call setSecure(True):
+
+        #self.conn.setSecure(True)         # <--------- Uncomment this
+    
+    def disconnect(self):
+        self.conn.seppuku()
+
+    @property
+    def user(self):
+        user = self.conn.getUser()
+        return dict(ID=user.getId(), Username=user.getName())
+
+    @property
+    def groups(self):
+        return [dict(ID=g.getId(), Name=g.getName()) for g in
+                self.conn.getGroupsMemberOf()]
+
+    @property
+    def current_group(self):
+        g = self.conn.getGroupFromContext()
+        return dict(ID=g.getId(), Name=g.getName())
+
+    def isAdmin(self):
+        return self.conn.isAdmin()
+
+    def getDataset(self, dataset_id):
+        ds = self.conn.getObject("Dataset", dataset_id)
+        return Dataset(ds)
 
 
 class Dataset:
-    """
-    A single Dataset, obtained from Omero.
+    def __init__(self, dataset_wrapper):
+        self.dataset = dataset_wrapper
 
-    Contains attributes and properties:
-    * A Unique ID
-    * Dataset metadata
-    * A list of position names
-    * A list of channels
-    * Image size
-    """
+    def __repr__(self):
+        return repr_obj(self.dataset)
 
-    def __init__(self, id):
-        self.id = id
+class Image:
+    def __init__(self, image_wrapper):
+        self.image = image_wrapper
 
-    def getHyperCube(self, x=None, y=None, z=None, c=None, t=None):
-        """
-        Get a set of images from the database.
-        :param x: Range of pixels in the x direction
-        :param y: Range of pixels in the y direction
-        :param z: Range of stacks in the z direction
-        :param c: List channel positions
-        :param t: List of time points
-        :return: A 5 dimensional nd.array ordered (x,y,z,c,t)
-        """
+    def __repr__(self):
+        return repr_obj(self.image)
+
+    def getHypercube(self, x, y, z, c, t):
         pass
