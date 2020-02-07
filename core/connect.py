@@ -5,68 +5,56 @@
 # Copyright (C) 2014 University of Dundee & Open Microscopy Environment.
 #                    All Rights Reserved.
 # Use is subject to license terms supplied in LICENSE.txt
+import itertools
 
-
-USERNAME = 'upload'
-PASSWORD = '***REMOVED***'
-HOST = 'sce-bio-c04287.bio.ed.ac.uk'
-PORT = 4064
 from omero.gateway import BlitzGateway
 
 from utils import repr_obj
 
 class Database:
-    def __init__(self):
-        self.conn = BlitzGateway(USERNAME, PASSWORD, host=HOST, port=PORT)
+    def __init__(self, username, password, host, port):
+        self.conn = BlitzGateway(username, password, host=host, port=port)
 
     def __repr__(self):
         return repr_obj(self.conn)
         _
-    def connect(self):
+    def connect(self, secure=False):
         connected = self.conn.connect()
-
-        # Check if you are connected
-        # ==========================
-        if not connected:
-            import sys
-            sys.stderr.write(
-                "Error: Connection not available, please check your user name and"
-                " password.\n")
-            sys.exit(1)
-
-        # Using secure connection
-        # =======================
-        # By default, once we have logged in, data transfer is not encrypted
-        # (faster)
-        # To use a secure connection, call setSecure(True):
-
-        #self.conn.setSecure(True)         # <--------- Uncomment this
+        self.conn.setSecure(secure)
+        return connected
     
     def disconnect(self):
         self.conn.seppuku()
 
     @property
     def user(self):
+        # TODO cache
         user = self.conn.getUser()
         return dict(ID=user.getId(), Username=user.getName())
 
     @property
     def groups(self):
+        # TODO cache
         return [dict(ID=g.getId(), Name=g.getName()) for g in
                 self.conn.getGroupsMemberOf()]
 
     @property
     def current_group(self):
+        # TODO cache
         g = self.conn.getGroupFromContext()
         return dict(ID=g.getId(), Name=g.getName())
 
     def isAdmin(self):
+        # TODO cache
         return self.conn.isAdmin()
 
     def getDataset(self, dataset_id):
         ds = self.conn.getObject("Dataset", dataset_id)
         return Dataset(ds)
 
+    def getDatasets(self, n):
+        top_n = itertools.islice(self.conn.getObjects("Dataset"), n)
+        return [Dataset(ds) for ds in top_n]
 
 class Dataset:
     def __init__(self, dataset_wrapper):
@@ -74,6 +62,10 @@ class Dataset:
 
     def __repr__(self):
         return repr_obj(self.dataset)
+
+    def getImages(self, n):
+        top_n = itertools.islice(self.dataset.listChildren(), n)
+        return [Image(im) for im in top_n]
 
 class Image:
     def __init__(self, image_wrapper):
