@@ -74,5 +74,9 @@ class Image:
     def __repr__(self):
         return repr_obj(self.image)
 
+    def getThumbnail(self):
+        thumb_str = self.image.getThumbnail(z=0, t=0)
+        # FIXME thumbnail returns None, there is an error
+
     def getHypercube(self, x, y, z, c, t):
         pass

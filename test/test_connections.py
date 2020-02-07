@@ -50,10 +50,13 @@ class TestConnections(unittest.TestCase):
         self.assertTrue(image is not None)
         # FIXME cannot do this as it is instanciated anew.
         self._im = image
-
-    def testRenderImage(self):
-        pass
-
+        #FIXME return single dataset
+        # TODO put this in the core module, not in the tests
+        pixels = image[0].image.getPrimaryPixels()
+        array = pixels.getPlane()
+        self.assertTrue(array is not None)
+        print(array.shape)
+        print(array[0:10, 0:10])
 
 if __name__ == "__main__":
     unittest.main()
