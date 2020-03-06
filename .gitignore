@@ -109,3 +109,4 @@ venv.bak/
 .idea/
 omero_py/omeroweb/
 omero_py/pipeline/
+*.ipynb
