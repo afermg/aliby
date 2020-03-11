@@ -4,13 +4,19 @@ import abc
 import re
 import glob
 from pathlib import Path
-
-from omero_metadata_parser.extract_acq_metadata import AcqMetadataParser
+import logging
+import imageio
+from tqdm import tqdm
+import numpy as np
+import json
 
 import omero
 from omero.gateway import BlitzGateway
+from omero_metadata_parser.extract_acq_metadata import AcqMetadataParser
 
 from timelapse import TimelapseOMERO, TimelapseLocal
+
+logger = logging.getLogger(__name__)
 
 
 class Experiment:
@@ -26,7 +32,7 @@ class Experiment:
         self._current_position = None
 
     @staticmethod
-    def from_source(source, **kwargs):
+    def from_source(*args, **kwargs):
         """
         Factory method to construct an instance of an Experiment subclass (
         either ExperimentOMERO or ExperimentLocal).
@@ -37,8 +43,12 @@ class Experiment:
         arguments are required. If the data is stored locally keyword
         arguments are ignored.
         """
-
-        pass
+        if len(args) > 1:
+            logger.debug('ExperimentOMERO: {}'.format(args, kwargs))
+            return ExperimentOMERO(*args, **kwargs)
+        else:
+            logger.debug('ExperimentLocal: {}'.format(args, kwargs))
+            return ExperimentLocal(*args, **kwargs)
 
     @staticmethod
     def parse_metadata(filename):
@@ -83,17 +93,17 @@ class ExperimentOMERO(Experiment):
         connected = self.connection.connect()
         assert connected is True, "Could not connect to server."
         self.dataset = self.connection.getObject("Dataset", self.exptID)
+        self.name = self.dataset.getName()
 
         self._positions = {img.getName(): img.getId() for img in
                            self.dataset.listChildren()}
 
-        # Get annotation Acq file (cached as a tmp file)
+        # Get annotation Acq file
         try:
             acq_annotation = [item for item in self.dataset.listAnnotations()
-                              if (isinstance(item,
-                                             omero.gateway.FileAnnotationWrapper)
-                                  and item.getFileName().endswith('Acq.txt'))][
-                0]
+                              if (isinstance(
+                                    item, omero.gateway.FileAnnotationWrapper)
+                                and item.getFileName().endswith('Acq.txt'))][0]
         except IndexError as e:
             raise (e, "No acquisition file found for this experiment")
 
@@ -119,6 +129,78 @@ class ExperimentOMERO(Experiment):
         img = self.connection.getObject("Image", self._positions[position])
         return TimelapseOMERO(img)
 
+    def cache_locally(self, root_dir='./', positions=None, channels=None,
+                      timepoints=None, z_positions=None):
+        """
+        Save the experiment locally.
+
+        :param root_dir: The directory in which the experiment will be
+        saved. The experiment will be a subdirectory of "root_directory"
+        and will be named by its id.
+        """
+        logger.warning('Saving experiment {}; may take some time.'.format(
+            self.name))
+
+        if positions is None:
+            positions = self.positions
+        if channels is None:
+            channels = self.current_position.channels
+        if timepoints is None:
+            timepoints = range(self.current_position.size_t)
+        if z_positions is None:
+            z_positions = range(self.current_position.size_z)
+
+        save_dir = Path(root_dir) / self.name
+        if not save_dir.exists():
+            save_dir.mkdir()
+        print(save_dir)
+        # Save the images
+        for pos_name in tqdm(positions):
+            pos = self.get_position(pos_name)
+            pos_dir = save_dir / pos_name
+            if not pos_dir.exists():
+                pos_dir.mkdir()
+            for channel in tqdm(channels):
+                for tp in tqdm(timepoints):
+                    for z_pos in tqdm(z_positions):
+                        ch_id = pos.get_channel_index(channel)
+                        image = pos.get_hypercube(x=None, y=None,
+                                                  width=None,
+                                                  height=None,
+                                                  channels=[ch_id],
+                                                  z_positions=[z_pos],
+                                                  timepoints=[tp])
+
+                        im_name = "{}_{:06d}_{}_{:03d}.png".format(self.name,
+                                                           tp + 1,
+                                                           channel,
+                                                           z_pos + 1)
+                        imageio.imwrite(str(pos_dir / im_name), np.squeeze(
+                            image))
+
+        # Save the file annotations
+        # Get annotation Acq file
+        try:
+            acq_annotation = [item for item in self.dataset.listAnnotations()
+                              if (isinstance(
+                                    item, omero.gateway.FileAnnotationWrapper)
+                                and item.getFileName().endswith('Acq.txt'))][0]
+        except IndexError as e:
+            raise (e, "No acquisition file found for this experiment")
+
+        filepath = save_dir / acq_annotation.getFileName()
+        with open(str(filepath), 'w') as acq_fd:
+            # Download the file
+            for chunk in acq_annotation.getFileInChunks():
+                acq_fd.write(chunk)
+
+        # Create caching log
+        cache_config = dict(positions=positions, channels=channels,
+                            timepoints=timepoints, z_positions=z_positions)
+
+        with open(str(save_dir / 'cache.config'), 'w') as fd:
+            json.dump(cache_config, fd)
+        logger.info('Downloaded experiment {}'.format(self.exptID))
 
 class ExperimentLocal(Experiment):
     """
@@ -127,9 +209,13 @@ class ExperimentLocal(Experiment):
     def __init__(self, root_dir):
         self.root_dir = Path(root_dir)
         self.exptID = self.root_dir.name
-        pos, acq_file = ExperimentLocal.parse_dir_structure(self.root_dir)
+        pos, acq_file, cache = ExperimentLocal.parse_dir_structure(self.root_dir)
         self._positions = pos
         self.metadata = Experiment.parse_metadata(acq_file)
+        if cache is not None:
+            with open(cache, 'r') as fd:
+                cache_config = json.load(fd)
+            self.cache_config(cache_config)
         self._current_position = self.get_position(self.positions[0])
 
 
@@ -154,8 +240,32 @@ class ExperimentLocal(Experiment):
                          f.is_dir())]
         acq_file = glob.glob(os.path.join(str(root_dir), '*[Aa]cq.txt'))[0]
 
-        return positions, acq_file
+        cache_file = glob.glob(os.path.join(str(root_dir), 'cache.config'))
+        if len(cache_file) == 1:
+            cache_file = cache_file[0]
+        else:
+            cache_file = None
+        return positions, acq_file, cache_file
 
+    def cache_config(self, cache):
+        self.metadata.positions = self.metadata.positions[
+                    self.metadata.positions.name.isin(cache['positions'])]
+        self.metadata.channels = self.metadata.channels[
+                    self.metadata.channels.names.isin(cache['channels'])]
+        ntimepoints = len(cache['timepoints'])
+        totalduration = ntimepoints*self.metadata.times['interval']
+        self.metadata.times.update(dict(ntimepoints=ntimepoints,
+                                        totalduration=totalduration))
+
+        diffs = np.unique([cache['z_positions'][i+1] - cache['z_positions'][i]
+                            for i in range(len(cache['z_positions']) - 1)])
+        if len(diffs) != 1:
+            self.metadata.zsections.spacing = np.nan
+        else:
+            self.metadata.zsections.spacing = \
+                self.metadata.zsections.spacing* diffs[0]
+
+        self.metadata.zsections.sections = len(cache['z_positions'])
 
     @property
     def positions(self):

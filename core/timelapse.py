@@ -4,6 +4,10 @@ import numpy as np
 import imageio
 from operator import itemgetter
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class Timelapse:
     """
     Timelapse class contains the specifics of one position.
@@ -138,6 +142,7 @@ class TimelapseLocal(Timelapse):
         -- exptID_{timepointID}_{ChannelID}_{z_position_id}.png
 
     """
+
     def __init__(self, position, root_dir, metadata):
         self.pos_dir = root_dir / position
         assert self.pos_dir.exists()
@@ -167,29 +172,27 @@ class TimelapseLocal(Timelapse):
             # Check that the metadata was correct/we are not missing any images
             assert len(img_list) != 0, "Channel {} not available, incorrect " \
                                        "metadata"
-            img_mapper[channel] = [sorted(list((group)), key= lambda item:
-                                   item.stem.split('_')[-1])
+            img_mapper[channel] = [sorted(list((group)), key=lambda item:
+            item.stem.split('_')[-1])
                                    for _, group in
                                    itertools.groupby(sorted(img_list),
-                                   key=lambda img: img.stem.split('_')[-3])]
+                                                     key=lambda img:
+                                                     img.stem.split('_')[-3])]
 
-
-        # TODO just remove those sets that are incomplete and keep the rest
-        # Check that there are enough timepoints
         for ch, item in img_mapper.items():
-            #assert len(item) == self.size_t, "Not enough timepoints in " \
-            #                                 "channel {}: {} out of {}" \
-            #                                 "".format(ch, len(item),
-            #                                           self.size_t)
-            pass
+            if len(item) != int(self.size_t):
+                logger.warning("Not enough timepoints in position {}, "
+                               "channel {}: {} out of {}".format(self.id, ch,
+                                                                 len(item),
+                                                                 self.size_t))
         for ix, (ch, im_list) in enumerate(img_mapper.items()):
             for item in im_list:
-                #assert len(item) == self.size_z, "Not enough z-stacks for " \
-                #                                 "channel {}, tp {}; {" \
-                #                                 "} out of {}".format(
-                #                                 ch, ix, len(item),
-                #                                 self.size_z)
-                pass
+                if len(item) != int(self.size_z):
+                    logger.warning("Not enough z-stacks for position {}, " \
+                                   "channel {}, tp {}; {} out of " \
+                                   "{}".format(self.id, ch, ix, len(item),
+                                               self.size_z))
+
         self.image_mapper = img_mapper
 
     @property
@@ -221,13 +224,16 @@ class TimelapseLocal(Timelapse):
 
     def get_hypercube(self, x, y, width, height, z_positions, channels,
                       timepoints):
-        # TODO Ability to specify only one direction
-        if None in [x, y, width, height]:
-            # Get full tile
-            xmin, xmax, ymin, ymax = None, None, None, None
+        if None in [x, height]:
+            # Get full x direction
+            xmin, xmax = None, None
         else:
             xmin = x
             xmax = x + height
+        if None in [y, width]:
+            # Get full y direction
+            ymin, ymax = None, None
+        else:
             ymin = y
             ymax = y + width
 
@@ -245,7 +251,8 @@ class TimelapseLocal(Timelapse):
             txyz = []
             for t in timepoints:
                 xyz = map(imageio.imread, z_pos_getter(self.image_mapper[
-                                                self.channels[ch_id]][t]))
+                                                           self.channels[
+                                                               ch_id]][t]))
                 txyz.append(np.dstack(xyz)[xmin:xmax, ymin:ymax])
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
