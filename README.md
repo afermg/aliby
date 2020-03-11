@@ -25,3 +25,13 @@ However, using the headers of verions 1.0.2 means that we have to downgrade Open
 It is highly recommended that we upgrade OMERO to 5.6 in order to use Python 3, in which case it will even 
 be possible to get OMERO.py directly from PyPI with easy installation, [omero-py](https://pypi.org/project/omero-py/)
 
+## Requirements
+
+pyOmeroUpload: https://github.com/SynthSys/pyOmeroUpload.git
+
+Clone the repository: `git clone https://github.com/SynthSys/pyOmeroUpload.git`
+Then install with `pip install pyOmeroUpload`
+
+## Local file Origanisation
+If the experiment is saved locally, we expect the organisation to be as in
+[this repository](https://github.com/SynthSys/omero_connect_demo/tree/master/test_data)

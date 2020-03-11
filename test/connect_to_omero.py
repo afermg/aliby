@@ -19,6 +19,7 @@ USERNAME = 'upload'
 PASSWORD = '***REMOVED***'
 HOST = 'sce-bio-c04287.bio.ed.ac.uk'
 PORT = 4064
+import omero
 from omero.gateway import BlitzGateway
 
 def print_obj(obj, indent=0):
@@ -26,12 +27,11 @@ def print_obj(obj, indent=0):
     Helper method to display info about OMERO objects.
     Not all objects will have a "name" or owner field.
     """
-    print("""%s%s:%s  Name:"%s" (owner=%s)""" % (
+    print("""%s%s:%s  Name:"%s" """ % (
         " " * indent,
         obj.OMERO_CLASS,
         obj.getId(),
-        obj.getName(),
-        obj.getAnnotation()))
+        obj.getName()))
 
 
 if __name__ == '__main__':
@@ -129,6 +129,14 @@ if __name__ == '__main__':
             break
         print_obj(dataset)
         i+=1
+
+    ds = conn.getObject("Dataset", 10421)
+    for img in ds.listChildren():
+        print_obj(img)
+
+    for ann in ds.listAnnotations():
+        if isinstance(ann, omero.gateway.FileAnnotationWrapper):
+            print(ann.getFileName())
 
     # Close connection
     # ================
