@@ -17,6 +17,57 @@ class Timelapse:
     def __repr__(self):
         return self.name
 
+    def __getitem__(self, item):
+        """
+        The hypercube is ordered as: C, T, X, Y, Z
+        :param item:
+        :return:
+        """
+        def parse_slice(s):
+            step = s.step if s.step is not None else 1
+            if s.start is None and s.stop is None:
+                return None
+            elif s.start is None and s.stop is not None:
+                return range(0, s.stop, step)
+            elif s.start is not None and s.stop is None:
+                return [s.start]
+            else: # both s.start and s.stop are not None
+                return range(s.start, s.stop, step)
+
+        def parse_subitem(subitem, kw):
+            if isinstance(subitem, int):
+                res = [subitem]
+            elif isinstance(subitem, list) or isinstance(subitem, tuple):
+                res = list(subitem)
+            elif isinstance(subitem, slice):
+                res = parse_slice(subitem)
+
+            if kw in ['x', 'y']:
+                # Need exactly two values
+                if len(res) < 2:
+                    # An int was passed, assume it was
+                    res = [res[0], self.size_x]
+                elif len(res) > 2:
+                    res = [res[0], res[-1] + 1]
+            return res
+
+        if isinstance(item, int):
+            return self.get_hypercube(x=None, y=None, z_positions=None,
+                                      channels=[item], timepoints=None)
+        elif isinstance(item, slice):
+            return self.get_hypercube(channels=parse_slice(item))
+        keywords = ['channels', 'timepoints', 'x', 'y', 'z_positions']
+        kwargs = dict()
+        for kw, subitem in zip(keywords, item):
+            kwargs[kw] = parse_subitem(subitem, kw)
+        return self.get_hypercube(**kwargs)
+
+
+    @property
+    def shape(self):
+        return (self.size_c, self.size_t,
+                self.size_x, self.size_y, self.size_z)
+
     @abc.abstractproperty
     def id(self):
         return
@@ -38,12 +89,21 @@ class Timelapse:
         return
 
     @abc.abstractproperty
+    def size_x(self):
+        return
+
+    @abc.abstractproperty
+    def size_y(self):
+        return
+
+    @abc.abstractproperty
     def channels(self):
         return
 
     @abc.abstractmethod
-    def get_hypercube(self, x, y, width, height, z_positions, channels,
-                      timepoints):
+    def get_hypercube(self, x=None, y=None,
+                      z_positions=None, channels=None,
+                      timepoints=None):
         return
 
     @abc.abstractmethod
@@ -98,6 +158,18 @@ class TimelapseOMERO:
         return self._size_t
 
     @property
+    def size_x(self):
+        if self._size_x is None:
+            self._size_x = self.image.getSizeX()
+        return self._size_x
+
+    @property
+    def size_y(self):
+        if self._size_y is None:
+            self._size_y = self.image.getSizeY()
+        return self._size_y
+
+    @property
     def channels(self):
         if self._channels is None:
             self._channels = self.image.getChannelLabels()
@@ -106,12 +178,21 @@ class TimelapseOMERO:
     def get_channel_index(self, channel):
         return self.channels.index(channel)
 
-    def get_hypercube(self, x, y, width, height, z_positions, channels,
-                      timepoints):
-        if None in [x, y, width, height]:
+    def get_hypercube(self, x=None, y=None,
+                      z_positions=None, channels=None,
+                      timepoints=None):
+        if x is None and y is None:
             tile = None  # Get full plane
+        elif x is None:
+            ymin, ymax = y
+            tile = (None, ymin, None, ymax - ymin)
+        elif y is None:
+            xmin, xmax = x
+            tile = (xmin, None, xmax - xmin, None)
         else:
-            tile = (x, y, width, height)
+            xmin, xmax = x
+            ymin, ymax = y
+            tile = (xmin, ymin, xmax - xmin, ymax-ymin)
 
         if z_positions is None:
             z_positions = range(self.size_z)
@@ -150,6 +231,8 @@ class TimelapseLocal(Timelapse):
         self._size_z = None
         self._size_c = None
         self._size_t = None
+        self._size_x = None
+        self._size_y = None
         self._channels = None
         self._id = position
         self._name = position
@@ -157,10 +240,10 @@ class TimelapseLocal(Timelapse):
         self.parse_file_structure(self.pos_dir)
 
     def parse_metadata(self, metadata):
-        self._size_z = metadata.zsections.sections.values[0]
+        self._size_z = int(metadata.zsections.sections.values[0])
         self._channels = metadata.channels.names.values
         self._size_c = len(self._channels)
-        self._size_t = metadata.times['ntimepoints']
+        self._size_t = int(metadata.times['ntimepoints'])
 
     def parse_file_structure(self, pos_dir):
         # Only needs to check the results of parse_metadata
@@ -185,6 +268,8 @@ class TimelapseLocal(Timelapse):
                                "channel {}: {} out of {}".format(self.id, ch,
                                                                  len(item),
                                                                  self.size_t))
+        self._size_t = min([len(item) for item in img_mapper.values()])
+
         for ix, (ch, im_list) in enumerate(img_mapper.items()):
             for item in im_list:
                 if len(item) != int(self.size_z):
@@ -192,6 +277,7 @@ class TimelapseLocal(Timelapse):
                                    "channel {}, tp {}; {} out of " \
                                    "{}".format(self.id, ch, ix, len(item),
                                                self.size_z))
+        self._size_z = min([len(item) for item in im_list])
 
         self.image_mapper = img_mapper
 
@@ -216,26 +302,31 @@ class TimelapseLocal(Timelapse):
         return self._size_t
 
     @property
+    def size_x(self):
+        if self._size_x is None:
+            single_img = self.get_hypercube(x=None, y=None,
+                                            z_positions=None, channels=[0],
+                                            timepoints=[0])
+            self._size_x = single_img.shape[2]
+            self._size_y = single_img.shape[3]
+        return self._size_x
+
+    @property
+    def size_y(self):
+        return self._size_y
+
+    @property
     def channels(self):
         return self._channels
 
     def get_channel_index(self, channel):
         return self.channels.index(channel)
 
-    def get_hypercube(self, x, y, width, height, z_positions, channels,
-                      timepoints):
-        if None in [x, height]:
-            # Get full x direction
-            xmin, xmax = None, None
-        else:
-            xmin = x
-            xmax = x + height
-        if None in [y, width]:
-            # Get full y direction
-            ymin, ymax = None, None
-        else:
-            ymin = y
-            ymax = y + width
+    def get_hypercube(self, x=None, y=None,
+                      z_positions=None, channels=None,
+                      timepoints=None):
+        xmin, xmax = x if x is not None else (None, None)
+        ymin, ymax = y if y is not None else (None, None)
 
         if z_positions is None:
             z_positions = range(self.size_z)
@@ -251,8 +342,7 @@ class TimelapseLocal(Timelapse):
             txyz = []
             for t in timepoints:
                 xyz = map(imageio.imread, z_pos_getter(self.image_mapper[
-                                                           self.channels[
-                                                               ch_id]][t]))
+                                                    self.channels[ch_id]][t]))
                 txyz.append(np.dstack(xyz)[xmin:xmax, ymin:ymax])
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)

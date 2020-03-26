@@ -24,12 +24,35 @@ class Experiment:
     Abstract base class for experiments.
     Gives all the functions that need to be implemented in both the local
     version and the Omero version of the Experiment class.
+
+    As this is an abstract class, experiments can not be directly instantiated
+    through the usual `__init__` function, but must be instantiated from a
+    source.
+    >>> expt = Experiment.from_source(root_directory)
+    Data from the current timelapse can be obtained from the experiment using
+    colon and comma separated slicing.
+    The order of data is C, T, X, Y, Z
+    C, T and Z can have any slice
+    X and Y will only consider the beginning and end as we want the images
+    to be continuous
+    >>> bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
     """
     __metaclass__ = abc.ABCMeta
     metadata_parser = AcqMetadataParser()
 
     def __init__(self):
         self._current_position = None
+
+    def __getitem__(self, item):
+        """
+        # TODO : Slicing also for the position?
+
+        """
+        return self.current_position[item]
+
+    @property
+    def shape(self):
+        return self.current_position.shape
 
     @staticmethod
     def from_source(*args, **kwargs):
@@ -71,9 +94,9 @@ class Experiment:
     def current_position(self, position):
         self._current_position = self.get_position(position)
 
-    def get_hypercube(self, x, y, width, height, z_positions, channels,
+    def get_hypercube(self, x, y, z_positions, channels,
                       timepoints):
-        return self.current_position.get_hypercube(x, y, width, height,
+        return self.current_position.get_hypercube(x, y,
                                                    z_positions, channels,
                                                    timepoints)
 

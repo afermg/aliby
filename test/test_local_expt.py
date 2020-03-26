@@ -1,12 +1,15 @@
 import os
 import sys 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 import logging
 from logging.handlers import RotatingFileHandler
 
+import unittest
 
 from core.experiment import Experiment
 
+## LOGGING
 logger = logging.getLogger('core')
 logger.handlers = []
 logger.setLevel(logging.DEBUG)
@@ -27,29 +30,34 @@ file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s '
 file_handler.setFormatter(file_formatter)
 logger.addHandler(file_handler)
 
-
 logger.debug('Set up the loggers as test.')
 
+
+root_directory = '/Users/s1893247/PhD/omero_connect_demo/test_data'
+
+class TestCase(unittest.TestCase):
+    def setUp(self):
+        self.expt = Experiment.from_source(root_directory)
+
+    def test_metadata(self):
+        # TODO change print to assert statements
+        print(self.expt.metadata.channels)
+        print(self.expt.metadata.times)
+        print(self.expt.metadata.switch_params)
+        print(self.expt.metadata.zsections)
+        print(self.expt.metadata.positions)
+
+    def test_experiment_shape(self):
+        print("C: {}, T: {}, X: {}, Y: {}, Z: {}".format(*self.expt.shape))
+        self.assertEqual(len(self.expt.shape), 5)
+
+    def test_experiment_slicing(self):
+        test_slice = self.expt[(0, 2), 0:3, :100, 100:200, 0:5:2]
+        self.assertTupleEqual(test_slice.shape, (2, 3, 100, 100, 3))
+
+
+
 if __name__ == "__main__":
-    #root_directory = '/Users/s1893247/PhD/pipeline-core/data
-    # /sga_glc0_1_Mig1Nhp_Maf1Nhp_Msn2Maf1_Mig1Mig1_Msn2Dot6_05'
-
-    root_directory = '/Users/s1893247/PhD/omero_connect_demo/test_data'
-    expt = Experiment.from_source(root_directory)
-
-    print(expt.metadata.channels)
-    print(expt.metadata.times)
-    print(expt.metadata.switch_params)
-    print(expt.metadata.zsections)
-    print(expt.metadata.positions)
+    unittest.main()
 
 
-    print(expt.current_position.image_mapper.keys())
-    print(map(lambda x: x.name, expt.current_position.image_mapper['GFP'][0]))
-
-    print(expt.get_hypercube(x=0, y=0, width=100, height=None,
-                             z_positions=[0, 2, 4], channels=[0, 1],
-                             timepoints=[0]).shape)
-
-    expt.current_position = expt.positions[-1]
-    print(map(lambda x: x.name, expt.current_position.image_mapper['GFP'][0]))
