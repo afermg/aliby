@@ -74,9 +74,20 @@ omero_expt = Experiment.from_source(10421, #Experiment ID on OMERO
 ```
  
 Data is organised in each experiment as `Timelapse` classes. These are also
-separated into `TimelapseOMERO` and `TimelapseLocal`, but the main 
-function of these objects is `get_hypercube()`, which can be called 
-directly from the `Experiment` object.
+separated into `TimelapseOMERO` and `TimelapseLocal`.
+The main function of these objects is to give a direct interface to the raw
+data, whatever form it is saved in. 
+These objects are sliceable, meaning that data can be accessed like a numpy
+array (with some reservations). This can be done directly through the
+ `Experiment` object. 
+
+ ```python
+bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
+```
+ 
+Aside from the argument parsing, this is implemented through the
+`get_hypercube()` function, which can be called directly from the `Experiment` 
+object.
 
 ```python
 x, y, width, height, z_positions, channels, timepoints = [None]*7 #Get full pos
