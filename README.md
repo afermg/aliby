@@ -1,54 +1,44 @@
 # Pipeline core
 
-The core classes and methods for the python microfluidics, microscopy, and analysis pypline pipeline.
+The core classes and methods for the python microfluidics, microscopy, and 
+analysis pipeline.
 
-## References
-* [OMERO python bindings](https://docs.openmicroscopy.org/omero/5.4.0/developers/Python.html)
-* [Zeroc-ice python](https://pypi.org/project/zeroc-ice/3.6.5/) 
+### Installation
+See [INSTALL.md](./INSTALL.md) for installation instructions.
 
-## Installation 
-How to set up access to OMERO from python:
-* Install bzip headers : `sudo apt-get install libbz2-dev`
-* Install openssl headers version 1.0.2: `sudo apt-get install libssl1.0-dev`
-* Install the corresponding openssl (as default is 1.1.1): `conda install openssl==1.0.2k`
-* Make sure you are in an environment that uses python 2.7 
-* Install zeroc-ice from PyPI, which includes Ice: `pip install zeroc-ice==3.6.0`
-* Run `connect_to_omero.py` as a test (TODO TESTS)
+## Development guidelines
+In order to separate the python2, python3, and "currently working" versions 
+(\#socialdistancing) of the pipeline, please use the branches:
+* python2.7: for any development on the 2 version
+* python3.6-dev: for any added features for the python3 version
+* master: very sparingly and only for changes that need to be made in both
+ versions as I will be merging changes from master into the development
+ branches frequently
+    * Ideally for adding features into any branch, espeically master, create
+     a new branch first, then create a pull request (from within Gitlab) before 
+     merging it back so we can check each others' code. This is just to make
+     sure that we can always use the code that is in the master branch without
+     any issues.
+ 
+Branching cheat-sheet:
+```git
+git branch my_branch # Create a new branch called branch_name from master
+git branch my_branch another_branch #Branch from another_branch, not master
+git checkout -b my_branch # Create my_branch and switch to it
 
-Tested on Ubuntu Bionic-Beaver (18.04): the `install.sh` file should run the
-above steps if run as root and in an environment with python 2.7
+# Merge changes from master into your branch
+git pull #get any remote changes in master
+git checkout my_branch
+git merge master
 
-Tested on MacOSX Mojave: Just installing zeroc-ice should be enough (the OSX
-defaults include much of the above) as long as you make sure you are 
-running in a python 2.7 environment. Not tested on 2.6 
+# Merge changes from your branch into another branch
+git checkout another_branch
+git merge my_branch #check the doc for --no-ff option, you might want to use it
+```
 
-## Disclaimers
-TLDR: Most of this stuff is deprecated. 
-Using OMERO 5.2.5 means that we need to use deprecated python 2.7 (EOL 2020
-.01.01), and we need to use `zeroc-ice` version 3.6 which is also dropped in 
-the newer version of OMERO.
-The local version of `openssl` (`conda`) needs to fit the headers of 
-`libssl-dev` (`apt-get`). 
-By default conda will install OpenSSL version 1.1.1 as all the others are no 
-longer maintained. 
-However, using the headers of verions 1.0.2 means that we have to downgrade 
-OpenSSL to version 1.0.2 also. 
+## Quickstart Documentation
 
-It is highly recommended that we upgrade OMERO to 5.6 in order to use Python 3,
-in which case it will even be possible to get OMERO.py directly from PyPI 
-with easy installation, [omero-py](https://pypi.org/project/omero-py/)
-
-## Requirements
-`pyOmeroUpload`: https://github.com/SynthSys/pyOmeroUpload.git
-
-Clone the repository: `git clone https://github.com/SynthSys/pyOmeroUpload.git`
-Then install with `pip install pyOmeroUpload`
-
-Note: as is, the `pyOmeroUpload` package ignores the DIC channel and cannot 
-read most of the `*log.txt` files that I've tested so we're relying mostly 
-on the metadata in the `*Acq.txt` files.
-
-## Raw data access
+### Raw data access
 Raw data access can be found in `core.experiment` and `core.timelapse`, and 
 is organised inspired by the Swain Lab MATLAB pipeline.
  
