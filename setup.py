@@ -1,13 +1,22 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name='pipeline-core',
-    version='0.1.0',
+    version='0.1.1-dev',
     packages=['core'],
     url='',
     license='',
     author='Diane Adjavon',
     author_email='diane.adjavon@ed.ac.uk',
-    description='Core utilities for microscopy pipeline'
-
+    description='Core utilities for microscopy pipeline',
+    python_requires='>=3.6',
+    install_requires=[
+        'numpy',
+        'pandas',
+        'tqdm',
+        'scikit-image==0.16.2',
+        'imageio==2.8.0',
+        'omero-py==5.6.2',
+        'zeroc-ice==3.6.5'
+    ]
 )

@@ -1,25 +1,16 @@
-
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-#
-# Copyright (C) 2014 University of Dundee & Open Microscopy Environment.
-#                    All Rights Reserved.
-# Use is subject to license terms supplied in LICENSE.txt
-#
-from __future__ import print_function
-
+"""
+This code requires a functional OMERO database on localhost at port 4064
+See the README for instructions as to how to set these up with docker.
+"""
 # TODO remove and use unittest to run tests
 import os 
 import sys 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import omero_py
 
-USERNAME = 'upload'
-PASSWORD = '***REMOVED***'
-HOST = 'sce-bio-c04287.bio.ed.ac.uk'
+USERNAME = 'root'
+PASSWORD = 'omero-root-password'
+HOST = 'localhost'
 PORT = 4064
-import omero
 from omero.gateway import BlitzGateway
 
 def print_obj(obj, indent=0):
@@ -35,13 +26,6 @@ def print_obj(obj, indent=0):
 
 
 if __name__ == '__main__':
-    """
-    NB: This block is only run when calling this file directly
-    and not when imported.
-    """
-    """
-    start-code
-    """
 
     # Connect to the Python Blitz Gateway
     # ===================================
@@ -82,63 +66,8 @@ if __name__ == '__main__':
     # Check if you are an Administrator
     print( "   Is Admin:", conn.isAdmin())
 
-    print( "Member of:")
-    for g in conn.getGroupsMemberOf():
-        print( "   ID:", g.getId(), " Name:", g.getName())
-    group = conn.getGroupFromContext()
-    print( "Current group: ", group.getName())
+   # Close connection
+   # ================
+   # When you are done, close the session to free up server resources.
+    conn.close()
 
-    # List the group owners and other members
-    owners, members = group.groupSummary()
-    print( "   Group owners:")
-    for o in owners:
-        print( "     ID: %s UserName: %s Name: %s" % (
-            o.getId(), o.getOmeName(), o.getFullName()))
-    print( "   Group members:")
-    for m in members:
-        print( "     ID: %s UserName: %s Name: %s" % (
-            m.getId(), m.getOmeName(), m.getFullName()))
-
-    print( "Owner of:")
-    for g in conn.listOwnedGroups():
-        print( "   ID: ", g.getId(), " Name:", g.getName())
-
-    # New in OMERO 5
-    print( "Admins:")
-    for exp in conn.getAdministrators():
-        print( "   ID: %s UserName: %s Name: %s" % (
-            exp.getId(), exp.getOmeName(), exp.getFullName()))
-
-    # The 'context' of our current session
-    ctx = conn.getEventContext()
-    # print ctx     # for more info
-
-    # Read Data
-    my_exp_id = conn.getUser().getId()
-    default_group_id = conn.getEventContext().groupId
-    i = 0
-    for project in conn.getObjects("Project"):
-        if i > 10:
-            break
-        print_obj(project)
-        i+=1
-    
-    i = 0
-    for dataset in conn.searchObjects(["Dataset"], "sga", batchSize=12):
-        if i > 10:
-            break
-        print_obj(dataset)
-        i+=1
-
-    ds = conn.getObject("Dataset", 10421)
-    for img in ds.listChildren():
-        print_obj(img)
-
-    for ann in ds.listAnnotations():
-        if isinstance(ann, omero.gateway.FileAnnotationWrapper):
-            print(ann.getFileName())
-
-    # Close connection
-    # ================
-    # When you are done, close the session to free up server resources.
-    conn.seppuku()

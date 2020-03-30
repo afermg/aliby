@@ -37,6 +37,32 @@ git merge my_branch #check the doc for --no-ff option, you might want to use it
 ```
 
 ## Quickstart Documentation
+### Setting up a server
+For testing and development, the easiest way to set up an OMERO server is by
+using Docker images. 
+[The software carpentry](https://software-carpentry.org/) and the [Open
+ Microscopy Environment](https://www.openmicroscopy.org), have provided
+[instructions](https://ome.github.io/training-docker/) to do this.
+
+The `docker-compose.yml` file can be used to create an OMERO server with an
+accompanying PostgreSQL database, and an OMERO web server.
+It is described in detail 
+[here](https://ome.github.io/training-docker/12-dockercompose/).
+
+Our version of the `docker-compose.yml` has been adapted from the above to
+use version 5.6 of OMERO.
+
+To start these containers (in background):
+```shell script
+cd pipeline-core
+docker-compose up -d
+```
+Omit the `-d` to run in foreground.
+
+To stop them, in the same directory, run:
+```shell script
+docker-compose stop
+```
 
 ### Raw data access
 Raw data access can be found in `core.experiment` and `core.timelapse`, and 

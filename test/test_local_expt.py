@@ -1,10 +1,5 @@
-import os
-import sys 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 import logging
 from logging.handlers import RotatingFileHandler
-
 import unittest
 
 from core.experiment import Experiment
@@ -38,14 +33,6 @@ root_directory = '/Users/s1893247/PhD/omero_connect_demo/test_data'
 class TestCase(unittest.TestCase):
     def setUp(self):
         self.expt = Experiment.from_source(root_directory)
-
-    def test_metadata(self):
-        # TODO change print to assert statements
-        print(self.expt.metadata.channels)
-        print(self.expt.metadata.times)
-        print(self.expt.metadata.switch_params)
-        print(self.expt.metadata.zsections)
-        print(self.expt.metadata.positions)
 
     def test_experiment_shape(self):
         print("C: {}, T: {}, X: {}, Y: {}, Z: {}".format(*self.expt.shape))

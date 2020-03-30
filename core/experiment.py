@@ -3,23 +3,23 @@ import os
 import abc
 import re
 import glob
+import json
 from pathlib import Path
 import logging
+
 import imageio
 from tqdm import tqdm
 import numpy as np
-import json
 
 import omero
 from omero.gateway import BlitzGateway
-from omero_metadata_parser.extract_acq_metadata import AcqMetadataParser
 
-from timelapse import TimelapseOMERO, TimelapseLocal
+from core.timelapse import TimelapseOMERO, TimelapseLocal
 
 logger = logging.getLogger(__name__)
 
 
-class Experiment:
+class Experiment(abc.ABC):
     """
     Abstract base class for experiments.
     Gives all the functions that need to be implemented in both the local
@@ -38,16 +38,12 @@ class Experiment:
     >>> bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
     """
     __metaclass__ = abc.ABCMeta
-    metadata_parser = AcqMetadataParser()
+    #metadata_parser = AcqMetadataParser()
 
     def __init__(self):
         self._current_position = None
 
     def __getitem__(self, item):
-        """
-        # TODO : Slicing also for the position?
-
-        """
         return self.current_position[item]
 
     @property
@@ -73,11 +69,8 @@ class Experiment:
             logger.debug('ExperimentLocal: {}'.format(args, kwargs))
             return ExperimentLocal(*args, **kwargs)
 
-    @staticmethod
-    def parse_metadata(filename):
-        return Experiment.metadata_parser.extract_metadata(filename)
-
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def positions(self):
         """Returns list of available position names"""
         return
@@ -120,24 +113,6 @@ class ExperimentOMERO(Experiment):
 
         self._positions = {img.getName(): img.getId() for img in
                            self.dataset.listChildren()}
-
-        # Get annotation Acq file
-        try:
-            acq_annotation = [item for item in self.dataset.listAnnotations()
-                              if (isinstance(
-                                    item, omero.gateway.FileAnnotationWrapper)
-                                and item.getFileName().endswith('Acq.txt'))][0]
-        except IndexError as e:
-            raise (e, "No acquisition file found for this experiment")
-
-        with open('acq_file.txt', 'w') as acq_fd:
-            # Download and cache the file
-            for chunk in acq_annotation.getFileInChunks():
-                acq_fd.write(chunk)
-
-        self.metadata = Experiment.parse_metadata('acq_file.txt')
-        # TODO use a tempfile?
-        os.remove('acq_file.txt')
 
         # Set up the current position as the first in the list
         self._current_position = self.get_position(self.positions[0])
@@ -188,8 +163,6 @@ class ExperimentOMERO(Experiment):
                     for z_pos in tqdm(z_positions):
                         ch_id = pos.get_channel_index(channel)
                         image = pos.get_hypercube(x=None, y=None,
-                                                  width=None,
-                                                  height=None,
                                                   channels=[ch_id],
                                                   z_positions=[z_pos],
                                                   timepoints=[tp])
@@ -202,45 +175,58 @@ class ExperimentOMERO(Experiment):
                             image))
 
         # Save the file annotations
-        # Get annotation Acq file
-        try:
-            acq_annotation = [item for item in self.dataset.listAnnotations()
-                              if (isinstance(
-                                    item, omero.gateway.FileAnnotationWrapper)
-                                and item.getFileName().endswith('Acq.txt'))][0]
-        except IndexError as e:
-            raise (e, "No acquisition file found for this experiment")
-
-        filepath = save_dir / acq_annotation.getFileName()
-        with open(str(filepath), 'w') as acq_fd:
-            # Download the file
-            for chunk in acq_annotation.getFileInChunks():
-                acq_fd.write(chunk)
-
+        for annotation in self.dataset.listAnnotations():
+            if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
+                filepath = save_dir / annotation.getFileName()
+                if filepath.stem.endswith('.mat'):
+                    mode = 'wb'
+                else:
+                    mode = 'w'
+                with open(str(filepath), mode) as fd:
+                    for chunk in annotation:
+                        fd.write(chunk)
         # Create caching log
         cache_config = dict(positions=positions, channels=channels,
                             timepoints=timepoints, z_positions=z_positions)
+        # TODO save TagAnnotations in Cache config
 
         with open(str(save_dir / 'cache.config'), 'w') as fd:
             json.dump(cache_config, fd)
         logger.info('Downloaded experiment {}'.format(self.exptID))
 
+
 class ExperimentLocal(Experiment):
     """
     Experiment class connected to a local file structure.
+    It relies on the file structure and file names being organised as follows:
+
+    root_directory
+    - {exptID}Acq.txt
+    - {exptID}log.txt
+    - {posID}
+    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
+    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
+    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
+    -- ...
+    - {posID}
+    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
+    -- ...
     """
     def __init__(self, root_dir):
+        super(ExperimentLocal, self).__init__()
         self.root_dir = Path(root_dir)
         self.exptID = self.root_dir.name
-        pos, acq_file, cache = ExperimentLocal.parse_dir_structure(self.root_dir)
+        self.metadata = dict()
+        pos, acq_file, log_file, cache = ExperimentLocal.parse_dir_structure(
+            self.root_dir)
         self._positions = pos
-        self.metadata = Experiment.parse_metadata(acq_file)
+        self.metadata['acq_file'] = acq_file
+        self.metadata['log_file'] = log_file
         if cache is not None:
             with open(cache, 'r') as fd:
                 cache_config = json.load(fd)
-            self.cache_config(cache_config)
+            self.metadata.update(**cache_config)
         self._current_position = self.get_position(self.positions[0])
-
 
     @staticmethod
     def parse_dir_structure(root_dir):
@@ -250,7 +236,7 @@ class ExperimentLocal(Experiment):
         root_directory
         - {exptID}Acq.txt
         - {exptID}log.txt
-        - pos001
+        - {posID}
         -- exptID_{timepointID}_{ChannelID}_{z_position_id}.png
         ```
 
@@ -261,34 +247,14 @@ class ExperimentLocal(Experiment):
         positions = [f.name for f in root_dir.iterdir()
                      if (re.search(r'pos[0-9]+$', f.name) and
                          f.is_dir())]
-        acq_file = glob.glob(os.path.join(str(root_dir), '*[Aa]cq.txt'))[0]
-
+        acq_file = glob.glob(os.path.join(str(root_dir), '*[Aa]cq.txt'))
+        log_file = glob.glob(os.path.join(str(root_dir), '*[Ll]og.txt'))
         cache_file = glob.glob(os.path.join(str(root_dir), 'cache.config'))
-        if len(cache_file) == 1:
-            cache_file = cache_file[0]
-        else:
-            cache_file = None
-        return positions, acq_file, cache_file
 
-    def cache_config(self, cache):
-        self.metadata.positions = self.metadata.positions[
-                    self.metadata.positions.name.isin(cache['positions'])]
-        self.metadata.channels = self.metadata.channels[
-                    self.metadata.channels.names.isin(cache['channels'])]
-        ntimepoints = len(cache['timepoints'])
-        totalduration = ntimepoints*self.metadata.times['interval']
-        self.metadata.times.update(dict(ntimepoints=ntimepoints,
-                                        totalduration=totalduration))
-
-        diffs = np.unique([cache['z_positions'][i+1] - cache['z_positions'][i]
-                            for i in range(len(cache['z_positions']) - 1)])
-        if len(diffs) != 1:
-            self.metadata.zsections.spacing = np.nan
-        else:
-            self.metadata.zsections.spacing = \
-                self.metadata.zsections.spacing* diffs[0]
-
-        self.metadata.zsections.sections = len(cache['z_positions'])
+        acq_file = acq_file[0] if len(acq_file) == 1 else None
+        log_file = log_file[0] if len(log_file) == 1 else None
+        cache_file = acq_file[0] if len(cache_file) == 1 else None
+        return positions, acq_file, log_file, cache_file
 
     @property
     def positions(self):
@@ -297,9 +263,7 @@ class ExperimentLocal(Experiment):
     def get_position(self, position):
         assert position in self.positions, "Position {} not available in {" \
                                            "}.".format(position, self.positions)
-        return TimelapseLocal(position, self.root_dir, self.metadata)
+        # TODO cache positions?
+        return TimelapseLocal(position, self.root_dir)
 
-
-Experiment.register(ExperimentOMERO)
-Experiment.register(ExperimentLocal)
 

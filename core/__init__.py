@@ -1,4 +1,3 @@
-import omero_py
 import logging
 from logging.handlers import RotatingFileHandler
 
