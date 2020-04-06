@@ -28,7 +28,7 @@ logger.addHandler(file_handler)
 logger.debug('Set up the loggers as test.')
 
 
-root_directory = '/Users/s1893247/PhD/omero_connect_demo/test_data'
+root_directory = '/Users/s1893247/PhD/pipeline-core/data/glclvl_0.1_mig1_msn2_maf1_sfp1_dot6_03'
 
 class TestCase(unittest.TestCase):
     def setUp(self):

@@ -1,7 +1,6 @@
 import itertools
 import logging
 import numpy as np
-from operator import itemgetter
 from pathlib import Path
 
 import imageio
@@ -34,7 +33,8 @@ def parse_local_fs(pos_dir):
 
     for channel, group in itertools.groupby(sorted(img_list, key=channel_idx),
                                             key=channel_idx):
-        img_mapper[channel] = [sorted(grp, key=z_idx)
+        img_mapper[channel] = [{i: item for i, item in enumerate(sorted(grp,
+                                                                key=z_idx))}
                                for _, grp in
                                itertools.groupby(sorted(group, key=tp_idx),
                                                  key=tp_idx)]
@@ -87,11 +87,12 @@ class Timelapse:
 
             if kw in ['x', 'y']:
                 # Need exactly two values
-                if len(res) < 2:
-                    # An int was passed, assume it was
-                    res = [res[0], self.size_x]
-                elif len(res) > 2:
-                    res = [res[0], res[-1] + 1]
+                if res is not None:
+                    if len(res) < 2:
+                        # An int was passed, assume it was
+                        res = [res[0], self.size_x]
+                    elif len(res) > 2:
+                        res = [res[0], res[-1] + 1]
             return res
 
         if isinstance(item, int):
@@ -229,7 +230,7 @@ class TimelapseLocal(Timelapse):
         self._channels = list(self.image_mapper.keys())
         self._size_c = len(self._channels)
         self._size_t = min([len(item) for item in self.image_mapper.values()])
-        self._size_z = min([len(item) for item in itertools.chain(
+        self._size_z = max([len(item) for item in itertools.chain(
                             *self.image_mapper.values())])
         single_img = self.get_hypercube(x=None, y=None,
                                         z_positions=None, channels=[0],
@@ -250,15 +251,19 @@ class TimelapseLocal(Timelapse):
         if timepoints is None:
             timepoints = range(self.size_t)
 
-        z_pos_getter = itemgetter(*z_positions)
+        def z_pos_getter(z_positions, ch_id, t):
+            default = np.zeros((self.size_x, self.size_y))
+            names = [self.image_mapper[self.channels[ch_id]][t].get(i, None)
+                   for i in z_positions]
+            res = [imageio.imread(name) if name is not None else default
+                   for name in names]
+            return res
         # nested list of images in C, T, X, Y, Z order
         ctxyz = []
         for ch_id in channels:
             txyz = []
             for t in timepoints:
-                xyz = map(imageio.imread, z_pos_getter(self.image_mapper[
-                                                           self.channels[
-                                                               ch_id]][t]))
+                xyz = z_pos_getter(z_positions, ch_id, t)
                 txyz.append(np.dstack(list(xyz))[xmin:xmax, ymin:ymax])
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
