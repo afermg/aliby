@@ -83,6 +83,10 @@ class Experiment(abc.ABC):
     def current_position(self):
         return self._current_position
 
+    @property
+    def channels(self):
+        return self._current_position.channels
+
     @current_position.setter
     def current_position(self, position):
         self._current_position = self.get_position(position)

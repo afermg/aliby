@@ -2,14 +2,13 @@
 A set of utilities for dealing with ALCATRAS traps
 """
 
-#TODO portfolio of trap templates
+# TODO portfolio of trap templates
 import numpy as np
 from skimage import transform, feature
 
 
 def identify_trap_locations(image, trap_template, optimize_scale=True,
-                            downscale=0.3,
-                            trap_rotation=0):
+                            downscale=0.3, trap_size=None):
     """
     Identify the traps in a single image based on a trap template.
     This assumes a trap template that is similar to the image in question
@@ -26,19 +25,28 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
     :param trap_rotation:
     :return:
     """
+    trap_size = trap_size if trap_size is not None else trap_template.shape[0]
     img = transform.rescale(image, downscale)
     temp = transform.rescale(trap_template, downscale)
-    # TODO reimplement optimize rotation
-    temp = transform.rotate(temp, trap_rotation,
-                            cval=np.median(img))
-    # TODO optimize over templates?
+
+    # TODO random search hyperparameter optimization
+    # optimize rotation
+    matches = {rotation: feature.match_template(
+        img, transform.rotate(temp,
+                              rotation,
+                              cval=np.median(img)),
+        pad_input=True,
+        mode='median'
+    )**2 for rotation in [0, 90, 180, 270]}
+    best_rotation = max(matches, key=lambda x: np.max(matches[x]))
+    temp = transform.rotate(temp, best_rotation, cval=np.median(img))
 
     if optimize_scale:
         scales = np.linspace(0.5, 2, 10)
-        matches = matches = {scale: feature.match_template(
+        matches = {scale: feature.match_template(
             img, transform.rescale(temp, scale),
             pad_input=True,
-            mode='median')
+            mode='median')**2
             for scale in scales}
         best_scale = max(matches, key=lambda x: np.max(matches[x]))
         matched = matches[best_scale]
@@ -48,7 +56,6 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
-        min_distance=trap_template.shape[0],
-        exclude_border=trap_template.shape[0] // 3)
+        min_distance=trap_template.shape[0]*0.80,
+        exclude_border=trap_size // 3)
     return coordinates
-
