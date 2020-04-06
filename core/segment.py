@@ -4,11 +4,12 @@ cell segmentation, nucleus segmentation."""
 from skimage import feature
 import numpy as np
 from scipy.spatial import distance
+from pathlib import Path
 
 from core.traps import identify_trap_locations
 
-trap_template = np.load('/Users/s1893247/PhD/pipeline-core/core/trap_templates'
-                        '/trap_bg_1.npy')
+trap_template_directory = Path(__file__).parent / 'trap_templates'
+trap_template = np.load(trap_template_directory / 'trap_bg_1.npy')
 
 
 def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,

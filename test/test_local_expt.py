@@ -1,6 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 import unittest
+from pathlib import Path
 
 from core.experiment import Experiment
 
@@ -27,8 +28,8 @@ logger.addHandler(file_handler)
 
 logger.debug('Set up the loggers as test.')
 
-
-root_directory = '/Users/s1893247/PhD/pipeline-core/data/glclvl_0.1_mig1_msn2_maf1_sfp1_dot6_03'
+data_directory = Path(__file__).parent.parent / 'data/'
+root_directory = data_directory / 'glclvl_0.1_mig1_msn2_maf1_sfp1_dot6_03'
 
 class TestCase(unittest.TestCase):
     def setUp(self):

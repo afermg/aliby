@@ -10,6 +10,7 @@ setup(
     author_email='diane.adjavon@ed.ac.uk',
     description='Core utilities for microscopy pipeline',
     python_requires='>=3.6',
+    include_package_data=True,
     install_requires=[
         'numpy',
         'pandas',
