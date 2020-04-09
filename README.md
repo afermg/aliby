@@ -136,12 +136,14 @@ From there, you can obtain a timelapse for a single trap as follows:
 channels = [0] #Get only the first channel, this is also the default
 z = [0, 1, 2, 3, 4] #Get all z-positions
 trap_id = 0
+tile_size = 117
 
 # Get a timelapse of the trap
 # The default trap size is 96 by 96
 # The trap is in the center of the image, except for edge cases
 # The output has shape (C, T, X, Y, Z), so in this example: (1, T, 96, 96, 5)
-timelapse = seg_expt.get_trap_timelapse(trap_id, channels=channels, z=z)
+timelapse = seg_expt.get_trap_timelapse(trap_id, tile_size=tile_size, 
+                                        channels=channels, z=z)
 ```
 
 This can take several seconds at the moment.
@@ -152,3 +154,5 @@ If you're not sure what your channel's index is, you can get the ordered
 ```python
 expt.channels
 ```
+
+
