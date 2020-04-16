@@ -13,7 +13,6 @@ setup(
     include_package_data=True,
     install_requires=[
         'numpy',
-        'pandas',
         'tqdm',
         'scikit-image==0.16.2',
         'imageio==2.8.0',

@@ -116,7 +116,8 @@ class ExperimentOMERO(Experiment):
         self.name = self.dataset.getName()
 
         self._positions = {img.getName(): img.getId() for img in
-                           self.dataset.listChildren()}
+                           sorted(self.dataset.listChildren(),
+                                  key=lambda x: x.getName())}
 
         # Set up the current position as the first in the list
         self._current_position = self.get_position(self.positions[0])
@@ -248,9 +249,9 @@ class ExperimentLocal(Experiment):
         described above.
         :return:
         """
-        positions = [f.name for f in root_dir.iterdir()
+        positions = sorted([f.name for f in root_dir.iterdir()
                      if (re.search(r'pos[0-9]+$', f.name) and
-                         f.is_dir())]
+                         f.is_dir())])
         acq_file = glob.glob(os.path.join(str(root_dir), '*[Aa]cq.txt'))
         log_file = glob.glob(os.path.join(str(root_dir), '*[Ll]og.txt'))
         cache_file = glob.glob(os.path.join(str(root_dir), 'cache.config'))

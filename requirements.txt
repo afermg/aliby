@@ -1,0 +1,7 @@
+imageio==2.8.0
+numpy
+omero-py==5.6.2
+pandas
+scikit-image==0.16.2
+tqdm
+zeroc-ice>=3.6.0

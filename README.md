@@ -130,7 +130,8 @@ seg_expt = SegmentedExperiment(expt)
 
 The initialization should take a few seconds, as it needs to align the images
 in time. 
- 
+
+#### Get a timelapse for a given trap
 From there, you can obtain a timelapse for a single trap as follows:
 ```python
 channels = [0] #Get only the first channel, this is also the default
@@ -149,10 +150,23 @@ timelapse = seg_expt.get_trap_timelapse(trap_id, tile_size=tile_size,
 This can take several seconds at the moment.
 For a speed-up: take fewer z-positions if you can.
 
-If you're not sure what your channel's index is, you can get the ordered
- list of channels in the experiment with:
+If you're not sure what indices to use:
 ```python
-expt.channels
+seg_expt.channels # Get a list of channels
+channel = 'Brightfield'
+ch_id = seg_expt.get_channel_index(channel)
+
+n_traps = seg_expt.n_traps # Get the number of traps 
 ```
+
+#### Get the traps for a given time point
+Alternatively, if you want to get all the traps at a given timepoint:
+
+```python
+timepoint = 0
+seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None, 
+                                z=[0,1,2,3,4])
+```
+
 
 

@@ -2,7 +2,6 @@
 A set of utilities for dealing with ALCATRAS traps
 """
 
-# TODO portfolio of trap templates
 import numpy as np
 from skimage import transform, feature
 
