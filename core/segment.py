@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 
 from core.traps import identify_trap_locations
+from core.baby_client import BabyClient
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
 trap_template = np.load(trap_template_directory / 'trap_bg_1.npy')
@@ -20,6 +21,7 @@ def get_tile_shapes(x, tile_size, max_shape):
     if ymin + tile_size > max_shape[1]:
         ymin = max_shape[1] - tile_size
     return xmin, xmin + tile_size, ymin, ymin + tile_size
+
 
 def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,
                            reference_reset_drift=25):
@@ -76,7 +78,8 @@ def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,
 
 
 class SegmentedExperiment(object):
-    def __init__(self, raw_expt):
+    def __init__(self, raw_expt, baby_url='http://localhost:5101',
+                 baby_config=dict()):
         """
         A base class for a segmented experiment.
 
@@ -87,6 +90,9 @@ class SegmentedExperiment(object):
         self.trap_locations = dict()
         self.cell_outlines = None
         self.compartment_outlines = None
+
+        # Set up the baby client
+        self.baby_client = BabyClient(url=baby_url, **baby_config)
 
         # Tile the current position
         self.trap_locations[self.current_position] = self.tile_timelapse()
@@ -150,7 +156,7 @@ class SegmentedExperiment(object):
                         for i in
                         range(len(self.trap_locations[self.current_position]))]
 
-        max_shape=(self.raw_expt.shape[2], self.raw_expt.shape[3])
+        max_shape = (self.raw_expt.shape[2], self.raw_expt.shape[3])
         tiles_shapes = [get_tile_shapes(x, tile_size, max_shape)
                         for x in trap_centers]
 
@@ -169,10 +175,18 @@ class SegmentedExperiment(object):
         Z) order
         """
         traps = []
-        max_shape=(self.raw_expt.shape[2], self.raw_expt.shape[3])
+        max_shape = (self.raw_expt.shape[2], self.raw_expt.shape[3])
         for trap_center in self.trap_locations[self.current_position]:
-            xmin, xmax, ymin,ymax = get_tile_shapes(trap_center, tile_size,
-                                                    max_shape)
+            xmin, xmax, ymin, ymax = get_tile_shapes(trap_center, tile_size,
+                                                     max_shape)
             traps.append(self.raw_expt[channels, tp, xmin:xmax, ymin:ymax, z])
         return np.stack(traps)
 
+    def cell_segmentation_per_trap(self, trap_id):
+        pass
+
+    def cell_segmentation_per_position(self, pos):
+        pass
+
+    def segment_full_experiment(self):
+        pass

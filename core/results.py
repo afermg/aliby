@@ -1,4 +1,20 @@
-"""Cell results class and utilities"""
+"""Pipeline results classes and utilities"""
+from core.utils import AttributeDict
+
+
+class SegmentationResults:
+    """
+    Object storing the data from the Segmentation pipeline.
+    Everything is stored as an `AttributeDict`, which is a `defaultdict` where
+    you can get elements as attributes.
+
+    In addition, it implements:
+     - IO functionality (read from file, write to file)
+    """
+    def __init__(self, raw_expt):
+        pass
+
+
 
 
 class CellResults:
