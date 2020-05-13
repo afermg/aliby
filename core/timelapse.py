@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 
 import imageio
+from core.utils import ImageCache
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,7 @@ class TimelapseLocal(Timelapse):
         self._id = position
         self._name = position
         self.image_mapper = parse_local_fs(self.pos_dir)
+        self.image_cache = ImageCache()
         self._init_metadata()
 
     def _init_metadata(self):
@@ -255,7 +257,7 @@ class TimelapseLocal(Timelapse):
             default = np.zeros((self.size_x, self.size_y))
             names = [self.image_mapper[self.channels[ch_id]][t].get(i, None)
                    for i in z_positions]
-            res = [imageio.imread(name) if name is not None else default
+            res = [self.image_cache[name] if name is not None else default
                    for name in names]
             return res
         # nested list of images in C, T, X, Y, Z order
