@@ -2,14 +2,14 @@ import time
 import numpy as np
 
 from core.experiment import ExperimentLocal
-from core.segment import SegmentedExperiment
+from core.segment import Tiler
 from core.baby_client import BabyClient
 
 root_dir = '/Users/s1893247/PhD/pipeline-core/data/glclvl_0' \
            '.1_mig1_msn2_maf1_sfp1_dot6_03'
 
 expt = ExperimentLocal(root_dir)
-seg_expt = SegmentedExperiment(expt)
+seg_expt = Tiler(expt)
 
 print(seg_expt.positions)
 seg_expt.current_position = 'pos007'

@@ -14,6 +14,8 @@ setup(
     install_requires=[
         'numpy',
         'tqdm',
+        'pandas',
+        'pytables',
         'scikit-image==0.16.2',
         'imageio==2.8.0',
         'omero-py==5.6.2',

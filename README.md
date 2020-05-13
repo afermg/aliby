@@ -120,12 +120,12 @@ expt.current_position = positions
 
 ### Tiling the raw data
 
-The tiling of raw data is done through a `SegmentedExperiment` object. 
+The tiling of raw data is done through a `Tiler` object. 
 It takes a raw `Experiment` object as an argument.
 
 ```python
-from core.segment import SegmentedExperiment
-seg_expt = SegmentedExperiment(expt)
+from core.segment import Tiler
+seg_expt = Tiler(expt)
 ```
 
 The initialization should take a few seconds, as it needs to align the images

@@ -36,7 +36,7 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
                               cval=np.median(img)),
         pad_input=True,
         mode='median'
-    )**2 for rotation in [0, 90, 180, 270]}
+    ) ** 2 for rotation in [0, 90, 180, 270]}
     best_rotation = max(matches, key=lambda x: np.max(matches[x]))
     temp = transform.rotate(temp, best_rotation, cval=np.median(img))
 
@@ -44,9 +44,9 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
         scales = np.linspace(0.5, 2, 10)
         matches = {scale: feature.match_template(
             img, transform.rescale(temp, scale),
-            pad_input=True,
-            mode='median')**2
-            for scale in scales}
+            mode='median',
+            pad_input=True) ** 2
+                   for scale in scales}
         best_scale = max(matches, key=lambda x: np.max(matches[x]))
         matched = matches[best_scale]
     else:
@@ -55,6 +55,130 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
-        min_distance=trap_template.shape[0]*0.80,
+        min_distance=trap_template.shape[0] * 0.80,
         exclude_border=trap_size // 3)
     return coordinates
+
+
+def get_tile_shapes(x, tile_size, max_shape):
+    half_size = tile_size // 2
+    xmin = int(x[0] - half_size)
+    ymin = max(0, int(x[1] - half_size))
+    if xmin + tile_size > max_shape[0]:
+        xmin = max_shape[0] - tile_size
+    if ymin + tile_size > max_shape[1]:
+        ymin = max_shape[1] - tile_size
+    return xmin, xmin + tile_size, ymin, ymin + tile_size
+
+
+def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
+                       channels=None,
+                       z=None):
+    """
+    Get a timelapse for a given trap by specifying the trap_id
+    :param trap_id: An integer defining which trap to choose. Counted
+    between 0 and Tiler.n_traps - 1
+    :param tile_size: The size of the trap tile (centered around the
+    trap as much as possible, edge cases exist)
+    :param channels: Which channels to fetch, indexed from 0.
+    If None, defaults to [0]
+    :param z: Which z_stacks to fetch, indexed from 0.
+    If None, defaults to [0].
+    :return: A numpy array with the timelapse in (C,T,X,Y,Z) order
+    """
+    # Set the defaults (list is mutable)
+    channels = channels if channels is not None else [0]
+    z = z if z is not None else [0]
+    # Get trap location for that id:
+    trap_centers = [trap_locations[trap_id][i]
+                    for i in
+                    range(len(trap_locations))]
+
+    max_shape = (raw_expt.shape[2], raw_expt.shape[3])
+    tiles_shapes = [get_tile_shapes(x, tile_size, max_shape)
+                    for x in trap_centers]
+
+    timelapse = [raw_expt[channels, i, xmin:xmax, ymin:ymax, z] for
+                 i, (xmin, xmax, ymin, ymax) in enumerate(tiles_shapes)]
+    return np.hstack(timelapse)
+
+
+def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
+                        channels=None, z=None):
+    """
+    Get all the traps from a given time point
+    :param raw_expt:
+    :param trap_locations:
+    :param tp:
+    :param tile_size:
+    :param channels:
+    :param z:
+    :return: A numpy array with the traps in the (trap, C, T, X, Y,
+    Z) order
+    """
+
+    # Set the defaults (list is mutable)
+    channels = channels if channels is not None else [0]
+    z = z if z is not None else [0]
+
+    traps = []
+    max_shape = (raw_expt.shape[2], raw_expt.shape[3])
+    for trap_center in trap_locations[tp]:
+        xmin, xmax, ymin, ymax = get_tile_shapes(trap_center, tile_size,
+                                                 max_shape)
+        traps.append(raw_expt[channels, tp, xmin:xmax, ymin:ymax, z])
+    return np.stack(traps)
+
+
+def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,
+                           reference_reset_drift=25):
+    """
+    Uses image registration to align images in the timelapse.
+    Uses the channel with id `channel` to perform the registration.
+
+    Starts with the first timepoint as a reference and changes the
+    reference to the current timepoint if either the images have moved
+    by half of a trap width or `reference_reset_time` has been reached.
+
+    Sets `self.drift`, a 3D numpy array with shape (t, drift_x, drift_y).
+    We assume no drift occurs in the z-direction.
+
+    :param reference_reset_drift: Upper bound on the allowed drift before
+    resetting the reference image.
+    :param reference_reset_time: Upper bound on number of time points to
+    register before resetting the reference image.
+    :param channel: index of the channel to use for image registration.
+    """
+
+    def centre(img, percentage=0.3):
+        y, x = img.shape
+        cropx = int(np.ceil(x * percentage))
+        cropy = int(np.ceil(y * percentage))
+        startx = int(x // 2 - (cropx // 2))
+        starty = int(y // 2 - (cropy // 2))
+        return img[starty:starty + cropy, startx:startx + cropx]
+
+    ref = centre(np.squeeze(raw_data[channel, 0, :, :, 0]))
+    size_t = raw_data.shape[1]
+
+    drift = [np.array([0, 0])]
+    for i in range(1, size_t):
+        img = centre(np.squeeze(raw_data[channel, i, :, :, 0]))
+
+        shifts, _, _ = feature.register_translation(ref, img)
+        # If a huge move is detected at a single time point it is taken
+        # to be inaccurate and the correction from the previous time point
+        # is used.
+        # This might be common if there is a focus loss for example.
+        if any([abs(x - y) > reference_reset_drift
+                for x, y in zip(shifts, drift[-1])]):
+            shifts = drift[-1]
+
+        drift.append(shifts)
+        ref = img
+
+        # TODO test necessity for references, description below
+        #   If the images have drifted too far from the reference or too
+        #   much time has passed we change the reference and keep track of
+        #   which images are kept as references
+    return np.stack(drift)
