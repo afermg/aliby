@@ -19,10 +19,9 @@ config = {"camera": "evolve",
           "zoom": "60x",
           "n_stacks": "5z"}
 
-baby_client = BabyClient(**config)
+baby_client = BabyClient(expt, **config)
 
-baby_client.get_new_session()
-print("The session is {}".format(baby_client.session_id))
+print("The session is {}".format(baby_client.sessions['default']))
 
 # Channel 0, TP all, X,Y,Z all
 full_img = seg_expt.get_trap_timelapse(15, tile_size=81, z=[0,1,2,3,4])[0, :]
@@ -34,7 +33,9 @@ segmentations = []
 try:
     for i, batch in enumerate(batches):
         print("Sending batch {};".format(i))
-        status = baby_client.queue_image(batch, assignbuds=True,
+        status = baby_client.queue_image(batch,
+                                         baby_client.sessions['default'],
+                                         assignbuds=True,
                                          with_edgemasks=False)
         while True:
             try:

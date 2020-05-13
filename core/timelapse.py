@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 import imageio
-from core.utils import ImageCache
+from core.utils import Cache
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ class TimelapseLocal(Timelapse):
         self._id = position
         self._name = position
         self.image_mapper = parse_local_fs(self.pos_dir)
-        self.image_cache = ImageCache()
+        self.image_cache = Cache()
         self._init_metadata()
 
     def _init_metadata(self):

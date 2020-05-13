@@ -1,6 +1,8 @@
 """
 Utility functions and classes
 """
+from typing import Callable
+
 import imageio
 
 def repr_obj(obj, indent=0):
@@ -18,30 +20,32 @@ def repr_obj(obj, indent=0):
     return string
 
 
-class ImageCache:
+# TODO check functools.lru_cache for this purpose
+class Cache:
     """
-    Cache of images to avoid multiple loading.
+    Fixed-length mapping to use as a cache.
+    Deletes items in FIFO manner when maximum allowed length is reached.
     """
-    def __init__(self, max_len=200):
+    def __init__(self, max_len=200, load_fn: Callable = imageio.imread):
         """
-
-        :param max_len:
+        :param max_len: Maximum number of items in the cache.
+        :param load_fn: The function used to load new items if they are not
+        available in the Cache
         """
         self._dict = dict()
         self._queue = []
+        self.load_fn = load_fn
         self.max_len=max_len
 
     def __getitem__(self, item):
         if item not in self._dict:
-            self.load_image(item)
+            self.load_item(item)
         return self._dict[item]
 
-    # TODO make the loading function a parameter so we can use this for both
-    #  the local and the OMERO timelapses
-    def load_image(self, item):
-        self._dict[item] = imageio.imread(item)
+    def load_item(self, item):
+        self._dict[item] = self.load_fn(item)
         # Clean up the queue
         self._queue.append(item)
         if len(self._queue) > self.max_len:
-            del self._dict.pop[self._queue.pop(0)]
+            del self._dict[self._queue.pop(0)]
 

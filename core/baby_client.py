@@ -4,6 +4,9 @@ import requests
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
+from core.traps import get_trap_timelapse
+from core.utils import Cache
+
 
 class BabyNoMatches(Exception):
     pass
@@ -72,26 +75,28 @@ def create_request(dims, bit_depth, img, **kwargs):
 
 
 class BabyClient:
-    def __init__(self, url='http://localhost:5101', **kwargs):
+    def __init__(self, raw_expt, url='http://localhost:5101', **kwargs):
+        self.raw_expt = raw_expt
         self.url = url
-        self._session_id = ""
         self._config = kwargs
         r_model_sets = requests.get(self.url + '/models')
         self.valid_models = r_model_sets.json()
         self._model_set = choose_model_from_params(self.valid_models,
                                                    **self.config)
+        self.sessions = Cache(load_fn=lambda _: self.get_new_session())
+        self.processing = []
+        self._store = None
 
     @property
-    def session_id(self):
-        return self._session_id
+    def store(self):
+        return self._store
 
-    @session_id.setter
-    def session_id(self, session_id):
-        if self._session_id is not "" and session_id is not "":
-            raise BabyNoSilent("Can only silently set a session id to/from "
-                               "None")
+    @store.setter
+    def store(self, store):
+        if self._store is None:
+            self._store = store
         else:
-            self._session_id = session_id
+            raise ValueError("Store attribute can only be set once.")
 
     @property
     def model_set(self):
@@ -124,28 +129,28 @@ class BabyClient:
             r_session = requests.get(self.url +
                                      '/session/{}'.format(self.model_set))
             r_session.raise_for_status()
-            self.session_id = r_session.json()["sessionid"]
+            return r_session.json()["sessionid"]
         except KeyError as e:
             raise e
         except HTTPError as e:
             raise e
 
-    def queue_image(self, img, **kwargs):
+    def queue_image(self, img, session_id, **kwargs):
         # TODO validate image type?
         # TODO character encoding options?
         bit_depth = img.dtype.itemsize * 8  # bit depth =  byte_size * 8
         data = create_request(img.shape, bit_depth, img, **kwargs)
         status = requests.post(self.url +
-                               '/segment?sessionid={}'.format(self.session_id),
+                               '/segment?sessionid={}'.format(session_id),
                                data=data,
                                headers={'Content-Type': data.content_type})
         status.raise_for_status()
         return status
 
-    def get_segmentation(self):
+    def get_segmentation(self, session_id):
         try:
             seg_response = requests.get(
-                self.url + '/segment?sessionid={}'.format(self.session_id),
+                self.url + '/segment?sessionid={}'.format(session_id),
                 timeout=120)
             seg_response.raise_for_status()
             result = seg_response.json()
@@ -154,3 +159,52 @@ class BabyClient:
         except HTTPError as e:
             raise e
         return result
+
+    def process_position(self, prompt: str):
+        # The prompt received by baby is the position
+        try:
+            trap_locations = self.store[prompt + '/trap_locations']
+            for trap_id in trap_locations.columns:
+                # Finish processing previously queued images
+                self.flush_processing()
+                self.process_trap(prompt, trap_id,
+                                  trap_locations.filter(items=[trap_id]))
+        except KeyError as e:
+            # TODO log that this will not be processed
+            raise e
+        # Flush all processing before moving to the next position
+        while len(self.processing) > 0:
+            self.flush_processing()
+
+    def process_trap(self, prompt, trap_id, trap_location):
+        tile = get_trap_timelapse(self.raw_expt, trap_location, trap_id)
+        # Get the corresponding session
+        trap_key = prompt + f'trap{trap_id}'
+        session_id = self.sessions[trap_key]
+        self.queue_image(tile, session_id)
+        self.processing.append(trap_key)
+
+    def flush_processing(self):
+        """
+        Get the results of previously queued images.
+        :return:
+        """
+        for trap_key in self.processing:
+            try:
+                segmentation = self.get_segmentation(self.sessions[trap_key])
+                #TODO format the segmentation then add to a table rather
+                # than just assigning
+                self.store[trap_key] = segmentation
+                self.processing.remove(trap_key)
+            except Timeout:
+                continue
+            except HTTPError:
+                continue
+
+    def run(self, keys, store):
+        if self.store is None:
+            self.store = store
+        for prompt in keys:
+            self.process_position(prompt)
+        return keys
+

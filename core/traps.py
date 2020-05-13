@@ -92,10 +92,10 @@ def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
     # Get trap location for that id:
     trap_centers = [trap_locations[trap_id][i]
                     for i in
-                    range(len(trap_locations))]
+                    range(len(trap_locations) // 2)]
 
     max_shape = (raw_expt.shape[2], raw_expt.shape[3])
-    tiles_shapes = [get_tile_shapes(x, tile_size, max_shape)
+    tiles_shapes = [get_tile_shapes((x.x, x.y), tile_size, max_shape)
                     for x in trap_centers]
 
     timelapse = [raw_expt[channels, i, xmin:xmax, ymin:ymax, z] for
