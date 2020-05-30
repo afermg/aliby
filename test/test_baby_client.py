@@ -39,8 +39,11 @@ try:
                                          with_edgemasks=False)
         while True:
             try:
-                result = baby_client.get_segmentation()
+                print('Loading.', end='')
+                result = baby_client.get_segmentation(baby_client.sessions[
+                                                          'default'])
             except:
+                print('.', end='')
                 time.sleep(2)
                 continue
             break

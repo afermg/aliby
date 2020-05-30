@@ -112,3 +112,6 @@ omero_py/pipeline/
 **.ipynb
 data/
 notebooks/
+*.pdf
+*.h5
+*.hdf5

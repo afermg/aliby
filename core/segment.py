@@ -143,20 +143,16 @@ class Tiler(object):
         for pos in self.positions:
             self.current_position = pos #So tiling occurs
             store_key = '/'.join([expt_root, pos, 'trap_locations'])
+            # Clear the trap_locations
+            store.remove(store_key)
             store.append(store_key, self.trap_locations[pos])
         return
 
-    def fit_to_pipe(self, pipe, split_results=True):
-        """
-        Takes a pipe of core.timelapse.Timelapse objects and their
-        corresponding experiment ID and in return yields Results objects
-        with trap location results.
-
-        :param pipe: Input generator of Timelapse objects.
-        :param split_results: Determines whether the output Results are
-        split by trap or not.
-        :returns:
-        """
-
-        return
+    def run(self, keys, store):
+        for key in keys:
+            _, pos = key.rsplit('/', maxsplit=1)
+            self.current_position = pos #So tiling occurs
+            trap_loc_key = key + '/trap_locations'
+            store.put(trap_loc_key, self.trap_locations[pos])
+        return keys
 

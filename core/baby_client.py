@@ -1,6 +1,10 @@
+import itertools
 import json
+import numpy as np
+import pandas as pd
 import re
 import requests
+import tables
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
@@ -16,6 +20,7 @@ class BabyNoSilent(Exception):
     pass
 
 
+# Todo: add defaults!
 def choose_model_from_params(valid_models,
                              modelset_filter=None, camera=None, channel=None,
                              zoom=None, n_stacks=None, **kwargs):
@@ -167,8 +172,7 @@ class BabyClient:
             for trap_id in trap_locations.columns:
                 # Finish processing previously queued images
                 self.flush_processing()
-                self.process_trap(prompt, trap_id,
-                                  trap_locations.filter(items=[trap_id]))
+                self.process_trap(prompt, trap_id, trap_locations)
         except KeyError as e:
             # TODO log that this will not be processed
             raise e
@@ -176,14 +180,58 @@ class BabyClient:
         while len(self.processing) > 0:
             self.flush_processing()
 
-    def process_trap(self, prompt, trap_id, trap_location):
-        tile = get_trap_timelapse(self.raw_expt, trap_location, trap_id)
+    # Todo: defined based on the model configuration what z should be
+    def process_trap(self, prompt, trap_id, trap_locations, tile_size=81,
+                     z=[0, 1, 2, 3, 4]):
+        tile = get_trap_timelapse(self.raw_expt, trap_locations, trap_id,
+                                  tile_size=tile_size, z=z)
+        tile = np.squeeze(tile)
+        # try:
+        #     self.store._handle.create_group(prompt, f'trap{trap_id}')
+        # except tables.exceptions.NodeError as e:
+        #     pass
         # Get the corresponding session
-        trap_key = prompt + f'trap{trap_id}'
+        trap_key = prompt + f'/trap{trap_id}'
         session_id = self.sessions[trap_key]
-        self.queue_image(tile, session_id)
-        self.processing.append(trap_key)
+        batches = np.array_split(tile, 8, axis=0)
+        for batch in batches:
+            self.queue_image(batch, session_id)
+            self.processing.append(trap_key)
+            self.flush_processing()
 
+    def format_seg_result(self, result, time_origin=0, max_size=16):
+        # Todo: update time origin at each step.
+        for i, res in enumerate(result):
+            res['timepoint'] = [i + time_origin] * len(res['cell_label'])
+        merged = {k: list(itertools.chain.from_iterable(
+            res[k] for res in result))
+            for k in result[0].keys()}
+        df = pd.DataFrame(merged)
+        df.set_index('timepoint', inplace=True)
+        if len(df) == 0:
+            return dict()
+
+        # Todo: split more systematically
+        for k in ['angles', 'radii']:
+            values = df[k].tolist()
+            for val in values:
+                val += [np.nan] * (max_size - len(val))
+            try:
+                df[[k + str(i) for i in range(max_size)]] = \
+                    pd.DataFrame(values, index=df.index)
+            except ValueError as e:
+                print(k)
+                print([len(val) for val in values])
+                print(result)
+                raise e
+        df[['centrex', 'centrey']] = pd.DataFrame(df['centres'].tolist(),
+                                                  index=df.index)
+        df.drop(['centres', 'angles', 'radii'], axis=1, inplace=True)
+
+        per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
+        return per_cell_dfs
+
+    # Todo: batching
     def flush_processing(self):
         """
         Get the results of previously queued images.
@@ -191,15 +239,25 @@ class BabyClient:
         """
         for trap_key in self.processing:
             try:
-                segmentation = self.get_segmentation(self.sessions[trap_key])
-                #TODO format the segmentation then add to a table rather
-                # than just assigning
-                self.store[trap_key] = segmentation
+                result = self.get_segmentation(self.sessions[trap_key])
+                segmentation = self.format_seg_result(result)
+                for i, seg in segmentation.items():
+                    cell_key = trap_key + f'/cell{i}'
+                    try:
+                        self.store.append(cell_key, seg)
+                    except Exception as e:
+                        print(seg)
+                        raise e
                 self.processing.remove(trap_key)
             except Timeout:
                 continue
             except HTTPError:
                 continue
+            except TypeError as e:
+                raise e
+            except KeyError as e:
+                print(self.store.keys())
+                raise e
 
     def run(self, keys, store):
         if self.store is None:
@@ -207,4 +265,3 @@ class BabyClient:
         for prompt in keys:
             self.process_position(prompt)
         return keys
-

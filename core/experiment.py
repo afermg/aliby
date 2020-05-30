@@ -41,7 +41,9 @@ class Experiment(abc.ABC):
     #metadata_parser = AcqMetadataParser()
 
     def __init__(self):
+        self.exptID = ''
         self._current_position = None
+        self.position_to_process = 0
 
     def __getitem__(self, item):
         return self.current_position[item]
@@ -97,7 +99,19 @@ class Experiment(abc.ABC):
                                                    z_positions, channels,
                                                    timepoints)
 
+    # Pipelining
+    def run(self, keys, store):
+        try:
+            self.current_position = self.positions[self.position_to_process]
+            # Todo: check if we should use the position's id or name
+            return ['/'.join(['', self.exptID, self.current_position.name])]
+            # Todo: write to store
+        except IndexError:
+            return None
 
+
+
+# Todo: cache images like in ExperimentLocal
 class ExperimentOMERO(Experiment):
     """
     Experiment class to organise different timelapses.
@@ -128,8 +142,8 @@ class ExperimentOMERO(Experiment):
 
     def get_position(self, position):
         """Get a Timelapse object for a given position by name"""
-        assert position in self.positions, "Position not available."
-        img = self.connection.getObject("Image", self._positions[position])
+        #assert position in self.positions, "Position not available."
+        img = self.connection.getObject("Image", self.positions[position])
         return TimelapseOMERO(img)
 
     def cache_locally(self, root_dir='./', positions=None, channels=None,
@@ -266,9 +280,8 @@ class ExperimentLocal(Experiment):
         return self._positions
 
     def get_position(self, position):
-        assert position in self.positions, "Position {} not available in {" \
-                                           "}.".format(position, self.positions)
-        # TODO cache positions?
+        # assert position in self.positions, "Position {} not available in {" \
+        #                                    "}.".format(position, self.positions)
         return TimelapseLocal(position, self.root_dir)
 
 
