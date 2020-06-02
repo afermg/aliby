@@ -44,5 +44,5 @@ class ImageCache:
         # Clean up the queue
         self._queue.append(item)
         if len(self._queue) > self.max_len:
-            del self._dict.pop[self._queue.pop(0)]
+            del self._dict[self._queue.pop(0)]
 
