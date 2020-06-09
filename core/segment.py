@@ -92,11 +92,13 @@ class Tiler(object):
                                 - np.sum(drifts[:i, [1, 0]], axis=0)
 
         # Reorganize into a pandas dataframe
-        trap_df = pd.concat([pd.DataFrame(x.T, index=['x', 'y'])
-                             for x in trap_locations.values()],
-                             keys=np.arange(len(trap_locations)),
-                            names=['timepoint', 'coordinate'])
-        return trap_df
+        # trap_df = pd.concat([pd.DataFrame(x.T, index=['x', 'y'])
+        #                      for x in trap_locations.values()],
+        #                      keys=np.arange(len(trap_locations)),
+        #                     names=['timepoint', 'coordinate'])
+        # return trap_df
+        # trap_locations[timepoint][trap_id]
+        return trap_locations
 
     def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
         """

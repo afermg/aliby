@@ -8,7 +8,7 @@ import tables
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from core.traps import get_trap_timelapse
+from core.traps import get_trap_timelapse, get_traps_timepoint
 from core.utils import Cache
 
 
@@ -169,16 +169,26 @@ class BabyClient:
         # The prompt received by baby is the position
         try:
             trap_locations = self.store[prompt + '/trap_locations']
-            for trap_id in trap_locations.columns:
+            for timepoint_id in trap_locations.index:
                 # Finish processing previously queued images
                 self.flush_processing()
-                self.process_trap(prompt, trap_id, trap_locations)
+                self.process_timepoint(prompt, timepoint_id, trap_locations)
         except KeyError as e:
             # TODO log that this will not be processed
             raise e
         # Flush all processing before moving to the next position
         while len(self.processing) > 0:
             self.flush_processing()
+
+    def process_timepoint(self, prompt, timepoint, trap_locations,
+                         tile_size=81, z=[0,1,2,3,4]):
+        traps = get_traps_timepoint(self.raw_expt, trap_locations,
+                                    timepoint, tile_size=tile_size, z=z)
+        traps = np.squeeze(traps)
+        timepoint_key = prompt + f'time{timepoint}'
+        session_id = self.sessions[timepoint_key]
+        self.queue_image(traps, session_id)
+        self.processing.append(timepoint_key)
 
     # Todo: defined based on the model configuration what z should be
     def process_trap(self, prompt, trap_id, trap_locations, tile_size=81,
@@ -231,24 +241,23 @@ class BabyClient:
         per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
         return per_cell_dfs
 
-    # Todo: batching
     def flush_processing(self):
         """
         Get the results of previously queued images.
         :return:
         """
-        for trap_key in self.processing:
+        for time_point in self.processing:
             try:
-                result = self.get_segmentation(self.sessions[trap_key])
+                result = self.get_segmentation(self.sessions[time_point])
                 segmentation = self.format_seg_result(result)
                 for i, seg in segmentation.items():
-                    cell_key = trap_key + f'/cell{i}'
+                    cell_key = time_point + f'/cell{i}'
                     try:
                         self.store.append(cell_key, seg)
                     except Exception as e:
                         print(seg)
                         raise e
-                self.processing.remove(trap_key)
+                self.processing.remove(time_point)
             except Timeout:
                 continue
             except HTTPError:
