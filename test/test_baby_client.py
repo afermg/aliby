@@ -1,3 +1,4 @@
+import json
 import time
 import numpy as np
 
@@ -23,20 +24,22 @@ baby_client = BabyClient(expt, **config)
 
 print("The session is {}".format(baby_client.sessions['default']))
 
-# Channel 0, TP all, X,Y,Z all
-full_img = seg_expt.get_trap_timelapse(15, tile_size=81, z=[0,1,2,3,4])[0, :]
-print(full_img.shape)
+# Channel 0, 0, X,Y,Z all
+num_timepoints = 5
 
-batches = np.array_split(full_img, 8, axis=0)
+traps_tps = [seg_expt.get_traps_timepoint(tp, tile_size=81, channels=[0],
+                                         z=[0, 1, 2, 3, 4]).squeeze()
+            for tp in range(num_timepoints)]
 
 segmentations = []
 try:
-    for i, batch in enumerate(batches):
-        print("Sending batch {};".format(i))
-        status = baby_client.queue_image(batch,
+    for i, timpoint in enumerate(traps_tps):
+        print("Sending timepoint {};".format(i))
+        status = baby_client.queue_image(timpoint,
                                          baby_client.sessions['default'],
-                                         assignbuds=True,
-                                         with_edgemasks=False)
+                                         assign_mothers=True,
+                                         return_baprobs=True,
+                                         with_edgemasks=True)
         while True:
             try:
                 print('Loading.', end='')
@@ -44,21 +47,25 @@ try:
                                                           'default'])
             except:
                 print('.', end='')
-                time.sleep(2)
+                time.sleep(1)
                 continue
             break
-        print("Received batch {}".format(i))
+        print("Received timepoint {}".format(i))
         segmentations.append(result)
 except Exception as e:
     print(segmentations)
     raise e
 
-print(len(segmentations[0]))
-for i in range(5):
-    print("timepoint {}".format(i))
-    for k, v in segmentations[0][i].items():
-        print(k, v)
+with open('segmentations.json', 'w') as fd:
+    json.dump(segmentations, fd)
 
-import matplotlib.pyplot as plt
-plt.imshow(np.squeeze(batches[0][0, ..., 0]))
-plt.savefig('test_baby.pdf')
+print('Done.')
+# print(len(segmentations[0]))
+# for i in range(5):
+#     print("trap {}".format(i))
+#     for k, v in segmentations[0][i].items():
+#         print(k, v)
+#
+# import matplotlib.pyplot as plt
+# plt.imshow(np.squeeze(batches[0][0, ..., 0]))
+# plt.savefig('test_baby.pdf')
