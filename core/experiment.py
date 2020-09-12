@@ -282,6 +282,14 @@ class ExperimentLocal(Experiment):
     def get_position(self, position):
         # assert position in self.positions, "Position {} not available in {" \
         #                                    "}.".format(position, self.positions)
-        return TimelapseLocal(position, self.root_dir)
+        return TimelapseLocal(position, self.root_dir, finished=True)
 
 
+class RunningExperiment(Experiment):
+    # Todo: Experiment that checks for updates in the file structure at each
+    #  call
+    #   * has a run function that is given key (the next pos_timepoint pair
+    #   to check for and returns the requested image
+    #   * acts the same as ExperimentLocal if the experiment is over
+    def __init__(self):
+        pass

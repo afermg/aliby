@@ -9,7 +9,7 @@ from core.utils import Cache
 logger = logging.getLogger(__name__)
 
 
-def parse_local_fs(pos_dir):
+def parse_local_fs(pos_dir, tp=None):
     """
     Local file structure:
     - pos_dir
@@ -21,24 +21,30 @@ def parse_local_fs(pos_dir):
     pos_dir = Path(pos_dir)
 
     img_mapper = dict()
-    img_list = [img for img in pos_dir.iterdir()]
 
     def channel_idx(img_name):
         return img_name.stem.split('_')[-2]
 
     def tp_idx(img_name):
-        return img_name.stem.split('_')[-3]
+        return int(img_name.stem.split('_')[-3]) - 1
 
     def z_idx(img_name):
         return img_name.stem.split('_')[-1]
 
-    for channel, group in itertools.groupby(sorted(img_list, key=channel_idx),
-                                            key=channel_idx):
-        img_mapper[channel] = [{i: item for i, item in enumerate(sorted(grp,
-                                                                key=z_idx))}
-                               for _, grp in
-                               itertools.groupby(sorted(group, key=tp_idx),
-                                                 key=tp_idx)]
+    if tp is not None:
+        img_list = [img for img in pos_dir.iterdir() if tp_idx(img) in tp]
+    else:
+        img_list = [img for img in pos_dir.iterdir()]
+
+    for tp, group in itertools.groupby(sorted(img_list, key=tp_idx),
+                                       key=tp_idx):
+        img_mapper[int(tp)] = {channel: {i: item
+                                    for i, item in
+                                    enumerate(sorted(grp, key=z_idx))}
+                          for channel, grp in
+                          itertools.groupby(sorted( group, key=channel_idx),
+                                            key=channel_idx)
+                          }
     return img_mapper
 
 
@@ -46,6 +52,7 @@ class Timelapse:
     """
     Timelapse class contains the specifics of one position.
     """
+
     def __init__(self):
         self._id = None
         self._name = None
@@ -55,7 +62,6 @@ class Timelapse:
         self._size_x = 0
         self._size_y = 0
         self._size_z = 0
-
 
     def __repr__(self):
         return self.name
@@ -205,35 +211,33 @@ class TimelapseOMERO(Timelapse):
 
 
 class TimelapseLocal(Timelapse):
-    """
-    Local file structure:
-
-    - pos_dir
-        -- exptID_{timepointID}_{ChannelID}_{z_position_id}.png
-
-    """
-
-    def __init__(self, position, root_dir):
+    # Todo: Local Timelapse that checks for changes to the file structure at
+    #  each call
+    #  * Acts the same as TimelapseLocal if the experiment is over
+    def __init__(self, position, root_dir, finished=False):
         super(TimelapseLocal, self).__init__()
         self.pos_dir = root_dir / position
         assert self.pos_dir.exists()
         self._id = position
         self._name = position
-        self.image_mapper = parse_local_fs(self.pos_dir)
         self.image_cache = Cache()
-        self._init_metadata()
+        if finished:
+            self.image_mapper = parse_local_fs(self.pos_dir)
+            self._update_metadata()
+        else:
+            self.image_mapper = dict()
 
-    def _init_metadata(self):
-        """
-        Initialize the metadata based on the image_mapper
-
-        :return:
-        """
-        self._channels = list(self.image_mapper.keys())
+    def _update_metadata(self):
+        self._size_t = len(self.image_mapper)
+        # Todo: if cy5 is the first one it causes issues with getting x, y
+        #   hence the sorted but it's not very robust
+        self._channels = sorted(list(set.union(*[set(tp.keys())
+                                          for tp in
+                                                 self.image_mapper.values()])))
         self._size_c = len(self._channels)
-        self._size_t = min([len(item) for item in self.image_mapper.values()])
-        self._size_z = max([len(item) for item in itertools.chain(
-                            *self.image_mapper.values())])
+        # Todo: refactor so we don't rely on there being any images at all
+        self._size_z = max([len(self.image_mapper[0][ch])
+                            for ch in self._channels])
         single_img = self.get_hypercube(x=None, y=None,
                                         z_positions=None, channels=[0],
                                         timepoints=[0])
@@ -255,11 +259,12 @@ class TimelapseLocal(Timelapse):
 
         def z_pos_getter(z_positions, ch_id, t):
             default = np.zeros((self.size_x, self.size_y))
-            names = [self.image_mapper[self.channels[ch_id]][t].get(i, None)
-                   for i in z_positions]
+            names = [self.image_mapper[t][self.channels[ch_id]].get(i, None)
+                     for i in z_positions]
             res = [self.image_cache[name] if name is not None else default
                    for name in names]
             return res
+
         # nested list of images in C, T, X, Y, Z order
         ctxyz = []
         for ch_id in channels:
@@ -269,4 +274,16 @@ class TimelapseLocal(Timelapse):
                 txyz.append(np.dstack(list(xyz))[xmin:xmax, ymin:ymax])
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
+
+    def run(self, keys):
+        """
+        Parse file structure and get images for the timepoints in keys.
+        """
+        if keys is None:
+            return None
+        elif isinstance(keys, int):
+            keys = [keys]
+        self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
+        self._update_metadata()
+        return keys
 
