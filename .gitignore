@@ -115,3 +115,4 @@ notebooks/
 *.pdf
 *.h5
 *.hdf5
+**.png
