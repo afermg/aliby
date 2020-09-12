@@ -1,6 +1,8 @@
 """
 Utility functions and classes
 """
+import itertools
+import operator
 from typing import Callable
 
 import imageio
@@ -49,3 +51,9 @@ class Cache:
         if len(self._queue) > self.max_len:
             del self._dict[self._queue.pop(0)]
 
+
+def accumulate(l: list):
+    l = sorted(l)
+    it = itertools.groupby(l, operator.itemgetter(0))
+    for key, sub_iter in it:
+        yield key, list(sub_iter)

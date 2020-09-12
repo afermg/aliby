@@ -285,5 +285,6 @@ class TimelapseLocal(Timelapse):
             keys = [keys]
         self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
         self._update_metadata()
+        # Todo: update store
         return keys
 

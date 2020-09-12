@@ -13,8 +13,10 @@ import numpy as np
 
 import omero
 from omero.gateway import BlitzGateway
+from logfile_parser import Parser
 
 from core.timelapse import TimelapseOMERO, TimelapseLocal
+from core.utils import accumulate
 
 logger = logging.getLogger(__name__)
 
@@ -98,16 +100,6 @@ class Experiment(abc.ABC):
         return self.current_position.get_hypercube(x, y,
                                                    z_positions, channels,
                                                    timepoints)
-
-    # Pipelining
-    def run(self, keys, store):
-        try:
-            self.current_position = self.positions[self.position_to_process]
-            # Todo: check if we should use the position's id or name
-            return ['/'.join(['', self.exptID, self.current_position.name])]
-            # Todo: write to store
-        except IndexError:
-            return None
 
 
 
@@ -215,81 +207,73 @@ class ExperimentOMERO(Experiment):
 
 
 class ExperimentLocal(Experiment):
-    """
-    Experiment class connected to a local file structure.
-    It relies on the file structure and file names being organised as follows:
-
-    root_directory
-    - {exptID}Acq.txt
-    - {exptID}log.txt
-    - {posID}
-    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
-    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
-    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
-    -- ...
-    - {posID}
-    -- exptID_{timepointID}_{ChannelID}_{ZStackID}.png
-    -- ...
-    """
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, finished=False):
         super(ExperimentLocal, self).__init__()
         self.root_dir = Path(root_dir)
         self.exptID = self.root_dir.name
-        self.metadata = dict()
-        pos, acq_file, log_file, cache = ExperimentLocal.parse_dir_structure(
-            self.root_dir)
-        self._positions = pos
-        self.metadata['acq_file'] = acq_file
-        self.metadata['log_file'] = log_file
-        if cache is not None:
-            with open(cache, 'r') as fd:
-                cache_config = json.load(fd)
-            self.metadata.update(**cache_config)
+        self._pos_mapper = dict()
+        # Fixme: Made the assumption that the Acq file gets saved before the
+        #  experiment is run and that the information in that file is
+        #  trustworthy.
+        acq_file = self._find_acq_file()
+        acq_parser = Parser('multiDGUI_acq_format')
+        with open(acq_file, 'r') as fd:
+            metadata = acq_parser.parse(fd)
+        self.metadata = metadata
+        self.metadata['finished'] = finished
+        if self.finished:
+            cache = self._find_cache()
+            #log = self._find_log() # Todo: add log metadata
+            if cache is not None:
+                with open(cache, 'r') as fd:
+                    cache_config = json.load(fd)
+                self.metadata.update(**cache_config)
         self._current_position = self.get_position(self.positions[0])
 
-    @staticmethod
-    def parse_dir_structure(root_dir):
-        """
-        The images are stored as follows:
-        ```
-        root_directory
-        - {exptID}Acq.txt
-        - {exptID}log.txt
-        - {posID}
-        -- exptID_{timepointID}_{ChannelID}_{z_position_id}.png
-        ```
+    def _find_file(self, regex):
+        file = glob.glob(os.path.join(str(self.root_dir), regex))
+        if len(file) != 1:
+            return None
+        else:
+            return file[0]
 
-        :param root_dir: The experiment's root directory, organised as
-        described above.
-        :return:
-        """
-        positions = sorted([f.name for f in root_dir.iterdir()
-                     if (re.search(r'pos[0-9]+$', f.name) and
-                         f.is_dir())])
-        acq_file = glob.glob(os.path.join(str(root_dir), '*[Aa]cq.txt'))
-        log_file = glob.glob(os.path.join(str(root_dir), '*[Ll]og.txt'))
-        cache_file = glob.glob(os.path.join(str(root_dir), 'cache.config'))
+    def _find_acq_file(self):
+        file = self._find_file('*[Aa]cq.txt')
+        if file is None:
+            raise ValueError('Cannot load this experiment. There are either '
+                             'too many or too few acq files.')
+        return file
 
-        acq_file = acq_file[0] if len(acq_file) == 1 else None
-        log_file = log_file[0] if len(log_file) == 1 else None
-        cache_file = acq_file[0] if len(cache_file) == 1 else None
-        return positions, acq_file, log_file, cache_file
+    def _find_cache(self):
+        return self._find_file('cache.config')
+
+    @property
+    def finished(self):
+        return self.metadata['finished']
+
+    @property
+    def running(self):
+        return not self.metadata['finished']
 
     @property
     def positions(self):
-        return self._positions
+        return self.metadata['positions']['posname']
 
     def get_position(self, position):
-        # assert position in self.positions, "Position {} not available in {" \
-        #                                    "}.".format(position, self.positions)
-        return TimelapseLocal(position, self.root_dir, finished=True)
+        if position not in self._pos_mapper:
+            self._pos_mapper[position] = TimelapseLocal(position,
+                                                        self.root_dir,
+                                                        finished=self.finished)
+        return self._pos_mapper[position]
 
+    def run(self, keys):
+        """
 
-class RunningExperiment(Experiment):
-    # Todo: Experiment that checks for updates in the file structure at each
-    #  call
-    #   * has a run function that is given key (the next pos_timepoint pair
-    #   to check for and returns the requested image
-    #   * acts the same as ExperimentLocal if the experiment is over
-    def __init__(self):
-        pass
+        :param keys: List of (position, timepoint) tuples to process.
+        :return:
+        """
+        for pos, tps in accumulate(keys):
+            self.get_position(pos).run(tps)
+        # Todo update store
+        return keys
+

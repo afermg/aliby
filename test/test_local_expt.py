@@ -33,7 +33,7 @@ root_directory = data_directory / 'glclvl_0.1_mig1_msn2_maf1_sfp1_dot6_03'
 
 class TestCase(unittest.TestCase):
     def setUp(self):
-        self.expt = Experiment.from_source(root_directory)
+        self.expt = Experiment.from_source(root_directory, finished=True)
 
     def test_experiment_shape(self):
         print("C: {}, T: {}, X: {}, Y: {}, Z: {}".format(*self.expt.shape))
@@ -42,6 +42,12 @@ class TestCase(unittest.TestCase):
     def test_experiment_slicing(self):
         test_slice = self.expt[(0, 2), 0:3, :100, 100:200, 0:5:2]
         self.assertTupleEqual(test_slice.shape, (2, 3, 100, 100, 3))
+
+    def test_experiment_metadata(self):
+        self.assertTrue('positions' in self.expt.metadata.keys())
+        self.assertTrue('channels' in self.expt.metadata.keys())
+        self.assertTrue('time_settings' in self.expt.metadata.keys())
+        self.assertTrue('zsectioning' in self.expt.metadata.keys())
 
 
 
