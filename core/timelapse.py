@@ -211,12 +211,19 @@ class TimelapseOMERO(Timelapse):
 
 
 class TimelapseLocal(Timelapse):
-    # Todo: Local Timelapse that checks for changes to the file structure at
-    #  each call
-    #  * Acts the same as TimelapseLocal if the experiment is over
     def __init__(self, position, root_dir, finished=False):
+        """
+        Linked to a local directory containing the images for one position
+        in an experiment.
+        Can be a still running experiment or a finished one.
+
+        :param position: Name of the position
+        :param root_dir: Root directory
+        :param finished: Whether the experiment has finished running or the
+        class will be used as part of a pipeline, mostly with calls to `run`
+        """
         super(TimelapseLocal, self).__init__()
-        self.pos_dir = root_dir / position
+        self.pos_dir = Path(root_dir) / position
         assert self.pos_dir.exists()
         self._id = position
         self._name = position

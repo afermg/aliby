@@ -148,6 +148,15 @@ def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
     return np.stack(traps, axis=0)
 
 
+def centre(img, percentage=0.3):
+    y, x = img.shape
+    cropx = int(np.ceil(x * percentage))
+    cropy = int(np.ceil(y * percentage))
+    startx = int(x // 2 - (cropx // 2))
+    starty = int(y // 2 - (cropy // 2))
+    return img[starty:starty + cropy, startx:startx + cropx]
+
+
 def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,
                            reference_reset_drift=25):
     """
@@ -167,15 +176,6 @@ def align_timelapse_images(raw_data, channel=0, reference_reset_time=80,
     register before resetting the reference image.
     :param channel: index of the channel to use for image registration.
     """
-
-    def centre(img, percentage=0.3):
-        y, x = img.shape
-        cropx = int(np.ceil(x * percentage))
-        cropy = int(np.ceil(y * percentage))
-        startx = int(x // 2 - (cropx // 2))
-        starty = int(y // 2 - (cropy // 2))
-        return img[starty:starty + cropy, startx:startx + cropx]
-
     ref = centre(np.squeeze(raw_data[channel, 0, :, :, 0]))
     size_t = raw_data.shape[1]
 

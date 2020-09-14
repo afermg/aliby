@@ -17,6 +17,7 @@ setup(
         'pandas',
         'tables',
         'scikit-image==0.16.2',
+        'opencv-python',
         'imageio==2.8.0',
         'omero-py==5.6.2',
         'zeroc-ice==3.6.5',

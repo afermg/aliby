@@ -9,8 +9,8 @@ from core.baby_client import BabyClient
 root_dir = '/Users/s1893247/PhD/pipeline-core/data/glclvl_0' \
            '.1_mig1_msn2_maf1_sfp1_dot6_03'
 
-expt = ExperimentLocal(root_dir)
-seg_expt = Tiler(expt)
+expt = ExperimentLocal(root_dir, finished=True)
+seg_expt = Tiler(expt, finished=True)
 
 print(seg_expt.positions)
 seg_expt.current_position = 'pos007'
