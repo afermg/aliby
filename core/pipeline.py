@@ -5,35 +5,19 @@ from abc import ABC, abstractmethod
 from typing import Iterable, List
 
 import pandas as pd
-import tables as tb
+import sqlalchemy as sa
+from sqlalchemy.orm import sessionmaker
 
-from core.experiment import Experiment, ExperimentLocal, ExperimentOMERO
+from database.records import Base
+from core.experiment import ExperimentLocal
 from core.segment import Tiler
 from core.baby_client import BabyClient
 
 
-class Results:
-    """
-    Object storing the data from the Pipeline.
-    Uses pandas' HDFStore object.
-
-    In addition, it implements:
-     - IO functionality (read from file, write to file)
-
-    """
-    def __init__(self):
-        pass
-
-    def to_store(self):
-        pass
-
-    def from_json(self):
-        pass
-
-
 class PipelineStep(ABC):
     @abstractmethod
-    def run(self, keys: List[str], store: pd.HDFStore) -> List[str]:
+    def run(self, keys: List[str], store: pd.HDFStore=None, session=None) -> \
+            List[str]:
         """
         Abstract run method, when implemented by subclasses, runs analysis
         on the keys and saves results in store.
@@ -48,41 +32,35 @@ class Pipeline:
     A chained set of Pipeline elements connected through pipes.
     """
 
-    def __init__(self, store: pd.HDFStore, pipeline_steps: Iterable):
-        self.store = store
+    def __init__(self, pipeline_steps: Iterable, database: str, store: str):
         # Setup steps
         self.steps = pipeline_steps
+        # Database session
+        self.engine = sa.create_engine(database)
+        Base.metadata.create_all(self.engine)
+        Session = sessionmaker(self.engine)
+        self.session = Session()
+        self.store = store
 
-    def run(self, max_runs=2):
-        keys = []
+    def run_step(self, keys):
+        for pipeline_step in self.steps:
+            keys = pipeline_step.run(keys, session=self.session,
+                                     store=self.store)
+            self.session.commit()
+        return keys
+
+    def run(self, keys, max_runs=2):
+        # Todo : create  a pipeline step that checks the data
         runs = 0
         while runs <= max_runs and keys is not None:
             # TODO make run functions return None when finished
             for pipeline_step in self.steps:
-                keys = pipeline_step.run(keys, self.store)
+                keys = pipeline_step.run(keys)
             runs += 1
 
-# Todo future: could have more flexibility by using pytables directly. At
-#  the moment using pandas.HDFstore, does not allow for writing arrays to
-#  the file, which would be more convenient for variable-sized data.
-class Store:
-    """
-    Implements an interface to pytables.
-    """
-    def __init__(self, filename: str, title: str = "Test file"):
-        self.h5file = tb.open_file(filename, mode='w', title=title)
-
-    def add_group(self, root: str, name: str, description=""):
-        # Todo: infer root from name
-        group = self.h5file.create_group(root, name, description)
-        return group
-
-    def add_array(self, group, name, values=None, title=""):
-        self.h5file.create_array(group, name, values, title)
-
-    def close(self):
-        self.h5file.close()
-
-
-
-
+    def store_to_h5(self):
+        store = pd.HDFStore(self.store)
+        for table in ['positions', 'traps', 'drifts', 'cells', 'cell_info']:
+            store[table] = pd.read_sql_table(table, self.engine)
+        store.close()
+        return

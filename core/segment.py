@@ -10,6 +10,8 @@ from pathlib import Path
 import core
 from core.traps import identify_trap_locations, get_trap_timelapse, \
     get_traps_timepoint, align_timelapse_images, centre
+from core.utils import accumulate
+from database.records import Trap, Position, Drift
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
 trap_template = np.load(trap_template_directory / 'trap_bg_1.npy')
@@ -32,6 +34,13 @@ class Tiler:
         self.finished = finished
         self.pos_mapper = dict()
         self._current_position = self.expt.positions[0]
+
+    def __getitem__(self, pos):
+        # Can ask for a position
+        if pos not in self.pos_mapper.keys():
+            self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
+                                                  self.finished)
+        return self.pos_mapper[pos]
 
     @property
     def n_timepoints(self):
@@ -72,8 +81,11 @@ class Tiler:
             tp, tile_size=tile_size, channels=channels, z=z
         )
 
-    def run(self, keys):
-        pass
+    def run(self, keys, session=None, **kwargs):
+        for pos, tps in accumulate(keys):
+            self[pos].run(tps, session=session)
+        session.commit()
+        return keys
 
 class TrapLocations:
     def __init__(self, initial_location, initial_time=0):
@@ -99,13 +111,16 @@ class TrapLocations:
             self._drifts.append(value)
             self._timepoints.append(key)
 
+    def __len__(self):
+        return self.n_timepoints
+
     def __repr__(self):
         pass
 
 class TimelapseTiler:
     def __init__(self, timelapse, finished=False):
         self.timelapse = timelapse
-        self.trap_locations = None
+        self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
         self._reference = None
         if finished:
             self.tile_timelapse()
@@ -206,20 +221,36 @@ class TimelapseTiler:
             raise ValueError("Requested timepoints {} but timepoints already "
                              "processed until time {}"
                              ".".format(timepoints, self.n_timepoints))
-        contiguous = np.arange(self.n_timepoints + 1, max(timepoints) + 1)
+        contiguous = np.arange(self.n_timepoints, max(timepoints) + 1)
         if not all(contiguous == timepoints):
             raise ValueError("Timepoints not contiguous: expected {}, "
                              "got {}".format(list(contiguous), timepoints))
 
-    def run(self, keys):
+    def run(self, keys, session=None):
         """
         :param keys: a list of timepoints to run tiling on.
         :return:
         """
         timepoints = sorted(keys)
+        # Get the position in the database that corresponds to the timelapse
+        # of this tiler
+        db_pos = session.query(Position).filter_by(
+            name=self.timelapse.name).first()
         if len(self.trap_locations) == 0:
-            self._initialise_locations(timepoints.pop(0))
+            initial_tp = timepoints.pop(0)
+            self._initialise_locations(initial_tp)
+            # Create a trap record for each found trap
+            for i in range(self.trap_locations.n_traps):
+                x, y = self.trap_locations[initial_tp][i]
+                trap = Trap(number=i, position=db_pos, x=x, y=y,
+                            size=96)  # Todo: should I include trap size?
+                session.add(trap)
         self._check_contiguous_time(timepoints)
         for tp in timepoints:
-            self.trap_locations[tp] = self._get_drift(tp)
+            drift = self._get_drift(tp)
+            self.trap_locations[tp] = drift
+            # Update the drifts
+            y, x = drift
+            db_drift = Drift(x=x, y=y, t=tp, position=db_pos)
+            session.add(db_drift)
         return keys

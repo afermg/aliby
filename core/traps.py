@@ -56,7 +56,7 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
         min_distance=trap_template.shape[0] * 0.80,
-        exclude_border=trap_size // 3)
+        exclude_border=trap_size // 2)
     return coordinates
 
 

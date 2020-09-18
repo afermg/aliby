@@ -5,6 +5,7 @@ from pathlib import Path
 
 import imageio
 from core.utils import Cache
+from database.records import Position
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +283,7 @@ class TimelapseLocal(Timelapse):
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
 
-    def run(self, keys):
+    def run(self, keys, session=None, **kwargs):
         """
         Parse file structure and get images for the timepoints in keys.
         """
@@ -292,6 +293,12 @@ class TimelapseLocal(Timelapse):
             keys = [keys]
         self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
         self._update_metadata()
-        # Todo: update store
+        # Update the position in the session
+        db_pos = session.query(Position).filter_by(name=self.name).first()
+        if db_pos is None:
+            db_pos = Position(name=self.name, n_timepoints=self.size_t)
+            session.add(db_pos)
+        else:
+            db_pos.n_timepoints = self.size_t
         return keys
 

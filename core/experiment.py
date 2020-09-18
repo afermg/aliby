@@ -266,14 +266,16 @@ class ExperimentLocal(Experiment):
                                                         finished=self.finished)
         return self._pos_mapper[position]
 
-    def run(self, keys):
+    def run(self, keys, session=None, **kwargs):
         """
 
-        :param keys: List of (position, timepoint) tuples to process.
+        :param keys: List of (position, time point) tuples to process.
         :return:
         """
         for pos, tps in accumulate(keys):
-            self.get_position(pos).run(tps)
-        # Todo update store
+            self.get_position(pos).run(tps, session=session)
+        session.commit()
+        # Todo: if keys is none, get the positions table from the session
+        #  and save it to the store, then return None
         return keys
 

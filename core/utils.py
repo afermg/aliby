@@ -56,4 +56,4 @@ def accumulate(l: list):
     l = sorted(l)
     it = itertools.groupby(l, operator.itemgetter(0))
     for key, sub_iter in it:
-        yield key, list(sub_iter)
+        yield key, [x[1] for x in sub_iter]

@@ -1,15 +1,19 @@
 import itertools
 import json
+from typing import List, Iterable
+
+import h5py
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import re
 import requests
-import tables
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 from core.traps import get_trap_timelapse, get_traps_timepoint
-from core.utils import Cache
+from core.utils import Cache, accumulate
+from database.records import CellInfo, Cell, Trap, Position
 
 
 class BabyNoMatches(Exception):
@@ -80,8 +84,8 @@ def create_request(dims, bit_depth, img, **kwargs):
 
 
 class BabyClient:
-    def __init__(self, raw_expt, url='http://localhost:5101', **kwargs):
-        self.raw_expt = raw_expt
+    def __init__(self, tiler, url='http://localhost:5101', **kwargs):
+        self.tiler = tiler
         self.url = url
         self._config = kwargs
         r_model_sets = requests.get(self.url + '/models')
@@ -90,18 +94,6 @@ class BabyClient:
                                                    **self.config)
         self.sessions = Cache(load_fn=lambda _: self.get_new_session())
         self.processing = []
-        self._store = None
-
-    @property
-    def store(self):
-        return self._store
-
-    @store.setter
-    def store(self, store):
-        if self._store is None:
-            self._store = store
-        else:
-            raise ValueError("Store attribute can only be set once.")
 
     @property
     def model_set(self):
@@ -165,49 +157,30 @@ class BabyClient:
             raise e
         return result
 
-    def process_position(self, prompt: str):
+    def process_position(self, prompt: str, tps: Iterable[int], session,
+                         store):
         # The prompt received by baby is the position
         try:
-            trap_locations = self.store[prompt + '/trap_locations']
-            for timepoint_id in trap_locations.index:
+            for timepoint_id in tps:
                 # Finish processing previously queued images
-                self.flush_processing()
-                self.process_timepoint(prompt, timepoint_id, trap_locations)
+                self.flush_processing(session, store)
+                self.process_timepoint(prompt, timepoint_id)
         except KeyError as e:
             # TODO log that this will not be processed
             raise e
         # Flush all processing before moving to the next position
         while len(self.processing) > 0:
-            self.flush_processing()
+            self.flush_processing(session, store)
 
-    def process_timepoint(self, prompt, timepoint, trap_locations,
-                         tile_size=81, z=[0,1,2,3,4]):
-        traps = get_traps_timepoint(self.raw_expt, trap_locations,
-                                    timepoint, tile_size=tile_size, z=z)
+    def process_timepoint(self, pos, timepoint, tile_size=81,
+                          z=[0, 1, 2, 3, 4]):
+        traps = self.tiler[pos].get_traps_timepoint(timepoint,
+                                                    tile_size=tile_size, z=z)
         traps = np.squeeze(traps)
-        timepoint_key = prompt + f'time{timepoint}'
-        session_id = self.sessions[timepoint_key]
+        timepoint_key = (pos, timepoint)
+        session_id = self.sessions[pos]
         self.queue_image(traps, session_id)
         self.processing.append(timepoint_key)
-
-    # Todo: defined based on the model configuration what z should be
-    def process_trap(self, prompt, trap_id, trap_locations, tile_size=81,
-                     z=[0, 1, 2, 3, 4]):
-        tile = get_trap_timelapse(self.raw_expt, trap_locations, trap_id,
-                                  tile_size=tile_size, z=z)
-        tile = np.squeeze(tile)
-        # try:
-        #     self.store._handle.create_group(prompt, f'trap{trap_id}')
-        # except tables.exceptions.NodeError as e:
-        #     pass
-        # Get the corresponding session
-        trap_key = prompt + f'/trap{trap_id}'
-        session_id = self.sessions[trap_key]
-        batches = np.array_split(tile, 8, axis=0)
-        for batch in batches:
-            self.queue_image(batch, session_id)
-            self.processing.append(trap_key)
-            self.flush_processing()
 
     def format_seg_result(self, result, time_origin=0, max_size=16):
         # Todo: update time origin at each step.
@@ -241,36 +214,62 @@ class BabyClient:
         per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
         return per_cell_dfs
 
-    def flush_processing(self):
+    def store_result(self, result, pos, tp, session, store):
+        # Todo: use joins for more efficient queries
+        for ix, trap in enumerate(result):
+            outputs = sorted(trap.keys())
+            per_cell = zip(*[trap[k] for k in outputs])
+            df = pd.DataFrame(per_cell, columns=outputs)
+            db_trap = session.query(Trap).filter_by(number=ix).first()
+            for _, cell in df.iterrows():
+                db_cell = session.query(Cell) \
+                    .filter_by(number=cell['cell_label']) \
+                    .join(Trap).filter_by(number=ix) \
+                    .join(Position).filter_by(name=pos) \
+                    .first()
+                if db_cell is None:
+                    # Create a new cell
+                    db_cell = Cell(number=cell['cell_label'],
+                                   trap=db_trap)
+                    session.add(db_cell)
+                data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
+                                                      cell['cell_label'],
+                                                      tp)
+                cell_info = CellInfo(number=cell['cell_label'],
+                                     x=cell['centres'][0],
+                                     y=cell['centres'][1],
+                                     t=tp,
+                                     data=data_key,
+                                     cell=db_cell
+                                     )
+                remaining_data = set(outputs) - {'cell_label', 'centres'}
+                # Todo: write arrays to store
+                with h5py.File(store, mode='a') as f:
+                    for key in remaining_data:
+                        item_key = data_key + '/' + key
+                        f[item_key] = cell[key]
+                session.add(cell_info)
+
+    def flush_processing(self, session, store):
         """
         Get the results of previously queued images.
         :return:
         """
-        for time_point in self.processing:
+        for pos, tp in self.processing:
             try:
-                result = self.get_segmentation(self.sessions[time_point])
-                segmentation = self.format_seg_result(result)
-                for i, seg in segmentation.items():
-                    cell_key = time_point + f'/cell{i}'
-                    try:
-                        self.store.append(cell_key, seg)
-                    except Exception as e:
-                        print(seg)
-                        raise e
-                self.processing.remove(time_point)
+                result = self.get_segmentation(self.sessions[pos])
+                self.store_result(result, pos, tp, session, store)
+                session.commit()
+                self.processing.remove((pos, tp))
             except Timeout:
                 continue
             except HTTPError:
                 continue
             except TypeError as e:
                 raise e
-            except KeyError as e:
-                print(self.store.keys())
-                raise e
 
-    def run(self, keys, store):
-        if self.store is None:
-            self.store = store
-        for prompt in keys:
-            self.process_position(prompt)
+    def run(self, keys, session=None, store='store.h5', **kwargs):
+        # key are (pos, timepoint) tuples
+        for pos, tps in accumulate(keys):
+            self.process_position(pos, tps, session, store)
         return keys
