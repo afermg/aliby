@@ -1,4 +1,5 @@
 """Core classes for the pipeline"""
+import itertools
 import os
 import abc
 import re
@@ -6,7 +7,9 @@ import glob
 import json
 from pathlib import Path
 import logging
+from typing import Iterable, Union
 
+import cv2
 import imageio
 from tqdm import tqdm
 import numpy as np
@@ -40,7 +43,8 @@ class Experiment(abc.ABC):
     >>> bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
     """
     __metaclass__ = abc.ABCMeta
-    #metadata_parser = AcqMetadataParser()
+
+    # metadata_parser = AcqMetadataParser()
 
     def __init__(self):
         self.exptID = ''
@@ -102,7 +106,6 @@ class Experiment(abc.ABC):
                                                    timepoints)
 
 
-
 # Todo: cache images like in ExperimentLocal
 class ExperimentOMERO(Experiment):
     """
@@ -128,13 +131,16 @@ class ExperimentOMERO(Experiment):
         # Set up the current position as the first in the list
         self._current_position = self.get_position(self.positions[0])
 
+        self.save_dir = Path(kwargs.get('save_dir', './'))
+        self.running_tp = 0
+
     @property
     def positions(self):
         return list(self._positions.keys())
 
     def get_position(self, position):
         """Get a Timelapse object for a given position by name"""
-        #assert position in self.positions, "Position not available."
+        # assert position in self.positions, "Position not available."
         img = self.connection.getObject("Image", self.positions[position])
         return TimelapseOMERO(img)
 
@@ -169,23 +175,20 @@ class ExperimentOMERO(Experiment):
             pos_dir = save_dir / pos_name
             if not pos_dir.exists():
                 pos_dir.mkdir()
-            for channel in tqdm(channels):
-                for tp in tqdm(timepoints):
-                    for z_pos in tqdm(z_positions):
-                        ch_id = pos.get_channel_index(channel)
-                        image = pos.get_hypercube(x=None, y=None,
-                                                  channels=[ch_id],
-                                                  z_positions=[z_pos],
-                                                  timepoints=[tp])
+            self.cache_set(pos, range(pos.size_t))
 
-                        im_name = "{}_{:06d}_{}_{:03d}.png".format(self.name,
-                                                           tp + 1,
-                                                           channel,
-                                                           z_pos + 1)
-                        imageio.imwrite(str(pos_dir / im_name), np.squeeze(
-                            image))
-
+        self.cache_annotations(save_dir)
         # Save the file annotations
+        cache_config = dict(positions=positions, channels=channels,
+                            timepoints=timepoints, z_positions=z_positions)
+        with open(str(save_dir / 'cache.config'), 'w') as fd:
+            json.dump(cache_config, fd)
+        logger.info('Downloaded experiment {}'.format(self.exptID))
+
+    # Todo: turn this static
+    def cache_annotations(self, save_dir):
+        # Save the file annotations
+        tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
                 filepath = save_dir / annotation.getFileName()
@@ -196,14 +199,55 @@ class ExperimentOMERO(Experiment):
                 with open(str(filepath), mode) as fd:
                     for chunk in annotation:
                         fd.write(chunk)
-        # Create caching log
-        cache_config = dict(positions=positions, channels=channels,
-                            timepoints=timepoints, z_positions=z_positions)
-        # TODO save TagAnnotations in Cache config
+            if isinstance(annotation, omero.gateway.TagAnnotationWrapper):
+                # TODO save TagAnnotations in tags dictionary
+                pass
+        with open(str(save_dir / 'omero_tags.json'), 'w') as fd:
+            json.dump(tags, fd)
+        return
 
-        with open(str(save_dir / 'cache.config'), 'w') as fd:
-            json.dump(cache_config, fd)
-        logger.info('Downloaded experiment {}'.format(self.exptID))
+    # Todo: turn this static
+    def cache_set(self, save_dir, position: TimelapseOMERO,
+                  timepoints: Iterable[int]):
+        # Todo: save one time point to file
+        #       save it under self.save_dir / self.exptID / self.position
+        #       save each channel, z_position separately
+        pos_dir = save_dir / position.name
+        if not pos_dir.exists():
+            pos_dir.mkdir()
+        for channel in tqdm(position.channels):
+            for tp in tqdm(timepoints):
+                for z_pos in tqdm(range(position.size_z)):
+                    ch_id = position.get_channel_index(channel)
+                    image = position.get_hypercube(x=None, y=None,
+                                                   channels=[ch_id],
+                                                   z_positions=[z_pos],
+                                                   timepoints=[tp])
+
+                    im_name = "{}_{:06d}_{}_{:03d}.png".format(self.name,
+                                                               tp + 1,
+                                                               channel,
+                                                               z_pos + 1)
+                    cv2.imwrite(str(pos_dir / im_name), np.squeeze(
+                        image))
+        return list(itertools.product([position.name], timepoints))
+
+    def run(self, keys: Union[list, int], **kwargs):
+        if self.running_tp == 0:
+            self.cache_annotations(self.save_dir)
+        if isinstance(keys, list):
+            # tells you how many time points to do at once
+            keys = len(keys)
+        # Locally save `keys` images at a time for each position
+        cached = []
+        for pos_name in self.positions:
+            position = self.get_position(pos_name)
+            timepoints = list(range(self.running_tp,
+                                    min(self.running_tp + keys,
+                                        position.size_t)))
+            cached += self.cache_set(self.save_dir, position, timepoints)
+        self.running_tp += keys  # increase by number of processed time points
+        return cached
 
 
 class ExperimentLocal(Experiment):
@@ -223,7 +267,7 @@ class ExperimentLocal(Experiment):
         self.metadata['finished'] = finished
         if self.finished:
             cache = self._find_cache()
-            #log = self._find_log() # Todo: add log metadata
+            # log = self._find_log() # Todo: add log metadata
             if cache is not None:
                 with open(cache, 'r') as fd:
                     cache_config = json.load(fd)
@@ -278,4 +322,3 @@ class ExperimentLocal(Experiment):
         # Todo: if keys is none, get the positions table from the session
         #  and save it to the store, then return None
         return keys
-
