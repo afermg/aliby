@@ -29,9 +29,12 @@ def get_tile_shapes(x, tile_size, max_shape):
 
 
 class Tiler:
-    def __init__(self, raw_expt, finished=False):
+    def __init__(self, raw_expt, finished=False, template=None):
         self.expt = raw_expt
         self.finished = finished
+        if template is None: 
+            template = trap_template
+        self.trap_template = template
         self.pos_mapper = dict()
         self._current_position = self.expt.positions[0]
 
@@ -39,7 +42,8 @@ class Tiler:
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
             self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
-                                                  self.finished)
+                                                  self.trap_template,
+                                                  finished=self.finished)
         return self.pos_mapper[pos]
 
     @property
@@ -56,20 +60,21 @@ class Tiler:
 
     @property
     def current_position(self):
+        pos = self._current_position
+        if pos not in self.pos_mapper: 
+            self.pos_mapper[pos] = self[pos]
         return self._current_position
 
     @current_position.setter
     def current_position(self, pos):
-        if pos not in self.pos_mapper:
-            self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
-                                                  self.finished)
         self._current_position = pos
+
     @property
     def channels(self):
-        return self.channels
+        return self.expt.channels
 
     def get_channel_index(self, channel):
-        return self.raw_expt.current_position.get_channel_index(channel)
+        return self.expt.current_position.get_channel_index(channel)
 
     def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
         return self.pos_mapper[self.current_position].get_trap_timelapse(
@@ -90,7 +95,7 @@ class Tiler:
 class TrapLocations:
     def __init__(self, initial_location, initial_time=0):
         self._initial_location = initial_location
-        self._drifts = [np.zeros((1, 2))]
+        self._drifts = [np.array([0, 0])]
         self._timepoints = [initial_time]
 
     @property
@@ -101,8 +106,13 @@ class TrapLocations:
     def n_traps(self):
         return len(self._initial_location)
 
+    @property
+    def drifts(self):
+        return np.stack(self._drifts)
+
     def __getitem__(self, item):
-        return self._initial_location + np.sum(self._drifts[:item + 1])
+        return self._initial_location - np.sum(self.drifts[:item],
+                axis=0)
 
     def __setitem__(self, key, value):
         if key in self._timepoints:
@@ -118,8 +128,9 @@ class TrapLocations:
         pass
 
 class TimelapseTiler:
-    def __init__(self, timelapse, finished=False):
+    def __init__(self, timelapse, template, finished=False):
         self.timelapse = timelapse
+        self.trap_template = template
         self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
         self._reference = None
         if finished:
@@ -134,15 +145,15 @@ class TimelapseTiler:
         trap_locations[timepoint][trap_id]
         """
         self._initialise_locations(0, channel=0)
-        for i in range(self.timelapse.size_t):
-            self.trap_locations[i] = self._get_drift(i, channel=channel)
+        for i in range(1, self.timelapse.size_t):
+            self.trap_locations[i] = self._get_drift(self.trap_locations._drifts[-1], i, channel=channel)
         return
 
     def _initialise_locations(self, timepoint, channel=0):
         img = np.squeeze(self.timelapse[channel, timepoint, :, :, 0])
 
         self.trap_locations = TrapLocations(identify_trap_locations(
-            img, trap_template
+            img, self.trap_template
         ), timepoint)
         self._reference = centre(img)
 
@@ -165,7 +176,7 @@ class TimelapseTiler:
     def n_traps(self):
         return self.trap_locations.n_traps
 
-    def _get_drift(self, timepoint, channel=0, reference_reset_drift=25):
+    def _get_drift(self, prev_drift, timepoint, channel=0, reference_reset_drift=25):
         """
         Get drift between this timepoint and the reference image.
         Note that this function changes the reference image, so
@@ -177,8 +188,7 @@ class TimelapseTiler:
         """
         image = centre(np.squeeze(self.timelapse[channel, timepoint, :, :, 0]))
         drift, _, _, = feature.register_translation(self._reference, image)
-        if any([abs(x) > reference_reset_drift
-                for x in drift]):
+        if any([np.abs(x-y).max() > reference_reset_drift for x,y in zip(drift, prev_drift)]):
             return np.zeros(2)
         self._reference = image
         return drift
@@ -247,7 +257,7 @@ class TimelapseTiler:
                 session.add(trap)
         self._check_contiguous_time(timepoints)
         for tp in timepoints:
-            drift = self._get_drift(tp)
+            drift = self._get_drift(self.trap_locations._drifts[-1], tp)
             self.trap_locations[tp] = drift
             # Update the drifts
             y, x = drift

@@ -16,7 +16,7 @@ def parse_local_fs(pos_dir, tp=None):
     - pos_dir
         -- exptID_{timepointID}_{ChannelID}_{z_position_id}.png
 
-    :param pos_dir:
+    :param pos_dirs:
     :return: Image_mapper
     """
     pos_dir = Path(pos_dir)

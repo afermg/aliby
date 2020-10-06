@@ -6,6 +6,7 @@ import operator
 from typing import Callable
 
 import imageio
+import cv2
 
 def repr_obj(obj, indent=0):
     """
@@ -28,7 +29,8 @@ class Cache:
     Fixed-length mapping to use as a cache.
     Deletes items in FIFO manner when maximum allowed length is reached.
     """
-    def __init__(self, max_len=200, load_fn: Callable = imageio.imread):
+    def __init__(self, max_len=5000, load_fn: Callable = lambda x:
+    cv2.imread(str(x), cv2.IMREAD_GRAYSCALE)):
         """
         :param max_len: Maximum number of items in the cache.
         :param load_fn: The function used to load new items if they are not

@@ -7,7 +7,7 @@ from skimage import transform, feature
 
 
 def identify_trap_locations(image, trap_template, optimize_scale=True,
-                            downscale=0.3, trap_size=None):
+                            downscale=0.35, trap_size=None):
     """
     Identify the traps in a single image based on a trap template.
     This assumes a trap template that is similar to the image in question
@@ -37,7 +37,7 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
         pad_input=True,
         mode='median'
     ) ** 2 for rotation in [0, 90, 180, 270]}
-    best_rotation = max(matches, key=lambda x: np.max(matches[x]))
+    best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
     temp = transform.rotate(temp, best_rotation, cval=np.median(img))
 
     if optimize_scale:
@@ -47,7 +47,8 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
             mode='median',
             pad_input=True) ** 2
                    for scale in scales}
-        best_scale = max(matches, key=lambda x: np.max(matches[x]))
+        best_scale = max(matches, key=lambda x: np.percentile(matches[x],
+                                                              99.9))
         matched = matches[best_scale]
     else:
         matched = feature.match_template(img, temp, pad_input=True,
@@ -82,6 +83,7 @@ def get_xy_tile(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3):
     idx[yidx] = slice(max(0, ymin), min(ymax, img.shape[yidx]))
     tile = img[tuple(idx)]
     tile = np.pad(tile, pad_shape, constant_values=pad_val)
+
     return tile
 
 def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
@@ -105,10 +107,10 @@ def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
     # Get trap location for that id:
     trap_centers = [trap_locations[i][trap_id]
                     for i in
-                    range(len(trap_locations) // 2)]
+                    range(len(trap_locations))]
 
     max_shape = (raw_expt.shape[2], raw_expt.shape[3])
-    tiles_shapes = [get_tile_shapes((x.x, x.y), tile_size, max_shape)
+    tiles_shapes = [get_tile_shapes((x[0], x[1]), tile_size, max_shape)
                     for x in trap_centers]
 
     # Fixme: is this less efficient on OMERO?
