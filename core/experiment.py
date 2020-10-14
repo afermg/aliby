@@ -20,6 +20,7 @@ from logfile_parser import Parser
 
 from core.timelapse import TimelapseOMERO, TimelapseLocal
 from core.utils import accumulate
+from database.records import Position
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,9 @@ class ExperimentOMERO(Experiment):
         # Set up the current position as the first in the list
         self._current_position = self.get_position(self.positions[0])
 
-        self.save_dir = Path(kwargs.get('save_dir', './'))
+        self.save_dir = Path(kwargs.get('save_dir', './')) / self.name
+        if not self.save_dir.exists():
+            self.save_dir.mkdir(parents=True)
         self.running_tp = 0
 
     @property
@@ -141,7 +144,7 @@ class ExperimentOMERO(Experiment):
     def get_position(self, position):
         """Get a Timelapse object for a given position by name"""
         # assert position in self.positions, "Position not available."
-        img = self.connection.getObject("Image", self.positions[position])
+        img = self.connection.getObject("Image", self._positions[position])
         return TimelapseOMERO(img)
 
     def cache_locally(self, root_dir='./', positions=None, channels=None,
@@ -186,37 +189,43 @@ class ExperimentOMERO(Experiment):
         logger.info('Downloaded experiment {}'.format(self.exptID))
 
     # Todo: turn this static
-    def cache_annotations(self, save_dir):
+    def cache_annotations(self, save_dir, **kwargs):
         # Save the file annotations
+        save_mat = kwargs.get('save_mat', False)
         tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
                 filepath = save_dir / annotation.getFileName()
-                if filepath.stem.endswith('.mat'):
-                    mode = 'wb'
-                else:
-                    mode = 'w'
-                with open(str(filepath), mode) as fd:
-                    for chunk in annotation:
-                        fd.write(chunk)
+                if save_mat or not str(filepath).endswith('mat') and not filepath.exists():
+                    with open(str(filepath), 'wb') as fd:
+                        for chunk in annotation.getFileInChunks():
+                            fd.write(chunk)
             if isinstance(annotation, omero.gateway.TagAnnotationWrapper):
                 # TODO save TagAnnotations in tags dictionary
-                pass
+                key = annotation.getDescription()
+                if key == '':
+                    key = 'misc. tags'
+                if key in tags:
+                    if not isinstance(tags[key], list):
+                        tags[key] = [tags[key]]
+                    tags[key].append(annotation.getValue())
+                else:
+                    tags[key] = annotation.getValue()
         with open(str(save_dir / 'omero_tags.json'), 'w') as fd:
             json.dump(tags, fd)
         return
 
     # Todo: turn this static
     def cache_set(self, save_dir, position: TimelapseOMERO,
-                  timepoints: Iterable[int]):
+                  timepoints: Iterable[int], db_pos, **kwargs):
         # Todo: save one time point to file
         #       save it under self.save_dir / self.exptID / self.position
         #       save each channel, z_position separately
         pos_dir = save_dir / position.name
         if not pos_dir.exists():
             pos_dir.mkdir()
-        for channel in tqdm(position.channels):
-            for tp in tqdm(timepoints):
+        for tp in tqdm(timepoints):
+            for channel in tqdm(position.channels):
                 for z_pos in tqdm(range(position.size_z)):
                     ch_id = position.get_channel_index(channel)
                     image = position.get_hypercube(x=None, y=None,
@@ -230,9 +239,10 @@ class ExperimentOMERO(Experiment):
                                                                z_pos + 1)
                     cv2.imwrite(str(pos_dir / im_name), np.squeeze(
                         image))
+            db_pos.n_timepoints = tp
         return list(itertools.product([position.name], timepoints))
 
-    def run(self, keys: Union[list, int], **kwargs):
+    def run(self, keys: Union[list, int], session, **kwargs):
         if self.running_tp == 0:
             self.cache_annotations(self.save_dir)
         if isinstance(keys, list):
@@ -241,17 +251,27 @@ class ExperimentOMERO(Experiment):
         # Locally save `keys` images at a time for each position
         cached = []
         for pos_name in self.positions:
+            db_pos = session.query(Position).filter_by(name=pos_name).first()
+            if db_pos is None:
+                db_pos = Position(name=pos_name, n_timepoints=0)
+                session.add(db_pos)
             position = self.get_position(pos_name)
-            timepoints = list(range(self.running_tp,
-                                    min(self.running_tp + keys,
+            timepoints = list(range(db_pos.n_timepoints,
+                                    min(db_pos.n_timepoints + keys,
                                         position.size_t)))
-            cached += self.cache_set(self.save_dir, position, timepoints)
+            if len(timepoints) > 0 and db_pos.n_timepoints < max(timepoints):
+                try:
+                    cached += self.cache_set(self.save_dir, position,
+                                         timepoints, db_pos, **kwargs)
+                finally:
+                    # Add position to storage
+                    session.commit()
         self.running_tp += keys  # increase by number of processed time points
         return cached
 
 
 class ExperimentLocal(Experiment):
-    def __init__(self, root_dir, finished=False):
+    def __init__(self, root_dir, finished=True):
         super(ExperimentLocal, self).__init__()
         self.root_dir = Path(root_dir)
         self.exptID = self.root_dir.name

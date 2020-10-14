@@ -29,7 +29,7 @@ def get_tile_shapes(x, tile_size, max_shape):
 
 
 class Tiler:
-    def __init__(self, raw_expt, finished=False, template=None):
+    def __init__(self, raw_expt, finished=True, template=None):
         self.expt = raw_expt
         self.finished = finished
         if template is None: 

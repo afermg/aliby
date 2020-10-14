@@ -15,12 +15,12 @@ setup(
         'numpy',
         'tqdm',
         'pandas',
-        'tables',
+        'sqlalchemy',
         'scikit-image==0.16.2',
         'opencv-python',
         'imageio==2.8.0',
-        'omero-py==5.6.2',
-        'zeroc-ice==3.6.5',
+        'omero-py>=5.6.2',
+        'zeroc-ice',
         'logfile_parser@git+https://git.ecdf.ed.ac.uk/jpietsch/logfile_parser@master'
     ]
 )
