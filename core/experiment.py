@@ -171,7 +171,6 @@ class ExperimentOMERO(Experiment):
         save_dir = Path(root_dir) / self.name
         if not save_dir.exists():
             save_dir.mkdir()
-        print(save_dir)
         # Save the images
         for pos_name in tqdm(positions):
             pos = self.get_position(pos_name)
@@ -197,11 +196,11 @@ class ExperimentOMERO(Experiment):
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
                 filepath = save_dir / annotation.getFileName()
                 if save_mat or not str(filepath).endswith('mat') and not filepath.exists():
+                    print('Saving {}'.format(filepath))
                     with open(str(filepath), 'wb') as fd:
                         for chunk in annotation.getFileInChunks():
                             fd.write(chunk)
             if isinstance(annotation, omero.gateway.TagAnnotationWrapper):
-                # TODO save TagAnnotations in tags dictionary
                 key = annotation.getDescription()
                 if key == '':
                     key = 'misc. tags'
@@ -215,59 +214,15 @@ class ExperimentOMERO(Experiment):
             json.dump(tags, fd)
         return
 
-    # Todo: turn this static
-    def cache_set(self, save_dir, position: TimelapseOMERO,
-                  timepoints: Iterable[int], db_pos, **kwargs):
-        # Todo: save one time point to file
-        #       save it under self.save_dir / self.exptID / self.position
-        #       save each channel, z_position separately
-        pos_dir = save_dir / position.name
-        if not pos_dir.exists():
-            pos_dir.mkdir()
-        for tp in tqdm(timepoints):
-            for channel in tqdm(position.channels):
-                for z_pos in tqdm(range(position.size_z)):
-                    ch_id = position.get_channel_index(channel)
-                    image = position.get_hypercube(x=None, y=None,
-                                                   channels=[ch_id],
-                                                   z_positions=[z_pos],
-                                                   timepoints=[tp])
-
-                    im_name = "{}_{:06d}_{}_{:03d}.png".format(self.name,
-                                                               tp + 1,
-                                                               channel,
-                                                               z_pos + 1)
-                    cv2.imwrite(str(pos_dir / im_name), np.squeeze(
-                        image))
-            db_pos.n_timepoints = tp
-        return list(itertools.product([position.name], timepoints))
-
     def run(self, keys: Union[list, int], session, **kwargs):
         if self.running_tp == 0:
             self.cache_annotations(self.save_dir)
-        if isinstance(keys, list):
-            # tells you how many time points to do at once
-            keys = len(keys)
-        # Locally save `keys` images at a time for each position
+            self.running_tp = 1 # Todo rename based on annotations 
         cached = []
-        for pos_name in self.positions:
-            db_pos = session.query(Position).filter_by(name=pos_name).first()
-            if db_pos is None:
-                db_pos = Position(name=pos_name, n_timepoints=0)
-                session.add(db_pos)
-            position = self.get_position(pos_name)
-            timepoints = list(range(db_pos.n_timepoints,
-                                    min(db_pos.n_timepoints + keys,
-                                        position.size_t)))
-            if len(timepoints) > 0 and db_pos.n_timepoints < max(timepoints):
-                try:
-                    cached += self.cache_set(self.save_dir, position,
-                                         timepoints, db_pos, **kwargs)
-                finally:
-                    # Add position to storage
-                    session.commit()
-        self.running_tp += keys  # increase by number of processed time points
-        return cached
+        for pos, tps in accumulate(keys):
+            position = self.get_position(pos)
+            cached.append(position.run(tps, session, self.name, self.save_dir))
+        return list(itertools.chain.from_iterable(cached))
 
 
 class ExperimentLocal(Experiment):

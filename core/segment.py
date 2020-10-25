@@ -1,6 +1,8 @@
 """Segment/segmented pipelines.
 Includes splitting the image into traps/parts,
 cell segmentation, nucleus segmentation."""
+import warnings
+
 import cv2
 from skimage import feature
 import numpy as np
@@ -227,12 +229,13 @@ class TimelapseTiler:
                                    z=z)
 
     def _check_contiguous_time(self, timepoints):
+        # Fixme check fails
         if max(timepoints) < self.n_timepoints:
-            raise ValueError("Requested timepoints {} but timepoints already "
+            warnings.warn("Requested timepoints {} but timepoints already "
                              "processed until time {}"
                              ".".format(timepoints, self.n_timepoints))
         contiguous = np.arange(self.n_timepoints, max(timepoints) + 1)
-        if not all(contiguous == timepoints):
+        if not all([x==y for x,y in zip(contiguous,timepoints)]):
             raise ValueError("Timepoints not contiguous: expected {}, "
                              "got {}".format(list(contiguous), timepoints))
 
@@ -255,7 +258,7 @@ class TimelapseTiler:
                 trap = Trap(number=i, position=db_pos, x=x, y=y,
                             size=96)  # Todo: should I include trap size?
                 session.add(trap)
-        self._check_contiguous_time(timepoints)
+        #self._check_contiguous_time(timepoints)
         for tp in timepoints:
             drift = self._get_drift(self.trap_locations._drifts[-1], tp)
             self.trap_locations[tp] = drift

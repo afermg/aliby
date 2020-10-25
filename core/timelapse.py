@@ -3,7 +3,9 @@ import logging
 import numpy as np
 from pathlib import Path
 
+from tqdm import tqdm
 import imageio
+import cv2
 from core.utils import Cache
 from database.records import Position
 
@@ -210,6 +212,48 @@ class TimelapseOMERO(Timelapse):
         # Set to C, T, X, Y, Z order
         return np.moveaxis(result, 0, -1)
 
+    def cache_set(self, save_dir, timepoints, expt_name, db_pos=None, quiet=True,**kwargs):
+        pos_dir = save_dir / self.name
+        if not pos_dir.exists():
+            pos_dir.mkdir()
+        for tp in tqdm(timepoints):
+            for channel in tqdm(self.channels, disable=quiet): 
+                for z_pos in tqdm(range(self.size_z), disable=quiet):
+                    ch_id = self.get_channel_index(channel)
+                    image = self.get_hypercube(x=None, y=None, channels=[ch_id],
+                            z_positions=[z_pos], timepoints=[tp])
+                    im_name = "{}_{:06d}_{}_{:03d}.png".format(expt_name,
+                                                               tp + 1,
+                                                               channel, 
+                                                               z_pos + 1)
+                    cv2.imwrite(str(pos_dir / im_name), np.squeeze(image))
+            if db_pos is not None:
+                db_pos.n_timepoints = tp + 1
+        return list(itertools.product([self.name], timepoints))
+
+
+    def run(self, keys, session, expt_name="", save_dir="./", **kwargs):
+        """
+        Parse file structure and get images for the timepoints in keys.
+        """
+        save_dir = Path(save_dir)
+        if keys is None:
+            return None
+        db_pos = session.query(Position).filter_by(name=self.name).first()
+        if db_pos is None:
+            db_pos = Position(name=self.name, n_timepoints=0)
+            session.add(db_pos)
+        start_tp = min(db_pos.n_timepoints, min(keys))
+        end_tp = min(self.size_t, max(keys)) 
+
+        timepoints = list(range(start_tp, end_tp + 1))
+        cached = []
+        if len(timepoints) > 0 and db_pos.n_timepoints <= max(timepoints):
+            try:
+                cached = self.cache_set(save_dir, timepoints, expt_name, db_pos)
+            finally:
+                session.commit()
+        return cached
 
 class TimelapseLocal(Timelapse):
     def __init__(self, position, root_dir, finished=False):

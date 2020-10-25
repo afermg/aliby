@@ -3,6 +3,7 @@ Pipeline and chaining elements.
 """
 from abc import ABC, abstractmethod
 from typing import Iterable, List
+import logging
 
 import pandas as pd
 import sqlalchemy as sa

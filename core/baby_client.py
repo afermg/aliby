@@ -1,3 +1,4 @@
+import collections
 import itertools
 import json
 from typing import List, Iterable
@@ -71,9 +72,10 @@ def create_request(dims, bit_depth, img, **kwargs):
     :param img: the image to segment, flattened in order 'F'
     :return: a MultipartEncoder to use as data for the request.
     """
-    fields = {"dims": json.dumps(dims),
-              "bitdepth": json.dumps(bit_depth),
-              "img": img.tostring(order='F')}
+    fields = collections.OrderedDict([
+             ("dims", json.dumps(dims)),
+             ("bitdepth", json.dumps(bit_depth)),
+             ("img", img.tostring(order='F'))])
     # Add optional arguments
     fields.update({kw: json.dumps(v) for kw, v in kwargs.items()})
     m = MultipartEncoder(
@@ -94,6 +96,14 @@ class BabyClient:
                                                    **self.config)
         self.sessions = Cache(load_fn=lambda _: self.get_new_session())
         self.processing = []
+        self.z = None
+        self.channel = None
+        self.__init_properties(self.config)
+
+    def __init_properties(self, config):
+        n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
+        self.z = list(range(n_stacks))
+        self.channel = config.get('channel', 'Brightfield')
 
     @property
     def model_set(self):
@@ -172,13 +182,14 @@ class BabyClient:
         while len(self.processing) > 0:
             self.flush_processing(session, store)
 
-    def process_timepoint(self, pos, timepoint, tile_size=81,
-                          z=[0, 1, 2, 3, 4]):
-        traps = self.tiler[pos].get_traps_timepoint(timepoint,
-                                                    tile_size=tile_size, z=z)
+    def process_timepoint(self, pos, timepoint, tile_size=96):
+        channel_idx = [self.tiler.get_channel_index(self.channel)]
+        traps = self.tiler[pos].get_traps_timepoint(timepoint, channels=channel_idx,
+                                                    tile_size=tile_size, z=self.z)
         traps = np.squeeze(traps)
         timepoint_key = (pos, timepoint)
         session_id = self.sessions[pos]
+        print(traps.shape)
         self.queue_image(traps, session_id)
         self.processing.append(timepoint_key)
 
