@@ -6,7 +6,7 @@ import operator
 from typing import Callable
 
 import imageio
-import cv2
+#import cv2
 
 def repr_obj(obj, indent=0):
     """
@@ -59,3 +59,121 @@ def accumulate(l: list):
     it = itertools.groupby(l, operator.itemgetter(0))
     for key, sub_iter in it:
         yield key, [x[1] for x in sub_iter]
+
+
+class PersistentShelf:
+    def __init__(self, filename):
+        pass
+
+import pickle, json, csv, os, shutil
+
+class PersistentDict(dict):
+    ''' Persistent dictionary with an API compatible with shelve and anydbm.
+
+    The dict is kept in memory, so the dictionary operations run as fast as
+    a regular dictionary.
+
+    Write to disk is delayed until close or sync (similar to gdbm's fast mode).
+
+    Input file format is automatically discovered.
+    Output file format is selectable between pickle, json, and csv.
+    All three serialization formats are backed by fast C implementations.
+
+    '''
+
+    def __init__(self, filename, flag='c',
+                 mode=None, format='json', *args, **kwargs):
+        self.flag = flag                    # r=readonly, c=create, or n=new
+        self.mode = mode                    # None or an octal triple like 0644
+        self.format = format                # 'csv', 'json', or 'pickle'
+        self.filename = filename
+        if flag != 'n' and os.access(filename, os.R_OK):
+            fileobj = open(filename, 'rb' if format=='pickle' else 'r')
+            with fileobj:
+                self.load(fileobj)
+        dict.__init__(self, *args, **kwargs)
+
+    def __getitem__(self, item):
+        if "/" not in item:
+            return dict.__getitem__(self, item)
+        keys = item.split("/")
+        retval = self
+        try:
+            for key in keys:
+                if key == "":
+                    pass
+                else:
+                    retval = dict.__getitem__(retval, key)
+            return retval
+        except AttributeError as e:
+            raise e
+
+    def get(self, item, default=None):
+        try:
+            self.__getitem__(item)
+        except KeyError:
+            return default
+
+    def __contains__(self, item):
+        try:
+            self.__getitem__(item)
+            return True
+        except KeyError:
+            return False
+
+    def __setitem__(self, key, value):
+        keys = key.split("/")
+        dic = self
+        for key in keys[:-1]:
+            # setdefault: If key is in the dictionary, return its value.
+            # If not, insert key with a value of default and return default.
+            dic = dic.setdefault(key, {})
+        dic[keys[-1]] = value
+
+    def sync(self):
+        'Write dict to disk'
+        if self.flag == 'r':
+            return
+        filename = self.filename
+        tempname = filename + '.tmp'
+        fileobj = open(tempname, 'wb' if self.format=='pickle' else 'w')
+        try:
+            self.dump(fileobj)
+        except Exception:
+            os.remove(tempname)
+            raise
+        finally:
+            fileobj.close()
+        shutil.move(tempname, self.filename)    # atomic commit
+        if self.mode is not None:
+            os.chmod(self.filename, self.mode)
+
+    def close(self):
+        self.sync()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
+    def dump(self, fileobj):
+        if self.format == 'csv':
+            csv.writer(fileobj).writerows(self.items())
+        elif self.format == 'json':
+            json.dump(self, fileobj, separators=(',', ':')) # Create a json
+            # encoder
+        elif self.format == 'pickle':
+            pickle.dump(dict(self), fileobj, 2)
+        else:
+            raise NotImplementedError('Unknown format: ' + repr(self.format))
+
+    def load(self, fileobj):
+        # try formats from most restrictive to least restrictive
+        for loader in (pickle.load, json.load, csv.reader):
+            fileobj.seek(0)
+            try:
+                return self.update(loader(fileobj)) # Create a json decoder
+            except Exception:
+                pass
+        raise ValueError('File not in a supported format')

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Sequence, String, Integer, ForeignKey
+from sqlalchemy import Column, Sequence, String, Integer, ForeignKey, Float
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -80,6 +80,7 @@ class Cell(Base):
 
     info = relationship("CellInfo", back_populates="cell")
 
+
     def __repr__(self):
         return "<Cell(id={}, trap={})>".format(self.number, self.trap.number)
 
@@ -95,8 +96,8 @@ class CellInfo(Base):
     __tablename__ = "cell_info"
     id = Column(Integer, Sequence('cell_id_sequence'), primary_key=True)
     number = Column(Integer)
-    x = Column(Integer)
-    y = Column(Integer)
+    x = Column(Float)
+    y = Column(Float)
     t = Column(Integer)
     data = Column(String(50)) # The key to the data in the hdf5 storage file
 
@@ -105,5 +106,6 @@ class CellInfo(Base):
 
     def __repr__(self):
         return "<CellInfo(id={}, x={}, y={}, t={}, data={}, cell={})>"\
-            .format(self.number, self.x, self.y, self.data, self.cell.number)
+            .format(self.number, self.x, self.y, self.t, self.data,
+                    self.cell.number)
 
