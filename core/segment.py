@@ -255,7 +255,7 @@ class TimelapseTiler:
             # Create a trap record for each found trap
             for i in range(self.trap_locations.n_traps):
                 x, y = self.trap_locations[initial_tp][i]
-                trap = Trap(number=i, position=db_pos, x=x, y=y,
+                trap = Trap(number=i, position=db_pos, x=int(x), y=int(y),
                             size=96)  # Todo: should I include trap size?
                 session.add(trap)
         #self._check_contiguous_time(timepoints)

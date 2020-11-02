@@ -1,6 +1,7 @@
 import collections
 import itertools
 import json
+import time
 from typing import List, Iterable
 
 import h5py
@@ -9,6 +10,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re
 import requests
+from baby import modelsets
+from baby.brain import BabyBrain
+from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
@@ -226,18 +230,20 @@ class BabyClient:
         return per_cell_dfs
 
     def store_result(self, result, pos, tp, session, store):
-        # Todo: use joins for more efficient queries
         for ix, trap in enumerate(result):
             outputs = sorted(trap.keys())
             per_cell = zip(*[trap[k] for k in outputs])
             df = pd.DataFrame(per_cell, columns=outputs)
-            db_trap = session.query(Trap).filter_by(number=ix).first()
+            db_trap = session.query(Trap).filter_by(number=ix)\
+                                         .join(Trap.position)\
+                                         .filter_by(name=pos)\
+                                         .one()
+            trap_id = db_trap.id
             for _, cell in df.iterrows():
-                db_cell = session.query(Cell) \
-                    .filter_by(number=cell['cell_label']) \
-                    .join(Trap).filter_by(number=ix) \
-                    .join(Position).filter_by(name=pos) \
-                    .first()
+                db_cell = session.query(Cell)\
+                                 .filter_by(trap_id=trap_id,
+                                            number=cell['cell_label'])\
+                                 .one()
                 if db_cell is None:
                     # Create a new cell
                     db_cell = Cell(number=cell['cell_label'],
@@ -254,11 +260,9 @@ class BabyClient:
                                      cell=db_cell
                                      )
                 remaining_data = set(outputs) - {'cell_label', 'centres'}
-                # Todo: write arrays to store
-                with h5py.File(store, mode='a') as f:
-                    for key in remaining_data:
-                        item_key = data_key + '/' + key
-                        f[item_key] = cell[key]
+                for key in remaining_data:
+                    item_key = data_key + '/' + key
+                    store[item_key] = cell[key]
                 session.add(cell_info)
 
     def flush_processing(self, session, store):
@@ -284,3 +288,43 @@ class BabyClient:
         for pos, tps in accumulate(keys):
             self.process_position(pos, tps, session, store)
         return keys
+
+
+class BabyRunner:
+    valid_models = [] # Todo: get model sets to choose from
+    ERROR_DUMP_DIR = 'baby-errors'
+    def __init__(self, tiler, error_dump_dir=None, **kwargs):
+        self.tiler = tiler
+        if error_dump_dir is None:
+            self.error_dump_dir = self.ERROR_DUMP_DIR
+        self._config = kwargs
+        model_name = choose_model_from_params(self.valid_models, **self.config)
+        self.sessions = Cache(load_fn=lambda _: self.session)
+        self.z = None
+        self.channel = None
+        self.__init_properties(self.config)
+
+        # Getting the runner
+        self.brain = BabyBrain(**modelsets[model_name],
+                         session=self.tf_session, graph=self.tf_graph,
+                         suppress_errors=True,
+                         error_dump_dir=self.err_dump_dir)
+
+    def __init_properties(self, config):
+        n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
+        self.z = list(range(n_stacks))
+        self.channel = config.get('channel', 'Brightfield')
+
+    def session(self):
+        return BabyCrawler(self.brain)
+
+    def segment(self, img, sessionid, **kwargs):
+        # Getting the result for a given image
+        crawler = self.sessions[sessionid]['crawler']
+        pred = crawler.step(img, **kwargs)
+        return pred
+
+    def run(self, keys, db, store, **kwargs):
+        # Todo: run on keys, store the results in the database and in the
+        #  store.
+        pass
