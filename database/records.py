@@ -105,5 +105,5 @@ class CellInfo(Base):
 
     def __repr__(self):
         return "<CellInfo(id={}, x={}, y={}, t={}, data={}, cell={})>"\
-            .format(self.number, self.x, self.y, self.data, self.cell.number)
+            .format(self.number, self.x, self.y, self.t, self.data, self.cell.number)
 
