@@ -2,15 +2,16 @@
 Pipeline and chaining elements.
 """
 from abc import ABC, abstractmethod
+import itertools
 from typing import Iterable, List
 import logging
 
-import h5py as h5py
+import h5py
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 
-from core.utils import PersistentShelf
+from core.utils import PersistentDict
 from database.records import Base
 from core.experiment import ExperimentLocal
 from core.segment import Tiler
@@ -30,6 +31,34 @@ class PipelineStep(ABC):
         return keys
 
 
+def create_keys(expt, strain, timepoints=None, positions=None, exclude=None):
+    """
+    Create a set of keys for use with the pipeline based on a given experiment
+    and an end time point.
+
+    :param expt: The Experiment object on which to work
+    :param strain: The name of the strain, which is assumed to be in the
+    position names. If it is not, use a list in the `positions` argument
+    instead.
+    :param timepoints: The number of timepoints to run. If set to None
+    (default) will run all of the timepoints in the experiment.
+    :param positions: The positions to run. Overrides the `strain` argument.
+    :param exclude: The positions to exclude to exclude. Needs to be an
+    iterable.
+    """
+    # TODO: Make it possible to use groups defined in metadata to choose the
+    # positions to run.
+    # TODO: make it possible to timepoints not from 0 
+    if timepoints is None:
+        # Run full experiment
+        timepoints = expt.shape[1]
+    if positions is None:
+        # Use strain to try to find the positions
+        positions = [p for p in expt.positions if p.startswith(strain)]
+    if exclude is not None:
+        positions = list(set(positions) - set(exclude))
+    return list(itertools.product(positions, range(timepoints)))
+
 class Pipeline:
     """
     A chained set of Pipeline elements connected through pipes.
@@ -45,9 +74,9 @@ class Pipeline:
         Session = sessionmaker(self.engine)
         self.session = Session()
         if hdf5 is True:
-            self.store = h5py.File(store, 'w')
+            self.store = h5py.File(store, 'r+') # TODO open with r+, w or a?
         else:
-            self.store = PersistentShelf(store)
+            self.store = PersistentDict(store)
 
     def run_step(self, keys):
         """

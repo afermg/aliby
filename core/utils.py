@@ -6,7 +6,8 @@ import operator
 from typing import Callable
 
 import imageio
-#import cv2
+import cv2
+import numpy as np
 
 def repr_obj(obj, indent=0):
     """
@@ -61,11 +62,13 @@ def accumulate(l: list):
         yield key, [x[1] for x in sub_iter]
 
 
-class PersistentShelf:
-    def __init__(self, filename):
-        pass
-
 import pickle, json, csv, os, shutil
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 class PersistentDict(dict):
     ''' Persistent dictionary with an API compatible with shelve and anydbm.
@@ -125,6 +128,8 @@ class PersistentDict(dict):
         keys = key.split("/")
         dic = self
         for key in keys[:-1]:
+            if key == "":
+                continue
             # setdefault: If key is in the dictionary, return its value.
             # If not, insert key with a value of default and return default.
             dic = dic.setdefault(key, {})
@@ -161,8 +166,7 @@ class PersistentDict(dict):
         if self.format == 'csv':
             csv.writer(fileobj).writerows(self.items())
         elif self.format == 'json':
-            json.dump(self, fileobj, separators=(',', ':')) # Create a json
-            # encoder
+            json.dump(self, fileobj, separators=(',', ':'), cls=NumpyEncoder) 
         elif self.format == 'pickle':
             pickle.dump(dict(self), fileobj, 2)
         else:

@@ -8,6 +8,7 @@ from skimage import feature
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from sqlalchemy.orm.exc import NoResultFound
 
 import core
 from core.traps import identify_trap_locations, get_trap_timelapse, \
@@ -253,17 +254,33 @@ class TimelapseTiler:
             initial_tp = timepoints.pop(0)
             self._initialise_locations(initial_tp)
             # Create a trap record for each found trap
+            traps = []
             for i in range(self.trap_locations.n_traps):
                 x, y = self.trap_locations[initial_tp][i]
-                trap = Trap(number=i, position=db_pos, x=int(x), y=int(y),
+                try:
+                    db_trap = session.query(Trap).filter(Trap.position==db_pos, Trap.number==i).one()
+                    db_trap.x = int(x)
+                    db_trap.y = int(y)
+                except NoResultFound: 
+                    db_trap = Trap(number=i, position=db_pos, x=int(x), y=int(y),
                             size=96)  # Todo: should I include trap size?
-                session.add(trap)
+                    traps.append(db_trap)
+            session.add_all(traps)
+            session.flush()
         #self._check_contiguous_time(timepoints)
+        drifts = []
         for tp in timepoints:
             drift = self._get_drift(self.trap_locations._drifts[-1], tp)
             self.trap_locations[tp] = drift
             # Update the drifts
             y, x = drift
-            db_drift = Drift(x=x, y=y, t=tp, position=db_pos)
-            session.add(db_drift)
+            try: 
+                db_drift = session.query(Drift).filter(Drift.position==db_pos, Drift.t==tp).one()
+                db_drift.x = x
+                db_drift.y = y
+            except NoResultFound:
+                db_drift = Drift(x=x, y=y, t=tp, position=db_pos)
+                drifts.append(db_drift)
+        session.add_all(drifts)
+        session.flush()
         return keys

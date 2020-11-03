@@ -10,6 +10,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re
 import requests
+from sqlalchemy.orm.exc import NoResultFound
+import tensorflow as tf
+from tqdm import tqdm
+
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
@@ -17,7 +21,7 @@ from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 from core.traps import get_trap_timelapse, get_traps_timepoint
-from core.utils import Cache, accumulate
+from core.utils import Cache, accumulate, PersistentDict
 from database.records import CellInfo, Cell, Trap, Position
 
 
@@ -229,41 +233,6 @@ class BabyClient:
         per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
         return per_cell_dfs
 
-    def store_result(self, result, pos, tp, session, store):
-        for ix, trap in enumerate(result):
-            outputs = sorted(trap.keys())
-            per_cell = zip(*[trap[k] for k in outputs])
-            df = pd.DataFrame(per_cell, columns=outputs)
-            db_trap = session.query(Trap).filter_by(number=ix)\
-                                         .join(Trap.position)\
-                                         .filter_by(name=pos)\
-                                         .one()
-            trap_id = db_trap.id
-            for _, cell in df.iterrows():
-                db_cell = session.query(Cell)\
-                                 .filter_by(trap_id=trap_id,
-                                            number=cell['cell_label'])\
-                                 .one()
-                if db_cell is None:
-                    # Create a new cell
-                    db_cell = Cell(number=cell['cell_label'],
-                                   trap=db_trap)
-                    session.add(db_cell)
-                data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
-                                                      cell['cell_label'],
-                                                      tp)
-                cell_info = CellInfo(number=cell['cell_label'],
-                                     x=cell['centres'][0],
-                                     y=cell['centres'][1],
-                                     t=tp,
-                                     data=data_key,
-                                     cell=db_cell
-                                     )
-                remaining_data = set(outputs) - {'cell_label', 'centres'}
-                for key in remaining_data:
-                    item_key = data_key + '/' + key
-                    store[item_key] = cell[key]
-                session.add(cell_info)
 
     def flush_processing(self, session, store):
         """
@@ -273,7 +242,7 @@ class BabyClient:
         for pos, tp in self.processing:
             try:
                 result = self.get_segmentation(self.sessions[pos])
-                self.store_result(result, pos, tp, session, store)
+                store_result(result, pos, tp, session, store)
                 session.commit()
                 self.processing.remove((pos, tp))
             except Timeout:
@@ -289,9 +258,49 @@ class BabyClient:
             self.process_position(pos, tps, session, store)
         return keys
 
+def store_result(result, pos, tp, session, store):
+    for ix, trap in enumerate(result):
+        outputs = sorted(trap.keys())
+        per_cell = zip(*[trap[k] for k in outputs])
+        df = pd.DataFrame(per_cell, columns=outputs)
+        db_trap = session.query(Trap).filter(Trap.number==ix)\
+                                     .join(Trap.position)\
+                                     .filter(Position.name==pos)\
+                                     .one()
+        trap_id = db_trap.id
+        cells_info = []
+        for _, cell in df.iterrows():
+            try:
+                db_cell = session.query(Cell)\
+                             .filter_by(trap_id=trap_id,
+                                        number=cell['cell_label'])\
+                             .one()
+            except NoResultFound:
+                # Create a new cell
+                db_cell = Cell(number=cell['cell_label'],
+                               trap=db_trap)
+                cells_info.append(db_cell)
+                #session.add(db_cell)
+            data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
+                                                  cell['cell_label'],
+                                                  tp)
+            cell_info = CellInfo(number=cell['cell_label'],
+                                 x=cell['centres'][0],
+                                 y=cell['centres'][1],
+                                 t=tp,
+                                 data=data_key,
+                                 cell=db_cell
+                                 )
+            remaining_data = set(outputs) - {'cell_label', 'centres'}
+            for key in remaining_data:
+                item_key = data_key + '/' + key
+                store[item_key] = cell[key]
+            cells_info.append(cell_info)
+            #session.add(cell_info)
+        session.add_all(cells_info)
 
 class BabyRunner:
-    valid_models = [] # Todo: get model sets to choose from
+    valid_models = modelsets()
     ERROR_DUMP_DIR = 'baby-errors'
     def __init__(self, tiler, error_dump_dir=None, **kwargs):
         self.tiler = tiler
@@ -299,32 +308,61 @@ class BabyRunner:
             self.error_dump_dir = self.ERROR_DUMP_DIR
         self._config = kwargs
         model_name = choose_model_from_params(self.valid_models, **self.config)
-        self.sessions = Cache(load_fn=lambda _: self.session)
+        self.sessions = Cache(load_fn=lambda _: self.session())
         self.z = None
         self.channel = None
         self.__init_properties(self.config)
-
+        # Create tensorflow objects
+        self.tf_session = None 
+        self.tf_graph = None
+        # TODO: put the tensorflow initilization in a separate function
+        tf_version = tuple(int(v) for v in tf.version.VERSION.split('.'))
+        if tf_version[0] == 1:
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True
+            self.tf_session = tf.Session(config=config)
+            self.tf_graph = tf.get_default_graph()
+        elif tf_version[0] == 2:
+            gpus = tf.config.experimental.list_physical_devices('GPU')
+            if gpus:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
         # Getting the runner
-        self.brain = BabyBrain(**modelsets[model_name],
+        self.brain = BabyBrain(**self.valid_models[model_name],
                          session=self.tf_session, graph=self.tf_graph,
                          suppress_errors=True,
-                         error_dump_dir=self.err_dump_dir)
+                         error_dump_dir=self.error_dump_dir)
+    @property
+    def config(self):
+        return self._config
 
     def __init_properties(self, config):
         n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
         self.z = list(range(n_stacks))
-        self.channel = config.get('channel', 'Brightfield')
+        self.channel = self.tiler.get_channel_index(config.get('channel', 'Brightfield'))
 
     def session(self):
         return BabyCrawler(self.brain)
 
     def segment(self, img, sessionid, **kwargs):
         # Getting the result for a given image
-        crawler = self.sessions[sessionid]['crawler']
+        crawler = self.sessions[sessionid]
         pred = crawler.step(img, **kwargs)
         return pred
 
-    def run(self, keys, db, store, **kwargs):
-        # Todo: run on keys, store the results in the database and in the
-        #  store.
-        pass
+    def process_position(self, position, tps, db, store, verbose, **kwargs):
+        self.tiler.current_position=position
+        for tp in tqdm(tps, desc=position, disable=not verbose): 
+            traps = np.squeeze(self.tiler.get_traps_timepoint(tp, channels=[self.channel], z=self.z))
+            segmentation = self.segment(traps, position, **kwargs)
+            store_result(segmentation, position, tp, db, store)
+        db.commit()
+        if isinstance(store, PersistentDict):
+            store.sync()
+
+    def run(self, keys, db, store, verbose=False, **kwargs):
+        for pos, tps in accumulate(keys):
+            self.process_position(pos, tps, db, store, verbose, **kwargs)
+        return keys

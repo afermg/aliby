@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='pipeline-core',
     version='0.1.1-dev',
-    packages=['core'],
+    packages=['core', 'database'],
     url='',
     license='',
     author='Diane Adjavon',
