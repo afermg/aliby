@@ -1,3 +1,5 @@
+from functools import lru_cache
+import numpy as np
 from sqlalchemy import Column, Sequence, String, Integer, ForeignKey, Float
 
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,6 +23,12 @@ class Position(Base):
     def __repr__(self):
         return "<Position(name={}, n_timepoints={})>".format(self.name,
                                                              self.n_timepoints)
+
+    @property
+    def trap_locations(self):
+        # Todo: get all traps + drifts and create TrapLocations class
+        #   save to an attribute so only need to get once.
+        pass
 
 
 class Trap(Base):
@@ -80,9 +88,46 @@ class Cell(Base):
 
     info = relationship("CellInfo", back_populates="cell")
 
-
     def __repr__(self):
         return "<Cell(id={}, trap={})>".format(self.number, self.trap.number)
+
+    @property
+    @lru_cache
+    def cell_info(self):
+        """
+        Returns the cell info in ordered manner (by time)
+        :return: self.info, sorted.
+        """
+        return sorted(self.info, key=lambda x: x.t)
+
+    def edge(self, store):
+        """
+        The edge masks of this cell over time, in dimensions (time, x, y)
+        :param store: The data store to use for extracting masks.
+        :return: np.ndarray in dimensions (time, x, y) of cell outline masks.
+        """
+        return np.stack([t.edge(store) for t in self.cell_info], axis=0)
+
+    def mask(self, store):
+        """
+        Extracts a mask of the full cell out of the store.
+        If you need only the outline, use Cell.edge
+        :param store: The data store from which to extract masks
+        :return: np.ndarray in dimensions (time, x, y) of cell masks.
+        """
+        return np.stack([t.mask(store) for t in self.cell_info], axis=0)
+
+    @property
+    @lru_cache
+    def timepoints(self):
+        """
+        The timepoints
+        :return: A list of timepoints. The first dimension of all other
+        computed attributes corresponds to these timepoints.
+        """
+        # Todo: save in an attribute so that only need to get it once
+        # Todo: validate if contiguous to extract tracking errors.
+        return [x.t for x in self.cell_info]
 
 
 class CellInfo(Base):
@@ -99,7 +144,7 @@ class CellInfo(Base):
     x = Column(Float)
     y = Column(Float)
     t = Column(Integer)
-    data = Column(String(50)) # The key to the data in the hdf5 storage file
+    data = Column(String(50))# The key to the data in the hdf5 storage file
 
     cell_id = Column(Integer, ForeignKey('cells.id'))
     cell = relationship("Cell", back_populates="info")
@@ -108,3 +153,23 @@ class CellInfo(Base):
         return "<CellInfo(id={}, x={}, y={}, t={}, data={}, cell={})>"\
             .format(self.number, self.x, self.y, self.t, self.data,
                     self.cell.number)
+
+    @lru_cache
+    def edge(self, store):
+        key = self.data
+        try:
+            edge = store[key + 'edge_mask']
+        except KeyError as e:
+            # Todo log e?
+            radii = store[key + 'radii']
+            angles = store[key + 'angles']
+            # Todo Active contour using the radii and angles
+            edge = None
+        return edge
+
+    @lru_cache
+    def mask(self, store):
+        edge = self.edge(store)
+        # Todo fill the image using opencv
+        filled = edge
+        return filled
