@@ -2,17 +2,13 @@
 import itertools
 import os
 import abc
-import re
 import glob
 import json
 from pathlib import Path
 import logging
-from typing import Iterable, Union
+from typing import Union
 
-import cv2
-import imageio
 from tqdm import tqdm
-import numpy as np
 
 import omero
 from omero.gateway import BlitzGateway
@@ -20,7 +16,6 @@ from logfile_parser import Parser
 
 from core.timelapse import TimelapseOMERO, TimelapseLocal
 from core.utils import accumulate
-from database.records import Position
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +109,10 @@ class ExperimentOMERO(Experiment):
     Connected to a Dataset object which handles database I/O.
     """
 
-    def __init__(self, exptID, username, password, host, port=4064, **kwargs):
+    def __init__(self, omero_id, username, password, host, port=4064,
+                 **kwargs):
         super(ExperimentOMERO, self).__init__()
-        self.exptID = exptID
+        self.exptID = omero_id
         self.connection = BlitzGateway(username, password, host=host,
                                        port=port)
 
@@ -190,7 +186,7 @@ class ExperimentOMERO(Experiment):
     # Todo: turn this static
     def cache_annotations(self, save_dir, **kwargs):
         # Save the file annotations
-        save_mat = kwargs.get('save_mat', False)
+        save_mat = kwargs.get('matlab', False)
         tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
@@ -216,7 +212,7 @@ class ExperimentOMERO(Experiment):
 
     def run(self, keys: Union[list, int], session, **kwargs):
         if self.running_tp == 0:
-            self.cache_annotations(self.save_dir)
+            self.cache_annotations(self.save_dir, **kwargs)
             self.running_tp = 1 # Todo rename based on annotations 
         cached = []
         for pos, tps in accumulate(keys):

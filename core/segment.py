@@ -3,18 +3,14 @@ Includes splitting the image into traps/parts,
 cell segmentation, nucleus segmentation."""
 import warnings
 
-import cv2
 from skimage import feature
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from sqlalchemy.orm.exc import NoResultFound
 
-import core
 from core.traps import identify_trap_locations, get_trap_timelapse, \
-    get_traps_timepoint, align_timelapse_images, centre
+    get_traps_timepoint, centre
 from core.utils import accumulate
-from database.records import Trap, Position, Drift
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
 trap_template = np.load(trap_template_directory / 'trap_bg_1.npy')
@@ -89,10 +85,9 @@ class Tiler:
             tp, tile_size=tile_size, channels=channels, z=z
         )
 
-    def run(self, keys, session=None, **kwargs):
+    def run(self, keys, **kwargs):
         for pos, tps in accumulate(keys):
-            self[pos].run(tps, session=session)
-        session.commit()
+            self[pos].run(tps, **kwargs)
         return keys
 
 class TrapLocations:
@@ -240,7 +235,7 @@ class TimelapseTiler:
             raise ValueError("Timepoints not contiguous: expected {}, "
                              "got {}".format(list(contiguous), timepoints))
 
-    def run(self, keys, session=None):
+    def run(self, keys, trap_store, drift_store):
         """
         :param keys: a list of timepoints to run tiling on.
         :return:
@@ -248,25 +243,19 @@ class TimelapseTiler:
         timepoints = sorted(keys)
         # Get the position in the database that corresponds to the timelapse
         # of this tiler
-        db_pos = session.query(Position).filter_by(
-            name=self.timelapse.name).first()
+        position = None # TODO get position dataframe
         if len(self.trap_locations) == 0:
             initial_tp = timepoints.pop(0)
             self._initialise_locations(initial_tp)
-            # Create a trap record for each found trap
+            # Create a dataframe of all found traps
             traps = []
             for i in range(self.trap_locations.n_traps):
                 x, y = self.trap_locations[initial_tp][i]
-                try:
-                    db_trap = session.query(Trap).filter(Trap.position==db_pos, Trap.number==i).one()
-                    db_trap.x = int(x)
-                    db_trap.y = int(y)
-                except NoResultFound: 
-                    db_trap = Trap(number=i, position=db_pos, x=int(x), y=int(y),
-                            size=96)  # Todo: should I include trap size?
-                    traps.append(db_trap)
-            session.add_all(traps)
-            session.flush()
+                traps.append((position, i, int(x), int(y)))
+            # TODO add the traps to a traps dataframe
+        # Save initial location of the traps
+        trap_df = pd.DataFrame(traps, columns=['position', 'trap', 'x', 'y'])
+        trap_df.to_csv(trap_store, mode='a')
         #self._check_contiguous_time(timepoints)
         drifts = []
         for tp in timepoints:
@@ -274,13 +263,8 @@ class TimelapseTiler:
             self.trap_locations[tp] = drift
             # Update the drifts
             y, x = drift
-            try: 
-                db_drift = session.query(Drift).filter(Drift.position==db_pos, Drift.t==tp).one()
-                db_drift.x = x
-                db_drift.y = y
-            except NoResultFound:
-                db_drift = Drift(x=x, y=y, t=tp, position=db_pos)
-                drifts.append(db_drift)
-        session.add_all(drifts)
-        session.flush()
+            drifts.append((position, tp, x, y))
+        drift_df = pd.DataFrame(drifts, columns=['position', 'timepoint',
+                                                 'x', 'y'])
+        drift_df.to_csv(drift_store, mode='a')
         return keys

@@ -2,7 +2,7 @@ import pytest
 pytest.mark.skip("all tests still WIP")
 
 
-from core.utils import PersistentDict
+from core.core import PersistentDict
 
 # Todo: temporary file needed
 class TestPersistentDict:
