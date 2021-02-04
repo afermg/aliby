@@ -85,6 +85,10 @@ class matObject:
     def __getitem__(self, item):
         return self.attrs[item]
 
+    def keys(self):
+        """Returns the names of the available properties"""
+        return self.attrs.keys()
+
     def _init_buffer(self):
         fp = open(self.filepath, 'rb')
         rdr = MatFile5Reader(fp, struct_as_record=True, squeeze_me=True)
@@ -272,6 +276,8 @@ def flatten_obj(arr):
         arr = {k: flatten_obj(v) for k, v in arr.items()}
     return arr
 
+
+## NOT YET FULLY IMPLEMENTED!
 
 class _Info:
     def __init__(self, info):
