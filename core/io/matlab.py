@@ -12,6 +12,7 @@ the reverse engineering at https://nbviewer.jupyter.org/gist/mbauman/9121961
 
 import re
 import struct
+import sys
 from collections import Iterable
 from io import BytesIO
 
@@ -223,23 +224,23 @@ class matObject:
         save_to_hdf(f, '/', self.attrs)
 
 
-def describe(d, indent=0, width=4):
+def describe(d, indent=0, width=4, out=None):
     for key, value in d.items():
-        print(f'{"": <{width * indent}}' + str(key))
+        print(f'{"": <{width * indent}}' + str(key), file=out)
         if isinstance(value, dict):
-            describe(value, indent + 1)
+            describe(value, indent + 1, out=out)
         elif isinstance(value, np.ndarray):
             print(f'{"": <{width * (indent + 1)}} {value.shape} array '
-                  f'of type {value.dtype}')
+                  f'of type {value.dtype}', file=out)
         elif isinstance(value, scipy.sparse.csc.csc_matrix):
             print(f'{"": <{width * (indent + 1)}} {value.shape} '
-                  f'sparse matrix of type {value.dtype}')
+                  f'sparse matrix of type {value.dtype}', file=out)
         elif isinstance(value, Iterable) and not isinstance(value,
                                                             str):
             print(f'{"": <{width * (indent + 1)}} {type(value)} of len '
-                  f'{len(value)}')
+                  f'{len(value)}', file=out)
         else:
-            print(f'{"": <{width * (indent + 1)}} {value}')
+            print(f'{"": <{width * (indent + 1)}} {value}', file=out)
 
 
 def parse_prop(n_props, buff, names, heap):
