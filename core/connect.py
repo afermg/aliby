@@ -10,7 +10,7 @@ import numpy as np
 
 from omero.gateway import BlitzGateway
 
-from core.utils import repr_obj
+from core.core import repr_obj
 
 # TODO inheritance
 #   Advantages:

@@ -1,18 +1,23 @@
+import collections
 import itertools
 import json
-from typing import List, Iterable
+from typing import Iterable
 
-import h5py
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import re
 import requests
+from sqlalchemy.orm.exc import NoResultFound
+import tensorflow as tf
+from tqdm import tqdm
+
+from baby import modelsets
+from baby.brain import BabyBrain
+from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from core.traps import get_trap_timelapse, get_traps_timepoint
-from core.utils import Cache, accumulate
+from core.core import Cache, accumulate
 from database.records import CellInfo, Cell, Trap, Position
 
 
@@ -71,9 +76,10 @@ def create_request(dims, bit_depth, img, **kwargs):
     :param img: the image to segment, flattened in order 'F'
     :return: a MultipartEncoder to use as data for the request.
     """
-    fields = {"dims": json.dumps(dims),
-              "bitdepth": json.dumps(bit_depth),
-              "img": img.tostring(order='F')}
+    fields = collections.OrderedDict([
+             ("dims", json.dumps(dims)),
+             ("bitdepth", json.dumps(bit_depth)),
+             ("img", img.tostring(order='F'))])
     # Add optional arguments
     fields.update({kw: json.dumps(v) for kw, v in kwargs.items()})
     m = MultipartEncoder(
@@ -94,6 +100,14 @@ class BabyClient:
                                                    **self.config)
         self.sessions = Cache(load_fn=lambda _: self.get_new_session())
         self.processing = []
+        self.z = None
+        self.channel = None
+        self.__init_properties(self.config)
+
+    def __init_properties(self, config):
+        n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
+        self.z = list(range(n_stacks))
+        self.channel = config.get('channel', 'Brightfield')
 
     @property
     def model_set(self):
@@ -172,13 +186,14 @@ class BabyClient:
         while len(self.processing) > 0:
             self.flush_processing(session, store)
 
-    def process_timepoint(self, pos, timepoint, tile_size=81,
-                          z=[0, 1, 2, 3, 4]):
-        traps = self.tiler[pos].get_traps_timepoint(timepoint,
-                                                    tile_size=tile_size, z=z)
+    def process_timepoint(self, pos, timepoint, tile_size=96):
+        channel_idx = [self.tiler.get_channel_index(self.channel)]
+        traps = self.tiler[pos].get_traps_timepoint(timepoint, channels=channel_idx,
+                                                    tile_size=tile_size, z=self.z)
         traps = np.squeeze(traps)
         timepoint_key = (pos, timepoint)
         session_id = self.sessions[pos]
+        print(traps.shape)
         self.queue_image(traps, session_id)
         self.processing.append(timepoint_key)
 
@@ -195,62 +210,27 @@ class BabyClient:
             return dict()
 
         # Todo: split more systematically
-        for k in ['angles', 'radii']:
-            values = df[k].tolist()
-            for val in values:
-                val += [np.nan] * (max_size - len(val))
-            try:
-                df[[k + str(i) for i in range(max_size)]] = \
-                    pd.DataFrame(values, index=df.index)
-            except ValueError as e:
-                print(k)
-                print([len(val) for val in values])
-                print(result)
-                raise e
-        df[['centrex', 'centrey']] = pd.DataFrame(df['centres'].tolist(),
-                                                  index=df.index)
-        df.drop(['centres', 'angles', 'radii'], axis=1, inplace=True)
-
+        # for k in ['angles', 'radii']:
+        #     values = df[k].tolist()
+        #     for val in values:
+        #         val += [np.nan] * (max_size - len(val))
+        #     try:
+        #         df[[k + str(i) for i in range(max_size)]] = \
+        #             pd.DataFrame(values, index=df.index)
+        #     except ValueError as e:
+        #         print(k)
+        #         print([len(val) for val in values])
+        #         print(result)
+        #         raise e
+        # df[['centrex', 'centrey']] = pd.DataFrame(df['centres'].tolist(),
+        #                                           index=df.index)
+        # df.drop(['centres', 'angles', 'radii'], axis=1, inplace=True)
+        # TODO encode the sparse data more intelligently
         per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
         return per_cell_dfs
 
-    def store_result(self, result, pos, tp, session, store):
-        # Todo: use joins for more efficient queries
-        for ix, trap in enumerate(result):
-            outputs = sorted(trap.keys())
-            per_cell = zip(*[trap[k] for k in outputs])
-            df = pd.DataFrame(per_cell, columns=outputs)
-            db_trap = session.query(Trap).filter_by(number=ix).first()
-            for _, cell in df.iterrows():
-                db_cell = session.query(Cell) \
-                    .filter_by(number=cell['cell_label']) \
-                    .join(Trap).filter_by(number=ix) \
-                    .join(Position).filter_by(name=pos) \
-                    .first()
-                if db_cell is None:
-                    # Create a new cell
-                    db_cell = Cell(number=cell['cell_label'],
-                                   trap=db_trap)
-                    session.add(db_cell)
-                data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
-                                                      cell['cell_label'],
-                                                      tp)
-                cell_info = CellInfo(number=cell['cell_label'],
-                                     x=cell['centres'][0],
-                                     y=cell['centres'][1],
-                                     t=tp,
-                                     data=data_key,
-                                     cell=db_cell
-                                     )
-                remaining_data = set(outputs) - {'cell_label', 'centres'}
-                # Todo: write arrays to store
-                with h5py.File(store, mode='a') as f:
-                    for key in remaining_data:
-                        item_key = data_key + '/' + key
-                        f[item_key] = cell[key]
-                session.add(cell_info)
 
-    def flush_processing(self, session, store):
+    def flush_processing(self, store):
         """
         Get the results of previously queued images.
         :return:
@@ -258,8 +238,7 @@ class BabyClient:
         for pos, tp in self.processing:
             try:
                 result = self.get_segmentation(self.sessions[pos])
-                self.store_result(result, pos, tp, session, store)
-                session.commit()
+                store_result(result, pos, tp, store)
                 self.processing.remove((pos, tp))
             except Timeout:
                 continue
@@ -268,8 +247,169 @@ class BabyClient:
             except TypeError as e:
                 raise e
 
-    def run(self, keys, session=None, store='store.h5', **kwargs):
+    def run(self, keys, store='store.h5', **kwargs):
         # key are (pos, timepoint) tuples
         for pos, tps in accumulate(keys):
-            self.process_position(pos, tps, session, store)
+            self.process_position(pos, tps, store)
         return keys
+
+def store_result(results, store):
+    """
+    Write the output of the segmentation to disk; this includes reducing
+    some inputs to sparse configurations.
+    :param result: A list of results, each result is the output of the
+    crawler, which is JSON-encoded
+    :param store: The file in which to store the results
+    :return:
+    """
+    # TODO write result to disk
+    pass
+
+def legacy_store_result(result, pos, tp, session, store):
+    # TODO: REMOVE
+    for ix, trap in enumerate(result):
+        outputs = sorted(trap.keys())
+        per_cell = zip(*[trap[k] for k in outputs])
+        df = pd.DataFrame(per_cell, columns=outputs)
+
+        db_trap = session.query(Trap).filter(Trap.number==ix)\
+                                     .join(Trap.position)\
+                                     .filter(Position.name==pos)\
+                                     .one()
+        trap_id = db_trap.id
+        cells_info = []
+        for _, cell in df.iterrows():
+            try:
+                db_cell = session.query(Cell)\
+                             .filter_by(trap_id=trap_id,
+                                        number=cell['cell_label'])\
+                             .one()
+            except NoResultFound:
+                # Create a new cell
+                db_cell = Cell(number=cell['cell_label'],
+                               trap=db_trap)
+                cells_info.append(db_cell)
+                #session.add(db_cell)
+            data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
+                                                  cell['cell_label'],
+                                                  tp)
+            cell_info = CellInfo(number=cell['cell_label'],
+                                 x=cell['centres'][0],
+                                 y=cell['centres'][1],
+                                 t=tp,
+                                 data=data_key,
+                                 cell=db_cell
+                                 )
+            remaining_data = set(outputs) - {'cell_label', 'centres'}
+            for key in remaining_data:
+                item_key = data_key + '/' + key
+                store[item_key] = cell[key]
+            cells_info.append(cell_info)
+            #session.add(cell_info)
+        session.add_all(cells_info)
+
+class BabyRunner:
+    valid_models = modelsets()
+    ERROR_DUMP_DIR = 'baby-errors'
+    def __init__(self, tiler, error_dump_dir=None, **kwargs):
+        self.tiler = tiler
+        if error_dump_dir is None:
+            self.error_dump_dir = self.ERROR_DUMP_DIR
+        self._config = kwargs
+        model_name = choose_model_from_params(self.valid_models, **self.config)
+        self.sessions = Cache(load_fn=lambda _: self.session())
+        self.z = None
+        self.channel = None
+        self.__init_properties(self.config)
+        # Create tensorflow objects
+        self.tf_session = None 
+        self.tf_graph = None
+        # TODO: put the tensorflow initilization in a separate function
+        tf_version = tuple(int(v) for v in tf.version.VERSION.split('.'))
+        if tf_version[0] == 1:
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True
+            self.tf_session = tf.Session(config=config)
+            self.tf_graph = tf.get_default_graph()
+        elif tf_version[0] == 2:
+            gpus = tf.config.experimental.list_physical_devices('GPU')
+            if gpus:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        # Getting the runner
+        self.brain = BabyBrain(**self.valid_models[model_name],
+                         session=self.tf_session, graph=self.tf_graph,
+                         suppress_errors=True,
+                         error_dump_dir=self.error_dump_dir)
+    @property
+    def config(self):
+        return self._config
+
+    def __init_properties(self, config):
+        n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
+        self.z = list(range(n_stacks))
+        self.channel = self.tiler.get_channel_index(config.get('channel', 'Brightfield'))
+
+    def session(self):
+        return BabyCrawler(self.brain)
+
+    def segment(self, img, sessionid, **kwargs):
+        # Getting the result for a given image
+        crawler = self.sessions[sessionid]
+        pred = crawler.step(img, **kwargs)
+        return pred
+
+    def process_position(self, position, tps, store, verbose, **kwargs):
+        """ Segment the position for the given number of time points and save.
+
+        :param position: The name of the position to segment
+        :param tps: A list of time points on which to run the segmentation
+        :param store: The file in which to save the results, as csv. Results
+        are appended to this file so make sure not to use a previously used
+        file name or you will have hard-to-find duplicates!
+        :param verbose: Set to show progression of the time points
+        :param kwargs: Additional segmentation parameters, to be given to
+        the BABY crawler
+        :return: None
+        """
+        self.tiler.current_position=position
+        position_results = []
+        for tp in tqdm(tps, desc=position, disable=not verbose): 
+            traps = np.squeeze(self.tiler.get_traps_timepoint(tp, channels=[self.channel], z=self.z))
+            segmentation = self.segment(traps, position, **kwargs)
+            # Segmentation is a list of dictionaries, ordered by trap
+            tp_dataframe = pd.DataFrame(segmentation)
+            # Set time point value for all traps
+            tp_dataframe['timepoint'] = tp
+            position_results.append(tp_dataframe)
+        # Combine all of the results into one data frame
+        position_results = pd.concat(position_results)
+        # Set the trap numbers explicitly
+        position_results.reset_index(inplace=True)
+        position_results.rename({'index': 'trap'})
+        # Set the position name explicitly
+        position_results['position'] = position
+        # TODO reset 'store' such that we write to store/cells
+        position_results.to_csv(store, mode='a')# Append results to the store
+
+    def run(self, keys, store, verbose=False, **kwargs):
+        for pos, tps in accumulate(keys):
+            self.process_position(pos, tps, store, verbose, **kwargs)
+        return keys
+
+# TODO
+# I am currently trying to get rid of the sql and keeping results as simple
+# pandas dataframe to be stored into CSV or parquet as that seems to take up
+# less space than the HDF5 + SQL mess I have going here
+# The idea is to have the structure match the structure of the pipeline:
+#   * Positions table saves the list of positions and potentially their
+#   groups (strain), indexed by pos_id
+#   * Traps/Tiles table saves the tile positions, indexed by pos_id, trap_num
+#   * Drifts table saves the drifts over time, indexed by pos_id, timepoint
+#   * Cells table saves all of the cell data, includes CellInfo & Cells,
+#   indexed by pos_id, trap_num, cell_id timepoint (this stores 3D data in 2D
+#   kind of)
+#   * ETC with extracted sub-cellular data once that comes out
+# ADDITIONAL TODO: Interface with reading the MATLAB files
