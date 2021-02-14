@@ -15,7 +15,7 @@ setup(
         'numpy',
         'tqdm',
         'pandas',
-        'sqlalchemy',
+        'baby@git+https://git.ecdf.ed.ac.uk/jpietsch/baby@master',
         'scikit-image<=0.16.2',
         'opencv-python',
         'requests_toolbelt',

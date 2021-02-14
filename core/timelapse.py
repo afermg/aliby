@@ -232,21 +232,14 @@ class TimelapseOMERO(Timelapse):
         # TODO update positions table to get the number of timepoints?
         return list(itertools.product([self.name], timepoints))
 
-    def run(self, keys, position, expt_name="", save_dir="./", **kwargs):
+    def run(self, keys, positions, expt_name="", save_dir="./", **kwargs):
         """
         Parse file structure and get images for the timepoints in keys.
         """
         save_dir = Path(save_dir)
         if keys is None:
             return None
-        # TODO: query a pandas dataFrame for positions
-        if position is None:
-            # TODO more/different options than just read_csv
-            pos_df = pd.read_csv(save_dir / "positions")
-            # TODO add a row to pos_df
-            pos_df[self.name] = 0  # The new position has 0 timepoints, 0 traps
-            position = pos_df[self.name]
-        n_timepoints = position.loc['n_timepoints']
+        n_timepoints = positions[self.name].loc['n_timepoints']
         start_tp = min(n_timepoints, min(keys))
         end_tp = min(self.size_t, max(keys))
 
@@ -255,6 +248,7 @@ class TimelapseOMERO(Timelapse):
         if len(timepoints) > 0 and n_timepoints <= max(timepoints):
             try:
                 cached = self.cache_set(save_dir, timepoints, expt_name)
+                positions[self.name].loc['n_timepoints'] = max(timepoints)
             finally:
                 # Write the new pos_df to file?
                 pass
@@ -333,7 +327,7 @@ class TimelapseLocal(Timelapse):
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
 
-    def run(self, keys, session=None, **kwargs):
+    def run(self, keys, **kwargs):
         """
         Parse file structure and get images for the timepoints in keys.
         """
@@ -343,11 +337,4 @@ class TimelapseLocal(Timelapse):
             keys = [keys]
         self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
         self._update_metadata()
-        # Update the position in the session
-        # db_pos = session.query(Position).filter_by(name=self.name).first()
-        # if db_pos is None:
-        #     db_pos = Position(name=self.name, n_timepoints=self.size_t)
-        #     session.add(db_pos)
-        # else:
-        #     db_pos.n_timepoints = self.size_t
         return keys

@@ -3,6 +3,7 @@ import itertools
 import json
 from typing import Iterable
 
+import h5py
 import numpy as np
 import pandas as pd
 import re
@@ -17,8 +18,7 @@ from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from core.core import Cache, accumulate
-from database.records import CellInfo, Cell, Trap, Position
+from core.utils import Cache, accumulate
 
 
 class BabyNoMatches(Exception):
@@ -77,9 +77,9 @@ def create_request(dims, bit_depth, img, **kwargs):
     :return: a MultipartEncoder to use as data for the request.
     """
     fields = collections.OrderedDict([
-             ("dims", json.dumps(dims)),
-             ("bitdepth", json.dumps(bit_depth)),
-             ("img", img.tostring(order='F'))])
+        ("dims", json.dumps(dims)),
+        ("bitdepth", json.dumps(bit_depth)),
+        ("img", img.tostring(order='F'))])
     # Add optional arguments
     fields.update({kw: json.dumps(v) for kw, v in kwargs.items()})
     m = MultipartEncoder(
@@ -188,8 +188,10 @@ class BabyClient:
 
     def process_timepoint(self, pos, timepoint, tile_size=96):
         channel_idx = [self.tiler.get_channel_index(self.channel)]
-        traps = self.tiler[pos].get_traps_timepoint(timepoint, channels=channel_idx,
-                                                    tile_size=tile_size, z=self.z)
+        traps = self.tiler[pos].get_traps_timepoint(timepoint,
+                                                    channels=channel_idx,
+                                                    tile_size=tile_size,
+                                                    z=self.z)
         traps = np.squeeze(traps)
         timepoint_key = (pos, timepoint)
         session_id = self.sessions[pos]
@@ -229,7 +231,6 @@ class BabyClient:
         per_cell_dfs = {i: x for i, x in df.groupby(df['cell_label'])}
         return per_cell_dfs
 
-
     def flush_processing(self, store):
         """
         Get the results of previously queued images.
@@ -250,8 +251,18 @@ class BabyClient:
     def run(self, keys, store='store.h5', **kwargs):
         # key are (pos, timepoint) tuples
         for pos, tps in accumulate(keys):
-            self.process_position(pos, tps, store)
+            self.process_position(pos, tps, store, **kwargs)
         return keys
+
+def format_seg_result(result, time_origin=0):
+    for i, res in enumerate(result):
+        res['timepoint'] = [i + time_origin] * len(res['cell_label'])
+    merged = {k: list(itertools.chain.from_iterable(
+        res[k] for res in result))
+        for k in result[0].keys()}
+    df = pd.DataFrame(merged)
+    df.set_index('timepoint', inplace=True)
+    return df
 
 def store_result(results, store):
     """
@@ -265,6 +276,7 @@ def store_result(results, store):
     # TODO write result to disk
     pass
 
+
 def legacy_store_result(result, pos, tp, session, store):
     # TODO: REMOVE
     for ix, trap in enumerate(result):
@@ -272,27 +284,28 @@ def legacy_store_result(result, pos, tp, session, store):
         per_cell = zip(*[trap[k] for k in outputs])
         df = pd.DataFrame(per_cell, columns=outputs)
 
-        db_trap = session.query(Trap).filter(Trap.number==ix)\
-                                     .join(Trap.position)\
-                                     .filter(Position.name==pos)\
-                                     .one()
+        db_trap = session.query(Trap).filter(Trap.number == ix) \
+            .join(Trap.position) \
+            .filter(Position.name == pos) \
+            .one()
         trap_id = db_trap.id
         cells_info = []
         for _, cell in df.iterrows():
             try:
-                db_cell = session.query(Cell)\
-                             .filter_by(trap_id=trap_id,
-                                        number=cell['cell_label'])\
-                             .one()
+                db_cell = session.query(Cell) \
+                    .filter_by(trap_id=trap_id,
+                               number=cell['cell_label']) \
+                    .one()
             except NoResultFound:
                 # Create a new cell
                 db_cell = Cell(number=cell['cell_label'],
                                trap=db_trap)
                 cells_info.append(db_cell)
-                #session.add(db_cell)
+                # session.add(db_cell)
             data_key = '/data/{}/trap_{}/cell_{}/time_{}'.format(pos, ix,
-                                                  cell['cell_label'],
-                                                  tp)
+                                                                 cell[
+                                                                     'cell_label'],
+                                                                 tp)
             cell_info = CellInfo(number=cell['cell_label'],
                                  x=cell['centres'][0],
                                  y=cell['centres'][1],
@@ -305,12 +318,55 @@ def legacy_store_result(result, pos, tp, session, store):
                 item_key = data_key + '/' + key
                 store[item_key] = cell[key]
             cells_info.append(cell_info)
-            #session.add(cell_info)
+            # session.add(cell_info)
         session.add_all(cells_info)
+
+
+
+def df_to_hdf(df, filename):
+    """Convert the dataframe of segmentation results into an HDF5 file.
+    :param df: The dataframe.
+    :param filename: The Name of the HDF5 file to use.
+    :return:
+    """
+    datatypes = {
+        'centres': ((None, 2), np.uint16),
+        'position': ((None,), np.uint16),
+        'angles': ((None,), h5py.vlen_dtype(np.float32)),
+        'radii': ((None,), h5py.vlen_dtype(np.float32)),
+        'edgemasks': ((None, 80, 80), np.bool),
+        'ellipse_dims': ((None, 2), np.float32),
+        'cell_label': ((None, ), np.uint16),
+        'trap': ((None, ), np.uint16),
+        'timepoint': ((None, ), np.uint16)
+    }
+
+    hfile = h5py.File(filename, 'a')
+    n = len(df)
+    for key in df.columns:
+        # We're only saving data that has a pre-defined data-type
+        if key not in datatypes:
+            raise KeyError(f"No defined data type for key {key}")
+        if key not in hfile:
+            max_shape, dtype = datatypes[key]
+            shape = (n,) + max_shape[1:]
+            data = df[key].to_list()
+            hfile.create_dataset(key, shape=shape, maxshape=max_shape,
+                                 dtype=dtype, compression='gzip')
+            hfile[key][()] = data
+        else:
+            # The dataset already exists, expand it
+            dset = hfile[key]
+            dset.resize(dset.shape[0] + n, axis=0)
+            dset[-n:] = df[key].tolist()
+    hfile.close()
+    return
+
 
 class BabyRunner:
     valid_models = modelsets()
     ERROR_DUMP_DIR = 'baby-errors'
+
     def __init__(self, tiler, error_dump_dir=None, **kwargs):
         self.tiler = tiler
         if error_dump_dir is None:
@@ -320,9 +376,10 @@ class BabyRunner:
         self.sessions = Cache(load_fn=lambda _: self.session())
         self.z = None
         self.channel = None
+        self.default_image_size = None
         self.__init_properties(self.config)
         # Create tensorflow objects
-        self.tf_session = None 
+        self.tf_session = None
         self.tf_graph = None
         # TODO: put the tensorflow initilization in a separate function
         tf_version = tuple(int(v) for v in tf.version.VERSION.split('.'))
@@ -336,13 +393,23 @@ class BabyRunner:
             if gpus:
                 for gpu in gpus:
                     tf.config.experimental.set_memory_growth(gpu, True)
-                logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+                logical_gpus = tf.config.experimental.list_logical_devices(
+                    'GPU')
+                print(len(gpus), "Physical GPUs,", len(logical_gpus),
+                      "Logical GPUs")
+        #Overriding some of the default model values in baby to avoid errors
+        model_config = self.valid_models[model_name]
+        default_image_size = self.config.get("default_image_size", None)
+        if default_image_size:
+            model_config["default_image_size"] = default_image_size
+            self.default_image_size=default_image_size
         # Getting the runner
-        self.brain = BabyBrain(**self.valid_models[model_name],
-                         session=self.tf_session, graph=self.tf_graph,
-                         suppress_errors=True,
-                         error_dump_dir=self.error_dump_dir)
+        self.brain = BabyBrain(**model_config,
+                               session=self.tf_session, graph=self.tf_graph,
+                               suppress_errors=True,
+                               error_dump_dir=self.error_dump_dir,
+                               )
+
     @property
     def config(self):
         return self._config
@@ -350,7 +417,8 @@ class BabyRunner:
     def __init_properties(self, config):
         n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
         self.z = list(range(n_stacks))
-        self.channel = self.tiler.get_channel_index(config.get('channel', 'Brightfield'))
+        self.channel = self.tiler.get_channel_index(
+            config.get('channel', 'Brightfield'))
 
     def session(self):
         return BabyCrawler(self.brain)
@@ -374,25 +442,33 @@ class BabyRunner:
         the BABY crawler
         :return: None
         """
-        self.tiler.current_position=position
+        self.tiler.current_position = position
         position_results = []
-        for tp in tqdm(tps, desc=position, disable=not verbose): 
-            traps = np.squeeze(self.tiler.get_traps_timepoint(tp, channels=[self.channel], z=self.z))
+        for tp in tqdm(tps, desc=position, disable=not verbose):
+            traps = np.squeeze(
+                self.tiler.get_traps_timepoint(tp, channels=[self.channel],
+                                               z=self.z,
+                                               tile_size=self.default_image_size))
             segmentation = self.segment(traps, position, **kwargs)
             # Segmentation is a list of dictionaries, ordered by trap
-            tp_dataframe = pd.DataFrame(segmentation)
+            # Add trap information
+            for i, x in enumerate(segmentation):
+                x['trap'] = [i] * len(x['cell_label'])
+            # Merge into a dictionary of lists, by column
+            merged = {k: list(itertools.chain.from_iterable(
+                res[k] for res in segmentation))
+                for k in segmentation[0].keys()}
+            tp_dataframe = pd.DataFrame(merged)
             # Set time point value for all traps
             tp_dataframe['timepoint'] = tp
             position_results.append(tp_dataframe)
         # Combine all of the results into one data frame
         position_results = pd.concat(position_results)
-        # Set the trap numbers explicitly
-        position_results.reset_index(inplace=True)
-        position_results.rename({'index': 'trap'})
         # Set the position name explicitly
-        position_results['position'] = position
-        # TODO reset 'store' such that we write to store/cells
-        position_results.to_csv(store, mode='a')# Append results to the store
+        position_results['position'] = self.tiler.positions.index(position)
+        # Append the results to the store
+        df_to_hdf(position_results, store)
+        return
 
     def run(self, keys, store, verbose=False, **kwargs):
         for pos, tps in accumulate(keys):

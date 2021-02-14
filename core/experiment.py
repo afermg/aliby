@@ -9,6 +9,7 @@ import logging
 from typing import Union
 
 from tqdm import tqdm
+import pandas as pd
 
 import omero
 from omero.gateway import BlitzGateway
@@ -190,7 +191,8 @@ class ExperimentOMERO(Experiment):
         tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
-                filepath = save_dir / annotation.getFileName()
+                filepath = self.save_dir / annotation.getFileName().replace(
+                    '/', '_')
                 if save_mat or not str(filepath).endswith('mat') and not filepath.exists():
                     print('Saving {}'.format(filepath))
                     with open(str(filepath), 'wb') as fd:
@@ -206,18 +208,23 @@ class ExperimentOMERO(Experiment):
                     tags[key].append(annotation.getValue())
                 else:
                     tags[key] = annotation.getValue()
-        with open(str(save_dir / 'omero_tags.json'), 'w') as fd:
+        with open(str(self.save_dir / 'omero_tags.json'), 'w') as fd:
             json.dump(tags, fd)
         return
 
-    def run(self, keys: Union[list, int], session, **kwargs):
+    def run(self, keys: Union[list, int], store, **kwargs):
         if self.running_tp == 0:
             self.cache_annotations(self.save_dir, **kwargs)
-            self.running_tp = 1 # Todo rename based on annotations 
+            self.running_tp = 1  # Todo rename based on annotations
+        positions = pd.DataFrame(index=['n_timepoints'],
+                                 columns=self.positions)
+        positions.fillna(0, inplace=True)
         cached = []
         for pos, tps in accumulate(keys):
             position = self.get_position(pos)
-            cached.append(position.run(tps, session, self.name, self.save_dir))
+            cached.append(position.run(tps, positions, self.name,
+                                       self.save_dir))
+        positions.to_csv(store, mode='w')
         return list(itertools.chain.from_iterable(cached))
 
 
@@ -281,15 +288,14 @@ class ExperimentLocal(Experiment):
                                                         finished=self.finished)
         return self._pos_mapper[position]
 
-    def run(self, keys, session=None, **kwargs):
+    def run(self, keys, **kwargs):
         """
 
         :param keys: List of (position, time point) tuples to process.
         :return:
         """
         for pos, tps in accumulate(keys):
-            self.get_position(pos).run(tps, session=session)
-        session.commit()
+            self.get_position(pos).run(tps)
         # Todo: if keys is none, get the positions table from the session
         #  and save it to the store, then return None
         return keys

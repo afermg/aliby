@@ -243,7 +243,7 @@ class TimelapseTiler:
         timepoints = sorted(keys)
         # Get the position in the database that corresponds to the timelapse
         # of this tiler
-        position = None # TODO get position dataframe
+        position = self.timelapse.name
         if len(self.trap_locations) == 0:
             initial_tp = timepoints.pop(0)
             self._initialise_locations(initial_tp)
@@ -252,10 +252,10 @@ class TimelapseTiler:
             for i in range(self.trap_locations.n_traps):
                 x, y = self.trap_locations[initial_tp][i]
                 traps.append((position, i, int(x), int(y)))
-            # TODO add the traps to a traps dataframe
         # Save initial location of the traps
         trap_df = pd.DataFrame(traps, columns=['position', 'trap', 'x', 'y'])
-        trap_df.to_csv(trap_store, mode='a')
+        with open(trap_store, 'a') as f:
+            trap_df.to_csv(f, header=f.tell() == 0)
         #self._check_contiguous_time(timepoints)
         drifts = []
         for tp in timepoints:
@@ -266,5 +266,6 @@ class TimelapseTiler:
             drifts.append((position, tp, x, y))
         drift_df = pd.DataFrame(drifts, columns=['position', 'timepoint',
                                                  'x', 'y'])
-        drift_df.to_csv(drift_store, mode='a')
+        with open(drift_store, 'a') as f:
+            drift_df.to_csv(f, header=f.tell() == 0)
         return keys
