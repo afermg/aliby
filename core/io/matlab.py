@@ -173,7 +173,7 @@ class matObject:
                 subdict[clss] = obj
 
     def describe(self):
-        pretty(self.attrs)
+        describe(self.attrs)
 
     def _parse_class_attributes(self, section_end):
         """Read the Class attributes = the first segment"""
@@ -218,11 +218,11 @@ class matObject:
         return props
 
 
-def pretty(d, indent=0, width=4):
+def describe(d, indent=0, width=4):
     for key, value in d.items():
         print(f'{"": <{width * indent}}' + str(key))
         if isinstance(value, dict):
-            pretty(value, indent + 1)
+            describe(value, indent + 1)
         elif isinstance(value, np.ndarray):
             print(f'{"": <{width * (indent + 1)}} {value.shape} array '
                   f'of type {value.dtype}')

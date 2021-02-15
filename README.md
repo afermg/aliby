@@ -205,4 +205,11 @@ git checkout another_branch
 git merge my_branch #check the doc for --no-ff option, you might want to use it
 ```
 
+## TODO
+### Tests
+* Test baby client with new format
+* Test size of new format run on full experiment
+* Time taken to segment a local experiment with baby runner
+* Time taken to segment a local experiment with baby client
+
 

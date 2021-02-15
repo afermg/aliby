@@ -78,14 +78,14 @@ class TestRemote(unittest.TestCase):
         # rm_tree(self.root_dir)
         pass
 
-def rm_tree(pth):
-    pth = Path(pth)
-    for child in pth.glob('*'):
+def rm_tree(path):
+    path = Path(path)
+    for child in path.glob('*'):
         if child.is_file():
             child.unlink()
         else:
             rm_tree(child)
-    pth.rmdir()
+    path.rmdir()
 
 if __name__ == '__main__':
     unittest.main()
