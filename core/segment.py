@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from core.io.matlab import matObject
 from core.traps import identify_trap_locations, get_trap_timelapse, \
     get_traps_timepoint, centre
 from core.utils import accumulate
@@ -126,13 +127,15 @@ class TrapLocations:
         pass
 
 class TimelapseTiler:
-    def __init__(self, timelapse, template, finished=False):
+    def __init__(self, timelapse, template, finished=True, matlab=None):
         self.timelapse = timelapse
         self.trap_template = template
         self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
         self._reference = None
-        if finished:
+        if finished and not matlab:
             self.tile_timelapse()
+        elif matlab:
+            self.trap_locations = from_matlab(matlab)
 
     def tile_timelapse(self, channel: int = 0):
         """
@@ -269,3 +272,24 @@ class TimelapseTiler:
         with open(drift_store, 'a') as f:
             drift_df.to_csv(f, header=f.tell() == 0)
         return keys
+
+def from_matlab(mat_timelapse):
+    """Create an initialised Timelapse Tiler from a Matlab Object"""
+    if isinstance(mat_timelapse, (str, Path)):
+        mat_timelapse = matObject(mat_timelapse)
+    # TODO what if it isn't a timelapseTrapsOmero?
+    mat_trap_locs = np.stack(mat_timelapse['timelapseTrapsOmero'][
+                                 'cTimepoint']['trapLocations'])
+    # Rewrite into 3D array of shape (time, trap, x/y) from structured array
+    mat_trap_locs = np.dstack([mat_trap_locs['ycenter'].astype(int),
+                               mat_trap_locs['xcenter'].astype(int)])
+    trap_locations = TrapLocations(initial_location=mat_trap_locs[0])
+    # Get drifts TODO check order is it loc_(x+1) - loc_(x) or vice versa?
+    drifts = mat_trap_locs[1:] - mat_trap_locs[:-1]
+    for i, drift in enumerate(drifts):
+        tp = i + 1
+        # TODO check that all drifts are identical
+        trap_locations[tp] = drifts[i][0]
+    return trap_locations
+
+
