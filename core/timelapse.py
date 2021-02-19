@@ -216,7 +216,7 @@ class TimelapseOMERO(Timelapse):
         pos_dir = save_dir / self.name
         if not pos_dir.exists():
             pos_dir.mkdir()
-        for tp in tqdm(timepoints):
+        for tp in tqdm(timepoints, desc=self.name):
             for channel in tqdm(self.channels, disable=quiet):
                 for z_pos in tqdm(range(self.size_z), disable=quiet):
                     ch_id = self.get_channel_index(channel)

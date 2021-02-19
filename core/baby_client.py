@@ -173,14 +173,15 @@ class BabyClient:
         return result
 
     def process_position(self, prompt: str, tps: Iterable[int], session,
-                         store):
+                         store, tile_size=96):
         position_results = []
         # The prompt received by baby is the position
         try:
             for timepoint_id in tps:
                 # Finish processing previously queued images
                 self.flush_processing(position_results)
-                self.process_timepoint(prompt, timepoint_id)
+                self.process_timepoint(prompt, timepoint_id,
+                        tile_size=tile_size)
         except KeyError as e:
             # TODO log that this will not be processed
             raise e
@@ -189,7 +190,7 @@ class BabyClient:
             mother_assign = self.flush_processing(position_results)
         store_position(position_results, self.tiler.positions.index(prompt),
                        store, position_name=prompt,
-                       mother_assign=mother_assign)
+                       mother_assign=mother_assign, tile_size=tile_size)
         return
 
     def process_timepoint(self, pos, timepoint, tile_size=96):
@@ -321,8 +322,10 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     if mother_assign:
         # We do not append to mother_assign; raise error if already saved
         n = len(mother_assign)
-        hfile.create_dataset((n, ), h5py.vlen_dtype(np.uint16))
-        hfile[mother_assign][()] = mother_assign
+        hfile.create_dataset('mother_assign', shape=(n, ),
+                dtype=h5py.vlen_dtype(np.uint16),
+                compression='gzip')
+        hfile['mother_assign'][()] = mother_assign
     hfile.close()
     return
 
