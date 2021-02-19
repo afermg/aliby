@@ -241,10 +241,15 @@ def format_segmentation(segmentation, tp):
     # Add trap information
     for i, x in enumerate(segmentation):
         x['trap'] = [i] * len(x['cell_label'])
+        # FIXME: Do we want to keep getting the results of the mother assign
+        #  for a cell after the cell has left the trap? i.e. should I keep
+        #  the global results for the mother assign somehow?
+        x['mother_assign'] = [x['mother_assign'][i-1] for i in x['cell_label']]
     # Merge into a dictionary of lists, by column
     merged = {k: list(itertools.chain.from_iterable(
         res[k] for res in segmentation))
         for k in segmentation[0].keys()}
+    # Special case for mother_assign
     tp_dataframe = pd.DataFrame(merged)
     # Set time point value for all traps
     tp_dataframe['timepoint'] = tp
