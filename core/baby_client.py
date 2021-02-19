@@ -186,9 +186,10 @@ class BabyClient:
             raise e
         # Flush all processing before moving to the next position
         while len(self.processing) > 0:
-            self.flush_processing(position_results)
+            mother_assign = self.flush_processing(position_results)
         store_position(position_results, self.tiler.positions.index(prompt),
-                       store, position_name=prompt)
+                       store, position_name=prompt,
+                       mother_assign=mother_assign)
         return
 
     def process_timepoint(self, pos, timepoint, tile_size=96):
@@ -212,7 +213,7 @@ class BabyClient:
         for pos, tp in self.processing:
             try:
                 result = self.get_segmentation(self.sessions[pos])
-                tp_dataframe = format_segmentation(result, tp)
+                tp_dataframe, mother_assign = format_segmentation(result, tp)
                 position_results.append(tp_dataframe)
                 self.processing.remove((pos, tp))
             except Timeout:
@@ -221,6 +222,7 @@ class BabyClient:
                 continue
             except TypeError as e:
                 raise e
+        return mother_assign
 
     def run(self, keys, store='store.h5', **kwargs):
         # key are (pos, timepoint) tuples
@@ -239,25 +241,29 @@ def format_segmentation(segmentation, tp):
     """
     # Segmentation is a list of dictionaries, ordered by trap
     # Add trap information
+    mother_assign = None
     for i, x in enumerate(segmentation):
         x['trap'] = [i] * len(x['cell_label'])
         # FIXME: Do we want to keep getting the results of the mother assign
         #  for a cell after the cell has left the trap? i.e. should I keep
         #  the global results for the mother assign somehow?
-        x['mother_assign'] = [x['mother_assign'][i-1] for i in x['cell_label']]
+        # x['mother_assign'] = [x['mother_assign'][i-1] for i in x[
+        # 'cell_label']]
     # Merge into a dictionary of lists, by column
     merged = {k: list(itertools.chain.from_iterable(
         res[k] for res in segmentation))
         for k in segmentation[0].keys()}
+    if 'mother_assign' in merged:
+        mother_assign = merged['mother_assign']
     # Special case for mother_assign
     tp_dataframe = pd.DataFrame(merged)
     # Set time point value for all traps
     tp_dataframe['timepoint'] = tp
-    return tp_dataframe
+    return tp_dataframe, mother_assign
 
 
 def store_position(position_results, position_index, store,
-                   position_name=None):
+                   position_name=None, mother_assign=None, tile_size=96):
     """Store the results from a set of timepoints for a given position to
     and HDF5 store
     :param position_results: List of timepoint dataframes as returned by
@@ -269,17 +275,18 @@ def store_position(position_results, position_index, store,
     # Combine all of the results into one data frame
     position_results = pd.concat(position_results)
     # Set the position name explicitly
-    position_results['position'] = position_index
+    # position_results['position'] = position_index
     if position_name:
         # This means to create a separate store for each position
         store = Path(store)
         store = store.with_name(position_name + store.name)
     # Append the results to the store
-    df_to_hdf(position_results, store)
+    df_to_hdf(position_results, store, mother_assign=mother_assign,
+              tile_size=tile_size)
     return
 
 
-def df_to_hdf(df, filename):
+def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     """Convert the dataframe of segmentation results into an HDF5 file.
     :param df: The dataframe.
     :param filename: The Name of the HDF5 file to use.
@@ -290,7 +297,7 @@ def df_to_hdf(df, filename):
         'position': ((None,), np.uint16),
         'angles': ((None,), h5py.vlen_dtype(np.float32)),
         'radii': ((None,), h5py.vlen_dtype(np.float32)),
-        'edgemasks': ((None, 80, 80), np.bool),
+        'edgemasks': ((None, tile_size, tile_size), np.bool),
         'ellipse_dims': ((None, 2), np.float32),
         'cell_label': ((None,), np.uint16),
         'trap': ((None,), np.uint16),
@@ -316,6 +323,11 @@ def df_to_hdf(df, filename):
             dset = hfile[key]
             dset.resize(dset.shape[0] + n, axis=0)
             dset[-n:] = df[key].tolist()
+    if mother_assign:
+        # We do not append to mother_assign; raise error if already saved
+        n = len(mother_assign)
+        hfile.create_dataset((n, ), h5py.vlen_dtype(np.uint16))
+        hfile[mother_assign][()] = mother_assign
     hfile.close()
     return
 
@@ -409,11 +421,12 @@ class BabyRunner:
             segmentation = self.segment(traps, position, **kwargs)
             # Segmentation is a list of dictionaries, ordered by trap
             # Add trap information
-            tp_dataframe = format_segmentation(segmentation, tp)
+            tp_dataframe, mother_assign = format_segmentation(segmentation, tp)
             position_results.append(tp_dataframe)
         store_position(position_results, self.tiler.positions.index(
-            position), store, position_name=position)
-
+            position), store, position_name=position,
+                       mother_assign=mother_assign,
+                       tile_size=self.default_image_size)
         return
 
     def run(self, keys, store, verbose=False, **kwargs):
