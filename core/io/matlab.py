@@ -275,6 +275,8 @@ def is_object(x):
         return x.dtype == np.object
 
 def flatten_obj(arr):
+    # TODO turn structured arrays into nested dicts of lists rather that
+    #  lists of dicts
     if isinstance(arr, np.ndarray):
         if arr.dtype.names:
             arrdict = dict()
@@ -284,11 +286,20 @@ def flatten_obj(arr):
         elif arr.dtype == np.object and arr.ndim == 0:
             arr = flatten_obj(arr[()])
         elif arr.dtype == np.object and arr.ndim > 0:
-            arr = [flatten_obj(x) for x in arr.tolist()]
+            try:
+                arr = np.stack(arr)
+                if arr.dtype.names:
+                    d = {k: flatten_obj(arr[k]) for k in arr.dtype.names}
+                    arr = d
+            except:
+                arr = [flatten_obj(x) for x in arr.tolist()]
     elif isinstance(arr, dict):
         arr = {k: flatten_obj(v) for k, v in arr.items()}
     elif isinstance(arr, list):
-        arr = [flatten_obj(x) for x in arr]
+        try:
+            arr = flatten_obj(np.stack(arr))
+        except:
+            arr = [flatten_obj(x) for x in arr]
     return arr
 
 
@@ -411,11 +422,11 @@ class CellInfo(_Info):
 
     @property
     def nucEstConv1(self):
-        return np.asarray(self.info['nucEstConv'][0][0].todense())
+        return np.asarray(self.info['nuc_est_conv'][0][0].todense())
 
     @property
     def nucEstConv2(self):
-        return np.asarray(self.info['nucEstConv'][0][1].todense())
+        return np.asarray(self.info['nuc_est_conv'][0][1].todense())
 
     @property
     def mothers(self):
@@ -472,37 +483,6 @@ def _toarray(ndarray):
         return np.array(elem_list)
     else:
         return ndarray
-
-
-def map_to_dict(mapped):
-    """Convert MATLAB-type map to python dictionary.
-
-    Example:
-    >>> mapped = {'keys': 1.0, 'values': 1, 'uniformity': 1, 'keyType': 'double', 'valueType': 'uint32'}
-    >>> map_to_dict(mapped)
-    {1.0: 1}
-    """
-    if isinstance(mapped, np.ndarray) and mapped.dtype.names:
-        if set(mapped.dtype.names) == {'keys', 'values', 'uniformity',
-                                       'keyType', 'valueType'}:
-            try:
-                return {k: v for k, v in zip(mapped['keys'], mapped['values'])}
-            except TypeError:
-                try:
-                    return {mapped['keys']: mapped['values']}
-                except Exception as e:
-                    raise Exception("{}, {}, {}".format(mapped['keys'],
-                                                        mapped['values'], type(
-                            mapped['keys']))) from e
-    return mapped
-
-
-def inf_from_cell_results(cr):
-    """Turn the cellResults object into a dictionary."""
-    # TODO clean up the objects individually
-    association = {name: map_to_dict(_todict(item)) for name, item in
-                   zip(cr.names, cr.heap[2:])}
-    return association
 
 
 from pathlib import Path

@@ -29,9 +29,10 @@ def get_tile_shapes(x, tile_size, max_shape):
 
 
 class Tiler:
-    def __init__(self, raw_expt, finished=True, template=None):
+    def __init__(self, raw_expt, finished=True, matlab=None, template=None):
         self.expt = raw_expt
         self.finished = finished
+        self.matlab = matlab
         if template is None: 
             template = trap_template
         self.trap_template = template
@@ -41,10 +42,20 @@ class Tiler:
     def __getitem__(self, pos):
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
+            pos_matlab = self._load_matlab(pos)
             self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
                                                   self.trap_template,
-                                                  finished=self.finished)
+                                                  finished=self.finished,
+                                                  matlab=pos_matlab)
         return self.pos_mapper[pos]
+
+    def _load_matlab(self, pos):
+        if self.matlab:
+            pos_matlab = pos + self.matlab
+            mat_timelapse = matObject(self.expt.root_dir / pos_matlab)
+            return mat_timelapse
+        else:
+            return None
 
     @property
     def n_timepoints(self):
@@ -212,6 +223,7 @@ class TimelapseTiler:
                                   trap_id, tile_size=tile_size,
                                   channels=channels, z=z)
 
+
     def get_traps_timepoint(self, tp, tile_size=96, channels=None, z=None):
         """
         Get all the traps from a given timepoint
@@ -278,14 +290,18 @@ def from_matlab(mat_timelapse):
     if isinstance(mat_timelapse, (str, Path)):
         mat_timelapse = matObject(mat_timelapse)
     # TODO what if it isn't a timelapseTrapsOmero?
-    mat_trap_locs = np.stack(mat_timelapse['timelapseTrapsOmero'][
-                                 'cTimepoint']['trapLocations'])
-    # Rewrite into 3D array of shape (time, trap, x/y) from structured array
-    mat_trap_locs = np.dstack([mat_trap_locs['ycenter'].astype(int),
-                               mat_trap_locs['xcenter'].astype(int)])
+    mat_trap_locs = mat_timelapse['timelapseTrapsOmero']['cTimepoint'][
+        'trapLocations']
+    # Rewrite into 3D array of shape (time, trap, x/y) from dictionary
+    mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[
+        'xcenter']])
+    # mat_trap_locs = np.dstack([[loc['ycenter'] for loc in mat_trap_locs],
+    #                            [loc['xcenter'] for loc in mat_trap_locs]]
+    #                           ).astype(int)
     trap_locations = TrapLocations(initial_location=mat_trap_locs[0])
     # Get drifts TODO check order is it loc_(x+1) - loc_(x) or vice versa?
     drifts = mat_trap_locs[1:] - mat_trap_locs[:-1]
+    drifts = -drifts
     for i, drift in enumerate(drifts):
         tp = i + 1
         # TODO check that all drifts are identical

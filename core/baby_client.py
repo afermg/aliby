@@ -283,7 +283,8 @@ def df_to_hdf(df, filename):
         'ellipse_dims': ((None, 2), np.float32),
         'cell_label': ((None,), np.uint16),
         'trap': ((None,), np.uint16),
-        'timepoint': ((None,), np.uint16)
+        'timepoint': ((None,), np.uint16),
+        'mother_assign': ((None, ), np.uint16)
     }
 
     hfile = h5py.File(filename, 'a')
