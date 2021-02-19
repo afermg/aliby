@@ -181,7 +181,7 @@ class BabyClient:
                 # Finish processing previously queued images
                 self.flush_processing(position_results)
                 self.process_timepoint(prompt, timepoint_id,
-                        tile_size=tile_size)
+                                       tile_size=tile_size)
         except KeyError as e:
             # TODO log that this will not be processed
             raise e
@@ -250,7 +250,8 @@ def format_segmentation(segmentation, tp):
         res[k] for res in segmentation))
         for k in segmentation[0].keys()}
     if 'mother_assign' in merged:
-        mother_assign = merged.pop('mother_assign')
+        del merged['mother_assign']
+        mother_assign = [x['mother_assign'] for x in segmentation]
     # Special case for mother_assign
     tp_dataframe = pd.DataFrame(merged)
     # Set time point value for all traps
@@ -282,6 +283,15 @@ def store_position(position_results, position_index, store,
     return
 
 
+def sparsity(arr):
+    """Defines a sparsity score for a matrix based on the percentage of
+    zeros."""
+    try:
+        return 1.0 - np.count_nonzero(arr) / arr.size
+    except:
+        return 1
+
+
 def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     """Convert the dataframe of segmentation results into an HDF5 file.
     :param df: The dataframe.
@@ -298,7 +308,7 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
         'cell_label': ((None,), np.uint16),
         'trap': ((None,), np.uint16),
         'timepoint': ((None,), np.uint16),
-        'mother_assign': ((None, ), np.uint16)
+        'mother_assign': ((None,), np.uint16)
     }
 
     hfile = h5py.File(filename, 'a')
@@ -308,6 +318,7 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
         if key not in datatypes:
             raise KeyError(f"No defined data type for key {key}")
         if key not in hfile:
+            # TODO Include sparsity check
             max_shape, dtype = datatypes[key]
             shape = (n,) + max_shape[1:]
             data = df[key].to_list()
@@ -322,9 +333,9 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     if mother_assign:
         # We do not append to mother_assign; raise error if already saved
         n = len(mother_assign)
-        hfile.create_dataset('mother_assign', shape=(n, ),
-                dtype=h5py.vlen_dtype(np.uint16),
-                compression='gzip')
+        hfile.create_dataset('mother_assign', shape=(n,),
+                             dtype=h5py.vlen_dtype(np.uint16),
+                             compression='gzip')
         hfile['mother_assign'][()] = mother_assign
     hfile.close()
     return
