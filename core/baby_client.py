@@ -1,6 +1,7 @@
 import collections
 import itertools
 import json
+from pathlib import Path
 from typing import Iterable
 
 import h5py
@@ -187,7 +188,7 @@ class BabyClient:
         while len(self.processing) > 0:
             self.flush_processing(position_results)
         store_position(position_results, self.tiler.positions.index(prompt),
-                       store)
+                       store, position_name=prompt)
         return
 
     def process_timepoint(self, pos, timepoint, tile_size=96):
@@ -250,7 +251,8 @@ def format_segmentation(segmentation, tp):
     return tp_dataframe
 
 
-def store_position(position_results, position_index, store):
+def store_position(position_results, position_index, store,
+                   position_name=None):
     """Store the results from a set of timepoints for a given position to
     and HDF5 store
     :param position_results: List of timepoint dataframes as returned by
@@ -263,6 +265,10 @@ def store_position(position_results, position_index, store):
     position_results = pd.concat(position_results)
     # Set the position name explicitly
     position_results['position'] = position_index
+    if position_name:
+        # This means to create a separate store for each position
+        store = Path(store)
+        store = store.with_name(position_name + store.name)
     # Append the results to the store
     df_to_hdf(position_results, store)
     return
@@ -401,7 +407,7 @@ class BabyRunner:
             tp_dataframe = format_segmentation(segmentation, tp)
             position_results.append(tp_dataframe)
         store_position(position_results, self.tiler.positions.index(
-            position), store)
+            position), store, position_name=position)
 
         return
 
