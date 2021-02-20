@@ -254,6 +254,9 @@ class TimelapseOMERO(Timelapse):
                 pass
         return cached
 
+    def clear_cache(self):
+        pass
+
 
 class TimelapseLocal(Timelapse):
     def __init__(self, position, root_dir, finished=False):
@@ -326,6 +329,9 @@ class TimelapseLocal(Timelapse):
                 txyz.append(np.dstack(list(xyz))[xmin:xmax, ymin:ymax])
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
+
+    def clear_cache(self):
+        self.image_cache.clear()
 
     def run(self, keys, **kwargs):
         """

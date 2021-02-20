@@ -438,7 +438,9 @@ class BabyRunner:
                        tile_size=self.default_image_size)
         return
 
-    def run(self, keys, store, verbose=False, **kwargs):
+    def run(self, keys, store, verbose=False, clear_cache=False, **kwargs):
         for pos, tps in accumulate(keys):
             self.process_position(pos, tps, store, verbose, **kwargs)
+            if clear_cache:
+                self.tiler[pos].clear_cache()
         return keys
