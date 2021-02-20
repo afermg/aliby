@@ -250,6 +250,9 @@ class TimelapseTiler:
             raise ValueError("Timepoints not contiguous: expected {}, "
                              "got {}".format(list(contiguous), timepoints))
 
+    def clear_cache(self):
+        self.timelapse.clear_cache()
+
     def run(self, keys, trap_store, drift_store):
         """
         :param keys: a list of timepoints to run tiling on.
