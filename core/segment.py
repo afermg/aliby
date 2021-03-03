@@ -296,11 +296,16 @@ def from_matlab(mat_timelapse):
     mat_trap_locs = mat_timelapse['timelapseTrapsOmero']['cTimepoint'][
         'trapLocations']
     # Rewrite into 3D array of shape (time, trap, x/y) from dictionary
-    mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[
-        'xcenter']])
-    # mat_trap_locs = np.dstack([[loc['ycenter'] for loc in mat_trap_locs],
-    #                            [loc['xcenter'] for loc in mat_trap_locs]]
-    #                           ).astype(int)
+    try:
+        mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[
+            'xcenter']])
+    except TypeError:
+        mat_trap_locs = np.dstack([
+                                    [loc['ycenter'] for loc in mat_trap_locs
+                                        if isinstance(loc, dict)],
+                                    [loc['xcenter'] for loc in mat_trap_locs
+                                        if isinstance(loc, dict)]
+                                   ]).astype(int)
     trap_locations = TrapLocations(initial_location=mat_trap_locs[0])
     # Get drifts TODO check order is it loc_(x+1) - loc_(x) or vice versa?
     drifts = mat_trap_locs[1:] - mat_trap_locs[:-1]

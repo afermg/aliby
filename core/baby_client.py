@@ -298,6 +298,7 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     :param filename: The Name of the HDF5 file to use.
     :return:
     """
+    # TODO: Use numpy min_scalar_type!
     datatypes = {
         'centres': ((None, 2), np.uint16),
         'position': ((None,), np.uint16),

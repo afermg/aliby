@@ -129,9 +129,9 @@ class ExperimentOMERO(Experiment):
         # Set up the current position as the first in the list
         self._current_position = self.get_position(self.positions[0])
 
-        self.save_dir = Path(kwargs.get('save_dir', './')) / self.name
-        if not self.save_dir.exists():
-            self.save_dir.mkdir(parents=True)
+        self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
+        if not self.root_dir.exists():
+            self.root_dir.mkdir(parents=True)
         self.running_tp = 0
 
     @property
@@ -185,13 +185,13 @@ class ExperimentOMERO(Experiment):
         logger.info('Downloaded experiment {}'.format(self.exptID))
 
     # Todo: turn this static
-    def cache_annotations(self, save_dir, **kwargs):
+    def cache_annotations(self, **kwargs):
         # Save the file annotations
         save_mat = kwargs.get('matlab', False)
         tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
-                filepath = self.save_dir / annotation.getFileName().replace(
+                filepath = self.root_dir / annotation.getFileName().replace(
                     '/', '_')
                 if save_mat or not str(filepath).endswith('mat') and not filepath.exists():
                     print('Saving {}'.format(filepath))
@@ -208,13 +208,13 @@ class ExperimentOMERO(Experiment):
                     tags[key].append(annotation.getValue())
                 else:
                     tags[key] = annotation.getValue()
-        with open(str(self.save_dir / 'omero_tags.json'), 'w') as fd:
+        with open(str(self.root_dir / 'omero_tags.json'), 'w') as fd:
             json.dump(tags, fd)
         return
 
     def run(self, keys: Union[list, int], store, **kwargs):
         if self.running_tp == 0:
-            self.cache_annotations(self.save_dir, **kwargs)
+            self.cache_annotations(self.root_dir, **kwargs)
             self.running_tp = 1  # Todo rename based on annotations
         positions = pd.DataFrame(index=['n_timepoints'],
                                  columns=self.positions)
@@ -223,7 +223,7 @@ class ExperimentOMERO(Experiment):
         for pos, tps in accumulate(keys):
             position = self.get_position(pos)
             cached.append(position.run(tps, positions, self.name,
-                                       self.save_dir))
+                                       self.root_dir))
         positions.to_csv(store, mode='w')
         return list(itertools.chain.from_iterable(cached))
 

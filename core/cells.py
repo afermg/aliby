@@ -1,6 +1,7 @@
+from pathlib import Path
+
 import h5py
 import numpy as np
-import scipy
 from scipy import ndimage
 
 from core.io.matlab import matObject
@@ -27,6 +28,14 @@ class Cells:
     def __init__(self):
         pass
 
+    @staticmethod
+    def from_source(source, type=None):
+        source = Path(source)
+        if type is None:
+            # Infer type from filename
+            type = 'matlab' if source.suffix == '.mat' else 'hdf5'
+        return cell_factory(source, type)
+
 
 def is_or_in(item, arr):
     if isinstance(arr, (list, np.ndarray)):
@@ -36,6 +45,9 @@ def is_or_in(item, arr):
 
 
 class CellsHDF(Cells):
+    # TODO implement cells information from HDF5 file format
+    # TODO combine all the cells of one strain into a cellResults?
+    # TODO filtering
     def __init__(self, file):
         pass
 
@@ -56,6 +68,10 @@ class CellsMat(Cells):
         if 'timelapseTrapsOmero' in mat_object.attrs:
             self.trap_info = mat_object['timelapseTrapsOmero'][
                 'cTimepoint']['trapInfo']
+            if isinstance(self.trap_info, list):
+                self.trap_info = {k: list([res.get(k, [])
+                                           for res in self.trap_info])
+                                        for k in self.trap_info[0].keys()}
         else:
             raise NotImplementedError('Cells from Cell Results not yet '
                                       'implemented')
@@ -86,3 +102,50 @@ class CellsMat(Cells):
         times, outlines = self.outline(cell_id, trap_id)
         return times, np.array([ndimage.morphology.binary_fill_holes(o) for
                                 o in outlines])
+
+    def _astype(self, array, type):
+        if type == 'outline':
+            return np.array(array.todense())
+        elif type == 'mask':
+            arr = np.array(array.todense())
+            return ndimage.binary_fill_holes(arr).astype(int)
+        else:
+            return array
+
+    def at_time(self, timepoint, type='outline'):
+        """Returns the segmentations for all the cells at a given timepoint.
+
+        FIXME: this is extremely hacky and accounts for differently saved
+            results in the matlab object. Deprecate ASAP.
+        """
+        if isinstance(self.trap_info['cell'][timepoint][0], dict):
+            segmentations = []
+            for x in self.trap_info['cell'][timepoint]:
+                seg = x['segmented']
+                if not isinstance(seg, np.ndarray):
+                    seg = [seg]
+                segmentations.append(
+                    [self._astype(y, 'outline') for y in seg])
+        else:
+            segmentations = [[self._astype(y, type) for y in x['segmented']]
+                         if x.ndim != 0 else []
+                         for x in self.trap_info['cell'][timepoint]]
+        return segmentations
+
+    def to_hdf(self):
+        pass
+
+
+class ExtractionRunner:
+    """An object to run extraction of fluorescence, and general data out of
+    segmented data.
+
+    Configure with what extraction we want to run.
+    Cell selection criteria.
+    Filtering criteria.
+    """
+    def __init__(self, tiler, cells):
+        pass
+
+    def run(self, keys, store, **kwargs):
+        pass

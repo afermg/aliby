@@ -116,3 +116,4 @@ notebooks/
 *.h5
 *.hdf5
 **.png
+./extraction/
