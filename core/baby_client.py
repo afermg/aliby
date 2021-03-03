@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import re
 import requests
-from sqlalchemy.orm.exc import NoResultFound
 import tensorflow as tf
 from tqdm import tqdm
 
