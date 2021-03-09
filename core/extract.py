@@ -1,136 +1,277 @@
 """
 A module to extract data from a processed experiment.
 """
+import h5py
+import numpy as np
+from tqdm import tqdm
 
-class Extraction: 
-    """
-    A class to extract cell information from a database and store. 
-    It can extract cells based on the initialization requirements. 
+from core.io.matlab import matObject
+from growth_rate.estimate_gr import estimate_gr
 
-    For example: 
-        * extract all cells from group 1 that are in frame for more than 100
-        timepoints (analysis)
-        * extract all cells from trap 10 in position one (Visualization)
-        * extract all daughter cells 
-        * extract all mother cells
-    
-    The Extraction class can (should) be used as a context so as to correctly
-    open/close the storage files in which the information is available. 
 
-    Within the context you can get certain attributes of your cell by default:
-        * position within the image/trap
-        * number of timepoints available
-        * volume
-        * outline
-    
-    Other attributes you have to specify in your extraction:
-        * mother/daughter relationship (extract cells and daughters)
-        * nucleus (extract cells and nucleus)
-        * vacuole (extract cells and vacuole)
-    This is because these attributes are relationships between separate
-    objects, and need to be queried separately from the database. 
+class Extracted:
+    # TODO write the filtering functions.
+    def __init__(self):
+        self.volume = None
+        self._keep = None
 
-    WIP: in future, it will be possible to nest these contexts.
-    """
-    def __init__(self, store, db, **kwargs):
-        self.store = store
-        self.db = db
-        self.config = kwargs
+    def filter(self, filename=None):
+        """
+        1. Filter out small non-growing tracks. This means:
+            a. the cell size never reaches beyond a certain size-threshold
+            volume_thresh or
+            b. the cell's volume doesn't increase by at least a minimum
+            amount over its lifetime
+        2. Join daughter tracks that are contiguous and within a volume
+           threshold of each other
+        3. Discard tracks that are shorter than a threshold number of
+           timepoints
 
-    def __enter__(self):
-        # TODO open the store and database here
+        This function is used to fix tracking/bud errors in post-processing.
+        The parameters define the thresholds used to determine which cells are
+        discarded.
+        FIXME Ideally we get to a point where this is no longer needed.
+        :return:
+        """
+        #self.join_tracks()
+        filter_out = self.filter_size()
+        filter_out += self.filter_lifespan()
+        # TODO save data or just filtering parameters?
+        #self.to_hdf(filename)
+        self.keep = ~filter_out
+
+    def filter_size(self, volume_thresh=7, growth_thresh=10):
+        """Filter out small and non-growing cells.
+        :param volume_thresh: Size threshold for small cells
+        :param growth_thresh: Size difference threshold for non-growing cells
+        """
+        filter_out = np.where(np.max(self.volume, axis=1) < volume_thresh,
+                              True, False)
+        growth = [v[v > 0] for v in self.volume]
+        growth = np.array([v[-1] - v[0] if len(v) > 0 else 0 for v in growth])
+        filter_out += np.where(growth < growth_thresh, True, False)
+        return filter_out
+
+    def filter_lifespan(self, min_time=5):
+        """Remove daughter cells that have a small life span.
+
+        :param min_time: The minimum life span, under which cells are removed.
+        """
+        # TODO What if there are nan values?
+        filter_out = np.where(np.count_nonzero(self.volume, axis=1) <
+                              min_time, True, False)
+        return filter_out
+
+    def join_tracks(self, threshold=7):
+        """ Join contiguous tracks that are within a certain volume
+        threshold of each other.
+
+        :param threshold: Maximum volume difference to join contiguous tracks.
+        :return:
+        """
         pass
 
-    def __exit__(self, type, value, traceback):
-        # TODO close the store and database session here
-        pass
-  
-    @property
-    def cells(self):
-        pass
+
+class ExtractedHDF(Extracted):
+    # TODO pull all the data out of the HFile and filter!
+    def __init__(self, file):
+        # We consider the data to be read-only
+        self.hfile = h5py.File(file, 'r')
 
 
-class ExtractedObject: 
+class ExtractedMat(Extracted):
+    """ Pulls the extracted data out of the MATLAB cTimelapse file.
+
+    This is mostly a convenience function in order to run the
+    gaussian-processes growth-rate estimation
     """
-    A Wrapper around a database record that links the database to the storage.
-    Used as a base for Cell, Vacuole, and Nucleus, objects for easy access to
-    common attributes such as location, edge_mask, n_timepoints. 
+    def __init__(self, file, debug=False):
+        ct = matObject(file)
+        self.debug = debug
+        # Pre-computed data
+        # TODO what if there is no timelapseTrapsOmero?
+        self.metadata = ct['timelapseTrapsOmero']['metadata']
+        self.extracted_data = ct['timelapseTrapsOmero']['extractedData']
+        self.channels = ct['timelapseTrapsOmero']['extractionParameters'][
+            'functionParameters']['channels'].tolist()
+        self.time_settings = ct['timelapseTrapsOmero']['metadata']['acq'][
+            'times']
+        # Get filtering information
+        n_cells = self.extracted_data['cellNum'][0].shape
+        self.keep = np.full(n_cells, True)
+        # Not yet computed data
+        self._growth_rate = None
+        self._daughter_index = None
 
-    :param obj: the database record object
-    :param dataset: the dataset (HDF5 or dictionary) where the larger arrays
-    are stored.
-    """
-    def __init__(self, obj, dataset):
-        self._obj = obj
-        self.dataset = dataset
-    
+
+    def get_channel_index(self, channel):
+        """Get index of channel based on name. This only considers
+        fluorescence channels."""
+        return self.channels.index(channel)
+
     @property
-    def edge_mask(self):
-        # TODO return full edge mask
+    def trap_num(self):
+        return self.extracted_data['trapNum'][0][self.keep]
+
+    @property
+    def cell_num(self):
+        return self.extracted_data['cellNum'][0][self.keep]
+
+    def identity(self, cell_idx):
+        """Get the (position), trap, and cell label given a cell's global
+        index."""
+        # Todo include position when using full strain
+        trap = self.trap_num[cell_idx]
+        cell = self.cell_num[cell_idx]
+        return trap, cell
+
+    def global_index(self, trap_id, cell_label):
+        """Get the global index of a cell given it's trap/cellNum
+        combination."""
+        candidates = np.where(np.logical_and(
+                            (self.trap_num == trap_id), # +1?
+                            (self.cell_num == cell_label)
+                        ))[0]
+        # TODO raise error if number of candidates != 1
+        if len(candidates) == 1:
+            return candidates[0]
+        elif len(candidates) == 0:
+            return -1
+        else:
+            raise(IndexError("No such cell/trap combination"))
+
+    @property
+    def daughter_label(self):
+        """Returns the cell label of the daughters of each cell over the
+        timelapse.
+
+        0 corresponds to no daughter. This *not* the index of the daughter
+        cell within the data. To get this, use daughter_index.
+        """
+        return self.extracted_data['daughterLabel'][0][self.keep]
+
+    def _single_daughter_idx(self, mother_idx, daughter_labels):
+        trap_id, _ = self.identity(mother_idx)
+        daughter_index = [self.global_index(trap_id, cell_label) for
+                          cell_label
+                          in daughter_labels]
+        return daughter_index
+
+    @property
+    def daughter_index(self):
+        """Returns the global index of the daughters of each cell.
+
+        This is different from the daughter label because it corresponds to
+        the index of the daughter when counting all of the cells. This can
+        be used to index within the data arrays.
+        """
+        if self._daughter_index is None:
+            daughter_index = [self._single_daughter_idx(i, daughter_labels)
+                          for i, daughter_labels in enumerate(
+                                  self.daughter_label)]
+            self._daughter_index = np.array(daughter_index)
+        return self._daughter_index
+
+    @property
+    def births(self):
+        return np.array(self.extracted_data['births'][0].todense())[self.keep]
+
+    @property
+    def volume(self):
+        """Get the volume of all of the cells"""
+        return np.array(self.extracted_data['volume'][0].todense())[self.keep]
+
+    def _gr_estimation(self):
+        dt = self.time_settings['interval'] / 360  # s to h conversion
+        results = []
+        for v in tqdm(self.volume):
+            results.append(estimate_gr(v, dt))
+        merged = {k: np.stack([x[k] for x in results]) for k in results[0]}
+        self._gr_results = merged
         return
 
     @property
-    def n_timepoints(self):
-        # TODO compute number of timepoints and save
-        return
-    
-    @property
-    def location(self):
-        # TODO return the position of the object within the trap/position (?)
-        return
+    def growth_rate(self):
+        """Get the growth rate for all cells.
 
+        Note that this uses the gaussian processes method of estimating
+        growth rate by default. If there is no growth rate in the given file
+        (usually the case for MATLAB), it needs to run estimation first.
+        This can take a while.
+        """
+        # TODO cache the results of growth rate estimation.
+        if self._gr_results is None:
+            dt = self.time_settings['interval'] / 360  # s to h conversion
+            self._growth_rate = [estimate_gr(v, dt) for v in self.volume]
+        return self._gr_results['growth_rate']
 
-class ExtractedTrap(ExtractedObject):
-    """
-    A Wrapper around the database Trap record that links the database to the
-    storage.
-    """
-    def __init__(self, trap, dataset):
-        super(ExtractedTrap, self).__init__(trap, dataset)
+    def _fluo_attribute(self, channel, attribute):
+        channel_id = self.get_channel_index(channel)
+        res = np.array(self.extracted_data[attribute][channel_id].todense())
+        return res[self.keep]
 
-    @property
-    def cells(self):
-        pass
+    def protein_localisation(self, channel, method='nucEstConv'):
+        """Returns protein localisation data for a given channel.
 
-class ExtractedCell(ExtractedObject): 
-    """
-    A Wrapper around the database Cell record that links the database to the
-    storage. 
-    
-    :param cell: the database Cell object to get the relationships of that cell
-    :param dataset: the dataset (HDF5 or dictionary) where the larger arrays
-    are stored.
-    """
-    def __init__(self, cell, dataset):
-        super(ExtractedCell, self).__init__(cell, dataset)
+        Uses the 'nucEstConv' by default. Alternatives are 'smallPeakConv',
+        'max5px', 'max2p5pc'
+        """
+        return self._fluo_attribute(channel, method)
 
-    @property 
-    def nucleus(self): 
-        # TODO return the nucleus or None if it was not requested
-        return
+    def background_fluo(self, channel):
+        return self._fluo_attribute(channel, 'imBackground')
 
-    @property
-    def vacuole(self):
-        # TODO return the vacuole or None if it was not requested
-        return
+    def mean(self, channel):
+        return self._fluo_attribute(channel, 'mean')
 
+    def median(self, channel):
+        return self._fluo_attribute(channel, 'median')
 
-class ExtractedVacuole(ExtractedObject):
-    """
-    A Wrapper around the database Vacuole record that links the database to the
-    storage.
-    """
-    def __init__(self, vacuole, dataset):
-        #TODO raise a NotImplementedError
-        super(ExtractedVacuole, self).__init__(vacuole, dataset)
+    def filter(self, filename=None):
+        """Filters and saves results to and HDF5 file.
 
-class ExtractedNucleus(ExtractedObject):
-    """
-    A Wrapper around the database Nucleus record that links the database to the
-    storage.
-    """
-    def __init__(self, nucleus, dataset):
-        #TODO raise a NotImplementedError
-        super(ExtractedNucleus, self).__init__(nucleus, dataset)
+        This is necessary because we cannot write to the MATLAB file,
+        so the results of the filter cannot be saved in the object.
+        """
+        super().filter(filename=filename)
+        self._growth_rate = None  # reset growth rate so it is recomputed
 
+    def to_hdf(self, filename):
+        """Store the current results, including any filtering done, to a file.
+
+        TODO Should we save filtered results or just re-do?
+        :param filename:
+        :return:
+        """
+        store = h5py.File(filename, 'w')
+        try:
+            # Store (some of the) metadata
+            for meta in ['experiment', 'username', 'microscope',
+                              'comments', 'project', 'date', 'posname',
+                              'exptid']:
+                store.attrs[meta] = self.metadata[meta]
+            # TODO store timing information?
+            store.attrs['time_interval'] = self.time_settings['interval']
+            store.attrs['timepoints'] = self.time_settings['ntimepoints']
+            store.attrs['total_duration'] = self.time_settings['totalduration']
+            # Store volume, births, daughterLabel, trapNum, cellNum
+            for key in ['volume', 'births', 'daughter_label', 'trap_num',
+                        'cell_num']:
+                store[key] = getattr(self, key)
+            # Store growth rate results
+            if self._gr_results:
+                grp = store.create_group('gaussian_process')
+                for key, val in self._gr_results.items():
+                    grp[key] = val
+            for channel in self.channels:
+                # Create a group for each channel
+                grp = store.create_group(channel)
+                # Store protein_localisation, background fluorescence, mean, median
+                # for each channel
+                grp['protein_localisation'] = self.protein_localisation(channel)
+                grp['background_fluo'] = self.background_fluo(channel)
+                grp['mean'] = self.mean(channel)
+                grp['median'] = self.median(channel)
+        finally:
+            store.close()
 
