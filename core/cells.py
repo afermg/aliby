@@ -8,6 +8,8 @@ from core.io.matlab import matObject
 
 
 def cell_factory(store, type='matlab'):
+    if isinstance(store, matObject):
+        return CellsMat(store)
     if type == 'matlab':
         mat_object = matObject(store)
         return CellsMat(mat_object)
@@ -30,10 +32,11 @@ class Cells:
 
     @staticmethod
     def from_source(source, type=None):
-        source = Path(source)
-        if type is None:
-            # Infer type from filename
-            type = 'matlab' if source.suffix == '.mat' else 'hdf5'
+        if isinstance(source, str):
+            source = Path(source)
+            if type is None:
+                # Infer type from filename
+                type = 'matlab' if source.suffix == '.mat' else 'hdf5'
         return cell_factory(source, type)
 
 

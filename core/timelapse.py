@@ -6,6 +6,8 @@ from pathlib import Path
 
 from tqdm import tqdm
 import cv2
+
+from core.io.matlab import matObject
 from core.utils import Cache
 
 logger = logging.getLogger(__name__)
@@ -156,13 +158,20 @@ class Timelapse:
     def get_channel_index(self, channel):
         return self.channels.index(channel)
 
+def load_annotation(filepath: Path):
+    try:
+        return matObject(filepath)
+    except Exception as e:
+        raise("Could not load annotation file. \n"
+              "Non MATLAB files currently unsupported") from e
+
 
 class TimelapseOMERO(Timelapse):
     """
     Connected to an Image object which handles database I/O.
     """
 
-    def __init__(self, image):
+    def __init__(self, image, annotation):
         super(TimelapseOMERO, self).__init__()
         self.image = image
         # Pre-load pixels
@@ -175,6 +184,10 @@ class TimelapseOMERO(Timelapse):
         self._size_c = self.image.getSizeC()
         self._size_t = self.image.getSizeT()
         self._channels = self.image.getChannelLabels()
+        self.annotation = None
+        # Check whether there are file annotations for this position
+        if annotation is not None:
+            self.annotation = load_annotation(annotation)
 
     def get_hypercube(self, x=None, y=None,
                       z_positions=None, channels=None,
@@ -259,7 +272,7 @@ class TimelapseOMERO(Timelapse):
 
 
 class TimelapseLocal(Timelapse):
-    def __init__(self, position, root_dir, finished=False):
+    def __init__(self, position, root_dir, finished=True, annotation=None):
         """
         Linked to a local directory containing the images for one position
         in an experiment.
@@ -281,6 +294,10 @@ class TimelapseLocal(Timelapse):
             self._update_metadata()
         else:
             self.image_mapper = dict()
+        self.annotation = None
+        # Check whether there are file annotations for this position
+        if annotation is not None:
+            self.annotation = load_annotation(annotation)
 
     def _update_metadata(self):
         self._size_t = len(self.image_mapper)

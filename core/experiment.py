@@ -4,7 +4,9 @@ import os
 import abc
 import glob
 import json
+import warnings
 from pathlib import Path
+import re
 import logging
 from typing import Union
 
@@ -114,35 +116,75 @@ class ExperimentOMERO(Experiment):
                  **kwargs):
         super(ExperimentOMERO, self).__init__()
         self.exptID = omero_id
+        # Get annotations
+        self._files = None
+        self._tags = None
+
+        # Connection objects
         self.connection = BlitzGateway(username, password, host=host,
                                        port=port)
-
         connected = self.connection.connect()
         assert connected is True, "Could not connect to server."
         self.dataset = self.connection.getObject("Dataset", self.exptID)
         self.name = self.dataset.getName()
-
-        self._positions = {img.getName(): img.getId() for img in
-                           sorted(self.dataset.listChildren(),
-                                  key=lambda x: x.getName())}
-
-        # Set up the current position as the first in the list
-        self._current_position = self.get_position(self.positions[0])
-
+        # Set up local cache
         self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
         if not self.root_dir.exists():
             self.root_dir.mkdir(parents=True)
+        # Create positions objects
+        self._positions = {img.getName(): img.getId() for img in
+                           sorted(self.dataset.listChildren(),
+                                  key=lambda x: x.getName())}
+        # Set up the current position as the first in the list
+        self._current_position = self.get_position(self.positions[0])
         self.running_tp = 0
+
+    @property
+    def files(self):
+        if self._files is None:
+            self._files = {x.getFileName(): x for x in
+                      self.dataset.listAnnotations()
+                 if isinstance(x, omero.gateway.FileAnnotationWrapper)}
+        return self._files
+
+    @property
+    def tags(self):
+        if self._tags is None:
+            self._tags = {x.getName(): x for x in
+                          self.dataset.listAnnotations()
+                         if isinstance(x, omero.gateway.TagAnnotationWrapper)}
+        return self._tags
 
     @property
     def positions(self):
         return list(self._positions.keys())
 
+    def _get_position_annotation(self, position):
+        # Get file annotations filtered by position name and ordered by
+        # creation date
+        r = re.compile(position)
+        wrappers = sorted([self.files[key]
+                          for key in filter(r.match, self.files)],
+                         key=lambda x: x.creationEventDate(), reverse=True)
+        # Choose newest file
+        if len(wrappers) < 0:
+            return None
+        else:
+            # Choose the newest annotation and cache it
+            annotation = wrappers[0]
+            filepath = self.root_dir / annotation.getFileName().replace(
+                '/', '_')
+            with open(str(filepath), 'wb') as fd:
+                for chunk in annotation.getFileInChunks():
+                    fd.write(chunk)
+            return filepath
+
     def get_position(self, position):
         """Get a Timelapse object for a given position by name"""
         # assert position in self.positions, "Position not available."
         img = self.connection.getObject("Image", self._positions[position])
-        return TimelapseOMERO(img)
+        annotation = self._get_position_annotation(position)
+        return TimelapseOMERO(img, annotation)
 
     def cache_locally(self, root_dir='./', positions=None, channels=None,
                       timepoints=None, z_positions=None):
@@ -184,8 +226,9 @@ class ExperimentOMERO(Experiment):
             json.dump(cache_config, fd)
         logger.info('Downloaded experiment {}'.format(self.exptID))
 
-    # Todo: turn this static
     def cache_annotations(self, **kwargs):
+        warnings.warn("Most annotations are now lazily cached by default, "
+                      "so this will be removed in future versions", DeprecationWarning)
         # Save the file annotations
         save_mat = kwargs.get('matlab', False)
         tags = dict()# and the tag annotations
@@ -243,6 +286,7 @@ class ExperimentLocal(Experiment):
             metadata = acq_parser.parse(fd)
         self.metadata = metadata
         self.metadata['finished'] = finished
+        self.files = [f for f in self.root_dir.iterdir() if f.is_file()]
         if self.finished:
             cache = self._find_cache()
             # log = self._find_log() # Todo: add log metadata
@@ -281,11 +325,22 @@ class ExperimentLocal(Experiment):
     def positions(self):
         return self.metadata['positions']['posname']
 
+    def _get_position_annotation(self, position):
+        r = re.compile(position)
+        files = list(filter(lambda x: r.match(x.stem), self.files))
+        if len(files) == 0:
+            return None
+        files = sorted(files, key=lambda x: x.lstat().st_ctime, reverse=True)
+        # Get the newest and return as string
+        return files[0]
+
     def get_position(self, position):
         if position not in self._pos_mapper:
+            annotation = self._get_position_annotation(position)
             self._pos_mapper[position] = TimelapseLocal(position,
                                                         self.root_dir,
-                                                        finished=self.finished)
+                                                        finished=self.finished,
+                                                        annotation=annotation)
         return self._pos_mapper[position]
 
     def run(self, keys, **kwargs):

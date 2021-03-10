@@ -30,11 +30,10 @@ def get_tile_shapes(x, tile_size, max_shape):
 
 
 class Tiler:
-    def __init__(self, raw_expt, finished=True, matlab=None, template=None):
+    def __init__(self, raw_expt, finished=True, template=None):
         self.expt = raw_expt
         self.finished = finished
-        self.matlab = matlab
-        if template is None: 
+        if template is None:
             template = trap_template
         self.trap_template = template
         self.pos_mapper = dict()
@@ -43,20 +42,12 @@ class Tiler:
     def __getitem__(self, pos):
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
-            pos_matlab = self._load_matlab(pos)
+            pos_matlab = self.expt.get_position(pos).annotation
             self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
                                                   self.trap_template,
                                                   finished=self.finished,
                                                   matlab=pos_matlab)
         return self.pos_mapper[pos]
-
-    def _load_matlab(self, pos):
-        if self.matlab:
-            pos_matlab = pos + self.matlab
-            mat_timelapse = matObject(self.expt.root_dir / pos_matlab)
-            return mat_timelapse
-        else:
-            return None
 
     @property
     def n_timepoints(self):
