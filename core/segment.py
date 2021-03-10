@@ -284,9 +284,13 @@ def from_matlab(mat_timelapse):
     """Create an initialised Timelapse Tiler from a Matlab Object"""
     if isinstance(mat_timelapse, (str, Path)):
         mat_timelapse = matObject(mat_timelapse)
-    # TODO what if it isn't a timelapseTrapsOmero?
-    mat_trap_locs = mat_timelapse['timelapseTrapsOmero']['cTimepoint'][
-        'trapLocations']
+    timelapse_traps = mat_timelapse.get('timelapseTrapsOmero',
+                                       mat_timelapse.get('timelapseTraps',
+                                                         None))
+    if timelapse_traps is None:
+        warnings.warn("Could not initialise from matlab")
+        return None
+    mat_trap_locs = timelapse_traps['cTimepoint']['trapLocations']
     # Rewrite into 3D array of shape (time, trap, x/y) from dictionary
     try:
         mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[

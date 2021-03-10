@@ -68,16 +68,19 @@ class CellsMat(Cells):
     def __init__(self, mat_object):
         super(CellsMat, self).__init__()
         # TODO add __contains__ to the matObject
-        if 'timelapseTrapsOmero' in mat_object.attrs:
-            self.trap_info = mat_object['timelapseTrapsOmero'][
-                'cTimepoint']['trapInfo']
+        timelapse_traps = mat_object.get('timelapseTrapsOmero',
+                                            mat_object.get('timelapseTraps',
+                                                              None))
+        if timelapse_traps is None:
+            raise NotImplementedError("Could not find a timelapseTraps or "
+                                      "timelapseTrapsOmero object. Cells "
+                                      "from cellResults not implemented")
+        else:
+            self.trap_info = timelapse_traps['cTimepoint']['trapInfo']
             if isinstance(self.trap_info, list):
                 self.trap_info = {k: list([res.get(k, [])
                                            for res in self.trap_info])
                                         for k in self.trap_info[0].keys()}
-        else:
-            raise NotImplementedError('Cells from Cell Results not yet '
-                                      'implemented')
 
     def where(self, cell_id, trap_id):
         times, indices = zip(*[(tp, np.where(cell_id == x)[0][0])
@@ -121,7 +124,15 @@ class CellsMat(Cells):
         FIXME: this is extremely hacky and accounts for differently saved
             results in the matlab object. Deprecate ASAP.
         """
-        if isinstance(self.trap_info['cell'][timepoint][0], dict):
+        # Case 1: only one cell per trap: trap_info['cell'][timepoint] is a
+        # structured array
+        if isinstance(self.trap_info['cell'][timepoint], dict):
+            segmentations = [self._astype(x, 'outline') for x in
+                             self.trap_info['cell'][timepoint]['segmented']]
+        # Case 2: Multiple cells per trap: it becomes a list of arrays or
+        # dictionaries,  one for each trap
+        # Case 2.1 : it's a dictionary
+        elif isinstance(self.trap_info['cell'][timepoint][0], dict):
             segmentations = []
             for x in self.trap_info['cell'][timepoint]:
                 seg = x['segmented']
@@ -129,6 +140,7 @@ class CellsMat(Cells):
                     seg = [seg]
                 segmentations.append(
                     [self._astype(y, 'outline') for y in seg])
+        # Case 2.2 : it's an array
         else:
             segmentations = [[self._astype(y, type) for y in x['segmented']]
                          if x.ndim != 0 else []

@@ -91,6 +91,9 @@ class matObject:
         """Returns the names of the available properties"""
         return self.attrs.keys()
 
+    def get(self, item, default=None):
+        return self.attrs.get(item, default)
+
     def _init_buffer(self):
         fp = open(self.filepath, 'rb')
         rdr = MatFile5Reader(fp, struct_as_record=True, squeeze_me=True)
