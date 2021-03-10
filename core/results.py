@@ -1,5 +1,4 @@
 """Pipeline results classes and utilities"""
-from core.utils import AttributeDict
 
 
 class SegmentationResults:

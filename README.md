@@ -175,6 +175,9 @@ you can usually access it as you would a nested dictionary, for instance:
 cTimelapse['timelapseTrapsOmero']['cTimepoint']['trapLocations']
 ```
 
+For more information about using MATLAB files in python objects, please see
+ [this page](./doc/matlab.md).
+
 ## Development guidelines
 In order to separate the python2, python3, and "currently working" versions 
 (\#socialdistancing) of the pipeline, please use the branches:
@@ -205,4 +208,7 @@ git checkout another_branch
 git merge my_branch #check the doc for --no-ff option, you might want to use it
 ```
 
+## TODO
+### Tests
+* test full pipeline with OMERO experiment (no download.)
 

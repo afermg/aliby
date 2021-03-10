@@ -12,9 +12,11 @@ the reverse engineering at https://nbviewer.jupyter.org/gist/mbauman/9121961
 
 import re
 import struct
+import sys
 from collections import Iterable
 from io import BytesIO
 
+import h5py
 import numpy as np
 import pandas as pd
 import scipy
@@ -173,7 +175,7 @@ class matObject:
                 subdict[clss] = obj
 
     def describe(self):
-        pretty(self.attrs)
+        describe(self.attrs)
 
     def _parse_class_attributes(self, section_end):
         """Read the Class attributes = the first segment"""
@@ -217,24 +219,28 @@ class matObject:
             self.buffer.seek(self.buffer.tell() + self.buffer.tell() % 8)
         return props
 
+    def to_hdf(self, filename):
+        f = h5py.File(filename, mode='w')
+        save_to_hdf(f, '/', self.attrs)
 
-def pretty(d, indent=0, width=4):
+
+def describe(d, indent=0, width=4, out=None):
     for key, value in d.items():
-        print(f'{"": <{width * indent}}' + str(key))
+        print(f'{"": <{width * indent}}' + str(key), file=out)
         if isinstance(value, dict):
-            pretty(value, indent + 1)
+            describe(value, indent + 1, out=out)
         elif isinstance(value, np.ndarray):
             print(f'{"": <{width * (indent + 1)}} {value.shape} array '
-                  f'of type {value.dtype}')
+                  f'of type {value.dtype}', file=out)
         elif isinstance(value, scipy.sparse.csc.csc_matrix):
             print(f'{"": <{width * (indent + 1)}} {value.shape} '
-                  f'sparse matrix of type {value.dtype}')
+                  f'sparse matrix of type {value.dtype}', file=out)
         elif isinstance(value, Iterable) and not isinstance(value,
                                                             str):
             print(f'{"": <{width * (indent + 1)}} {type(value)} of len '
-                  f'{len(value)}')
+                  f'{len(value)}', file=out)
         else:
-            print(f'{"": <{width * (indent + 1)}} {value}')
+            print(f'{"": <{width * (indent + 1)}} {value}', file=out)
 
 
 def parse_prop(n_props, buff, names, heap):
@@ -261,20 +267,88 @@ def parse_prop(n_props, buff, names, heap):
     return d
 
 
+def is_object(x):
+    """Checking object dtype for structured numpy arrays"""
+    if x.dtype.names is not None and len(x.dtype.names) > 1:  # Complex obj
+        return all(x.dtype[ix] == np.object for ix in range(len(x.dtype)))
+    else:  # simple object
+        return x.dtype == np.object
+
 def flatten_obj(arr):
+    # TODO turn structured arrays into nested dicts of lists rather that
+    #  lists of dicts
     if isinstance(arr, np.ndarray):
-        if arr.dtype == np.object and arr.ndim == 0:
-            arr = flatten_obj(arr[()])
-        elif arr.dtype == np.object and arr.ndim > 0:
-            arr = arr.tolist()
-        elif arr.ndim == 0:
+        if arr.dtype.names:
             arrdict = dict()
             for fieldname in arr.dtype.names:
                 arrdict[fieldname] = flatten_obj(arr[fieldname])
             arr = arrdict
+        elif arr.dtype == np.object and arr.ndim == 0:
+            arr = flatten_obj(arr[()])
+        elif arr.dtype == np.object and arr.ndim > 0:
+            try:
+                arr = np.stack(arr)
+                if arr.dtype.names:
+                    d = {k: flatten_obj(arr[k]) for k in arr.dtype.names}
+                    arr = d
+            except:
+                arr = [flatten_obj(x) for x in arr.tolist()]
     elif isinstance(arr, dict):
         arr = {k: flatten_obj(v) for k, v in arr.items()}
+    elif isinstance(arr, list):
+        try:
+            arr = flatten_obj(np.stack(arr))
+        except:
+            arr = [flatten_obj(x) for x in arr]
     return arr
+
+
+def save_to_hdf(h5file, path, dic):
+    """
+    Saving a MATLAB object to HDF5
+    """
+    if isinstance(dic, list):
+        dic = {str(i): v for i,v in enumerate(dic)}
+    for key, item in dic.items():
+        if isinstance(item, (int, float, str)):
+            h5file[path].attrs.create(key, item)
+        elif isinstance(item, list):
+            if len(item) == 0 and path + key not in h5file:  # empty list empty group
+                h5file.create_group(path + key)
+            if all(isinstance(x, (int, float, str)) for x in item):
+                if path not in h5file:
+                    h5file.create_group(path)
+                h5file[path].attrs.create(key, item)
+            else:
+                if path + key not in h5file:
+                    h5file.create_group(path + key)
+                save_to_hdf(h5file, path + key + '/',
+                            {str(i): x for i, x in enumerate(item)})
+        elif isinstance(item, scipy.sparse.csc.csc_matrix):
+            try:
+                h5file.create_dataset(path + key, data=item.todense(),
+                                      compression='gzip')
+            except Exception as e:
+                print(path + key)
+                raise e
+        elif isinstance(item, (np.ndarray, np.int64, np.float64)):
+            if item.dtype == np.dtype('<U1'):  # Strings to 'S' type for HDF5
+                item = item.astype('S')
+            try:
+                h5file.create_dataset(path + key, data=item, compression='gzip')
+            except Exception as e:
+                print(path + key)
+                raise e
+        elif isinstance(item, dict):
+            if path + key not in h5file:
+                h5file.create_group(path + key)
+            save_to_hdf(h5file, path + key + '/',
+                        item)
+        elif item is None:
+            continue
+        else:
+            raise ValueError(
+                f'Cannot save {type(item)} type at key {path + key}')
 
 
 ## NOT YET FULLY IMPLEMENTED!
@@ -282,7 +356,7 @@ def flatten_obj(arr):
 class _Info:
     def __init__(self, info):
         self.info = info
-        self.identity = None
+        self._identity = None
 
     def __getitem__(self, item):
         val = self.info[item]
@@ -348,11 +422,11 @@ class CellInfo(_Info):
 
     @property
     def nucEstConv1(self):
-        return np.asarray(self.info['nucEstConv'][0][0].todense())
+        return np.asarray(self.info['nuc_est_conv'][0][0].todense())
 
     @property
     def nucEstConv2(self):
-        return np.asarray(self.info['nucEstConv'][0][1].todense())
+        return np.asarray(self.info['nuc_est_conv'][0][1].todense())
 
     @property
     def mothers(self):
@@ -411,37 +485,6 @@ def _toarray(ndarray):
         return ndarray
 
 
-def map_to_dict(mapped):
-    """Convert MATLAB-type map to python dictionary.
-
-    Example:
-    >>> mapped = {'keys': 1.0, 'values': 1, 'uniformity': 1, 'keyType': 'double', 'valueType': 'uint32'}
-    >>> map_to_dict(mapped)
-    {1.0: 1}
-    """
-    if isinstance(mapped, np.ndarray) and mapped.dtype.names:
-        if set(mapped.dtype.names) == {'keys', 'values', 'uniformity',
-                                       'keyType', 'valueType'}:
-            try:
-                return {k: v for k, v in zip(mapped['keys'], mapped['values'])}
-            except TypeError:
-                try:
-                    return {mapped['keys']: mapped['values']}
-                except Exception as e:
-                    raise Exception("{}, {}, {}".format(mapped['keys'],
-                                                        mapped['values'], type(
-                            mapped['keys']))) from e
-    return mapped
-
-
-def inf_from_cell_results(cr):
-    """Turn the cellResults object into a dictionary."""
-    # TODO clean up the objects individually
-    association = {name: map_to_dict(_todict(item)) for name, item in
-                   zip(cr.names, cr.heap[2:])}
-    return association
-
-
 from pathlib import Path
 
 
@@ -483,14 +526,13 @@ class Strain:
         try:
             result = self.identity.query(query).index[0]
         except Exception as e:
-            print(query)
             raise e
         return result
 
-    # TODO get mothers and daughters
     @property
     def mothers(self):
-        return np.where((self['births'] != 0).any(axis=1))[0]
+        # At least two births are needed to be considered a mother cell
+        return np.where(np.count_nonzero(self['births'], axis=1) > 3)[0]
 
     def daughters(self, mother_index):
         """
@@ -500,9 +542,14 @@ class Strain:
         different from the mother's pos/trap/cell identity.
         """
         daughter_ids = np.unique(self['daughterLabel'][mother_index]).tolist()
-        daughter_ids.remove(0)
+        if 0 in daughter_ids:
+            daughter_ids.remove(0)
         mother_pos_trap = self.identity[['position', 'trapNum']].loc[
             mother_index]
-        daughters = [self.index(*mother_pos_trap, cellNum) for cellNum in
-                     daughter_ids]
+        daughters = []
+        for cellNum in daughter_ids:
+            try:
+                daughters.append(self.index(*mother_pos_trap, cellNum))
+            except IndexError:
+                continue
         return daughters

@@ -1,11 +1,12 @@
 import itertools
 import logging
 import numpy as np
+import pandas as pd
 from pathlib import Path
 
-import imageio
+from tqdm import tqdm
+import cv2
 from core.utils import Cache
-from database.records import Position
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +41,13 @@ def parse_local_fs(pos_dir, tp=None):
     for tp, group in itertools.groupby(sorted(img_list, key=tp_idx),
                                        key=tp_idx):
         img_mapper[int(tp)] = {channel: {i: item
-                                    for i, item in
-                                    enumerate(sorted(grp, key=z_idx))}
-                          for channel, grp in
-                          itertools.groupby(sorted( group, key=channel_idx),
-                                            key=channel_idx)
-                          }
+                                         for i, item in
+                                         enumerate(sorted(grp, key=z_idx))}
+                               for channel, grp in
+                               itertools.groupby(
+                                   sorted(group, key=channel_idx),
+                                   key=channel_idx)
+                               }
     return img_mapper
 
 
@@ -210,6 +212,51 @@ class TimelapseOMERO(Timelapse):
         # Set to C, T, X, Y, Z order
         return np.moveaxis(result, 0, -1)
 
+    def cache_set(self, save_dir, timepoints, expt_name, quiet=True):
+        pos_dir = save_dir / self.name
+        if not pos_dir.exists():
+            pos_dir.mkdir()
+        for tp in tqdm(timepoints, desc=self.name):
+            for channel in tqdm(self.channels, disable=quiet):
+                for z_pos in tqdm(range(self.size_z), disable=quiet):
+                    ch_id = self.get_channel_index(channel)
+                    image = self.get_hypercube(x=None, y=None,
+                                               channels=[ch_id],
+                                               z_positions=[z_pos],
+                                               timepoints=[tp])
+                    im_name = "{}_{:06d}_{}_{:03d}.png".format(expt_name,
+                                                               tp + 1,
+                                                               channel,
+                                                               z_pos + 1)
+                    cv2.imwrite(str(pos_dir / im_name), np.squeeze(image))
+        # TODO update positions table to get the number of timepoints?
+        return list(itertools.product([self.name], timepoints))
+
+    def run(self, keys, positions, expt_name="", save_dir="./", **kwargs):
+        """
+        Parse file structure and get images for the timepoints in keys.
+        """
+        save_dir = Path(save_dir)
+        if keys is None:
+            return None
+        n_timepoints = positions[self.name].loc['n_timepoints']
+        start_tp = min(n_timepoints, min(keys))
+        end_tp = min(self.size_t, max(keys))
+
+        timepoints = list(range(start_tp, end_tp + 1))
+        cached = []
+        if len(timepoints) > 0 and n_timepoints <= max(timepoints):
+            try:
+                cached = self.cache_set(save_dir, timepoints, expt_name)
+                positions[self.name].loc['n_timepoints'] = max(timepoints)
+            finally:
+                # Write the new pos_df to file?
+                pass
+        return cached
+
+    def clear_cache(self):
+        pass
+
 
 class TimelapseLocal(Timelapse):
     def __init__(self, position, root_dir, finished=False):
@@ -240,7 +287,7 @@ class TimelapseLocal(Timelapse):
         # Todo: if cy5 is the first one it causes issues with getting x, y
         #   hence the sorted but it's not very robust
         self._channels = sorted(list(set.union(*[set(tp.keys())
-                                          for tp in
+                                                 for tp in
                                                  self.image_mapper.values()])))
         self._size_c = len(self._channels)
         # Todo: refactor so we don't rely on there being any images at all
@@ -283,7 +330,10 @@ class TimelapseLocal(Timelapse):
             ctxyz.append(np.stack(txyz))
         return np.stack(ctxyz)
 
-    def run(self, keys, session=None, **kwargs):
+    def clear_cache(self):
+        self.image_cache.clear()
+
+    def run(self, keys, **kwargs):
         """
         Parse file structure and get images for the timepoints in keys.
         """
@@ -293,12 +343,4 @@ class TimelapseLocal(Timelapse):
             keys = [keys]
         self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
         self._update_metadata()
-        # Update the position in the session
-        db_pos = session.query(Position).filter_by(name=self.name).first()
-        if db_pos is None:
-            db_pos = Position(name=self.name, n_timepoints=self.size_t)
-            session.add(db_pos)
-        else:
-            db_pos.n_timepoints = self.size_t
         return keys
-
