@@ -1,14 +1,13 @@
 import itertools
 import logging
 import numpy as np
-import pandas as pd
 from pathlib import Path
 
 from tqdm import tqdm
 import cv2
 
 from core.io.matlab import matObject
-from core.utils import Cache
+from core.utils import Cache, imread
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +66,30 @@ class Timelapse:
         self._size_x = 0
         self._size_y = 0
         self._size_z = 0
+        self.image_cache = None
+        self.annotation = None
 
     def __repr__(self):
         return self.name
 
+    def full_mask(self):
+        return np.full(self.shape, False)
+
     def __getitem__(self, item):
+        cached = self.image_cache[item]
+        # Check if there are missing values, if so reload
+        # TODO only reload missing
+        mask = np.isnan(cached)
+        if np.any(mask):
+            full = np.squeeze(self.load_fn(item))
+            self.image_cache[item] = full
+            return full
+        return cached
+
+    def get_hypercube(self):
+        pass
+
+    def load_fn(self, item):
         """
         The hypercube is ordered as: C, T, X, Y, Z
         :param item:
@@ -90,12 +108,14 @@ class Timelapse:
                 return range(s.start, s.stop, step)
 
         def parse_subitem(subitem, kw):
-            if isinstance(subitem, int):
-                res = [subitem]
+            if isinstance(subitem, (int, float)):
+                res = [int(subitem)]
             elif isinstance(subitem, list) or isinstance(subitem, tuple):
                 res = list(subitem)
             elif isinstance(subitem, slice):
                 res = parse_slice(subitem)
+            else:
+                raise ValueError(f"Cannot parse slice {kw}: {subitem}")
 
             if kw in ['x', 'y']:
                 # Need exactly two values
@@ -171,7 +191,7 @@ class TimelapseOMERO(Timelapse):
     Connected to an Image object which handles database I/O.
     """
 
-    def __init__(self, image, annotation):
+    def __init__(self, image, annotation, cache, **kwargs):
         super(TimelapseOMERO, self).__init__()
         self.image = image
         # Pre-load pixels
@@ -184,10 +204,15 @@ class TimelapseOMERO(Timelapse):
         self._size_c = self.image.getSizeC()
         self._size_t = self.image.getSizeT()
         self._channels = self.image.getChannelLabels()
-        self.annotation = None
         # Check whether there are file annotations for this position
         if annotation is not None:
             self.annotation = load_annotation(annotation)
+        # Get an HDF5 dataset to use as a cache.
+        compression = kwargs.get('compression', None)
+        self.image_cache = cache.require_dataset(self.name, self.shape,
+                                                 dtype=np.float16,
+                                                 fillvalue=np.nan,
+                                                 compression=compression)
 
     def get_hypercube(self, x=None, y=None,
                       z_positions=None, channels=None,
@@ -226,6 +251,7 @@ class TimelapseOMERO(Timelapse):
         return np.moveaxis(result, 0, -1)
 
     def cache_set(self, save_dir, timepoints, expt_name, quiet=True):
+        # TODO deprecate when this is default
         pos_dir = save_dir / self.name
         if not pos_dir.exists():
             pos_dir.mkdir()
@@ -268,11 +294,12 @@ class TimelapseOMERO(Timelapse):
         return cached
 
     def clear_cache(self):
-        pass
+        self.image_cache.clear()
 
 
 class TimelapseLocal(Timelapse):
-    def __init__(self, position, root_dir, finished=True, annotation=None):
+    def __init__(self, position, root_dir, finished=True, annotation=None,
+                 cache=None, **kwargs):
         """
         Linked to a local directory containing the images for one position
         in an experiment.
@@ -288,7 +315,6 @@ class TimelapseLocal(Timelapse):
         assert self.pos_dir.exists()
         self._id = position
         self._name = position
-        self.image_cache = Cache()
         if finished:
             self.image_mapper = parse_local_fs(self.pos_dir)
             self._update_metadata()
@@ -298,6 +324,11 @@ class TimelapseLocal(Timelapse):
         # Check whether there are file annotations for this position
         if annotation is not None:
             self.annotation = load_annotation(annotation)
+        compression = kwargs.get('compression', None)
+        self.image_cache = cache.require_dataset(self.name, self.shape,
+                                                 dtype=np.float16,
+                                                 fillvalue=np.nan,
+                                                 compression=compression)
 
     def _update_metadata(self):
         self._size_t = len(self.image_mapper)
@@ -333,7 +364,7 @@ class TimelapseLocal(Timelapse):
             default = np.zeros((self.size_x, self.size_y))
             names = [self.image_mapper[t][self.channels[ch_id]].get(i, None)
                      for i in z_positions]
-            res = [self.image_cache[name] if name is not None else default
+            res = [imread(name) if name is not None else default
                    for name in names]
             return res
 
