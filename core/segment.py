@@ -14,7 +14,8 @@ from core.traps import identify_trap_locations, get_trap_timelapse, \
 from core.utils import accumulate
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
-trap_template = np.load(trap_template_directory / 'trap_bg_1.npy')
+# TODO do we need multiple templates, one for each setup?
+trap_template = np.load(trap_template_directory / 'trap_prime.npy')
 
 
 def get_tile_shapes(x, tile_size, max_shape):
