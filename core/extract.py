@@ -15,7 +15,7 @@ class Extracted:
         self.volume = None
         self._keep = None
 
-    def filter(self, filename=None):
+    def filter(self, filename=None, **kwargs):
         """
         1. Filter out small non-growing tracks. This means:
             a. the cell size never reaches beyond a certain size-threshold
@@ -34,13 +34,13 @@ class Extracted:
         :return:
         """
         #self.join_tracks()
-        filter_out = self.filter_size()
-        filter_out += self.filter_lifespan()
+        filter_out = self.filter_size(**kwargs)
+        filter_out += self.filter_lifespan(**kwargs)
         # TODO save data or just filtering parameters?
         #self.to_hdf(filename)
         self.keep = ~filter_out
 
-    def filter_size(self, volume_thresh=7, growth_thresh=10):
+    def filter_size(self, volume_thresh=7, growth_thresh=10, **kwargs):
         """Filter out small and non-growing cells.
         :param volume_thresh: Size threshold for small cells
         :param growth_thresh: Size difference threshold for non-growing cells
@@ -52,7 +52,7 @@ class Extracted:
         filter_out += np.where(growth < growth_thresh, True, False)
         return filter_out
 
-    def filter_lifespan(self, min_time=5):
+    def filter_lifespan(self, min_time=5, **kwargs):
         """Remove daughter cells that have a small life span.
 
         :param min_time: The minimum life span, under which cells are removed.
@@ -69,6 +69,8 @@ class Extracted:
         :param threshold: Maximum volume difference to join contiguous tracks.
         :return:
         """
+        # For all pairs of cells
+        #
         pass
 
 

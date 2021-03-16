@@ -72,18 +72,30 @@ def get_tile_shapes(x, tile_size, max_shape):
     # return max(xmin, 0), xmin + tile_size, max(ymin, 0), ymin + tile_size
     return xmin, xmin + tile_size, ymin, ymin + tile_size
 
-def get_xy_tile(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3):
-    pad_val = np.median(img)
-    pad_shape = [(0, 0)] * len(img.shape)
-    pad_shape[xidx] = (max(-xmin, 0), max(xmax - img.shape[xidx], 0))
-    pad_shape[yidx] = (max(-ymin, 0), max(ymax - img.shape[yidx], 0))
+def in_image(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3):
+    if xmin >= 0 and ymin >= 0:
+        if xmax < img.shape[xidx] and ymax < img.shape[yidx]:
+            return True
+    else:
+        return False
 
+def get_xy_tile(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3, pad_val=None):
+    if pad_val is None:
+        pad_val = np.median(img)
+    # Get the tile from the image
     idx = [slice(None)] * len(img.shape)
     idx[xidx] = slice(max(0, xmin), min(xmax, img.shape[xidx]))
     idx[yidx] = slice(max(0, ymin), min(ymax, img.shape[yidx]))
     tile = img[tuple(idx)]
-    tile = np.pad(tile, pad_shape, constant_values=pad_val)
-
+    # Check if the tile is in the image
+    if in_image(img, xmin, xmax, ymin, ymax, xidx, yidx):
+        return tile
+    else:
+        # Add padding
+        pad_shape = [(0, 0)] * len(img.shape)
+        pad_shape[xidx] = (max(-xmin, 0), max(xmax - img.shape[xidx], 0))
+        pad_shape[yidx] = (max(-ymin, 0), max(ymax - img.shape[yidx], 0))
+        tile = np.pad(tile, pad_shape, constant_values=pad_val)
     return tile
 
 def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
@@ -115,7 +127,7 @@ def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=96,
 
     # Fixme: is this less efficient on OMERO?
     timelapse = [get_xy_tile(raw_expt[channels, i, :, :, z],
-                             xmin, xmax, ymin, ymax)
+                             xmin, xmax, ymin, ymax, pad_val=None)
                  for i, (xmin, xmax, ymin, ymax) in enumerate(tiles_shapes)]
     return np.hstack(timelapse)
 
@@ -140,13 +152,14 @@ def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
 
     # Get full img
     img = raw_expt[channels, tp, :, :, z]
+    pad_val = np.median(img)
 
     traps = []
     max_shape = (raw_expt.shape[2], raw_expt.shape[3])
     for trap_center in trap_locations[tp]:
         xmin, xmax, ymin, ymax= get_tile_shapes(trap_center, tile_size,
                                                  max_shape)
-        traps.append(get_xy_tile(img, xmin, xmax, ymin, ymax))
+        traps.append(get_xy_tile(img, xmin, xmax, ymin, ymax, pad_val=pad_val))
     return np.stack(traps, axis=0)
 
 
