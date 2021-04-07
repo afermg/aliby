@@ -64,11 +64,23 @@ class PostProcessor:
         self.cells = self.cells.from_source(
             self.expt.current_position.annotation)
 
+    def get_exp_mo_bud(self):
+        d = {}
+        for pos in self.expt.positions:
+            self.expt.current_position = pos
+            d = {**d, **self.get_pos_mo_bud()}
+
+        self.expt.current_position = self.expt.positions[0]
+
+        return d
     def load_extraction(self, folder=None)-> None:
         if folder is None:
             folder = Path(self.expt.name + '/extraction')
         
         self.extraction = {}
         for pos in self.expt.positions:
-            self.extraction[pos] = load(folder / Path(pos + '.gz'))
-            
+            try:
+                self.extraction[pos] = load(folder / Path(pos + '.gz'))
+
+            except:
+                print(pos, ' not found')
