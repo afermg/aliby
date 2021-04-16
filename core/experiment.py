@@ -117,6 +117,7 @@ class ExperimentOMERO(Experiment):
         super(ExperimentOMERO, self).__init__()
         self.exptID = omero_id
         # Get annotations
+        self.use_annotations = kwargs.get("use_annotations", True)
         self._files = None
         self._tags = None
 
@@ -167,7 +168,7 @@ class ExperimentOMERO(Experiment):
                           for key in filter(r.match, self.files)],
                          key=lambda x: x.creationEventDate(), reverse=True)
         # Choose newest file
-        if len(wrappers) < 0:
+        if len(wrappers) < 1:
             return None
         else:
             # Choose the newest annotation and cache it
@@ -183,7 +184,10 @@ class ExperimentOMERO(Experiment):
         """Get a Timelapse object for a given position by name"""
         # assert position in self.positions, "Position not available."
         img = self.connection.getObject("Image", self._positions[position])
-        annotation = self._get_position_annotation(position)
+        if self.use_annotations:
+            annotation = self._get_position_annotation(position)
+        else:
+            annotation = None
         return TimelapseOMERO(img, annotation)
 
     def cache_locally(self, root_dir='./', positions=None, channels=None,
