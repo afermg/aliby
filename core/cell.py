@@ -18,5 +18,6 @@ def growth_rate(data:Series, alg=None, filt = 'savgol'):
     if alg is None:
         alg='standard'
 
+    
 
     
