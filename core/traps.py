@@ -160,7 +160,7 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     images = raw_expt.pixels.getTiles(zct_tiles)
     timelapse = np.full(shape, np.nan)
 
-    for (z, c, t, _), (x, y), image in zip(zct_tiles, slices, images):
+    for (z, c, t, _), (y, x), image in zip(zct_tiles, slices, images):
         timelapse[c, t, x[0]:x[1], y[0]:y[1], z] = image
 
     for x in timelapse:  # By channel
