@@ -220,9 +220,10 @@ class TimelapseOMERO(Timelapse):
                         itertools.product(z_positions, channels, timepoints)]
         planes = list(self.pixels.getTiles(zcttile_list))
         order = (len(z_positions), len(channels), len(timepoints),
-                 planes[0].shape[-1], planes[0].shape[-2])
+                 planes[0].shape[-2], planes[0].shape[-1])
         result = np.stack([x for x in planes]).reshape(order)
         # Set to C, T, X, Y, Z order
+        result = np.moveaxis(result, -1, -2)
         return np.moveaxis(result, 0, -1)
 
     def cache_set(self, save_dir, timepoints, expt_name, quiet=True):

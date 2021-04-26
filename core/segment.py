@@ -8,9 +8,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from core.timelapse import TimelapseOMERO
 from core.io.matlab import matObject
 from core.traps import identify_trap_locations, get_trap_timelapse, \
-    get_traps_timepoint, centre
+    get_traps_timepoint, centre, get_trap_timelapse_omero
 from core.utils import accumulate
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
@@ -129,6 +130,13 @@ class TrapLocations:
     def __repr__(self):
         pass
 
+    def __iter__(self):
+        i = 0
+        while i < self.n_timepoints:
+            yield self.__getitem__(i)
+            i += 1
+
+
 class TimelapseTiler:
     def __init__(self, timelapse, template, finished=True, matlab=None):
         self.timelapse = timelapse
@@ -210,6 +218,12 @@ class TimelapseTiler:
         If None, defaults to [0].
         :return: A numpy array with the timelapse in (C,T,X,Y,Z) order
         """
+        # TODO is there a better way of separating the two?
+        if isinstance(self.timelapse, TimelapseOMERO):
+            return get_trap_timelapse_omero(self.timelapse,
+                                  self.trap_locations,
+                                  trap_id, tile_size=tile_size,
+                                  channels=channels, z=z)
         return get_trap_timelapse(self.timelapse,
                                   self.trap_locations,
                                   trap_id, tile_size=tile_size,
@@ -295,7 +309,7 @@ def from_matlab(mat_timelapse):
     try:
         mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[
             'xcenter']])
-    except TypeError:
+    except (TypeError, IndexError):
         mat_trap_locs = np.dstack([
                                     [loc['ycenter'] for loc in mat_trap_locs
                                         if isinstance(loc, dict)],
