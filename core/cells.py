@@ -140,7 +140,6 @@ class CellsMat(Cells):
         """
         # Case 1: only one cell per trap: trap_info['cell'][timepoint] is a
         # structured array
-        print("test")
         if isinstance(self.trap_info["cell"][timepoint], dict):
             segmentations = [
                 self._astype(x, "outline")
