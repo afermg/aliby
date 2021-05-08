@@ -134,7 +134,7 @@ def get_trap_timelapse(raw_expt, trap_locations, trap_id, tile_size=117,
 
 
 def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
-                             channels=None, z=None):
+                             channels=None, z=None, t=None):
     """
     Get a timelapse for a given trap by specifying the trap_id
     :param raw_expt: A Timelapse object from which data is obtained
@@ -151,24 +151,26 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     # Set the defaults (list is mutable)
     channels = channels if channels is not None else [0]
     z = z if z is not None else [0]
-    t = np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
-    shape = (len(channels), len(t), tile_size, tile_size, len(z))
+    times = t if t is not None else np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
+    shape = (len(channels), len(times), tile_size, tile_size, len(z))
     # Get trap location for that id:
     zct_tiles, slices = all_tiles(trap_locations, shape, raw_expt,
-                                  z, channels, trap_id)
+                                  z, channels, times, trap_id)
     # TODO Make this an explicit function in TimelapseOMERO
     images = raw_expt.pixels.getTiles(zct_tiles)
     timelapse = np.full(shape, np.nan)
 
     for (z, c, t, _), (y, x), image in zip(zct_tiles, slices, images):
-        timelapse[c, t, x[0]:x[1], y[0]:y[1], z] = image
+        ch = channels.index(c)
+        tp = times.tolist().index(t)
+        timelapse[ch, tp, x[0]:x[1], y[0]:y[1], z] = image
 
     for x in timelapse:  # By channel
         np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
     return timelapse
 
 
-def all_tiles(trap_locations, shape, raw_expt, z_positions, channels,
+def all_tiles(trap_locations, shape, raw_expt, z_positions, channels, times,
               trap_id):
     _, _, x, y, _ = shape
     _, _, MAX_X, MAX_Y, _ = raw_expt.shape
@@ -177,7 +179,8 @@ def all_tiles(trap_locations, shape, raw_expt, z_positions, channels,
     slices = []
     for z in z_positions:
         for ch in channels:
-            for t, trap_centres in enumerate(trap_locations):
+            for t in times:
+                trap_centres = trap_locations[t]
                 centre = trap_centres[trap_id]
                 xmin, ymin, xmax, ymax, r_xmin, r_ymin, r_xmax, r_ymax = tile_where(
                     centre, x, y, MAX_X, MAX_Y)

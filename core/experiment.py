@@ -191,7 +191,7 @@ class ExperimentOMERO(Experiment):
             annotation = self._get_position_annotation(position)
         else:
             annotation = None
-        return TimelapseOMERO(img, annotation)
+        return TimelapseOMERO(img, annotation, self.image_cache)
 
     def cache_locally(self, root_dir='./', positions=None, channels=None,
                       timepoints=None, z_positions=None):

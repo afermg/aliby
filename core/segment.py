@@ -80,9 +80,9 @@ class Tiler:
     def get_channel_index(self, channel):
         return self.expt.current_position.get_channel_index(channel)
 
-    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
+    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None, t=None):
         return self.pos_mapper[self.current_position].get_trap_timelapse(
-            trap_id, tile_size=tile_size, channels=channels, z=z
+            trap_id, tile_size=tile_size, channels=channels, z=z, t=t
         )
 
     def get_traps_timepoint(self, tp, tile_size=96, channels=None, z=None):
@@ -205,7 +205,7 @@ class TimelapseTiler:
         self._reference = image
         return drift
 
-    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
+    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None, t=None):
         """
         Get a timelapse for a given trap by specifying the trap_id
         :param trap_id: An integer defining which trap to choose. Counted
@@ -223,7 +223,7 @@ class TimelapseTiler:
             return get_trap_timelapse_omero(self.timelapse,
                                   self.trap_locations,
                                   trap_id, tile_size=tile_size,
-                                  channels=channels, z=z)
+                                  channels=channels, z=z, t=t)
         return get_trap_timelapse(self.timelapse,
                                   self.trap_locations,
                                   trap_id, tile_size=tile_size,
