@@ -51,6 +51,10 @@ class Tiler:
         return self.pos_mapper[pos]
 
     @property
+    def trap_locations(self):
+        return self.pos_mapper[self.current_position].trap_locations
+    
+    @property
     def n_timepoints(self):
         return self.pos_mapper[self.current_position].n_timepoints
 
@@ -72,6 +76,8 @@ class Tiler:
     @current_position.setter
     def current_position(self, pos):
         self._current_position = pos
+        # Also set the experiment to avoid discrepancies
+        self.expt.current_position = pos
 
     @property
     def channels(self):
@@ -304,16 +310,24 @@ def from_matlab(mat_timelapse):
     if timelapse_traps is None:
         warnings.warn("Could not initialise from matlab")
         return None
+    # The image rotation term takes into account the fact that in 
+    # some experiments the images are flipped wrt to the cTimepoint data for some reason??
+    image_rotation = timelapse_traps['image_rotation']
+    if image_rotation == -90:
+        order = ['ycenter', 'xcenter']
+    else:
+        order = ['xcenter', 'ycenter']
+        
     mat_trap_locs = timelapse_traps['cTimepoint']['trapLocations']
     # Rewrite into 3D array of shape (time, trap, x/y) from dictionary
     try:
-        mat_trap_locs = np.dstack([mat_trap_locs['ycenter'], mat_trap_locs[
-            'xcenter']])
-    except (TypeError, IndexError):
+        mat_trap_locs = np.dstack([mat_trap_locs[order[0]], mat_trap_locs[
+            order[1]]])
+    except (TypeError, IndexError):            
         mat_trap_locs = np.dstack([
-                                    [loc['ycenter'] for loc in mat_trap_locs
+                                    [loc[order[0]] for loc in mat_trap_locs
                                         if isinstance(loc, dict)],
-                                    [loc['xcenter'] for loc in mat_trap_locs
+                                    [loc[order[1]] for loc in mat_trap_locs
                                         if isinstance(loc, dict)]
                                    ]).astype(int)
     trap_locations = TrapLocations(initial_location=mat_trap_locs[0])
