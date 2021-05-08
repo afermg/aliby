@@ -181,9 +181,10 @@ def all_tiles(trap_locations, shape, raw_expt, z_positions, channels,
                 centre = trap_centres[trap_id]
                 xmin, ymin, xmax, ymax, r_xmin, r_ymin, r_xmax, r_ymax = tile_where(
                     centre, x, y, MAX_X, MAX_Y)
-                slices.append(((r_xmin - xmin, r_xmax - xmin),
-                               (r_ymin - ymin, r_ymax - ymin)))
-                tile = (r_xmin, r_ymin, r_xmax - r_xmin, r_ymax - r_ymin)
+                slices.append(((r_ymin - ymin, r_ymax - ymin),
+                               (r_xmin - xmin, r_xmax - xmin)
+                               ))
+                tile = (r_ymin, r_xmin, r_ymax - r_ymin, r_xmax - r_xmin)
                 zct_tiles.append((z, ch, t, tile))
     return zct_tiles, slices
 

@@ -96,6 +96,8 @@ class Timelapse:
                 res = list(subitem)
             elif isinstance(subitem, slice):
                 res = parse_slice(subitem)
+            else:
+                res = subitem
 
             if kw in ['x', 'y']:
                 # Need exactly two values
