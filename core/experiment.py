@@ -10,6 +10,7 @@ import re
 import logging
 from typing import Union
 
+import h5py
 from tqdm import tqdm
 import pandas as pd
 
@@ -104,7 +105,6 @@ class Experiment(abc.ABC):
                                                    z_positions, channels,
                                                    timepoints)
 
-
 # Todo: cache images like in ExperimentLocal
 class ExperimentOMERO(Experiment):
     """
@@ -132,6 +132,8 @@ class ExperimentOMERO(Experiment):
         self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
         if not self.root_dir.exists():
             self.root_dir.mkdir(parents=True)
+        self.compression = kwargs.get('compression', None)
+        self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
         # Create positions objects
         self._positions = {img.getName(): img.getId() for img in
                            sorted(self.dataset.listChildren(),
@@ -175,9 +177,10 @@ class ExperimentOMERO(Experiment):
             annotation = wrappers[0]
             filepath = self.root_dir / annotation.getFileName().replace(
                 '/', '_')
-            with open(str(filepath), 'wb') as fd:
-                for chunk in annotation.getFileInChunks():
-                    fd.write(chunk)
+            if not filepath.exists():
+                with open(str(filepath), 'wb') as fd:
+                    for chunk in annotation.getFileInChunks():
+                        fd.write(chunk)
             return filepath
 
     def get_position(self, position):
@@ -291,6 +294,7 @@ class ExperimentLocal(Experiment):
         self.metadata = metadata
         self.metadata['finished'] = finished
         self.files = [f for f in self.root_dir.iterdir() if f.is_file()]
+        self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
         if self.finished:
             cache = self._find_cache()
             # log = self._find_log() # Todo: add log metadata
@@ -344,7 +348,8 @@ class ExperimentLocal(Experiment):
             self._pos_mapper[position] = TimelapseLocal(position,
                                                         self.root_dir,
                                                         finished=self.finished,
-                                                        annotation=annotation)
+                                                        annotation=annotation,
+                                                        cache=self.image_cache)
         return self._pos_mapper[position]
 
     def run(self, keys, **kwargs):
