@@ -80,7 +80,8 @@ class CellsMat(Cells):
             )
         else:
 
-            if timelapse_traps["timepointsProcessed"] == 1:
+            tps_processed = timelapse_traps["timepointsProcessed"]
+            if isinstance(tps_processed, int) and tps_processed == 1:
                 self.trap_info = {
                     k: [v] for k, v in timelapse_traps["cTimepoint"]["trapInfo"].items()
                 }
