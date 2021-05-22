@@ -1,10 +1,12 @@
 """Core classes for the pipeline"""
+import atexit
 import itertools
 import os
 import abc
 import glob
 import json
 import warnings
+from getpass import getpass
 from pathlib import Path
 import re
 import logging
@@ -111,8 +113,7 @@ class ExperimentOMERO(Experiment):
     Experiment class to organise different timelapses.
     Connected to a Dataset object which handles database I/O.
     """
-
-    def __init__(self, omero_id, username, password, host, port=4064,
+    def __init__(self, omero_id, host, port=4064,
                  **kwargs):
         super(ExperimentOMERO, self).__init__()
         self.exptID = omero_id
@@ -121,26 +122,42 @@ class ExperimentOMERO(Experiment):
         self._files = None
         self._tags = None
 
-        # Connection objects
-        self.connection = BlitzGateway(username, password, host=host,
+        # Create a connection
+        self.connection = BlitzGateway(kwargs.get('username') or input('Username: '),
+                                       kwargs.get('password') or getpass('Password: '),
+                                       host=host,
                                        port=port)
         connected = self.connection.connect()
         assert connected is True, "Could not connect to server."
-        self.dataset = self.connection.getObject("Dataset", self.exptID)
-        self.name = self.dataset.getName()
-        # Set up local cache
-        self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
-        if not self.root_dir.exists():
-            self.root_dir.mkdir(parents=True)
-        self.compression = kwargs.get('compression', None)
-        self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
-        # Create positions objects
-        self._positions = {img.getName(): img.getId() for img in
+        try: # Run everything that could cause the initialisation to fail
+            self.dataset = self.connection.getObject("Dataset", self.exptID)
+            self.name = self.dataset.getName()
+            # Create positions objects
+            self._positions = {img.getName(): img.getId() for img in
                            sorted(self.dataset.listChildren(),
                                   key=lambda x: x.getName())}
-        # Set up the current position as the first in the list
-        self._current_position = self.get_position(self.positions[0])
-        self.running_tp = 0
+            # Set up local cache
+            self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
+            if not self.root_dir.exists():
+                self.root_dir.mkdir(parents=True)
+            self.compression = kwargs.get('compression', None)
+            self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
+
+            # Set up the current position as the first in the list
+            self._current_position = self.get_position(self.positions[0])
+            self.running_tp = 0
+        except Exception as e:
+            # Close the connection!
+            print("Error in initialisation, closing connection.")
+            self.connection.close()
+            print(self.connection.isConnected())
+            raise e
+        atexit.register(self.close)  # Close everything if program ends
+
+    def close(self):
+        print("Clean-up on exit.")
+        self.image_cache.close()
+        self.connection.close()
 
     @property
     def files(self):
@@ -225,7 +242,7 @@ class ExperimentOMERO(Experiment):
                 pos_dir.mkdir()
             self.cache_set(pos, range(pos.size_t))
 
-        self.cache_annotations(save_dir)
+        self.cache_logs(save_dir)
         # Save the file annotations
         cache_config = dict(positions=positions, channels=channels,
                             timepoints=timepoints, z_positions=z_positions)
@@ -233,18 +250,15 @@ class ExperimentOMERO(Experiment):
             json.dump(cache_config, fd)
         logger.info('Downloaded experiment {}'.format(self.exptID))
 
-    def cache_annotations(self, **kwargs):
-        warnings.warn("Most annotations are now lazily cached by default, "
-                      "so this will be removed in future versions", DeprecationWarning)
+    def cache_logs(self, **kwargs):
         # Save the file annotations
-        save_mat = kwargs.get('matlab', False)
         tags = dict()# and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
                 filepath = self.root_dir / annotation.getFileName().replace(
                     '/', '_')
-                if save_mat or not str(filepath).endswith('mat') and not filepath.exists():
-                    print('Saving {}'.format(filepath))
+                if str(filepath).endswith('txt') and not filepath.exists():
+                    # Save only the text files
                     with open(str(filepath), 'wb') as fd:
                         for chunk in annotation.getFileInChunks():
                             fd.write(chunk)
