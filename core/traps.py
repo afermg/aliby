@@ -150,7 +150,7 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     """
     # Set the defaults (list is mutable)
     channels = channels if channels is not None else [0]
-    z = z if z is not None else [0]
+    z_positions = z if z is not None else [0]
     times = t if t is not None else np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
     shape = (len(channels), len(times), tile_size, tile_size, len(z))
     # Get trap location for that id:
@@ -163,7 +163,8 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     for (z, c, t, _), (y, x), image in zip(zct_tiles, slices, images):
         ch = channels.index(c)
         tp = times.tolist().index(t)
-        timelapse[ch, tp, x[0]:x[1], y[0]:y[1], z] = image
+        z_pos = z_positions.index(z)
+        timelapse[ch, tp, x[0]:x[1], y[0]:y[1], z_pos] = image
 
     for x in timelapse:  # By channel
         np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
