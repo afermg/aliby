@@ -1,6 +1,7 @@
 import collections
 import itertools
 import json
+import time
 from pathlib import Path
 from typing import Iterable
 
@@ -12,13 +13,14 @@ import requests
 import tensorflow as tf
 from tqdm import tqdm
 
+import baby.errors
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from core.utils import Cache, accumulate
+from core.utils import Cache, accumulate, get_store_path
 
 
 class BabyNoMatches(Exception):
@@ -171,26 +173,43 @@ class BabyClient:
             raise e
         return result
 
-    def process_position(self, prompt: str, tps: Iterable[int], session,
-                         store, tile_size=96):
+    def process_position(self, position: str, tps: Iterable[int], store,
+                         save_dir, tile_size=96, **kwargs):
+        # Open the store
+        store_file = get_store_path(save_dir, store, position)
+        with h5py.File(store_file, 'a') as file:
+            hfile = file.require_group('cell_info')
+            processed = hfile.require_dataset('processed_timepoints',
+                                              maxshape=(None,),
+                                              dtype=np.uint16)
+            # reset the time points to avoid double-processing
+            tps = [t for t in tps if t not in processed]
         position_results = []
-        # The prompt received by baby is the position
-        try:
-            for timepoint_id in tps:
+        skipped = []
+        for timepoint_id in tps:
+            try:
                 # Finish processing previously queued images
                 self.flush_processing(position_results)
-                self.process_timepoint(prompt, timepoint_id,
+                self.process_timepoint(position, timepoint_id,
                                        tile_size=tile_size)
-        except KeyError as e:
-            # TODO log that this will not be processed
-            raise e
+            except KeyError as e:
+                # TODO log that this will not be processed
+                skipped.append(timepoint_id)
         # Flush all processing before moving to the next position
+        mother_assign = None
         while len(self.processing) > 0:
             mother_assign = self.flush_processing(position_results)
-        store_position(position_results, self.tiler.positions.index(prompt),
-                       store, position_name=prompt,
-                       mother_assign=mother_assign, tile_size=tile_size)
-        return
+        store_position(position_results, self.tiler.positions.index(position),
+                       store, save_dir, position, mother_assign=mother_assign,
+                       tile_size=tile_size)
+        processed_tps = [t for t in tps if t not in skipped]
+        with h5py.File(store_file, 'a') as file:
+            hfile = file.require_group('cell_info')
+            processed = hfile['processed_timepoints']
+            if processed.shape[0] < max(processed_tps):
+                processed.resize(max(processed_tps), axis=0)
+            processed[processed_tps] = processed_tps
+        return processed_tps
 
     def process_timepoint(self, pos, timepoint, tile_size=96):
         channel_idx = [self.tiler.get_channel_index(self.channel)]
@@ -201,7 +220,6 @@ class BabyClient:
         traps = np.squeeze(traps)
         timepoint_key = (pos, timepoint)
         session_id = self.sessions[pos]
-        print(traps.shape)
         self.queue_image(traps, session_id)
         self.processing.append(timepoint_key)
 
@@ -226,8 +244,10 @@ class BabyClient:
 
     def run(self, keys, store='store.h5', **kwargs):
         # key are (pos, timepoint) tuples
+        run_tps = dict()
         for pos, tps in accumulate(keys):
-            self.process_position(pos, tps, store, **kwargs)
+            run_tps[pos] = self.process_position(pos, tps, store, **kwargs)
+        keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
         return keys
 
 
@@ -248,18 +268,22 @@ def format_segmentation(segmentation, tp):
     merged = {k: list(itertools.chain.from_iterable(
         res[k] for res in segmentation))
         for k in segmentation[0].keys()}
+    # Special case for mother_assign
     if 'mother_assign' in merged:
         del merged['mother_assign']
         mother_assign = [x['mother_assign'] for x in segmentation]
-    # Special case for mother_assign
+    # Check that the lists are all of the same length (in case of errors in
+    # BABY)
+    n_cells = min([len(v) for v in merged.values()])
+    merged = {k: v[:n_cells] for k,v in merged.items()}
     tp_dataframe = pd.DataFrame(merged)
     # Set time point value for all traps
     tp_dataframe['timepoint'] = tp
     return tp_dataframe, mother_assign
 
 
-def store_position(position_results, position_index, store,
-                   position_name=None, mother_assign=None, tile_size=96):
+def store_position(position_results, position_index, store, save_dir,
+                   position_name, mother_assign=None, tile_size=96):
     """Store the results from a set of timepoints for a given position to
     and HDF5 store
     :param position_results: List of timepoint dataframes as returned by
@@ -270,14 +294,8 @@ def store_position(position_results, position_index, store,
     """
     # Combine all of the results into one data frame
     position_results = pd.concat(position_results)
-    # Set the position name explicitly
-    # position_results['position'] = position_index
-    if position_name:
-        # This means to create a separate store for each position
-        store = Path(store)
-        store = store.with_name(position_name + store.name)
-    # Append the results to the store
-    df_to_hdf(position_results, store, mother_assign=mother_assign,
+    store_file = get_store_path(save_dir, store, position_name)
+    df_to_hdf(position_results, store_file, mother_assign=mother_assign,
               tile_size=tile_size)
     return
 
@@ -311,7 +329,9 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
         'mother_assign': ((None,), np.uint16)
     }
 
-    hfile = h5py.File(filename, 'a')
+    file = h5py.File(filename, 'a')
+    hfile = file.require_group('cell_info')
+
     n = len(df)
     for key in df.columns:
         # We're only saving data that has a pre-defined data-type
@@ -333,11 +353,11 @@ def df_to_hdf(df, filename, mother_assign=None, tile_size=96):
     if mother_assign:
         # We do not append to mother_assign; raise error if already saved
         n = len(mother_assign)
-        hfile.create_dataset('mother_assign', shape=(n,),
+        hfile.require_dataset('mother_assign', shape=(n,),
                              dtype=h5py.vlen_dtype(np.uint16),
                              compression='gzip')
         hfile['mother_assign'][()] = mother_assign
-    hfile.close()
+    file.close()
     return
 
 
@@ -394,7 +414,7 @@ class BabyRunner:
 
     def __init_properties(self, config):
         n_stacks = int(config.get('n_stacks', '5z').replace('z', ''))
-        self.z = list(range(n_stacks))
+        self.z = slice(0, n_stacks)
         self.channel = self.tiler.get_channel_index(
             config.get('channel', 'Brightfield'))
 
@@ -407,9 +427,11 @@ class BabyRunner:
         pred = crawler.step(img, **kwargs)
         return pred
 
-    def process_position(self, position, tps, store, verbose, **kwargs):
+    def process_position(self, position, tps, store, save_dir, verbose,
+                         **kwargs):
         """ Segment the position for the given number of time points and save.
 
+        :param save_dir: Directory in which to save results
         :param position: The name of the position to segment
         :param tps: A list of time points on which to run the segmentation
         :param store: The file in which to save the results, as csv. Results
@@ -422,25 +444,62 @@ class BabyRunner:
         """
         self.tiler.current_position = position
         position_results = []
+        skipped = []
+        mother_assign = None
+        # Open the store
+        store_file = get_store_path(save_dir, store, position)
+        with h5py.File(store_file, 'a') as file:
+            hfile = file.require_group('cell_info')
+            if 'processed_timepoints' in hfile:
+                processed = hfile['processed_timepoints']
+                # reset the time points to avoid double-processing
+                tps = [t for t in tps if t not in processed]
+            else:
+                processed = hfile.create_dataset('processed_timepoints',
+                                                 shape=(len(tps),),
+                                                 maxshape=(None, ),
+                                                 dtype=np.uint16)
         for tp in tqdm(tps, desc=position, disable=not verbose):
-            traps = np.squeeze(
-                self.tiler.get_traps_timepoint(tp, channels=[self.channel],
+            try:
+                t = time.perf_counter()
+                traps = np.squeeze(
+                    self.tiler.get_traps_timepoint(tp, channels=[self.channel],
                                                z=self.z,
                                                tile_size=self.default_image_size))
-            segmentation = self.segment(traps, position, **kwargs)
-            # Segmentation is a list of dictionaries, ordered by trap
-            # Add trap information
-            tp_dataframe, mother_assign = format_segmentation(segmentation, tp)
-            position_results.append(tp_dataframe)
-        store_position(position_results, self.tiler.positions.index(
-            position), store, position_name=position,
+                t2 = time.perf_counter()
+                print(f"Loading image {position}, {tp} in {t2 - t}s")
+                segmentation = self.segment(traps, position, **kwargs)
+                print(f"Segmenting image {position}, {tp} in "
+                      f"{time.perf_counter() - t2}s")
+                # Segmentation is a list of dictionaries, ordered by trap
+                # Add trap information
+                tp_dataframe, mother_assign = format_segmentation(segmentation, tp)
+                position_results.append(tp_dataframe)
+            except baby.errors.BadOutput as e:
+                skipped.append(tp)
+                continue
+                #raise (e)
+        store_position(position_results,
+                       self.tiler.positions.index(position),
+                       store, save_dir, position_name=position,
                        mother_assign=mother_assign,
                        tile_size=self.default_image_size)
-        return
+        processed_tps = [t for t in tps if t not in skipped]
+        with h5py.File(store_file, 'a') as hfile:
+            processed = hfile['/cell_info/processed_timepoints']
+            if processed.shape[0] < max(processed_tps):
+                processed.resize(max(processed_tps), axis=0)
+            processed[processed_tps] = processed_tps
+        return processed_tps
 
-    def run(self, keys, store, verbose=False, clear_cache=False, **kwargs):
+    def run(self, keys, store, clear_cache=False, **kwargs):
+        save_dir = self.tiler.expt.root_dir
+        # key are (pos, timepoint) tuples
+        run_tps = dict()
         for pos, tps in accumulate(keys):
-            self.process_position(pos, tps, store, verbose, **kwargs)
+            run_tps[pos] = self.process_position(pos, tps, store, save_dir,
+                                                 **kwargs)
             if clear_cache:
                 self.tiler[pos].clear_cache()
+        keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
         return keys

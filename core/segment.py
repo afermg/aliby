@@ -3,6 +3,7 @@ Includes splitting the image into traps/parts,
 cell segmentation, nucleus segmentation."""
 import warnings
 
+import h5py
 from skimage import feature
 import numpy as np
 import pandas as pd
@@ -12,7 +13,7 @@ from core.timelapse import TimelapseOMERO
 from core.io.matlab import matObject
 from core.traps import identify_trap_locations, get_trap_timelapse, \
     get_traps_timepoint, centre, get_trap_timelapse_omero
-from core.utils import accumulate
+from core.utils import accumulate, get_store_path
 
 trap_template_directory = Path(__file__).parent / 'trap_templates'
 # TODO do we need multiple templates, one for each setup?
@@ -43,7 +44,8 @@ class Tiler:
     def __getitem__(self, pos):
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
-            pos_matlab = self.expt.get_position(pos).annotation
+            pos_matlab = self.expt.get_position(pos).annotation # Returns
+            # none if non-existent
             self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
                                                   self.trap_template,
                                                   finished=self.finished,
@@ -96,9 +98,10 @@ class Tiler:
             tp, tile_size=tile_size, channels=channels, z=z
         )
 
-    def run(self, keys, **kwargs):
+    def run(self, keys, store, **kwargs):
+        save_dir = self.expt.root_dir
         for pos, tps in accumulate(keys):
-            self[pos].run(tps, **kwargs)
+            self[pos].run(tps, store, save_dir, **kwargs)
         return keys
 
 class TrapLocations:
@@ -144,7 +147,8 @@ class TrapLocations:
 
 
 class TimelapseTiler:
-    def __init__(self, timelapse, template, finished=True, matlab=None):
+    def __init__(self, timelapse, template, finished=True, matlab=None,
+                 hdf=None):
         self.timelapse = timelapse
         self.trap_template = template
         self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
@@ -153,6 +157,8 @@ class TimelapseTiler:
             self.tile_timelapse()
         elif matlab:
             self.trap_locations = from_matlab(matlab)
+        elif hdf:
+            self.trap_locations = from_hdf(hdf)
 
     def tile_timelapse(self, channel: int = 0):
         """
@@ -265,40 +271,61 @@ class TimelapseTiler:
     def clear_cache(self):
         self.timelapse.clear_cache()
 
-    def run(self, keys, trap_store, drift_store):
+    def run(self, keys, store, save_dir):
         """
         :param keys: a list of timepoints to run tiling on.
         :return:
         """
-        timepoints = sorted(keys)
-        # Get the position in the database that corresponds to the timelapse
-        # of this tiler
         position = self.timelapse.name
-        if len(self.trap_locations) == 0:
-            initial_tp = timepoints.pop(0)
-            self._initialise_locations(initial_tp)
-            # Create a dataframe of all found traps
-            traps = []
-            for i in range(self.trap_locations.n_traps):
-                x, y = self.trap_locations[initial_tp][i]
-                traps.append((position, i, int(x), int(y)))
-        # Save initial location of the traps
-        trap_df = pd.DataFrame(traps, columns=['position', 'trap', 'x', 'y'])
-        with open(trap_store, 'a') as f:
-            trap_df.to_csv(f, header=f.tell() == 0)
-        #self._check_contiguous_time(timepoints)
-        drifts = []
-        for tp in timepoints:
-            drift = self._get_drift(self.trap_locations._drifts[-1], tp)
-            self.trap_locations[tp] = drift
-            # Update the drifts
-            y, x = drift
-            drifts.append((position, tp, x, y))
-        drift_df = pd.DataFrame(drifts, columns=['position', 'timepoint',
-                                                 'x', 'y'])
-        with open(drift_store, 'a') as f:
-            drift_df.to_csv(f, header=f.tell() == 0)
-        return keys
+        timepoints = sorted(keys)
+        # Initialise the store
+        store_file = get_store_path(save_dir, store, position)
+        # TODO remove
+        print(f'Tiler: Running {position} to {store_file}')
+        with h5py.File(store_file, 'a') as h5:
+            store = h5.require_group('/trap_info/')
+            # RUN TRAP INFO
+            if 'processed_timepoints' in store:
+                processed = store['processed_timepoints']
+            else:
+                processed = store.create_dataset('processed_timepoints',
+                                                 shape=(len(timepoints),),
+                                                 maxshape=(None, ),
+                                                 dtype=np.uint16)
+            # modify the time points based on the processed values
+            timepoints = [t for t in timepoints if t not in processed]
+            try:
+                max_tp = max(timepoints)
+            except ValueError: # There are no timepoints left
+                return timepoints
+            if 'trap_locations' in store:
+                trap_locs = store['trap_locations'][()]
+                self.trap_locations._initial_location = trap_locs
+            else:
+                self._initialise_locations(0)
+                store.create_dataset('trap_locations',
+                                     data=self.trap_locations[0])
+            # DRIFTS
+            if 'drifts' in store:
+                drifts = store['drifts']
+                # Expand the dataset to reach max_tp spots
+                if drifts.shape[0] <= max_tp:
+                    drifts.resize(max_tp + 1, axis=0)
+            else:  # No drifts yet
+                drifts = store.create_dataset('drifts',
+                                              shape=(max_tp + 1, 2),
+                                              maxshape=(None, 2))
+            for tp in timepoints:
+                drift = self._get_drift(self.trap_locations._drifts[-1], tp)
+                self.trap_locations[tp] = drift
+                # Note this overwrites the drift for any given time point if
+                # it has already been run
+                drifts[tp] = drift
+            # Keep track of which time points have been processed
+            if processed.shape[0] < max_tp:
+                processed.resize(max_tp, axis=0)
+            processed[timepoints] = timepoints
+        return timepoints
 
 def from_matlab(mat_timelapse):
     """Create an initialised Timelapse Tiler from a Matlab Object"""
@@ -339,5 +366,17 @@ def from_matlab(mat_timelapse):
         # TODO check that all drifts are identical
         trap_locations[tp] = drifts[i][0]
     return trap_locations
+
+
+def from_hdf(store_name):
+    with h5py.File(store_name, 'r') as store:
+        traps = store.require_group('trap_info')
+        trap_locations = TrapLocations(initial_location=traps[
+            'trap_locations'])
+        # Drifts
+        for i, drift in enumerate(traps['drifts']):
+            trap_locations[i] = drift
+        return TrapLocations
+
 
 

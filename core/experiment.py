@@ -128,7 +128,11 @@ class ExperimentOMERO(Experiment):
                                        host=host,
                                        port=port)
         connected = self.connection.connect()
-        assert connected is True, "Could not connect to server."
+        try:
+            assert connected is True, "Could not connect to server."
+        except AssertionError as e:
+            self.connection.close()
+            raise(e)
         try: # Run everything that could cause the initialisation to fail
             self.dataset = self.connection.getObject("Dataset", self.exptID)
             self.name = self.dataset.getName()
@@ -278,18 +282,16 @@ class ExperimentOMERO(Experiment):
 
     def run(self, keys: Union[list, int], store, **kwargs):
         if self.running_tp == 0:
-            self.cache_annotations(self.root_dir, **kwargs)
+            self.cache_logs(**kwargs)
             self.running_tp = 1  # Todo rename based on annotations
-        positions = pd.DataFrame(index=['n_timepoints'],
-                                 columns=self.positions)
-        positions.fillna(0, inplace=True)
-        cached = []
+        run_tps = dict()
         for pos, tps in accumulate(keys):
             position = self.get_position(pos)
-            cached.append(position.run(tps, positions, self.name,
-                                       self.root_dir))
-        positions.to_csv(store, mode='w')
-        return list(itertools.chain.from_iterable(cached))
+            run_tps[pos] = position.run(tps, store, save_dir=self.root_dir)
+        # Update the keys to match what was actually run
+        keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
+        return keys
+
 
 
 class ExperimentLocal(Experiment):
@@ -366,14 +368,15 @@ class ExperimentLocal(Experiment):
                                                         cache=self.image_cache)
         return self._pos_mapper[position]
 
-    def run(self, keys, **kwargs):
+    def run(self, keys, store, **kwargs):
         """
 
         :param keys: List of (position, time point) tuples to process.
         :return:
         """
+        run_tps = dict()
         for pos, tps in accumulate(keys):
-            self.get_position(pos).run(tps)
-        # Todo: if keys is none, get the positions table from the session
-        #  and save it to the store, then return None
+            run_tps[pos] = self.get_position(pos).run(tps, store)
+        # Update the keys to match what was actually run
+        keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
         return keys

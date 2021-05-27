@@ -3,6 +3,7 @@ Utility functions and classes
 """
 import itertools
 import operator
+from pathlib import Path
 from typing import Callable
 
 import h5py
@@ -89,3 +90,21 @@ def accumulate(l: list):
     for key, sub_iter in it:
         yield key, [x[1] for x in sub_iter]
 
+
+def get_store_path(save_dir, store, name):
+    """Create a path to a position-specific store.
+
+    This combines the name and the store's base name into a file path within save_dir.
+    For example.
+    >>> get_store_path('data', 'baby_seg.h5', 'pos001')
+    Path(data/pos001baby_seg.h5')
+
+    :param save_dir: The root directory in which to save the file, absolute
+    path.
+    :param store: The base name of the store
+    :param name: The name of the position
+    :return: Path(save_dir) / name+store
+    """
+    store = Path(save_dir) / store
+    store = store.with_name(name + store.name)
+    return store

@@ -23,7 +23,7 @@ class PipelineStep(ABC):
         return keys
 
 
-def create_keys(expt, strain, timepoints=None, positions=None, exclude=None):
+def create_keys(expt, strain='', timepoints=None, positions=None, exclude=None):
     """
     Create a set of keys for use with the pipeline based on a given experiment
     and an end time point.
@@ -40,16 +40,29 @@ def create_keys(expt, strain, timepoints=None, positions=None, exclude=None):
     """
     # TODO: Make it possible to use groups defined in metadata to choose the
     # positions to run.
-    # TODO: make it possible to timepoints not from 0 
-    if timepoints is None:
-        # Run full experiment
-        timepoints = expt.shape[1]
+    # TODO: make it possible to timepoints not from 0
     if positions is None:
         # Use strain to try to find the positions
         positions = [p for p in expt.positions if p.startswith(strain)]
     if exclude is not None:
         positions = list(set(positions) - set(exclude))
-    return list(itertools.product(positions, range(timepoints)))
+    # Get the correct time points for each position
+    run_tps = dict()
+    for pos in positions:
+        # Note that the different posistions can have different shapes
+        position = expt.get_position(pos)
+        n_tps = position.shape[1]
+        if timepoints is None:
+            # Run full experiment
+            run_tps[pos] = list(range(0, n_tps))
+        else:
+            if max(timepoints) > n_tps:
+                raise ValueError(f'Position {pos} only has {n_tps} time '
+                                 f'points but you asked for {timepoints}')
+            # If all the time points are available for that position
+            run_tps[pos] = timepoints
+    keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
+    return keys
 
 class Pipeline:
     """

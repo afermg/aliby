@@ -12,11 +12,12 @@ setup(
     python_requires='>=3.6',
     include_package_data=True,
     install_requires=[
-        'numpy',
-        'tqdm',
         'pandas',
         'baby@git+https://git.ecdf.ed.ac.uk/jpietsch/baby@master',
+        'tensorflow >=1.14'
         'scikit-image<=0.16.2',
+        'numpy',
+        'tqdm',
         'opencv-python',
         'requests_toolbelt',
         'h5py',

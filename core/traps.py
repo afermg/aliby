@@ -25,7 +25,8 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
     :return:
     """
     trap_size = trap_size if trap_size is not None else trap_template.shape[0]
-    img = transform.rescale(image, downscale)
+    # Careful, the image is float16!
+    img = transform.rescale(image.astype(float), downscale)
     temp = transform.rescale(trap_template, downscale)
 
     # TODO random search hyperparameter optimization
@@ -152,10 +153,10 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     channels = channels if channels is not None else [0]
     z_positions = z if z is not None else [0]
     times = t if t is not None else np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
-    shape = (len(channels), len(times), tile_size, tile_size, len(z))
+    shape = (len(channels), len(times), tile_size, tile_size, len(z_positions))
     # Get trap location for that id:
     zct_tiles, slices = all_tiles(trap_locations, shape, raw_expt,
-                                  z, channels, times, trap_id)
+                                  z_positions, channels, times, trap_id)
     # TODO Make this an explicit function in TimelapseOMERO
     images = raw_expt.pixels.getTiles(zct_tiles)
     timelapse = np.full(shape, np.nan)
@@ -255,19 +256,24 @@ def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
     # Set the defaults (list is mutable)
     channels = channels if channels is not None else [0]
     z = z if z is not None else [0]
+    if isinstance(z, slice):
+        n_z = z.stop
+    elif isinstance(z, int):
+        n_z = 1
+    elif isinstance(z, list):
+        n_z = len(z)
 
-    # Get full img
-    img = raw_expt[channels, tp, :, :, z]
-    pad_val = np.median(img)
-
-    traps = []
+    n_traps = len(trap_locations[tp])
+    shape = (len(channels), 1, tile_size, tile_size, n_z)
     max_shape = (raw_expt.shape[2], raw_expt.shape[3])
-    for trap_center in trap_locations[tp]:
-        xmin, xmax, ymin, ymax = get_tile_shapes(trap_center, tile_size,
-                                                 max_shape)
-        traps.append(get_xy_tile(img, xmin, xmax, ymin, ymax, pad_val=pad_val))
-    return np.stack(traps, axis=0)
+    timelapse = np.full((n_traps,) + shape, np.nan)
+    for i, trap_center in enumerate(trap_locations[tp]):
+        timelapse[i, :, 0, :, :, :] = get_tile(shape, trap_center, raw_expt,
+                                               channels, tp, z)
 
+    for x in timelapse:  # By channel
+        np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
+    return timelapse
 
 def centre(img, percentage=0.3):
     y, x = img.shape

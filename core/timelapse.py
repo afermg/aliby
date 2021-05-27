@@ -1,5 +1,7 @@
 import itertools
 import logging
+
+import h5py
 import numpy as np
 from pathlib import Path
 
@@ -7,7 +9,7 @@ from tqdm import tqdm
 import cv2
 
 from core.io.matlab import matObject
-from core.utils import Cache, imread
+from core.utils import Cache, imread, get_store_path
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +83,9 @@ class Timelapse:
         # TODO only reload missing
         mask = np.isnan(cached)
         if np.any(mask):
-            full = np.squeeze(self.load_fn(item))
-            self.image_cache[item] = full
+            full = self.load_fn(item)
+            shape = self.image_cache[item].shape # TODO speed this up by  recognising the shape from the item
+            self.image_cache[item] = np.reshape(full, shape)
             return full
         return cached
 
@@ -273,27 +276,27 @@ class TimelapseOMERO(Timelapse):
         # TODO update positions table to get the number of timepoints?
         return list(itertools.product([self.name], timepoints))
 
-    def run(self, keys, positions, expt_name="", save_dir="./", **kwargs):
+    def run(self, keys, store, save_dir="./", **kwargs):
         """
         Parse file structure and get images for the timepoints in keys.
         """
         save_dir = Path(save_dir)
         if keys is None:
+            # TODO save final metadata
             return None
-        n_timepoints = positions[self.name].loc['n_timepoints']
-        start_tp = min(n_timepoints, min(keys))
-        end_tp = min(self.size_t, max(keys))
-
-        timepoints = list(range(start_tp, end_tp + 1))
-        cached = []
-        if len(timepoints) > 0 and n_timepoints <= max(timepoints):
-            try:
-                cached = self.cache_set(save_dir, timepoints, expt_name)
-                positions[self.name].loc['n_timepoints'] = max(timepoints)
-            finally:
-                # Write the new pos_df to file?
+        store = save_dir / store
+        # A position specific store
+        store = store.with_name(self.name + store.name)
+        # Create store if it does not exist
+        if not store.exists():
+            # The first run, add metadata to the store
+            with h5py.File(store, 'w') as pos_store:
+                # TODO Add metadata to the store.
                 pass
-        return cached
+        # TODO check how sensible the keys are with what is available
+        #   if some of the keys don't make sense, log a warning and remove
+        #   them so that the next steps of the pipeline make sense
+        return keys
 
     def clear_cache(self):
         self.image_cache.clear()
@@ -383,9 +386,9 @@ class TimelapseLocal(Timelapse):
     def clear_cache(self):
         self.image_cache.clear()
 
-    def run(self, keys, **kwargs):
+    def run(self, keys, store, save_dir='./', **kwargs):
         """
-        Parse file structure and get images for the timepoints in keys.
+        Parse file structure and get images for the time points in keys.
         """
         if keys is None:
             return None
@@ -393,4 +396,16 @@ class TimelapseLocal(Timelapse):
             keys = [keys]
         self.image_mapper.update(parse_local_fs(self.pos_dir, tp=keys))
         self._update_metadata()
+        # Create store if it does not exist
+        store = get_store_path(save_dir, store, self.name)
+        if not store.exists():
+            # The first run, add metadata to the store
+            with h5py.File(store, 'w') as pos_store:
+                # TODO Add metadata to the store.
+                pass
+        # TODO check how sensible the keys are with what is available
+        #   if some of the keys don't make sense, log a warning and remove
+        #   them so that the next steps of the pipeline make sense
         return keys
+
+
