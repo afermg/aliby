@@ -20,7 +20,7 @@ class PostProcessor:
     :param source: Origin of experiment, if int it is assumed from Omero, if str
         or Path
     '''
-    def __init__(self, parameters=None, source: Union[int,str,Path]=None):
+    def __init__(self, parameters=None, source: Union[int, str, Path] = None):
         # self.params = parameters
         if source is not None:
             if type(source) is int:
@@ -46,14 +46,15 @@ class PostProcessor:
 
         return self.expt.current_position
 
-    def load_expt(self, source:Union[int,str], omero:bool=False) -> None:
+    def load_expt(self, source: Union[int, str], omero: bool = False) -> None:
         if omero:
-            self.expt = Experiment.from_source(self.expt_id, #Experiment ID on OMERO
-                                'upload', #OMERO Username
-                                '***REMOVED***', #OMERO Password
-                                'islay.bio.ed.ac.uk', #OMERO host
-                                port=4064 #This is default
-                                )
+            self.expt = Experiment.from_source(
+                self.expt_id,  #Experiment ID on OMERO
+                'upload',  #OMERO Username
+                '***REMOVED***',  #OMERO Password
+                'islay.bio.ed.ac.uk',  #OMERO host
+                port=4064  #This is default
+            )
         else:
             self.expt = Experiment.from_source(source)
             self.expt_id = self.expt.exptID
@@ -64,6 +65,24 @@ class PostProcessor:
         self.cells = self.cells.from_source(
             self.expt.current_position.annotation)
 
+    def get_pos_mo_bud(self):
+        annot = self.expt._get_position_annotation(
+            self.expt.current_position.name)
+        matob = matObject(annot)
+        m = matob["timelapseTrapsOmero"].get("cellMothers", None)
+        if m is not None:
+            ids = np.nonzero(m.todense())
+            d = {(self.expt.current_position.name, i, int(m[i, j])): []
+                 for i, j in zip(*ids)}
+            for i, j, k in zip(*ids, d.keys()):
+                d[k].append((self.expt.current_position.name, i, j + 1))
+        else:
+            print("Pos {} has no mother matrix".format(
+                self.expt.current_position.name))
+            d = {}
+
+        return d
+
     def get_exp_mo_bud(self):
         d = {}
         for pos in self.expt.positions:
@@ -73,10 +92,11 @@ class PostProcessor:
         self.expt.current_position = self.expt.positions[0]
 
         return d
-    def load_extraction(self, folder=None)-> None:
+
+    def load_extraction(self, folder=None) -> None:
         if folder is None:
             folder = Path(self.expt.name + '/extraction')
-        
+
         self.extraction = {}
         for pos in self.expt.positions:
             try:

@@ -1,207 +1,221 @@
 from typing import Dict, List, Union
+import re
 
 import numpy as np
 import pandas as pd
 from pandas import Series, DataFrame
+from sklearn.cluster import KMeans
 from matplotlib import pyplot as plt
 import seaborn as sns
 
+import compress_pickle
+
 from postprocessor.core.postprocessor import PostProcessor
-<<<<<<< HEAD
-from postprocessor.core.tracks import non_uniform_savgol
+from postprocessor.core.tracks import get_avg_grs, non_uniform_savgol
+from postprocessor.core.ph import *
 
-pp = PostProcessor(source=19916)  # 19916
-pp.load_tiler_cells()
-# f = '/home/alan/Documents/libs/extraction/extraction/examples/gluStarv_2_0_x2_dual_phl_ura8_00/extraction'
-f = "/home/alan/Documents/libs/extraction/extraction/examples/pH_calibration_dual_phl__ura8__by4741__01"
-pp.load_extraction(
-    "/home/alan/Documents/libs/extraction/extraction/examples/"
-    + pp.expt.name
-    + "/extraction/"
-)
+sns.set_context("talk", font_scale=1.8)
+sns.set_theme(style="whitegrid")
 
-tmp = pp.extraction[pp.expt.positions[0]]
+# pp_c = PostProcessor(source=19920)  # 19916
+# pp_c.load_tiler_cells()
+# # f = "/home/alan/Documents/libs/extraction/extraction/examples/gluStarv_2_0_x2_dual_phl_ura8_00/extraction"
+# # f = "/home/alan/Documents/tmp/pH_calibration_dual_phl__ura8__by4741__01/extraction/"
+# f = "/home/alan/Documents/tmp/pH_calibration_dual_phl__ura8__by4741_Alan4_00/extraction/"
+# pp_c.load_extraction(f)
 
-# prepare data
-test = tmp[("GFPFast", np.maximum, "mean")]
-clean = test.loc[test.notna().sum(axis=1) > 30]
-
-window = 9
-degree = 3
-savgol_on_srs = lambda x: Series(
-    non_uniform_savgol(x.dropna().index, x.dropna().values, window, degree),
-    index=x.dropna().index,
-)
-
-smooth = clean.apply(savgol_on_srs, axis=1)
-
-from random import randint
-
-x = randint(0, len(smooth))
-plt.plot(clean.iloc[x], "b")
-plt.plot(smooth.iloc[x], "r")
-plt.show()
-
-
-def growth_rate(
-    data: Series, alg=None, filt={"kind": "savgol", "window": 9, "degree": 3}
-):
-    if alg is None:
-        alg = "standard"
-
-    if filt:  # TODO add support for multiple algorithms
-        data = Series(
-            non_uniform_savgol(
-                data.dropna().index, data.dropna().values, window, degree
-            ),
-            index=data.dropna().index,
-        )
-
-    return Series(np.convolve(data, diff_kernel, "same"), index=data.dropna().index)
-
-
-import numpy as np
-
-diff_kernel = np.array([1, -1])
-gr = clean.apply(growth_rate, axis=1)
-=======
-from postprocessor.core.tracks import non_uniform_savgol, clean_tracks
->>>>>>> 96f513af38080e6ebb6d301159ca973b5d90ce81
-
-
-def sort_df(df, by="first", rev=True):
-    nona = df.notna()
-    if by == "len":
-        idx = nona.sum(axis=1)
-    elif by == "first":
-        idx = nona.idxmax(axis=1)
-    idx = idx.sort_values().index
-
-    if rev:
-        idx = idx[::-1]
-
-    return df.loc[idx]
-<<<<<<< HEAD
-
-
-test = tmp[("GFPFast", np.maximum, "median")]
-test2 = tmp[("pHluorin405", np.maximum, "median")]
-ph = test / test2
-ph = ph.stack().reset_index(1)
-ph.columns = ["tp", "fl"]
-
-
-=======
->>>>>>> 96f513af38080e6ebb6d301159ca973b5d90ce81
-def m2p5_med(ext, ch, red=np.maximum):
-    m2p5pc = ext[(ch, red, "max2p5pc")]
-    med = ext[(ch, red, "median")]
-
-    result = m2p5pc / med
-
-    return result
-
-
-def plot_avg(df):
-    df = df.stack().reset_index(1)
-    df.columns = ["tp", "val"]
-
-    sns.relplot(x=df["tp"], y=df["val"], kind="line")
-    plt.show()
-
-def split_data(df:DataFrame, splits:List[int]):
-    dfs = [df.iloc[:,i:j] for i,j in zip( (0,) + splits,
-                                                splits + (df.shape[1],))]
-    return dfs
-
-def growth_rate(data:Series, alg=None, filt = {'kind':'savgol','window':7, 'degree':3}):
-    if alg is None:
-        alg='standard'
-
-    if filt: #TODO add support for multiple algorithms
-        window = filt['window']
-        degree = filt['degree']
-        data = Series(non_uniform_savgol(data.dropna().index, data.dropna().values,
-                                         window, degree), index = data.dropna().index)
-
-    diff_kernel = np.array([1,-1])
-
-
-    return Series(np.convolve(data,diff_kernel ,'same'), index=data.dropna().index)
-
-pp = PostProcessor(source=19831)
-pp.load_tiler_cells()
-f = '/home/alan/Documents/sync_docs/libs/postproc/gluStarv_2_0_x2_dual_phl_ura8_00/extraction'
-pp.load_extraction('/home/alan/Documents/sync_docs/libs/postproc/postprocessor/' + pp.expt.name + '/extraction/')
-tmp=pp.extraction['phl_ura8_002']
-
-def _check_bg(data):
-    for k in list(pp.extraction.values())[0].keys():
-        for p in pp.expt.positions:
-            if k not in pp.extraction[p]:
-                print(p, k)
-data = {k:pd.concat([pp.extraction[pos][k] for pos in \
-                     pp.expt.positions[:-3]]) for k in list(pp.extraction.values())[0].keys()}
-
-hmap = lambda df: sns.heatmap(sort_df(df), robust=True);
-# from random import randint
-# x = randint(0, len(smooth))
-# plt.plot(clean.iloc[x], 'b')
-# plt.plot(smooth.iloc[x], 'r')
+# calib = process_phs(pp_c)
+# # c = calib.loc[(5.4 < calib["ph"]) & (calib["ph"] < 8)].groupby("ph").mean()
+# sns.violinplot(x="ph", y="em_ratio_mean", data=calib)
 # plt.show()
 
 
-# data = tmp
-df= data[('general',None,'area')]
-clean = clean_tracks(df, min_len=160)
-clean = clean.loc[clean.notna().sum(axis=1) > 9]
-gr = clean.apply(growth_rate, axis=1)
-splits = (72,108,180)
-gr_sp = split_data(gr, splits)
+# bring timelapse data and convert it to pH
 
-idx = gr.index
+pp = PostProcessor(source=19831)  # 19831
+pp.load_tiler_cells()
+f = "/home/alan/Documents/tmp/gluStarv_2_0_x2_dual_phl_ura8_00/extraction/"
+# f = "/home/alan/Documents/tmp/downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00/extraction/"
+pp.load_extraction(f)
 
-bg = get_bg(data)
-test = data[('GFPFast', np.maximum, 'median')]
-test2 = data[('pHluorin405', np.maximum, 'median')]
-ph = (test/test2).loc[idx]
-c=pd.concat((ph.mean(1), gr.max(1)), axis=1); c.columns = ['ph', 'gr_max']
-# ph = ph.stack().reset_index(1)
-# ph.columns = ['tp', 'fl']
+import compress_pickle
 
-ph_sp=split_data(gr, splits)
+compress_pickle.dump(pp.extraction, "/home/alan/extraction_example.pkl")
 
-def get_bg(data):
-    bg = {}
-    fl_subkeys = [x for x in data.keys() if x[0] in \
-                  ['GFP', 'GFPFast', 'mCherry', 'pHluorin405'] and x[-1]!='imBackground']
-    for k in fl_subkeys:
-            nk = list(k)
-            bk = tuple(nk[:-1] + ['imBackground'])
-            nk = tuple(nk[:-1] +  [nk[-1] + '_BgSub'])
-            tmp = []
-            for i,v in data[bk].iterrows():
-                if i in data[k].index:
-                    newdf = data[k].loc[i] / v
-                    newdf.index = pd.MultiIndex.from_tuples([(*i, c) for c in \
-                                                          newdf.index])
-                tmp.append(newdf)
-            bg[nk] = pd.concat(tmp)
+if True:  # Load extracted data or pkld version
+    new_dfs = compress_pickle.load("/home/alan/Documents/tmp/new_dfs.gz")
+# Combine dataframes
+else:
+    new_dfs = combine_dfs(get_dfs(pp))
+    # t = [x.index for x in new_dfs.values()]
+    # i = set(t[0])
+    # for j in t:
+    #     i = i.intersection(j)
+    new_dfs = {
+        k: v
+        for k, v in new_dfs.items()
+        if k[2] != "imBackground"
+        and k[2] != "median"
+        and ~(((k[0] == "GFPFast") | (k[0] == "pHluorin405")) and k[2] == "max2p5pc")
+    }
 
-    return bg
+del pp
+compress_pickle.dump(new_dfs, "/home/alan/Documents/tmp/new_dfs.gz")
 
-def calc_ph(bg):
-    fl_subkeys = [x for x in bg.keys() if x[0] in \
-                  ['GFP', 'GFPFast', 'pHluorin405']]
-    chs = list(set([x[0] for x in fl_subkeys]))
-    assert len(chs)==2, 'Too many channels'
-    ch1 = [x[1:] for x in fl_subkeys if x[0]==chs[0]]
-    ch2 = [x[1:] for x in fl_subkeys if x[0]==chs[1]]
-    inter = list(set(ch1).intersection(ch2))
-    ph = {}
-    for red_fld in inter:
-        ph[tuple(('ph',) + red_fld)] = bg[tuple((chs[0],) + red_fld)] / bg[tuple((chs[1],) + red_fld)]
 
-# sns.heatmap(sort_df(data[('mCherry', np.maximum, 'max2p5pc_BgSub')] / data[('mCherry', np.maximum, 'median_BgSub')]), robust=True)
+def get_clean_dfs(dfs=None):
+    if dfs is None:
+        clean_dfs = compress_pickle.load("/home/alan/Documents/tmp/clean_dfs.gz")
+    else:
 
-# from postprocessor.core.tracks import clean_tracks
+        from postprocessor.core.tracks import clean_tracks, merge_tracks, join_tracks
+
+        # Clean timelapse
+        clean = clean_tracks(new_dfs[("general", None, "area")])
+        tra, joint = merge_tracks(clean)
+        clean_dfs = new_dfs
+        i_ids = set(clean.index).intersection(
+            clean_dfs[("general", None, "area")].index
+        )
+        clean_dfs = {k: v.loc[i_ids] for k, v in clean_dfs.items()}
+        clean_dfs = {k: join_tracks(v, joint, drop=True) for k, v in clean_dfs.items()}
+
+        del new_dfs
+        compress_pickle.dump(clean_dfs, "/home/alan/Documents/tmp/clean_dfs.gz")
+
+
+def plot_ph_hmap(clean_dfs):
+    GFPFast = clean_dfs[("GFPFast", np.maximum, "mean")]
+    phluorin = clean_dfs[("pHluorin405", np.maximum, "mean")]
+    ph = GFPFast / phluorin
+    ph = ph.loc[ph.notna().sum(axis=1) > 0.7 * ph.shape[1]]
+    ph = 1 / ph
+
+    fig, ax = plt.subplots()
+    hmap(ph, cbar_kws={"label": r"emission ratio $\propto$ pH"})
+    plt.xlabel("Time (hours)")
+    plt.ylabel("Cells")
+    xticks = plt.xticks(fontsize=15)[0]
+    ax.set(yticklabels=[], xticklabels=[str(round(i * 5 / 60, 1)) for i in xticks])
+    # plt.setp(ax.get_xticklabels(), Rotation=90)
+    plt.show()
+
+
+def fit_calibs(c, h):
+    h = process_phs(pp_c)
+    h["ratio"] = h["GFPFast_bgsub_median"] / h["pHluorin405_bgsub_median"]
+    sns.lineplot(x="ph", y="ratio", data=h, err_style="bars")
+    plt.show()
+
+    calibs = fit_calibration(c)
+    for k, params in calibs.items():
+        i, j = ("_".join(k.split("_")[:-1]), k.split("_")[-1])
+        if j == "mean" and "k2" not in k:
+            clean_dfs[k] = objective(clean_dfs[i, np.maximum, j], *params)
+
+
+# max 2.5% / med
+def plot_ratio_vs_max2p5(h):
+    fig, ax = plt.subplots()
+    sns.regplot(
+        x="em_ratio_median",
+        y="mCherry_max2p5pc",
+        data=h,
+        scatter=False,
+        ax=ax,
+        color="teal",
+    )
+    sns.scatterplot(x="em_ratio_median", y="max5_d_med", data=h, hue="ph", ax=ax)
+    plt.xlabel(r"Fluorescence ratio $R \propto (1/pH)$")
+    plt.ylabel("Max 2.5% px / median")
+    plt.show()
+
+
+em = clean_dfs[("em_ratio", np.maximum, "mean")]
+area = clean_dfs[("general", None, "area")]
+
+
+def get_grs(clean_dfs):
+    area = clean_dfs[("general", None, "area")]
+    area = area.loc[area.notna().sum(axis=1) > 10]
+    return area.apply(growth_rate, axis=1)
+
+
+def get_agg(dfs, rng):
+    # df dict of DataFrames containing an area/vol one TODO generalise this beyond area
+    # rng tuple of section to use
+    grs = get_grs(dfs)
+    smooth = grs.loc(axis=1)[list(range(rng[0], rng[1]))].dropna(how="all")
+
+    aggregate_mean = lambda dfs, rng: pd.concat(
+        {
+            k[0] + "_" + k[2]: dfs[k].loc[smooth.index, rng[0] : rng[1]].mean(axis=1)
+            for k in clean_dfs.keys()
+        },
+        axis=1,
+    )
+    # f_comp_df = comp_df.loc[(comp_df["gr"] > 0) & (area.notna().sum(axis=1) > 50)]
+
+    agg = aggregate_mean(dfs, rng)
+    agg["max2_med"] = agg["mCherry_max2p5pc"] / agg["mCherry_mean"]
+
+    for c in agg.columns:
+        agg[c + "_log"] = np.log(agg[c])
+
+    agg["gr_mean"] = smooth.loc[set(agg.index).intersection(smooth.index)].mean(axis=1)
+    agg["gr_max"] = smooth.loc[set(agg.index).intersection(smooth.index)].max(axis=1)
+
+    return agg
+
+
+def plot_scatter_fit(x, y, data, hue=None, xlabel=None, ylabel=None, ylim=None):
+    fig, ax = plt.subplots()
+    sns.regplot(x=x, y=y, data=data, scatter=False, ax=ax)
+    sns.scatterplot(x=x, y=y, data=data, ax=ax, alpha=0.1, hue=hue)
+    # plt.show()
+    if xlabel is not None:
+        plt.xlabel(xlabel)
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+    if ylim is not None:
+        plt.ylim(ylim)
+
+    fig.savefig(
+        "/home/alan/Documents/sync_docs/drafts/third_year_pres/figs/"
+        + str(len(data))
+        + "_"
+        + x
+        + "_vs_"
+        + y
+        + ".png",
+        dpi=200,
+    )
+
+
+from extraction.core.argo import Argo, annot_from_dset
+
+
+def additional_feats(aggs):
+    aggs["gr_mean_norm"] = aggs["gr_mean"] * 12
+    aggs["log_ratio_r"] = np.log(1 / aggs["em_ratio_mean"])
+    return aggs
+
+
+def compare_methods_ph_calculation(dfs):
+    GFPFast = dfs[("GFPFast", np.maximum, "mean")]
+    phluorin = dfs[("pHluorin405", np.maximum, "mean")]
+    ph = GFPFast / phluorin
+
+    sns.scatterplot(
+        dfs["em_ratio", np.maximum, "mean"].values.flatten(),
+        ph.values.flatten(),
+        alpha=0.1,
+    )
+    plt.xlabel("ratio_median")
+    plt.ylabel("median_ratio")
+    plt.title("Comparison of ph calculation")
+    plt.show()
+
+
+# get the number of changes in a bool list
+nchanges = lambda x: sum([i for i, j in zip(x[:-2], x[1:]) if operator.xor(i, j)])
