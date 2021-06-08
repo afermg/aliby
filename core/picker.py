@@ -1,5 +1,5 @@
 # from abc import ABC, abstractmethod
-from typing import Tuple, Union, Array
+from typing import Tuple, Union, List
 
 import numpy as np
 import pandas as pd
@@ -32,14 +32,17 @@ class Picker:
         cells: CellsHDF,
         condition: Tuple[str, Union[float, int]] = None,
         lineage: str = None,
+        sequence: List[str] = ["lineage", "condition"],
     ):
-        self._tracks = tracks
+        self.tracks = tracks
+        self._index = tracks.index
         self._cells = cells
         self.condition = condition
         self.lineage = lineage
+        self.sequence = sequence
 
     @staticmethod
-    def mother_assign_to_mb_matrix(ma: Array[np.array]):
+    def mother_assign_to_mb_matrix(ma: List[np.array]):
         # Convert from list of lists to mother_bud sparse matrix
         ncells = sum([len(t) for t in ma])
         mb_matrix = np.zeros((ncells, ncells), dtype=bool)
@@ -54,7 +57,7 @@ class Picker:
         return mb_matrix
 
     def pick_by_lineage(self):
-        idx = self._tracks.index
+        idx = self.tracks.index
 
         if self.lineage:
             ma = self._cells["mother_assign"]
@@ -71,11 +74,19 @@ class Picker:
                 else:  # orphans
                     idx = idx[list(set(range(len(idx))).difference(families))]
 
-        return self._tracks.loc[idx]
+            idx = self._index[idx]
+            idx = list(set(idx).intersection(self.tracks.index))
+
+        return self.tracks.loc[idx]
 
     def pick_by_condition(self):
-        idx = switch_case(self.condition[0], self._tracks, self.condition[1])
-        return self._tracks.loc[idx]
+        idx = switch_case(self.condition[0], self.tracks, self.condition[1])
+        return self.tracks.loc[idx]
+
+    def run(self):
+        for alg in self.sequence:
+            self.tracks = getattr(self, "pick_by" + alg)()
+        return self.tracks
 
 
 def as_int(threshold: Union[float, int], ntps: int):
