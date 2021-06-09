@@ -87,6 +87,10 @@ class CellsHDF(Cells):
     def _get_idx(self, cell_id, trap_id):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
+    @property
+    def ntraps(self):
+        return len(self["mother_assign"])
+
     def where(self, cell_id, trap_id):
         indices = self._get_idx(cell_id, trap_id)
         return self["timepoints"][indices], indices
@@ -107,24 +111,14 @@ class CellsHDF(Cells):
 
         masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
 
-        return self.grouped_by_traps(traps, masks)
+        return self.group_by_traps(traps, masks)
 
-    def split_by_trap_timepoint(self):
-        # Convert from hdf5 flat format to nested lists
-        tp_set = set(self["timepoint"])
-        trap_set = set(self["trap"])
-        cell_labels = [
-            [[] for _ in range(max(trap_set) + 1)] for _ in range(max(tp_set) + 1)
-        ]
-        for lbl, tp, trap in zip(self["cell_label"], self["timepoint"], self["trap"]):
-            cell_labels[tp][trap].append(lbl)  # TODO watch out for different timepoints
-        return cell_labels
-
-    @staticmethod
-    def grouped_by_traps(traps, field):
-        return [
-            [y[1] for y in x[1]] for x in groupby(zip(traps, field), lambda x: x[0])
-        ]
+    def group_by_traps(self, traps, data):
+        # returns a dict with traps as keys and labels as value
+        iterator = groupby(zip(traps, data), lambda x: x[0])
+        d = {key: [x[1] for x in group] for key, group in iterator}
+        d = {i: d.get(i, []) for i in range(self.ntraps + 1)}
+        return list(d.values())
 
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
@@ -133,7 +127,15 @@ class CellsHDF(Cells):
     def labels_at_time(self, timepoint):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
-        return self.grouped_by_traps(traps, labels)
+        return self.group_by_traps(traps, labels)
+
+    @property
+    def labels(self):
+        """
+        Return all cell labels in object
+        We use mother_assign to list traps because it is the only propriety that appears even
+        when no cells are found"""
+        return [self.labels_in_trap(trap) for trap in range(len(self["mother_assign"]))]
 
     @property
     def close(self):
