@@ -101,15 +101,14 @@ class CellsHDF(Cells):
         )
 
     def at_time(self, timepoint, kind="mask"):
-        self.traps = self["trap"]
-        self.edgemasks = self["edgemasks"]
-        tp_indices = self["timepoint"] == timepoint
-        trap_indices = [
-            self.edgemasks[(self.traps == trap_id) & tp_indices]
-            for trap_id in set(self.traps)
-        ]
+        # self.edgemasks = self["edgemasks"]
+        # tp_indices =
+        edgemasks = self["edgemasks"][self["timepoint"] == timepoint]
+        traps = self["trap"][self["timepoint"] == timepoint]
+
         return [
-            [self._astype(cells, kind) for cells in trap_id] for trap_id in trap_indices
+            [self._astype(edgemask, kind) for edgemask in edgemasks[trap_id]]
+            for trap_id in traps
         ]
 
     def split_by_trap_timepoint(self):
