@@ -73,10 +73,8 @@ runner.run(keys, store_name, verbose=True, **run_config)  # Raises an error if t
 from core.cells import Cells
 
 cells = Cells.from_source("./data/20191026_ss_experiments_01/DO6MS2_003store.h5")
+
 trap = 70
 tp = 0
 print("Number of masks obtained: ", len(cells.at_time(tp, kind="mask")[trap]))
-print(
-    "Number of labels obtained: ",
-    len(cells["cell_label"][(cells["trap"] == trap) & (cells["timepoint"] == tp)]),
-)
+print("Number of labels obtained: ", len(cells.labels_at_time(tp)[trap]))

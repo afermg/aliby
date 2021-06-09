@@ -1,5 +1,6 @@
 from pathlib import Path, PosixPath
 from typing import Union
+from itertools import groupby
 
 import h5py
 import numpy as np
@@ -101,15 +102,12 @@ class CellsHDF(Cells):
         )
 
     def at_time(self, timepoint, kind="mask"):
-        # self.edgemasks = self["edgemasks"]
-        # tp_indices =
         edgemasks = self["edgemasks"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
 
-        return [
-            [self._astype(edgemask, kind) for edgemask in edgemasks[trap_id]]
-            for trap_id in traps
-        ]
+        masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
+
+        return self.grouped_by_traps(traps, masks)
 
     def split_by_trap_timepoint(self):
         # Convert from hdf5 flat format to nested lists
@@ -122,18 +120,22 @@ class CellsHDF(Cells):
             cell_labels[tp][trap].append(lbl)  # TODO watch out for different timepoints
         return cell_labels
 
+    @staticmethod
+    def grouped_by_traps(traps, field):
+        return [
+            [y[1] for y in x[1]] for x in groupby(zip(traps, field), lambda x: x[0])
+        ]
+
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
         return set((self["cell_label"][self["trap"] == trap_id]))
 
-    @property
-    def labels(self):
-        """
-        Return all cell labels in object
-        We use mother_assign to list traps because it is the only propriety that appears even
-        when no cells are found"""
-        return [self.labels_in_trap(trap) for trap in range(len(self["mother_assign"]))]
+    def labels_at_time(self, timepoint):
+        labels = self["cell_label"][self["timepoint"] == timepoint]
+        traps = self["trap"][self["timepoint"] == timepoint]
+        return self.grouped_by_traps(traps, labels)
 
+    @property
     def close(self):
         self._file.close()
 
