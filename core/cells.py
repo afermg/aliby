@@ -88,8 +88,16 @@ class CellsHDF(Cells):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
     @property
-    def ntraps(self):
-        return len(self["mother_assign"])
+    def traps(self):
+        return list(set(self["trap"]))
+
+    @property
+    def labels(self):
+        """
+        Return all cell labels in object
+        We use mother_assign to list traps because it is the only propriety that appears even
+        when no cells are found"""
+        return [self.labels_in_trap(trap) for trap in self.traps]
 
     def where(self, cell_id, trap_id):
         indices = self._get_idx(cell_id, trap_id)
@@ -117,7 +125,7 @@ class CellsHDF(Cells):
         # returns a dict with traps as keys and labels as value
         iterator = groupby(zip(traps, data), lambda x: x[0])
         d = {key: [x[1] for x in group] for key, group in iterator}
-        d = {i: d.get(i, []) for i in range(self.ntraps + 1)}
+        d = {i: d.get(i, []) for i in self.traps}
         return list(d.values())
 
     def labels_in_trap(self, trap_id):
@@ -128,14 +136,6 @@ class CellsHDF(Cells):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
-
-    @property
-    def labels(self):
-        """
-        Return all cell labels in object
-        We use mother_assign to list traps because it is the only propriety that appears even
-        when no cells are found"""
-        return [self.labels_in_trap(trap) for trap in range(len(self["mother_assign"]))]
 
     @property
     def close(self):
