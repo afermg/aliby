@@ -4,6 +4,7 @@ Tested on: Mac OSX Mojave
 
 ## Requirements
 We strongly recommend installing within a python environment as there are many dependencies that you may not want polluting your regular python environment. 
+Make sure you are using python 3.
 
 An environment can be created with using the conda package manager:
 
@@ -23,6 +24,11 @@ This will download all of your packages under `/path/to/venv` and then activate 
 Deactivate using 
 
     $ deactivate
+
+You will also need to make sure you have a recent version of pip.
+In your local environment, run: 
+
+    $ pip install --upgrade pip
 
 ## Pipeline installation
 
