@@ -261,7 +261,7 @@ class ExperimentOMERO(Experiment):
 
     def run(self, keys: Union[list, int], store, **kwargs):
         if self.running_tp == 0:
-            self.cache_annotations(self.root_dir, **kwargs)
+            self.cache_annotations(**kwargs)
             self.running_tp = 1  # Todo rename based on annotations
         positions = pd.DataFrame(index=['n_timepoints'],
                                  columns=self.positions)
