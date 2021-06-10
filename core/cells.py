@@ -42,6 +42,7 @@ class Cells:
             kind = "matlab" if source.suffix == ".mat" else "hdf5"
         return cell_factory(source, kind)
 
+
     @staticmethod
     def _asdense(array):
         if not isdense(array):
@@ -157,6 +158,7 @@ class CellsMat(Cells):
             )
         else:
             self.trap_info = timelapse_traps["cTimepoint"]["trapInfo"]
+
             if isinstance(self.trap_info, list):
                 self.trap_info = {
                     k: list([res.get(k, []) for res in self.trap_info])
@@ -195,6 +197,7 @@ class CellsMat(Cells):
         )
 
     def at_time(self, timepoint, kind="outline"):
+
         """Returns the segmentations for all the cells at a given timepoint.
 
         FIXME: this is extremely hacky and accounts for differently saved
