@@ -60,15 +60,15 @@ class Tiler:
 
     @property
     def trap_locations(self):
-        return self.pos_mapper[self.current_position].trap_locations
+        return self.current_tiler.trap_locations
     
     @property
     def n_timepoints(self):
-        return self.pos_mapper[self.current_position].n_timepoints
+        return self.current_tiler.n_timepoints
 
     @property
     def n_traps(self):
-        return self.pos_mapper[self.current_position].n_traps
+        return self.current_tiler.n_traps
 
     @property
     def positions(self):
@@ -76,33 +76,49 @@ class Tiler:
 
     @property
     def current_position(self):
-        pos = self._current_position
-        if pos not in self.pos_mapper: 
-            self.pos_mapper[pos] = self[pos]
-        return self._current_position
+        return self.expt.current_position
 
     @current_position.setter
     def current_position(self, pos):
-        self._current_position = pos
-        # Also set the experiment to avoid discrepancies
         self.expt.current_position = pos
+
+    @property
+    def current_tiler(self):
+        """The current TimelapseTiler object
+
+        Corresponds to the TimelapseTiler that runs on the currently active
+        position on the experiment.
+        For most methods, the Tiler object is only a proxy object for what
+        ever TimelapseTiler is currently active.
+
+        For example:
+        $ tiler.get_trap_timelapse(0, 96) == tiler.current_tiler.get_trap_timelapse(0, 96)
+
+        This object cannot be set, directly. If you want to change the
+        position you are working on, you need to modify self.current_position.
+        If you want to directly access another position's tiler without
+        changing the current active position, use:
+        $ alternate_tiler = tiler[position_name]
+        """
+        pos_name = self.current_position.name
+        return self[pos_name]
 
     @property
     def channels(self):
         return self.expt.channels
 
     def get_channel_index(self, channel):
-        return self.expt.current_position.get_channel_index(channel)
+        return self.current_position.get_channel_index(channel)
 
-    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None, t=None):
-        return self.pos_mapper[self.current_position].get_trap_timelapse(
-            trap_id, tile_size=tile_size, channels=channels, z=z, t=t
-        )
+
+    def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
+        return self.current_tiler.get_trap_timelapse(trap_id,
+                                                     tile_size=tile_size,
+                                                     channels=channels, z=z)
 
     def get_traps_timepoint(self, tp, tile_size=96, channels=None, z=None):
-        return self.pos_mapper[self.current_position].get_traps_timepoint(
-            tp, tile_size=tile_size, channels=channels, z=z
-        )
+        return self.current_tiler.get_traps_timepoint(tp, tile_size=tile_size,
+                                                      channels=channels, z=z)
 
     def run(self, keys, store, **kwargs):
         save_dir = self.expt.root_dir
