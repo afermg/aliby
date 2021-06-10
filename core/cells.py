@@ -1,8 +1,10 @@
-from pathlib import Path
+from pathlib import Path, PosixPath
+from typing import Union
 
 import h5py
 import numpy as np
 from scipy import ndimage
+from scipy.sparse.sputils import isdense
 
 from core.io.matlab import matObject
 

@@ -32,7 +32,7 @@ def get_tile_shapes(x, tile_size, max_shape):
 
 
 class Tiler:
-    def __init__(self, raw_expt, finished=True, template=None):
+    def __init__(self, raw_expt, finished=True, template=None, local=None):
         self.expt = raw_expt
         self.finished = finished
         if template is None:
@@ -40,16 +40,22 @@ class Tiler:
         self.trap_template = template
         self.pos_mapper = dict()
         self._current_position = self.expt.positions[0]
+        # Local version of annotation to use, by default None in which case
+        # it will use whatever is available on OMERO
+        self.local = local
 
     def __getitem__(self, pos):
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
-            pos_matlab = self.expt.get_position(pos).annotation # Returns
+            if self.local: # Use local version
+                annotation = self.local
+            else:
+                annotation = self.expt.get_position(pos).annotation # Returns
             # none if non-existent
             self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
                                                   self.trap_template,
                                                   finished=self.finished,
-                                                  matlab=pos_matlab)
+                                                  annotation=annotation)
         return self.pos_mapper[pos]
 
     @property
@@ -147,17 +153,18 @@ class TrapLocations:
 
 
 class TimelapseTiler:
-    def __init__(self, timelapse, template, finished=True, matlab=None,
-                 hdf=None):
+    def __init__(self, timelapse, template, finished=True, annotation=None)
         self.timelapse = timelapse
         self.trap_template = template
         self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
         self._reference = None
-        if finished and not matlab:
+        if finished and not annotation:
             self.tile_timelapse()
-        elif matlab:
-            self.trap_locations = from_matlab(matlab)
-        elif hdf:
+        elif annotation:
+            self.trap_locations = from_annotation(annotation)
+        else:
+            # TODO ?
+            pass
             self.trap_locations = from_hdf(hdf)
 
     def tile_timelapse(self, channel: int = 0):
@@ -379,4 +386,9 @@ def from_hdf(store_name):
         return TrapLocations
 
 
-
+def from_annotation(annotation):
+    if isinstance(annotation, matObject):
+        return from_matlab(annotation)
+    if isinstance(annotation, str):
+        return from_hdf(annotation)
+    return None
