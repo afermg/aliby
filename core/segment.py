@@ -153,7 +153,7 @@ class TrapLocations:
 
 
 class TimelapseTiler:
-    def __init__(self, timelapse, template, finished=True, annotation=None)
+    def __init__(self, timelapse, template, finished=True, annotation=None):
         self.timelapse = timelapse
         self.trap_template = template
         self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
@@ -165,7 +165,7 @@ class TimelapseTiler:
         else:
             # TODO ?
             pass
-            self.trap_locations = from_hdf(hdf)
+            self.trap_locations = from_hdf(annotation)
 
     def tile_timelapse(self, channel: int = 0):
         """

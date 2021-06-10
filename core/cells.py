@@ -1,26 +1,28 @@
 from pathlib import Path, PosixPath
 from typing import Union
+from itertools import groupby
 
 import h5py
 import numpy as np
 from scipy import ndimage
-from scipy.sparse.sputils import isdense
+from scipy.sparse.base import isdense
 
 from core.io.matlab import matObject
 
 
-def cell_factory(store, type='matlab'):
+def cell_factory(store, type="matlab"):
     if isinstance(store, matObject):
         return CellsMat(store)
-    if type == 'matlab':
+    if type == "matlab":
         mat_object = matObject(store)
         return CellsMat(mat_object)
-    elif type == 'hdf5':
+    elif type == "hdf5":
         file = h5py.File(store)
         return CellsHDF(file)
     else:
-        raise TypeError("Could not get cells for type {}:"
-                        "valid types are matlab and hdf5")
+        raise TypeError(
+            "Could not get cells for type {}:" "valid types are matlab and hdf5"
+        )
 
 
 class Cells:
@@ -36,8 +38,7 @@ class Cells:
     def from_source(source: Union[PosixPath, str], kind: str = None):
         if isinstance(source, str):
             source = Path(source)
-        if kind is None:
-            # Infer kind from filename
+        if kind is None:  # Infer kind from filename
             kind = "matlab" if source.suffix == ".mat" else "hdf5"
         return cell_factory(source, kind)
 
@@ -86,6 +87,18 @@ class CellsHDF(Cells):
     def _get_idx(self, cell_id, trap_id):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
+    @property
+    def traps(self):
+        return list(set(self["trap"]))
+
+    @property
+    def labels(self):
+        """
+        Return all cell labels in object
+        We use mother_assign to list traps because it is the only propriety that appears even
+        when no cells are found"""
+        return [self.labels_in_trap(trap) for trap in self.traps]
+
     def where(self, cell_id, trap_id):
         indices = self._get_idx(cell_id, trap_id)
         return self["timepoints"][indices], indices
@@ -101,28 +114,30 @@ class CellsHDF(Cells):
         )
 
     def at_time(self, timepoint, kind="mask"):
-        self.traps = self["trap"]
-        self.edgemasks = self["edgemasks"]
-        tp_indices = self["timepoint"] == timepoint
-        trap_indices = [
-            self.edgemasks[(self.traps == trap_id) & tp_indices]
-            for trap_id in set(self.traps)
-        ]
-        return [
-            [self._astype(cells, kind) for cells in trap_id] for trap_id in trap_indices
-        ]
+        edgemasks = self["edgemasks"][self["timepoint"] == timepoint]
+        traps = self["trap"][self["timepoint"] == timepoint]
 
-    def split_by_trap_timepoint(self):
-        # Convert from hdf5 flat format to nested lists
-        tp_set = set(self["timepoint"])
-        trap_set = set(self["trap"])
-        cell_labels = [
-            [[] for _ in range(max(trap_set) + 1)] for _ in range(max(tp_set) + 1)
-        ]
-        for lbl, tp, trap in zip(self["cell_label"], self["timepoint"], self["trap"]):
-            cell_labels[tp][trap].append(lbl)  # TODO watch out for different timepoints
-        return cell_labels
+        masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
 
+        return self.group_by_traps(traps, masks)
+
+    def group_by_traps(self, traps, data):
+        # returns a dict with traps as keys and labels as value
+        iterator = groupby(zip(traps, data), lambda x: x[0])
+        d = {key: [x[1] for x in group] for key, group in iterator}
+        d = {i: d.get(i, []) for i in self.traps}
+        return list(d.values())
+
+    def labels_in_trap(self, trap_id):
+        # Return set of cell ids in a trap.
+        return set((self["cell_label"][self["trap"] == trap_id]))
+
+    def labels_at_time(self, timepoint):
+        labels = self["cell_label"][self["timepoint"] == timepoint]
+        traps = self["trap"][self["timepoint"] == timepoint]
+        return self.group_by_traps(traps, labels)
+
+    @property
     def close(self):
         self._file.close()
 
@@ -187,25 +202,27 @@ class CellsMat(Cells):
         """
         # Case 1: only one cell per trap: trap_info['cell'][timepoint] is a
         # structured array
-        if isinstance(self.trap_info['cell'][timepoint], dict):
-            segmentations = [self._astype(x, 'outline') for x in
-                             self.trap_info['cell'][timepoint]['segmented']]
+        if isinstance(self.trap_info["cell"][timepoint], dict):
+            segmentations = [
+                self._astype(x, "outline")
+                for x in self.trap_info["cell"][timepoint]["segmented"]
+            ]
         # Case 2: Multiple cells per trap: it becomes a list of arrays or
         # dictionaries,  one for each trap
         # Case 2.1 : it's a dictionary
-        elif isinstance(self.trap_info['cell'][timepoint][0], dict):
+        elif isinstance(self.trap_info["cell"][timepoint][0], dict):
             segmentations = []
-            for x in self.trap_info['cell'][timepoint]:
-                seg = x['segmented']
+            for x in self.trap_info["cell"][timepoint]:
+                seg = x["segmented"]
                 if not isinstance(seg, np.ndarray):
                     seg = [seg]
-                segmentations.append(
-                    [self._astype(y, 'outline') for y in seg])
+                segmentations.append([self._astype(y, "outline") for y in seg])
         # Case 2.2 : it's an array
         else:
-            segmentations = [[self._astype(y, type) for y in x['segmented']]
-                         if x.ndim != 0 else []
-                         for x in self.trap_info['cell'][timepoint]]
+            segmentations = [
+                [self._astype(y, type) for y in x["segmented"]] if x.ndim != 0 else []
+                for x in self.trap_info["cell"][timepoint]
+            ]
         return segmentations
 
     def to_hdf(self):
@@ -220,6 +237,7 @@ class ExtractionRunner:
     Cell selection criteria.
     Filtering criteria.
     """
+
     def __init__(self, tiler, cells):
         pass
 
