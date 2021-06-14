@@ -1,3 +1,6 @@
+import pandas as pd
+
+
 class Parameters:
     def __init__(self, merger=None, picker=None, processes=None, branches=None):
         self.merger = merger
@@ -49,15 +52,17 @@ class Signals:
         return self._hdf[branch][()]
 
     def branch_to_df(self, branch):
-        dset = self._hdf[branch].values
+        dset = self._hdf[branch][()]
         attrs = self._hdf[branch].attrs
         first_branch = "/" + branch.split("/")[0] + "/"
-        timepoints = self._hdf[first_branch].attrs["timepoints_processed"]
+        timepoints = self._hdf[first_branch].attrs["processed_timepoints"]
 
-        if "cell_label" in self._hdf[branch]:
-            ids = pd.MultiIndex.from_tuple(zip(attrs["trap"], attrs["cell_label"]))
+        if "cell_label" in self._hdf[branch].attrs:
+            ids = pd.MultiIndex.from_tuples(
+                zip(attrs["trap"], attrs["cell_label"]), names=["trap", "cell_label"]
+            )
         else:
-            ids = pd.Inde(attrs["trap"])
+            ids = pd.Index(attrs["trap"], names=["trap"])
 
         return pd.DataFrame(dset, index=ids, columns=timepoints)
 
