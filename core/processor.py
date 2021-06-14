@@ -28,14 +28,38 @@ class PostProcessor:
 
 
 class Signals:
+    """
+    Class that fetches data from the hdf5 storage for post-processing
+    """
+
     def __init__(self, file):
-        self._file = h5py.File(file, "r")
+        self._hdf = h5py.File(file, "r")
+
+    @staticmethod
+    def _if_ext_or_post(name):
+        if name.startswith("extraction") or name.startswith("postprocessing"):
+            if len(name.split("/")) > 3:
+                print(name)
+
+    @property
+    def branches(self):
+        return signals._hdf.visit(self._if_ext_or_post)
 
     def get_branch(self, branch):
-        return self._file[branch][()]
+        return self._hdf[branch][()]
 
-    def branch_to_df(self):
-        pass
+    def branch_to_df(self, branch):
+        dset = self._hdf[branch].values
+        attrs = self._hdf[branch].attrs
+        first_branch = "/" + branch.split("/")[0] + "/"
+        timepoints = self._hdf[first_branch].attrs["timepoints_processed"]
+
+        if "cell_label" in self._hdf[branch]:
+            ids = pd.MultiIndex.from_tuple(zip(attrs["trap"], attrs["cell_label"]))
+        else:
+            ids = pd.Inde(attrs["trap"])
+
+        return pd.DataFrame(dset, index=ids, columns=timepoints)
 
     def close(self):
-        self._file.close()
+        self._hdf.close()
