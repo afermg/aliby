@@ -42,7 +42,7 @@ class Signals:
     def _if_ext_or_post(name):
         if name.startswith("extraction") or name.startswith("postprocessing"):
             if len(name.split("/")) > 3:
-                print(name)
+                return name
 
     @property
     def branches(self):
