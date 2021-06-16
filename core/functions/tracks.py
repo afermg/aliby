@@ -47,7 +47,7 @@ def max_nonstop_ntps(track: pd.Series) -> int:
 
 
 def get_tracks_ntps(tracks: pd.DataFrame) -> pd.Series:
-    return tracks.apply(get_ntps, axis=1)
+    return tracks.apply(max_ntps, axis=1)
 
 
 def get_avg_gr(track: pd.Series) -> int:
@@ -56,7 +56,7 @@ def get_avg_gr(track: pd.Series) -> int:
 
     :param tracks: Series with volume and timepoints as indices
     """
-    ntps = get_ntps(track)
+    ntps = max_ntps(track)
     vals = track.dropna().values
     gr = (vals[-1] - vals[0]) / ntps
     return gr
@@ -138,6 +138,9 @@ def get_joint_ids(merging_seqs) -> dict:
     output {a:a, b:a, c:a, d:a}
 
     """
+    if not merging_seqs:
+        return {}
+
     targets, origins = list(zip(*merging_seqs))
     static_tracks = set(targets).difference(origins)
 

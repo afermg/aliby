@@ -42,25 +42,34 @@ class PostProParameters(ParametersABC):
                 },
             )
 
+    def to_dict(self):
+        return {k: _if_dict(v) for k, v in self.__dict__()}
+
 
 class PostProcessor:
-    def __init__(self, fname, parameters, signals):
+    def __init__(self, filename, parameters):
         self.parameters = parameters
-        self._signals = Signals(fname)
-        self._writer = Writer(fname)
+        self._signals = Signal(filename)
+        self._writer = Writer(filename)
 
         self.datasets = parameters["datasets"]
         self.merger = Merger(parameters["merger"])
         self.picker = Picker(
-            parameters=parameters["picker"], cell=Cells.from_source(fname)
+            parameters=parameters["picker"], cells=Cells.from_source(filename)
         )
         self.processes = [
             self.get_process(process) for process in parameters["processes"]
         ]
 
     def run(self):
-        self.merger.run(signals[self.datasets["merger"]])
-        self.picker.run(signals[self.datasets["picker"]])
+        self.merger.run(self._signals[self.datasets["merger"]])
+        self.picker.run(self._signals[self.datasets["picker"]])
         for process, dataset in zip(self.processes, self.datasets["processes"]):
-            process_result = process.run(signals.get_dataset(dataset))
+            process_result = process.run(self._signals.get_dataset(dataset))
             self.writer.write(process_result, dataset)
+
+
+def _ifdict(item):
+    if hasattr(item, "to_dict"):
+        item = item.to_dict()
+    return item

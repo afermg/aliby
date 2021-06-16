@@ -88,7 +88,7 @@ class Picker(ProcessABC):
         return signals.loc[idx]
 
     def pick_by_condition(self, signals):
-        idx = switch_case(self.condition[0], signals, self.condition[1])
+        idx = self.switch_case(self.condition[0], signals, self.condition[1])
         return signals.loc[idx]
 
     def run(self, signals):
@@ -96,22 +96,23 @@ class Picker(ProcessABC):
             self.signals = getattr(self, "pick_by_" + alg)(signals)
         return self.signals
 
+    @staticmethod
+    def switch_case(
+        condition: str,
+        signals: pd.DataFrame,
+        threshold: Union[float, int],
+    ):
+        threshold_asint = _as_int(threshold, signals.shape[1])
+        case_mgr = {
+            "present": signals.apply(max_ntps, axis=1) > threshold_asint,
+            "nonstoply_present": signals.apply(max_nonstop_ntps, axis=1)
+            > threshold_asint,
+            "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
+        }
+        return case_mgr[condition]
 
-def as_int(threshold: Union[float, int], ntps: int):
+
+def _as_int(threshold: Union[float, int], ntps: int):
     if type(threshold) is float:
         threshold = threshold / ntps
     return threshold
-
-
-def switch_case(
-    condition: str,
-    signals: pd.DataFrame,
-    threshold: Union[float, int],
-):
-    threshold_asint = as_int(threshold, signals.shape[1])
-    case_mgr = {
-        "present": signals.apply(max_ntps, axis=1) > threshold_asint,
-        "nonstoply_present": signals.apply(max_nonstop_ntps, axis=1) > threshold_asint,
-        "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
-    }
-    return case_mgr[condition]

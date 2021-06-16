@@ -1,4 +1,8 @@
-class MergerParameters:
+from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
+
+
+class MergerParameters(ParametersABC):
     """
     :param tol: float or int threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,
@@ -26,14 +30,26 @@ class MergerParameters:
 
         self.min_avg_delta = min_avg_delta
 
+    @classmethod
+    def default(cls):
+        return cls.from_dict(
+            {
+                "smooth": False,
+                "tolerance": 0.1,
+                "window": 5,
+                "degree": 3,
+                "min_avg_delta": 0.9,
+            }
+        )
 
-class Merger:
+
+class Merger(ProcessABC):
     """
     TODO Integrate functions/tracks.py inside this class?
     """
 
     def __init__(self, parameters):
-        self.parameters = parameters
+        super().__init__(parameters)
 
     def run(self, signal):
-        merged, joint_pairs = merge_tracks(signal, min_len=self.window + 1)
+        merged, joint_pairs = merge_tracks(signal)  # , min_len=self.window + 1)
