@@ -28,6 +28,15 @@ class ParametersABC(ABC):
     def default(cls):
         pass
 
+
+class ProcessABC(ABC):
+    "Base class for processes"
+
+    @abstractmethod
+    @property
+    def parameters(self):
+        return self.parameters
+
     @abstractmethod
     def run(self):
         pass
