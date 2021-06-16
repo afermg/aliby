@@ -25,7 +25,7 @@ class PickerParameters(ParametersABC):
     def default(cls):
         return cls.from_dict(
             {
-                "condition": ("present", 0.8),
+                "condition": ["present", 0.8],
                 "lineage": None,
                 "sequence": ["lineage", "condition"],
             }

@@ -2,6 +2,8 @@ from pathlib import Path, PosixPath
 from typing import Union
 from abc import ABC, abstractmethod
 
+from yaml import safe_load, dump
+
 
 class ParametersABC(ABC):
     """
@@ -16,8 +18,11 @@ class ParametersABC(ABC):
     def from_dict(cls, d: dict):
         return cls(**d)
 
-    def to_yaml(self, path: Union[PosixPath, str]):
-        return dump(self.__dict__, path)
+    def to_yaml(self, path: Union[PosixPath, str] = None):
+        if path:
+            with open(Path(path), "w") as f:
+                dump(self.to_dict(), f)
+        return dump(self.to_dict())
 
     @classmethod
     def from_yaml(cls, path: Union[PosixPath, str]):
