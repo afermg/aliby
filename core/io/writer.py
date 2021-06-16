@@ -1,9 +1,12 @@
-import numpy as np
+import h5py
 import pandas as pd
 
-def Writer(filename):
+from postprocessor.core.io.base import BridgeH5
+
+
+def Writer(BridgeH5):
     def __init__(self, filename):
-        self._file = h5py.File(filename)
+        self._hdf = h5py.File(filename, "a")
 
     def write(self, address, data):
         self._file.add_group(address)

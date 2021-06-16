@@ -6,7 +6,7 @@ import pandas as pd
 
 from core.cells import CellsHDF
 
-from postprocessor.core.base import ParametersABC, ProcessABC
+from postprocessor.core.processes.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
