@@ -28,7 +28,10 @@ class MergerParameters:
 
 
 class Merger:
-    # Class in charge of merging tracks
+    """
+    TODO Integrate functions/tracks.py inside this class?
+    """
+
     def __init__(self, parameters):
         self.parameters = parameters
 

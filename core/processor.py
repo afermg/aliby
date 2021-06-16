@@ -1,7 +1,9 @@
 import pandas as pd
+from postprocessor.core.base import ParametersABC
+from core import Cells
 
 
-class Parameters:
+class PostProParameters(ParametersABC):
     """
     Anthology of parameters used for postprocessing
     """
@@ -21,12 +23,15 @@ class PostProcessor:
     def __init__(self, fname, parameters, signals):
         self.parameters = parameters
 
+        self._signals = Signals(fname)
+        self.datasets = parameters["datasets"]
         self.merger = Merger(parameters["merger"])
-        self.picker = Picker(parameters["picker"])
+        self.picker = Picker(
+            parameters=parameters["picker"], cell=Cells.from_source(fname)
+        )
         self.processes = [
             self.get_process(process) for process in parameters["processes"]
         ]
-        self.datasets = parameters["datasets"]
 
     def run(self):
         self.merger.run(signals[self.datasets["merger"]])

@@ -7,7 +7,7 @@ import pandas as pd
 from core.cells import CellsHDF
 
 from postprocessor.core.base import ParametersABC, ProcessABC
-from postprocessor.core.functions.signals import max_ntps, max_nonstop_ntps
+from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
 class PickerParameters(ParametersABC):
@@ -34,7 +34,6 @@ class PickerParameters(ParametersABC):
 
 class Picker(ProcessABC):
     """
-    :signals: pd.DataFrame of data used for selection, such as area or GFP/np.max/mean
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be
     "present", "nonstoply_present" or "quantile".
@@ -45,13 +44,10 @@ class Picker(ProcessABC):
     def __init__(
         self,
         parameters: PickerParameters,
-        signals: pd.DataFrame,
         cells: CellsHDF,
     ):
         super().__init__(parameters=parameters)
 
-        self.signals = signals
-        self._index = signals.index
         self._cells = cells
 
     @staticmethod
@@ -69,8 +65,8 @@ class Picker(ProcessABC):
 
         return mb_matrix
 
-    def pick_by_lineage(self):
-        idx = self.signals.index
+    def pick_by_lineage(self, signals):
+        idx = signals.index
 
         if self.lineage:
             ma = self._cells["mother_assign"]
@@ -87,18 +83,17 @@ class Picker(ProcessABC):
                 else:  # orphans
                     idx = idx[list(set(range(len(idx))).difference(families))]
 
-            idx = self._index[idx]
-            idx = list(set(idx).intersection(self.signals.index))
+            idx = list(set(idx).intersection(signals.index))
 
-        return self.signals.loc[idx]
+        return signals.loc[idx]
 
-    def pick_by_condition(self):
-        idx = switch_case(self.condition[0], self.signals, self.condition[1])
-        return self.signals.loc[idx]
+    def pick_by_condition(self, signals):
+        idx = switch_case(self.condition[0], signals, self.condition[1])
+        return signals.loc[idx]
 
-    def run(self):
+    def run(self, signals):
         for alg in self.sequence:
-            self.signals = getattr(self, "pick_by" + alg)()
+            self.signals = getattr(self, "pick_by_" + alg)(signals)
         return self.signals
 
 
