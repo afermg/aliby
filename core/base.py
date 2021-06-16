@@ -33,7 +33,6 @@ class ProcessABC(ABC):
     "Base class for processes"
 
     @property
-    @abstractmethod
     def parameters(self):
         return self.parameters
 
