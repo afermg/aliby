@@ -6,12 +6,12 @@ import pandas as pd
 
 from core.cells import CellsHDF
 
-from postprocessor.core.parameters import ParametersABC
+from postprocessor.core.base import ParametersABC
 from postprocessor.core.functions.signals import max_ntps, max_nonstop_ntps
 
 
-@ParametersABC.register
-class PickerParameters:
+# ParametersABC.register(PickerParameters)
+class PickerParameters(ParametersABC):
     def __init__(
         self,
         condition: Tuple[str, Union[float, int]] = None,
@@ -23,7 +23,7 @@ class PickerParameters:
         self.sequence = sequence
 
     @classmethod
-    def defaults(cls):
+    def default(cls):
         return cls.from_dict(
             {
                 "condition": ("present", 0.8),

@@ -10,6 +10,8 @@ f = h5py.File(
 )
 tracks = f["/extraction/general/None/area"][()]
 cell = Cells.from_source("/home/alan/Documents/sync_docs/PhD/tmp/DO6MS2_003store.h5")
-from postprocessor.core.picker import Picker
+from postprocessor.core.picker import Picker, PickerParameters
 
-picker = Picker(tracks=pd.DataFrame(tracks), cells=cell)
+picker = Picker(
+    signals=pd.DataFrame(tracks), cells=cell, parameters=PickerParameters.default()
+)
