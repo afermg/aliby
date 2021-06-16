@@ -1,3 +1,5 @@
+from pathlib import Path, PosixPath
+from typing import Union
 from abc import ABC, abstractmethod
 
 
@@ -11,15 +13,15 @@ class ParametersABC(ABC):
         return self.__dict__
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: dict):
         return cls(**d)
 
-    def to_yaml(self, path=None):
+    def to_yaml(self, path: Union[PosixPath, str]):
         return dump(self.__dict__, path)
 
     @classmethod
-    def from_yaml(cls, yam):
-        with open(Path(yam)) as f:
+    def from_yaml(cls, path: Union[PosixPath, str]):
+        with open(Path(file)) as f:
             params = safe_load(f)
         return cls(**params)
 
