@@ -1,4 +1,4 @@
-class Parameters:
+class MergerParameters:
     """
     :param tol: float or int threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,

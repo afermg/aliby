@@ -6,11 +6,10 @@ import pandas as pd
 
 from core.cells import CellsHDF
 
-from postprocessor.core.base import ParametersABC
+from postprocessor.core.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.signals import max_ntps, max_nonstop_ntps
 
 
-# ParametersABC.register(PickerParameters)
 class PickerParameters(ParametersABC):
     def __init__(
         self,
@@ -33,7 +32,7 @@ class PickerParameters(ParametersABC):
         )
 
 
-class Picker:
+class Picker(ProcessABC):
     """
     :signals: pd.DataFrame of data used for selection, such as area or GFP/np.max/mean
     :cells: Cell object passed to the constructor
@@ -45,17 +44,15 @@ class Picker:
 
     def __init__(
         self,
+        parameters: PickerParameters,
         signals: pd.DataFrame,
         cells: CellsHDF,
-        parameters: PickerParameters,
     ):
+        super().__init__(parameters=parameters)
+
         self.signals = signals
         self._index = signals.index
         self._cells = cells
-        self.parameters = parameters
-
-        for k, v in parameters.to_dict().items():  # access parameters directly
-            setattr(self, k, v)
 
     @staticmethod
     def mother_assign_to_mb_matrix(ma: List[np.array]):

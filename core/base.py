@@ -34,9 +34,9 @@ class ParametersABC(ABC):
 class ProcessABC(ABC):
     "Base class for processes"
 
-    @property
-    def parameters(self):
-        return self.parameters
+    def __init__(self, parameters):
+        for k, v in parameters.to_dict().items():  # access parameters directly
+            setattr(self, k, v)
 
     @abstractmethod
     def run(self):
