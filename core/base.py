@@ -23,8 +23,8 @@ class ParametersABC(ABC):
             params = safe_load(f)
         return cls(**params)
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def default(cls):
         pass
 
@@ -32,8 +32,8 @@ class ParametersABC(ABC):
 class ProcessABC(ABC):
     "Base class for processes"
 
-    @abstractmethod
     @property
+    @abstractmethod
     def parameters(self):
         return self.parameters
 
