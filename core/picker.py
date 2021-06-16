@@ -1,18 +1,36 @@
 from typing import Tuple, Union, List
+from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
 
 from core.cells import CellsHDF
+
+from postprocessor.core.parameters import ParametersABC
 from postprocessor.core.functions.signals import max_ntps, max_nonstop_ntps
 
 
-# def BasePicker(ABC):
-#     """
-#     Base class to add mother-bud filtering support
-#     """
-#     def __init__(self, branch=None, lineage=None):
-#         self.lineage = lineage
+@ParametersABC.register
+class PickerParameters:
+    def __init__(
+        self,
+        condition: Tuple[str, Union[float, int]] = None,
+        lineage: str = None,
+        sequence: List[str] = ["lineage", "condition"],
+    ):
+        self.condition = condition
+        self.lineage = lineage
+        self.sequence = sequence
+
+    @classmethod
+    def defaults(cls):
+        return cls.from_dict(
+            {
+                "condition": ("present", 0.8),
+                "lineage": None,
+                "sequence": ["lineage", "condition"],
+            }
+        )
 
 
 class Picker:
@@ -29,16 +47,15 @@ class Picker:
         self,
         signals: pd.DataFrame,
         cells: CellsHDF,
-        condition: Tuple[str, Union[float, int]] = None,
-        lineage: str = None,
-        sequence: List[str] = ["lineage", "condition"],
+        parameters: PickerParameters,
     ):
         self.signals = signals
         self._index = signals.index
         self._cells = cells
-        self.condition = condition
-        self.lineage = lineage
-        self.sequence = sequence
+        self.parameters = parameters
+
+        for k, v in parameters.to_dict().items():  # access parameters directly
+            setattr(self, k, v)
 
     @staticmethod
     def mother_assign_to_mb_matrix(ma: List[np.array]):
