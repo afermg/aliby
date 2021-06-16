@@ -43,7 +43,7 @@ class PostProParameters(ParametersABC):
             )
 
     def to_dict(self):
-        return {k: _if_dict(v) for k, v in self.__dict__()}
+        return {k: _if_dict(v) for k, v in self.__dict__.items()}
 
 
 class PostProcessor:
@@ -69,7 +69,7 @@ class PostProcessor:
             self.writer.write(process_result, dataset)
 
 
-def _ifdict(item):
+def _if_dict(item):
     if hasattr(item, "to_dict"):
         item = item.to_dict()
     return item
