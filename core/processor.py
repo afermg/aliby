@@ -65,8 +65,8 @@ class PostProcessor:
         self.merger.run(self._signals[self.datasets["merger"]])
         self.picker.run(self._signals[self.datasets["picker"]])
         for process, dataset in zip(self.processes, self.datasets["processes"]):
-            process_result = process.run(self._signals.get_dataset(dataset))
-            self.writer.write(process_result, dataset)
+            processed_result = process.run(self._signals.get_dataset(dataset))
+            self.writer.write(processed_result, dataset, outpath)
 
 
 def _if_dict(item):
