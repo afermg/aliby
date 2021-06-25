@@ -14,7 +14,7 @@ class Signal(BridgeH5):
     def __getitem__(self, dataset):
         dset = self._hdf[dataset][()]
         attrs = self._hdf[dataset].attrs
-        first_dataset = dataset.split("/")[1] + "/"
+        first_dataset = dataset.split("/")[0] + "/"
         timepoints = self._hdf[first_dataset].attrs["processed_timepoints"]
 
         if "cell_label" in self._hdf[dataset].attrs:
