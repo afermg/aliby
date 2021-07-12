@@ -7,6 +7,11 @@ import h5py
 
 
 class BridgeH5:
+    """
+    Base class to interact with h5 data stores.
+    It also contains functions useful to predict how long should segmentation take.
+    """
+
     def __init__(self, file):
         self._hdf = h5py.File(file, "r")
 

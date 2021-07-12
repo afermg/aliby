@@ -10,21 +10,12 @@ class Signal(BridgeH5):
 
     def __init__(self, file):
         super().__init__(file)
+        self._hdf.close()  # Close the file to use pandas hdf functions
+        # hdf = pd.HDFStore(file)
+        # self.file = file
 
     def __getitem__(self, dataset):
-        dset = self._hdf[dataset][()]
-        attrs = self._hdf[dataset].attrs
-        first_dataset = dataset.split("/")[0] + "/"
-        timepoints = self._hdf[first_dataset].attrs["processed_timepoints"]
-
-        if "cell_label" in self._hdf[dataset].attrs:
-            ids = pd.MultiIndex.from_tuples(
-                zip(attrs["trap"], attrs["cell_label"]), names=["trap", "cell_label"]
-            )
-        else:
-            ids = pd.Index(attrs["trap"], names=["trap"])
-
-        return pd.DataFrame(dset, index=ids, columns=timepoints)
+        return pd.read_hdf(self.file, dataset)
 
     @staticmethod
     def _if_ext_or_post(name):
@@ -34,4 +25,4 @@ class Signal(BridgeH5):
 
     @property
     def datasets(self):
-        return signals._hdf.visit(self._if_ext_or_post)
+        return self._hdf.visit(self._if_ext_or_post)
