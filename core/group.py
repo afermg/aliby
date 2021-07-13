@@ -105,12 +105,10 @@ class Group(ProcessABC):
         self.concat_signals()
         # processed_signals = self.process_signals(grouped_signals)
 
-        return concated_signals
+        return self.concated_signals
         # return processed_signals
 
 
-# "/shared_libs/pipeline-core/scripts/data/ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01"
-# simulate poses
 poses = [
     x.name.split("store")[0]
     for x in Path(
