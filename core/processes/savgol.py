@@ -25,7 +25,6 @@ class Savgol(ProcessABC):
     """
     Apply Savitzky-Golay filter (works with NaNs, but it might return
     NaN regions).
-
     """
 
     def __init__(self, parameters: SavgolParameters):
@@ -38,7 +37,7 @@ class Savgol(ProcessABC):
         return signal.apply(savgol_on_srs, 1)
 
     @staticmethod
-    def non_uniform_savgol(x, y, window, polynom):
+    def non_uniform_savgol(x, y, window: int, polynom: int):
         """
         Applies a Savitzky-Golay filter to y with non-uniform spacing
         as defined in x
