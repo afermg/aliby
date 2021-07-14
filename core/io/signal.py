@@ -10,12 +10,16 @@ class Signal(BridgeH5):
 
     def __init__(self, file):
         super().__init__(file)
-        self._hdf.close()  # Close the file to use pandas hdf functions
-        # hdf = pd.HDFStore(file)
-        # self.file = file
 
     def __getitem__(self, dataset):
-        return pd.read_hdf(self.file, dataset)
+        dset = self._hdf[dataset]
+        index = pd.MultiIndex.from_arrays(
+            [dset[lbl][()] for lbl in dset.keys() if "axis1_label" in lbl]
+        )
+
+        columns = dset["axis0"][()]
+
+        return pd.DataFrame(dset[("block0_values")][()], index=index, columns=columns)
 
     @staticmethod
     def _if_ext_or_post(name):

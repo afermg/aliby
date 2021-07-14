@@ -13,6 +13,7 @@ class BridgeH5:
     """
 
     def __init__(self, file):
+        self.filename = file
         self._hdf = h5py.File(file, "r")
 
         self._filecheck()

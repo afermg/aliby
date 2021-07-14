@@ -10,7 +10,7 @@ from postprocessor.core.io.signal import Signal
 from core.cells import Cells
 
 
-class PostProParameters(ParametersABC):
+class PostProcessorParameters(ParametersABC):
     """
     Anthology of parameters used for postprocessing
     :merger:
