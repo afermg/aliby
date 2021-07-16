@@ -1,6 +1,6 @@
 import pandas as pd
 
-from postprocessor.core.io.base import BridgeH5
+from core.io.base import BridgeH5
 
 
 class Signal(BridgeH5):
@@ -25,11 +25,13 @@ class Signal(BridgeH5):
     @staticmethod
     def dataset_to_df(f, path):
         all_indices = ["experiment", "position", "trap", "cell_label"]
-        indices = {k: f[path][k] for k in all_indices if k in f[path][k].keys()}
+        indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
         return pd.DataFrame(
-            f[path]["values"],
-            index=pd.MultiIndex.from_arrays(indices.values, keys=indices.keys()),
-            columns=[path]["timepoint"],
+            f[path + "/values"][()],
+            index=pd.MultiIndex.from_arrays(
+                list(indices.values()), names=indices.keys()
+            ),
+            columns=f[path + "/timepoint"][()],
         )
 
     @staticmethod
@@ -41,3 +43,10 @@ class Signal(BridgeH5):
     @property
     def datasets(self):
         return self._hdf.visit(self._if_ext_or_post)
+
+
+s = Signal(
+    "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5"
+)
+
+s.dataset_to_df(s._hdf, "/extraction/em_ratio_bgsub/np_max/median")

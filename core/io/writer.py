@@ -44,9 +44,10 @@ class Writer(BridgeH5):
         dset = f[values_path]
         dset[()] = df.values
 
+        print(df.index.names)
         for name in df.index.names:
             dtype = "uint16"  # if name != "position" else "str"
-            indices_path = path + name
+            indices_path = path + "/" + name
             f.create_dataset(name=indices_path, shape=(len(df),), dtype=dtype)
             dset = f[indices_path]
             dset[()] = df.index.get_level_values(level=name).tolist()
