@@ -23,16 +23,19 @@ class Signal(BridgeH5):
         return pd.DataFrame(dset[("block0_values")][()], index=index, columns=columns)
 
     @staticmethod
-    def dataset_to_df(f, path):
-        all_indices = ["experiment", "position", "trap", "cell_label"]
-        indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
-        return pd.DataFrame(
-            f[path + "/values"][()],
-            index=pd.MultiIndex.from_arrays(
-                list(indices.values()), names=indices.keys()
-            ),
-            columns=f[path + "/timepoint"][()],
-        )
+    def dataset_to_df(f, path, mode="h5py"):
+        # TODO add support for pytables additionally to h5py?
+
+        if mode is "h5py":
+            all_indices = ["experiment", "position", "trap", "cell_label"]
+            indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
+            return pd.DataFrame(
+                f[path + "/values"][()],
+                index=pd.MultiIndex.from_arrays(
+                    list(indices.values()), names=indices.keys()
+                ),
+                columns=f[path + "/timepoint"][()],
+            )
 
     @staticmethod
     def _if_ext_or_post(name):
