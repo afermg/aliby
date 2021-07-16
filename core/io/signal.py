@@ -23,6 +23,16 @@ class Signal(BridgeH5):
         return pd.DataFrame(dset[("block0_values")][()], index=index, columns=columns)
 
     @staticmethod
+    def dataset_to_df(f, path):
+        all_indices = ["experiment", "position", "trap", "cell_label"]
+        indices = {k: f[path][k] for k in all_indices if k in f[path][k].keys()}
+        return pd.DataFrame(
+            f[path]["values"],
+            index=pd.MultiIndex.from_arrays(indices.values, keys=indices.keys()),
+            columns=[path]["timepoint"],
+        )
+
+    @staticmethod
     def _if_ext_or_post(name):
         if name.startswith("extraction") or name.startswith("postprocessing"):
             if len(name.split("/")) > 3:
