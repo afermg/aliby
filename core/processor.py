@@ -68,7 +68,7 @@ class PostProcessor:
     def run(self):
         new_ids = self.merger.run(self._signal[self.datasets["merger"]])
         for name, ids in new_ids.items():
-            self._writer.write(ids, "/postprocessing/cell_info/")
+            self._writer.write(ids, "/postprocessing/cell_info/" + name)
         picks = self.picker.run(self._signal[self.datasets["picker"]])
         return picks
         # print(merge, picks)
