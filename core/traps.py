@@ -5,6 +5,7 @@ A set of utilities for dealing with ALCATRAS traps
 import numpy as np
 from skimage import transform, feature
 
+from tqdm import tqdm
 
 def identify_trap_locations(image, trap_template, optimize_scale=True,
                             downscale=0.35, trap_size=None):
@@ -57,8 +58,8 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
-        min_distance=trap_template.shape[0] * 0.70,
-        exclude_border=trap_size // 3)
+        min_distance=int(trap_template.shape[0] * 0.70),
+        exclude_border=(trap_size//3))
     return coordinates
 
 
@@ -155,20 +156,22 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     times = t if t is not None else np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
     shape = (len(channels), len(times), tile_size, tile_size, len(z_positions))
     # Get trap location for that id:
-    zct_tiles, slices, _ = all_tiles(trap_locations, shape, raw_expt,
+    zct_tiles, slices, trap_ids = all_tiles(trap_locations, shape, raw_expt,
                                   z_positions, channels, times, [trap_id])
+
     # TODO Make this an explicit function in TimelapseOMERO
     images = raw_expt.pixels.getTiles(zct_tiles)
     timelapse = np.full(shape, np.nan)
-
-    for (z, c, t, _), (y, x), image in zip(zct_tiles, slices, images):
+    total = len(zct_tiles)
+    for (z, c, t, _), (y, x), image in tqdm(zip(zct_tiles, slices, images),
+                                            total=total):
         ch = channels.index(c)
         tp = times.tolist().index(t)
         z_pos = z_positions.index(z)
         timelapse[ch, tp, x[0]:x[1], y[0]:y[1], z_pos] = image
 
-    for x in timelapse:  # By channel
-        np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
+    #for x in timelapse:  # By channel
+    #    np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
     return timelapse
 
 

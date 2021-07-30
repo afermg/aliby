@@ -13,7 +13,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'pandas',
-        'baby@git+https://git.ecdf.ed.ac.uk/jpietsch/baby@master',
+        'baby@git+https://git.ecdf.ed.ac.uk/jpietsch/baby@dev',
         'tensorflow >=1.14'
         'scikit-image<=0.16.2',
         'numpy',
@@ -21,7 +21,6 @@ setup(
         'opencv-python',
         'requests_toolbelt',
         'h5py',
-        'tables',
         'imageio==2.8.0',
         'omero-py>=5.6.2',
         'zeroc-ice==3.6.5',
