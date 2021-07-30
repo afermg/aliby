@@ -17,6 +17,8 @@ class PostProcessorParameters(ParametersABC):
     :picker: parameters for picker
     :processes: List of processes that can be found in ./processes
     :datasets: Dictionary
+
+    #TODO Use cells to fetch updated cell indices
     """
 
     def __init__(
