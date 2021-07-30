@@ -14,9 +14,10 @@ class BridgeH5:
 
     def __init__(self, filename, flag="r"):
         self.filename = filename
-        self._hdf = h5py.File(filename, flag)
+        if flag is not None:
+            self._hdf = h5py.File(filename, flag)
 
-        self._filecheck()
+            self._filecheck
 
     def _filecheck(self):
         assert "cell_info" in self._hdf, "Invalid file. No 'cell_info' found."

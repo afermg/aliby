@@ -1,3 +1,4 @@
+import h5py
 import pandas as pd
 
 from core.io.base import BridgeH5
@@ -9,18 +10,24 @@ class Signal(BridgeH5):
     """
 
     def __init__(self, file):
-        super().__init__(file)
+        super().__init__(file, flag=None)
 
     def __getitem__(self, dataset):
-        dset = self._hdf[dataset]
-        lbls = [dset[lbl][()] for lbl in dset.keys() if "axis1_label" in lbl]
-        index = pd.MultiIndex.from_arrays(
-            lbls, names=["position", "trap", "cell"][-len(lbls) :]
-        )
+        with h5py.File(self.filename, "r") as f:
+            dset = f[dataset]
+            # lbls = [dset[lbl][()] for lbl in dset.keys() if "axis1_label" in lbl]
+            names = ["experiment", "position", "trap"]
+            if not dataset.endswith("imBackground"):
+                names.append("cell_label")
+            lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
+            index = pd.MultiIndex.from_arrays(
+                list(lbls.values()), names=names[-len(lbls) :]
+            )
 
-        columns = dset["axis0"][()]
+            columns = dset["timepoint"][()]
 
-        return pd.DataFrame(dset[("block0_values")][()], index=index, columns=columns)
+            df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
+        return df
 
     @staticmethod
     def dataset_to_df(f, path, mode="h5py"):
@@ -45,11 +52,13 @@ class Signal(BridgeH5):
 
     @property
     def datasets(self):
-        return self._hdf.visit(self._if_ext_or_post)
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visit(self._if_ext_or_post)
+        return dsets
 
 
-s = Signal(
-    "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5"
-)
+# s = Signal(
+#     "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5"
+# )
 
-s.dataset_to_df(s._hdf, "/extraction/em_ratio_bgsub/np_max/median")
+# s.dataset_to_df(s._hdf, "/extraction/em_ratio_bgsub/np_max/median")
