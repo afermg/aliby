@@ -216,11 +216,6 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
 
     """
 
-    tracks.index.names = [
-        "trap",
-        "cell",
-    ]  # TODO remove this once it is integrated in the tracker
-    # contig=tracks.groupby(['pos','trap']).apply(tracks2contig)
     clean = clean_tracks(tracks, min_len=window + 1, min_gr=0.9)  # get useful tracks
     contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
     contig = contig.loc[contig.apply(len) > 0]

@@ -52,4 +52,7 @@ class Merger(ProcessABC):
         super().__init__(parameters)
 
     def run(self, signal):
-        merged, joint_pairs = merge_tracks(signal)  # , min_len=self.window + 1)
+        merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
+        indices = (*zip(*merged.index.tolist()),)
+        names = merged.index.names
+        return {name: ids for name, ids in zip(names, indices)}

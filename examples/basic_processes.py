@@ -2,7 +2,14 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 params = PostProcessorParameters.default()
 pp = PostProcessor(
-    "/shared_libs/pipeline-core/scripts/data/ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01/ph_5_04_005store.h5",
+    "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5",
     params,
 )
-tmp = pp.run()
+# tmp = pp.run()
+
+import h5py
+
+f = h5py.File(
+    "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5",
+    "a",
+)
