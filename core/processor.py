@@ -52,7 +52,7 @@ class PostProcessorParameters(ParametersABC):
 class PostProcessor:
     def __init__(self, filename, parameters):
         self.parameters = parameters
-        # self._signals = Signal(filename)
+        self._signal = Signal(filename)
         self._writer = Writer(filename)
 
         self.datasets = parameters["datasets"]
@@ -66,11 +66,11 @@ class PostProcessor:
         ]
 
     def run(self):
-        new_ids = self.merger.run(self._signals[self.datasets["merger"]])
+        new_ids = self.merger.run(self._signal[self.datasets["merger"]])
         for name, ids in new_ids.items():
             self._writer.write(ids, "/postprocessing/cell_info/")
-        picks = self.picker.run(self._writer[self.datasets["picker"]])
-        return merge
+        picks = self.picker.run(self._signal[self.datasets["picker"]])
+        return picks
         # print(merge, picks)
         # for process, dataset, outpath in zip(
         #     self.processes, self.datasets["processes"], self.outpaths
