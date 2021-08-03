@@ -67,9 +67,8 @@ class PostProcessor:
     @staticmethod
     def get_process(process):
         """
-        Get process from  folder ./processes
+        Dynamically import a process class from the 'processes' folder.
         """
-        print(__file__)
         return locate("postprocessor.core.processes." + process + "." + process)
 
     def run(self):
@@ -77,12 +76,30 @@ class PostProcessor:
         for name, ids in new_ids.items():
             self._writer.write(ids, "/postprocessing/cell_info/" + name)
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
-        return picks
-        # for process, dataset, outpath in zip(
-        #     self.processes, self.datasets["processes"], self.outpaths
-        # ):
-        #     processed_result = process.run(self._signals.get_dataset(dataset))
-        #     self.writer.write(processed_result, dataset, outpath)
+        for process, datasets in self.processes.values():
+            for dataset in datasets:
+                if isinstance(dataset, list):  # multisignal process
+                    result = self.processes["process"].run(
+                        [self._signal[d] for d in dataset]
+                    )
+                    prefix = "".join(
+                        prefix + c[0]
+                        for c in takewhile(
+                            lambda x: all(x[0] == y for y in x), zip(*dataset)
+                        )
+                    )
+                    outpath = (
+                        prefix
+                        + "_".join(  # TODO check that it always finishes in '/'
+                            [d[len(prefix) :].replace("/", "_") for d in dataset]
+                        )
+                    )
+                elif isinstance(dataset, str):
+                    result = self.processes["process"].run(self._signal[dataset])
+                    outpath = dataset[1:].replace("/", "_")
+                else:
+                    raise ("Not appropiate dataset")
+                self.writer.write(result, "/postprocessing/" + process + "/" + outpath)
 
 
 def _if_dict(item):
