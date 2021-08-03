@@ -15,19 +15,17 @@ class PostProcessorParameters(ParametersABC):
     Anthology of parameters used for postprocessing
     :merger:
     :picker: parameters for picker
-    :processes: List of processes that can be found in ./processes
-    :datasets: Dictionary
+    :processes: Dict processes:[objectives], 'processes' are defined in ./processes/
+        while objectives are relative or absolute paths to datasets. If relative paths the
+        post-processed addresses are used.
 
     #TODO Use cells to fetch updated cell indices
     """
 
-    def __init__(
-        self, merger=None, picker=None, processes=[], datasets=[], outpaths=[]
-    ):
+    def __init__(self, merger=None, picker=None, processes=[]):
         self.merger: MergerParameters = merger
         self.picker: PickerParameters = picker
         self.processes: List = processes
-        self.outpaths = outpaths
 
         self.datasets: Dict = datasets
 
@@ -43,7 +41,7 @@ class PostProcessorParameters(ParametersABC):
                 datasets={
                     "merger": "/extraction/general/None/area",
                     "picker": "/extraction/general/None/area",
-                    "processes": [],
+                    "processes": {"dSignal": ["/general/None/area"]},
                 },
             )
 
@@ -57,8 +55,7 @@ class PostProcessor:
         self._signal = Signal(filename)
         self._writer = Writer(filename)
 
-        self.datasets = parameters["datasets"]
-        self.outpaths = parameters["outpaths"]
+        # self.outpaths = parameters["outpaths"]
         self.merger = Merger(parameters["merger"])
         self.picker = Picker(
             parameters=parameters["picker"], cells=Cells.from_source(filename)
