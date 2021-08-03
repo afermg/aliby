@@ -1,9 +1,10 @@
+from pydoc import locate
 from typing import List, Dict, Union
 import pandas as pd
 
 from postprocessor.core.processes.base import ParametersABC
-from postprocessor.core.processes.merger import MergerParameters, Merger
-from postprocessor.core.processes.picker import PickerParameters, Picker
+from postprocessor.core.processes.merger import mergerParameters, merger
+from postprocessor.core.processes.picker import pickerParameters, picker
 from core.io.writer import Writer
 from core.io.signal import Signal
 
@@ -23,11 +24,9 @@ class PostProcessorParameters(ParametersABC):
     """
 
     def __init__(self, merger=None, picker=None, processes=[]):
-        self.merger: MergerParameters = merger
-        self.picker: PickerParameters = picker
-        self.processes: List = processes
-
-        self.datasets: Dict = datasets
+        self.merger: mergerParameters = merger
+        self.picker: pickerParameters = picker
+        self.processes: Dict = processes
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -36,9 +35,9 @@ class PostProcessorParameters(ParametersABC):
     def default(cls, kind=None):
         if kind == "defaults" or kind == None:
             return cls(
-                merger=MergerParameters.default(),
-                picker=PickerParameters.default(),
-                datasets={
+                merger=mergerParameters.default(),
+                picker=pickerParameters.default(),
+                processes={
                     "merger": "/extraction/general/None/area",
                     "picker": "/extraction/general/None/area",
                     "processes": {"dSignal": ["/general/None/area"]},
@@ -56,21 +55,29 @@ class PostProcessor:
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = Merger(parameters["merger"])
-        self.picker = Picker(
+        self.merger = merger(parameters["merger"])
+        self.picker = picker(
             parameters=parameters["picker"], cells=Cells.from_source(filename)
         )
-        self.processes = [
-            self.get_process(process) for process in parameters["processes"]
-        ]
+        self.process_dict = {
+            process: locate(process) for process in parameters["processes"].keys()
+        }
+        self.processes = parameters["processes"]
+
+    @staticmethod
+    def get_process(process):
+        """
+        Get process from  folder ./processes
+        """
+        print(__file__)
+        return locate("postprocessor.core.processes." + process + "." + process)
 
     def run(self):
-        new_ids = self.merger.run(self._signal[self.datasets["merger"]])
+        new_ids = self.merger.run(self._signal[self.processes["merger"]])
         for name, ids in new_ids.items():
             self._writer.write(ids, "/postprocessing/cell_info/" + name)
-        picks = self.picker.run(self._signal[self.datasets["picker"]])
+        picks = self.picker.run(self._signal[self.processes["picker"][0]])
         return picks
-        # print(merge, picks)
         # for process, dataset, outpath in zip(
         #     self.processes, self.datasets["processes"], self.outpaths
         # ):

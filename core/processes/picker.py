@@ -10,7 +10,7 @@ from postprocessor.core.processes.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
-class PickerParameters(ParametersABC):
+class pickerParameters(ParametersABC):
     def __init__(
         self,
         condition: Tuple[str, Union[float, int]] = None,
@@ -32,7 +32,7 @@ class PickerParameters(ParametersABC):
         )
 
 
-class Picker(ProcessABC):
+class picker(ProcessABC):
     """
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be
@@ -43,7 +43,7 @@ class Picker(ProcessABC):
 
     def __init__(
         self,
-        parameters: PickerParameters,
+        parameters: pickerParameters,
         cells: CellsHDF,
     ):
         super().__init__(parameters=parameters)

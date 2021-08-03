@@ -1,7 +1,8 @@
+import pandas as pd
 from postprocessor.core.processes.base import ParametersABC, ProcessABC
 
 
-class SavgolParameters(ParametersABC):
+class savgolParameters(ParametersABC):
     """
     Parameters
 
@@ -21,13 +22,13 @@ class SavgolParameters(ParametersABC):
         return cls.from_dict({"window": 3, "polynom": 3})
 
 
-class Savgol(ProcessABC):
+class savgol(ProcessABC):
     """
     Apply Savitzky-Golay filter (works with NaNs, but it might return
     NaN regions).
     """
 
-    def __init__(self, parameters: SavgolParameters):
+    def __init__(self, parameters: savgolParameters):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):

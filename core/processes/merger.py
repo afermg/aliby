@@ -2,7 +2,7 @@ from postprocessor.core.processes.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
 
 
-class MergerParameters(ParametersABC):
+class mergerParameters(ParametersABC):
     """
     :param tol: float or int threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,
@@ -43,7 +43,7 @@ class MergerParameters(ParametersABC):
         )
 
 
-class Merger(ProcessABC):
+class merger(ProcessABC):
     """
     TODO Integrate functions/tracks.py inside this class?
     """
