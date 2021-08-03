@@ -1,6 +1,8 @@
+from collections.abc import Iterable
 from itertools import accumulate
 
 import h5py
+import numpy as np
 import pandas as pd
 
 from core.io.base import BridgeH5
@@ -16,8 +18,7 @@ class Writer(BridgeH5):
     """
 
     def __init__(self, filename):
-        super().__init__(filename)
-        self._hdf.close()
+        super().__init__(filename, flag=None)
 
     def write(self, data, path, overwrite=True):
         with h5py.File(self.filename, "a") as f:
@@ -25,26 +26,31 @@ class Writer(BridgeH5):
                 if path in f:
                     del f[path]
                 f.create_group(path)
-            if type(data) is pd.DataFrame:
+            if isinstance(data, pd.DataFrame):
                 self.write_df(data, f, path)
-            elif tself._bfself._bfype(data) is np.ndarray or type(data) is list:
-                self.write_array(path, data)
+            elif isinstance(data, Iterable):
+                self.write_array(data, f, path)
 
-    def write_array(self, path, array):
-        pass
+    def write_array(self, array, f, path):
+        print("writing to ", path)
+        if path in f:
+            del f[path]
+
+        narray = np.array(array)
+        dset = f.create_dataset(path, shape=narray.shape, dtype="int")
+        dset[()] = narray
 
     @staticmethod
     def write_df(df, f, path):
         print("writing to ", path)
         if path not in f:
-            f.create_group(path)
+            f.create_group(path)  # TODO check if we can remove this
 
         values_path = path + "/values"
         f.create_dataset(name=values_path, shape=df.shape, dtype=df.dtypes[0])
         dset = f[values_path]
         dset[()] = df.values
 
-        print(df.index.names)
         for name in df.index.names:
             dtype = "uint16"  # if name != "position" else "str"
             indices_path = path + "/" + name
