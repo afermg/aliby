@@ -42,7 +42,6 @@ class Cells:
             kind = "matlab" if source.suffix == ".mat" else "hdf5"
         return cell_factory(source, kind)
 
-
     @staticmethod
     def _asdense(array):
         if not isdense(array):
@@ -75,9 +74,9 @@ class CellsHDF(Cells):
     # DONE implement cells information from HDF5 file format
     # TODO combine all the cells of one strain into a cellResults?
     # TODO filtering
-    def __init__(self, file):
+    def __init__(self, file, path="/cell_info"):
         self._file = file
-        self._info = hdf_dict(self._file.get("/cell_info"))
+        self._info = hdf_dict(self._file.get(path))
 
     def __getitem__(self, item):
         _item = "_" + item
