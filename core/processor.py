@@ -68,6 +68,8 @@ class PostProcessor:
     def get_process(process):
         """
         Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        # TODO add support for passing parameters
         """
         return locate("postprocessor.core.processes." + process + "." + process)
 
