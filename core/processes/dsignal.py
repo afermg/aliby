@@ -1,8 +1,10 @@
+import pandas as pd
+
 from postprocessor.core.processes.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
 
 
-class dSignalParameters(ParametersABC):
+class dsignalParameters(ParametersABC):
     """
     :window: Number of timepoints to consider for signal.
     """
@@ -15,12 +17,12 @@ class dSignalParameters(ParametersABC):
         return cls.from_dict({"window": 3})
 
 
-class dSignal(ProcessABC):
+class dsignal(ProcessABC):
     """
     Calculate the change in a signal depending on a window
     """
 
-    def __init__(self, parameters: ParametersTemplate):
+    def __init__(self, parameters: dsignalParameters):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):

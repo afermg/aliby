@@ -23,10 +23,19 @@ class PostProcessorParameters(ParametersABC):
     #TODO Use cells to fetch updated cell indices
     """
 
-    def __init__(self, merger=None, picker=None, processes=[]):
+    def __init__(
+        self,
+        merger=None,
+        picker=None,
+        processes={},
+        process_parameters={},
+        process_outpaths={},
+    ):
         self.merger: mergerParameters = merger
         self.picker: pickerParameters = picker
         self.processes: Dict = processes
+        self.process_parameters: Dict = process_parameters
+        self.process_outpaths: Dict = process_outpaths
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -40,7 +49,9 @@ class PostProcessorParameters(ParametersABC):
                 processes={
                     "merger": "/extraction/general/None/area",
                     "picker": ["/extraction/general/None/area"],
-                    "processes": {"dSignal": ["/general/None/area"]},
+                    "processes": {"dsignal": ["/general/None/area"]},
+                    "process_parameters": {},
+                    "process_outpaths": {},
                 },
             )
 
@@ -59,8 +70,13 @@ class PostProcessor:
         self.picker = picker(
             parameters=parameters["picker"], cells=Cells.from_source(filename)
         )
-        self.process_dict = {
-            process: locate(process) for process in parameters["processes"].keys()
+        self.process_classfun = {
+            process: self.get_process(process)
+            for process in parameters["processes"]["processes"].keys()
+        }
+        self.process_parameters = {
+            process: self.get_parameters(process)
+            for process in parameters["process_parameters"].keys()
         }
         self.processes = parameters["processes"]
 
@@ -73,17 +89,45 @@ class PostProcessor:
         """
         return locate("postprocessor.core.processes." + process + "." + process)
 
+    @staticmethod
+    def get_parameters(process):
+        """
+        Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        # TODO add support for passing parameters
+        """
+        return locate(
+            "postprocessor.core.processes." + process + "." + process + "Parameters"
+        )
+
     def run(self):
         new_ids = self.merger.run(self._signal[self.processes["merger"]])
         for name, ids in new_ids.items():
             self._writer.write(ids, "/postprocessing/cell_info/" + name)
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
-        for process, datasets in self.processes.items():
+        for process, datasets in self.processes["processes"].items():
+            if process in self.parameters.to_dict():
+                loaded_process = self.process_classfun[process](
+                    self.process_parameters[process]
+                )
+            else:
+                print(self.process_classfun, process)
+                loaded_process = self.process_classfun[process].default()
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
-                    result = self.processes["process"].run(
-                        [self._signal[d] for d in dataset]
-                    )
+                    dataset = [self._signal[d] for d in dataset]
+                elif isinstance(dataset, str):
+                    dataset = self._signal[dataset]
+                else:
+                    raise ("Incorrect dataset")
+
+                result = loaded_process.run(dataset)
+
+                # If no outpath defined, place the result in the minimum common
+                # branch of all signals used
+                if process in self.parameters.to_dict()["process_outpaths"]:
+                    outpath = self.parameters.to_dict()["process_outpaths"][process]
+                elif isinstance(dataset, list):
                     prefix = "".join(
                         prefix + c[0]
                         for c in takewhile(
@@ -97,10 +141,8 @@ class PostProcessor:
                         )
                     )
                 elif isinstance(dataset, str):
-                    result = self.process_dict[process].run(dataset)
                     outpath = dataset[1:].replace("/", "_")
-                else:
-                    raise ("Not appropiate dataset")
+
                 self.writer.write(result, "/postprocessing/" + process + "/" + outpath)
 
 
