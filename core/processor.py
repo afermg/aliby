@@ -76,7 +76,7 @@ class PostProcessor:
         }
         self.process_parameters = {
             process: self.get_parameters(process)
-            for process in parameters["process_parameters"].keys()
+            for process in parameters["processes"]["processes"]
         }
         self.processes = parameters["processes"]
 
@@ -106,13 +106,15 @@ class PostProcessor:
             self._writer.write(ids, "/postprocessing/cell_info/" + name)
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
         for process, datasets in self.processes["processes"].items():
-            if process in self.parameters.to_dict():
-                loaded_process = self.process_classfun[process](
+            parameters = (
+                self.process_parameters[process].from_dict(
                     self.process_parameters[process]
                 )
-            else:
-                print(self.process_classfun, process)
-                loaded_process = self.process_classfun[process].default()
+                if process in self.parameters["processes"]["process_parameters"]
+                else self.process_parameters[process].default()
+            )
+            print(parameters.to_dict())
+            loaded_process = self.process_classfun[process](parameters)
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
                     dataset = [self._signal[d] for d in dataset]
