@@ -49,7 +49,7 @@ class PostProcessorParameters(ParametersABC):
                 processes={
                     "merger": "/extraction/general/None/area",
                     "picker": ["/extraction/general/None/area"],
-                    "processes": {"dsignal": ["/general/None/area"]},
+                    "processes": {"dsignal": ["/extraction/general/None/area"]},
                     "process_parameters": {},
                     "process_outpaths": {},
                 },
@@ -113,17 +113,17 @@ class PostProcessor:
                 if process in self.parameters["processes"]["process_parameters"]
                 else self.process_parameters[process].default()
             )
-            print(parameters.to_dict())
             loaded_process = self.process_classfun[process](parameters)
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
-                    dataset = [self._signal[d] for d in dataset]
+                    signal = [self._signal[d] for d in dataset]
                 elif isinstance(dataset, str):
-                    dataset = self._signal[dataset]
+                    print(dataset)
+                    signal = self._signal[dataset]
                 else:
                     raise ("Incorrect dataset")
 
-                result = loaded_process.run(dataset)
+                result = loaded_process.run(signal)
 
                 # If no outpath defined, place the result in the minimum common
                 # branch of all signals used
@@ -145,7 +145,7 @@ class PostProcessor:
                 elif isinstance(dataset, str):
                     outpath = dataset[1:].replace("/", "_")
 
-                self.writer.write(result, "/postprocessing/" + process + "/" + outpath)
+                self._writer.write(result, "/postprocessing/" + process + "/" + outpath)
 
 
 def _if_dict(item):
