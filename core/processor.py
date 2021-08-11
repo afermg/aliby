@@ -39,7 +39,7 @@ class PostProcessorParameters(ParametersABC):
                 picker=pickerParameters.default(),
                 processes={
                     "merger": "/extraction/general/None/area",
-                    "picker": "/extraction/general/None/area",
+                    "picker": ["/extraction/general/None/area"],
                     "processes": {"dSignal": ["/general/None/area"]},
                 },
             )
@@ -78,7 +78,7 @@ class PostProcessor:
         for name, ids in new_ids.items():
             self._writer.write(ids, "/postprocessing/cell_info/" + name)
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
-        for process, datasets in self.processes.values():
+        for process, datasets in self.processes.items():
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
                     result = self.processes["process"].run(
@@ -97,7 +97,7 @@ class PostProcessor:
                         )
                     )
                 elif isinstance(dataset, str):
-                    result = self.processes["process"].run(self._signal[dataset])
+                    result = self.process_dict[process].run(dataset)
                     outpath = dataset[1:].replace("/", "_")
                 else:
                     raise ("Not appropiate dataset")
