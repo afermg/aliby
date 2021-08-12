@@ -26,10 +26,12 @@ class Writer(BridgeH5):
         super().__init__(filename, flag=None)
 
     def write(
-        self, path: str, data: Iterable = None, meta: Dict = {}, overwrite: str = "over"
+        self, path: str, data: Iterable = None, meta: Dict = {}, overwrite: bool = True
     ):
         with h5py.File(self.filename, "a") as f:
+            over_txt = ""
             if overwrite:
+                over_txt = "over"
                 self.deldset(f, path)
             else:  # Add a number if needed
                 if path in f:
@@ -40,7 +42,7 @@ class Writer(BridgeH5):
             # f.create_group(path)
             print(
                 "{}writing {} to {} and {} metadata fields".format(
-                    overwrite, type(data), path, meta
+                    over_txt, type(data), path, len(meta)
                 )
             )
             if data:
