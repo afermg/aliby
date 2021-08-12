@@ -125,11 +125,11 @@ class PostProcessor:
 
                 result = loaded_process.run(signal)
 
-                # If no outpath defined, place the result in the minimum common
-                # branch of all signals used
                 if process in self.parameters.to_dict()["process_outpaths"]:
                     outpath = self.parameters.to_dict()["process_outpaths"][process]
                 elif isinstance(dataset, list):
+                    # If no outpath defined, place the result in the minimum common
+                    # branch of all signals used
                     prefix = "".join(
                         prefix + c[0]
                         for c in takewhile(
@@ -144,11 +144,17 @@ class PostProcessor:
                     )
                 elif isinstance(dataset, str):
                     outpath = dataset[1:].replace("/", "_")
+                else:
+                    raise ("Putpath not defined", type(dataset))
+
+                self.write_result(
+                    "/postprocessing/" + process + "/" + outpath, result, metadata={}
+                )
 
     def write_result(
-        self, result: Union[List, pd.DataFrame, np.ndarray], path: str, metadata: Dict
+        self, path: str, result: Union[List, pd.DataFrame, np.ndarray], metadata: Dict
     ):
-        self._writer.write(result, "/postprocessing/" + process + "/" + outpath)
+        self._writer.write(path, result, meta=metadata)
 
 
 def _if_dict(item):
