@@ -64,7 +64,6 @@ class Writer(BridgeH5):
 
     @staticmethod
     def deldset(f: h5py.File, path: str):
-        print(f, path)
         if path in f:
             del f[path]
 
