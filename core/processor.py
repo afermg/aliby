@@ -1,5 +1,8 @@
-from pydoc import locate
+import h5py
 from typing import List, Dict, Union
+from pydoc import locate
+
+import numpy as np
 import pandas as pd
 
 from postprocessor.core.processes.base import ParametersABC
@@ -85,7 +88,6 @@ class PostProcessor:
         """
         Dynamically import a process class from the 'processes' folder.
         Assumes process filename and class name are the same
-        # TODO add support for passing parameters
         """
         return locate("postprocessor.core.processes." + process + "." + process)
 
@@ -94,7 +96,6 @@ class PostProcessor:
         """
         Dynamically import a process class from the 'processes' folder.
         Assumes process filename and class name are the same
-        # TODO add support for passing parameters
         """
         return locate(
             "postprocessor.core.processes." + process + "." + process + "Parameters"
@@ -103,7 +104,7 @@ class PostProcessor:
     def run(self):
         new_ids = self.merger.run(self._signal[self.processes["merger"]])
         for name, ids in new_ids.items():
-            self._writer.write(ids, "/postprocessing/cell_info/" + name)
+            self._writer.write("/postprocessing/cell_info/" + name, ids)
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
         for process, datasets in self.processes["processes"].items():
             parameters = (
@@ -118,7 +119,6 @@ class PostProcessor:
                 if isinstance(dataset, list):  # multisignal process
                     signal = [self._signal[d] for d in dataset]
                 elif isinstance(dataset, str):
-                    print(dataset)
                     signal = self._signal[dataset]
                 else:
                     raise ("Incorrect dataset")
@@ -145,7 +145,10 @@ class PostProcessor:
                 elif isinstance(dataset, str):
                     outpath = dataset[1:].replace("/", "_")
 
-                self._writer.write(result, "/postprocessing/" + process + "/" + outpath)
+    def write_result(
+        self, result: Union[List, pd.DataFrame, np.ndarray], path: str, metadata: Dict
+    ):
+        self._writer.write(result, "/postprocessing/" + process + "/" + outpath)
 
 
 def _if_dict(item):
