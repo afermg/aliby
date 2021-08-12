@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from typing import Union, List, Dict
 from itertools import accumulate
 
 import h5py
@@ -14,29 +15,70 @@ class Writer(BridgeH5):
 
     Decoupling interface from implementation!
 
-    :filename: Name of file to write into
+    Parameters
+    ----------
+        filename: str Name of file to write into
+        flag: str, default=None
+            Flag to pass to the default file reader. If None the file remains closed.
     """
 
     def __init__(self, filename):
         super().__init__(filename, flag=None)
 
-    def write(self, data, path, overwrite=True):
+    def write(
+        self, path: str, data: Iterable = None, meta: Dict = {}, overwrite: str = "over"
+    ):
         with h5py.File(self.filename, "a") as f:
             if overwrite:
+                self.deldset(f, path)
+            else:  # Add a number if needed
                 if path in f:
-                    del f[path]
-                f.create_group(path)
-            if isinstance(data, pd.DataFrame):
-                self.write_df(data, f, path)
-            elif isinstance(data, Iterable):
-                self.write_array(data, f, path)
+                    parent, name = path.rsplit("/", maxsplit=1)
+                    n = sum([x.startswith(name) for x in f[path]])
+                    path = path + str(n).zfill(3)
 
-    def write_array(self, array, f, path):
-        print("writing to ", path)
+            # f.create_group(path)
+            print(
+                "{}writing {} to {} and {} metadata fields".format(
+                    overwrite, type(data), path, meta
+                )
+            )
+            if data:
+                self.write_dset(f, path, data)
+            if meta:
+                for attr, metadata in meta.items():
+                    self.write_meta(f, path, attr, metadata)
+
+    def write_dset(self, f: h5py.File, path: str, data: Iterable):
+        if isinstance(data, pd.DataFrame):
+            self.write_df(data, f, path)
+        elif isinstance(data, Iterable):
+            self.write_arraylike(f, path, data)
+        else:
+            self.write_atomic(data, f, path)
+
+    def write_meta(self, f: h5py.File, path: str, data: Iterable):
+        path, attr = path.split(".")
+
+        f[path].attrs[attr] = data
+
+    @staticmethod
+    def deldset(f: h5py.File, path: str):
+        print(f, path)
         if path in f:
             del f[path]
 
-        narray = np.array(array)
+    @staticmethod
+    def delmeta(f: h5py.File, path: str, attr: str):
+        if path in f and attr in f[path].attrs:
+            del f[path].attrs[attr]
+
+    @staticmethod
+    def write_arraylike(f: h5py.File, path: str, data: Iterable):
+        if path in f:
+            del f[path]
+
+        narray = np.array(data)
         dset = f.create_dataset(path, shape=narray.shape, dtype="int")
         dset[()] = narray
 

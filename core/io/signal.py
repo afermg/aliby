@@ -31,7 +31,7 @@ class Signal(BridgeH5):
         return df
 
     @staticmethod
-    def dataset_to_df(f, path, mode="h5py"):
+    def dataset_to_df(f: h5py.File, path: str, mode: str = "h5py"):
 
         if mode is "h5py":
             all_indices = ["experiment", "position", "trap", "cell_label"]
