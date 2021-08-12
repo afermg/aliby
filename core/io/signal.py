@@ -14,6 +14,7 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dataset):
         with h5py.File(self.filename, "r") as f:
+            print("Reading from ", dataset)
             dset = f[dataset]
             # lbls = [dset[lbl][()] for lbl in dset.keys() if "axis1_label" in lbl]
             names = ["experiment", "position", "trap"]
@@ -31,7 +32,6 @@ class Signal(BridgeH5):
 
     @staticmethod
     def dataset_to_df(f, path, mode="h5py"):
-        # TODO add support for pytables additionally to h5py?
 
         if mode is "h5py":
             all_indices = ["experiment", "position", "trap", "cell_label"]
