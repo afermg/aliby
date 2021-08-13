@@ -15,19 +15,38 @@ class Signal(BridgeH5):
     def __getitem__(self, dataset):
         with h5py.File(self.filename, "r") as f:
             print("Reading from ", dataset)
-            dset = f[dataset]
-            # lbls = [dset[lbl][()] for lbl in dset.keys() if "axis1_label" in lbl]
-            names = ["experiment", "position", "trap"]
-            if not dataset.endswith("imBackground"):
-                names.append("cell_label")
-            lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
-            index = pd.MultiIndex.from_arrays(
-                list(lbls.values()), names=names[-len(lbls) :]
-            )
+            if isinstance(dataset, str):
+                return self.dset_to_df(f, dataset)
 
-            columns = dset["timepoint"][()]
+            elif isinstance(dataset, list):
+                is_bgd = [dset.endswith("imBackground") for dset in dataset]
+                assert sum(is_bgd) == 0 or sum(is_bgd) == len(
+                    dataset
+                ), "Trap data and cell data can't be mixed"
 
-            df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
+                datasets = [self.dset_to_df(f, dset) for dset in dataset]
+
+                indices = [dset.index for dset in datasets]
+                intersection = indices[0]
+                for index in indices[1:]:
+                    intersection = intersection.intersection(index)
+
+                return [dset.loc[intersection] for dset in datasets]
+
+    @staticmethod
+    def dset_to_df(f, dataset):
+        dset = f[dataset]
+        names = ["experiment", "position", "trap"]
+        if not dataset.endswith("imBackground"):
+            names.append("cell_label")
+        lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
+        index = pd.MultiIndex.from_arrays(
+            list(lbls.values()), names=names[-len(lbls) :]
+        )
+
+        columns = dset["timepoint"][()]
+
+        df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
         return df
 
     @staticmethod

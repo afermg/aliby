@@ -49,20 +49,21 @@ class Writer(BridgeH5):
                 self.write_dset(f, path, data)
             if meta:
                 for attr, metadata in meta.items():
-                    self.write_meta(f, path, attr, metadata)
+                    self.write_meta(f, path, attr, data=metadata)
 
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
         if isinstance(data, pd.DataFrame):
-            self.write_df(data, f, path)
+            self.write_df(f, path, data)
         elif isinstance(data, Iterable):
             self.write_arraylike(f, path, data)
         else:
             self.write_atomic(data, f, path)
 
-    def write_meta(self, f: h5py.File, path: str, data: Iterable):
-        path, attr = path.split(".")
+    def write_meta(self, f: h5py.File, path: str, attr: str, data: Iterable):
+        # path, attr = path.split(".")
+        obj = f.require_group(path)
 
-        f[path].attrs[attr] = data
+        obj.attrs[attr] = data
 
     @staticmethod
     def deldset(f: h5py.File, path: str):
@@ -84,7 +85,7 @@ class Writer(BridgeH5):
         dset[()] = narray
 
     @staticmethod
-    def write_df(df, f, path):
+    def write_df(f, path, df):
         if path not in f:
             f.create_group(path)  # TODO check if we can remove this
 
