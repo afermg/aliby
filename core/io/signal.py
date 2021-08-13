@@ -1,3 +1,5 @@
+from more_itertools import first_true
+
 import h5py
 import pandas as pd
 
@@ -32,6 +34,16 @@ class Signal(BridgeH5):
                     intersection = intersection.intersection(index)
 
                 return [dset.loc[intersection] for dset in datasets]
+
+    def get_merge_events(self, signal: str):
+        # fetch merge events going up to the first level
+        paths = (*accumulate(signal.split("/"), lambda x, y: "".join([x, y])),)
+        with h5py.File(self.filename, "r") as f:
+            merge_events = first_true(
+                (f[path].attrs.get("merge_events") for path in paths)
+            )
+
+        return (*previous_merges, *merge_events)
 
     @staticmethod
     def dset_to_df(f, dataset):
