@@ -45,7 +45,7 @@ class Writer(BridgeH5):
                     over_txt, type(data), path, len(meta)
                 )
             )
-            if data:
+            if data is not None:
                 self.write_dset(f, path, data)
             if meta:
                 for attr, metadata in meta.items():
@@ -85,7 +85,6 @@ class Writer(BridgeH5):
 
     @staticmethod
     def write_df(df, f, path):
-        print("writing to ", path)
         if path not in f:
             f.create_group(path)  # TODO check if we can remove this
 
