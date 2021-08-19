@@ -9,6 +9,7 @@ from typing import Union, List
 
 import numpy as np
 import pandas as pd
+from utils_find_1st import find_1st, cmp_larger
 
 import more_itertools as mit
 from scipy.signal import savgol_filter
@@ -193,11 +194,14 @@ def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
     return tmp
 
 
-def join_track_pairs(track1, track2):
-    tmp = copy(track1)
-    tmp.loc[track2.dropna().index] = track2.dropna().values
+from copy import copy
 
-    return tmp
+
+def join_track_pair(target, source):
+    tgt_copy = copy(target)
+    end = find_1st(target.values[::-1], 0, cmp_larger)
+    tgt_copy.iloc[-end:] = source.iloc[-end:].values
+    return tgt_copy
 
 
 def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:

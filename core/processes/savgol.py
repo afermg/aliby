@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+
 from postprocessor.core.processes.base import ParametersABC, ProcessABC
 
 
@@ -12,14 +14,13 @@ class savgolParameters(ParametersABC):
             The order of polynom used. Must be smaller than the window size
     """
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
+    def __init__(self, window, polynom):
+        self.window = window
+        self.polynom = polynom
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"window": 3, "polynom": 3})
+        return cls.from_dict({"window": 3, "polynom": 2})
 
 
 class savgol(ProcessABC):

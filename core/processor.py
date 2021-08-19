@@ -23,7 +23,6 @@ class PostProcessorParameters(ParametersABC):
         while objectives are relative or absolute paths to datasets. If relative paths the
         post-processed addresses are used.
 
-    #TODO Use cells to fetch updated cell indices
     """
 
     def __init__(
@@ -50,9 +49,14 @@ class PostProcessorParameters(ParametersABC):
                 merger=mergerParameters.default(),
                 picker=pickerParameters.default(),
                 processes={
-                    "merger": "/extraction/general/None/area",
-                    "picker": ["/extraction/general/None/area"],
-                    "processes": {"dsignal": ["/extraction/general/None/area"]},
+                    "prepost": {
+                        "merger": "/extraction/general/None/area",
+                        "picker": ["/extraction/general/None/area"],
+                    },
+                    "processes": {
+                        "dsignal": ["/extraction/general/None/area"],
+                        # "savgol": ["/extraction/general/None/area"],
+                    },
                     "process_parameters": {},
                     "process_outpaths": {},
                 },
@@ -65,13 +69,15 @@ class PostProcessorParameters(ParametersABC):
 class PostProcessor:
     def __init__(self, filename, parameters):
         self.parameters = parameters
+        self._filename = filename
         self._signal = Signal(filename)
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = merger(parameters["merger"])
+        self.merger = merger(parameters["prepost"]["merger"])
         self.picker = picker(
-            parameters=parameters["picker"], cells=Cells.from_source(filename)
+            parameters=parameters["prepost"]["picker"],
+            cells=Cells.from_source(filename),
         )
         self.process_classfun = {
             process: self.get_process(process)
@@ -101,11 +107,27 @@ class PostProcessor:
             "postprocessor.core.processes." + process + "." + process + "Parameters"
         )
 
-    def run(self):
-        new_ids = self.merger.run(self._signal[self.processes["merger"]])
-        for name, ids in new_ids.items():
-            self._writer.write("/postprocessing/cell_info/" + name, ids)
+    def run_prepost(self):
+        """Important processes run before normal post-processing ones"""
+        merge_events = self.merger.run(self._signal[self.processes["merger"]])
+
+        with h5py.File(self.filename, "r") as f:
+            prev_idchanges = self._signal.get_id_changes()
+
+        changes_history = prev_idchanges + merge_events + picks
+        self._writer.write("/id_changes", data=changes_history)
+        self._writer.write(
+            "/postprocessing/merge_events/",
+            data=merge_events,
+            meta={"source": "/cell_info/"},
+        )
+        changes_history += picks
         picks = self.picker.run(self._signal[self.processes["picker"][0]])
+        # self._writer.write()
+
+    def run(self):
+        self.run_prepost()
+
         for process, datasets in self.processes["processes"].items():
             parameters = (
                 self.process_parameters[process].from_dict(
@@ -145,7 +167,7 @@ class PostProcessor:
                 elif isinstance(dataset, str):
                     outpath = dataset[1:].replace("/", "_")
                 else:
-                    raise ("Putpath not defined", type(dataset))
+                    raise ("Outpath not defined", type(dataset))
 
                 self.write_result(
                     "/postprocessing/" + process + "/" + outpath, result, metadata={}
