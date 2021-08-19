@@ -168,7 +168,7 @@ def rec_bottom(d, k):
         return rec_bottom(d, d[k])
 
 
-def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
+def join_tracks(tracks, joinable_pairs, drop=True) -> pd.DataFrame:
     """
     Join pairs of tracks from later tps towards the start.
 
@@ -186,15 +186,12 @@ def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
 
     tmp = copy(tracks)
     for target, source in joinable_pairs:
-        tmp.loc[target] = join_track_pairs(tmp.loc[target], tmp.loc[source])
+        tmp.loc[target] = join_track_pair(tmp.loc[target], tmp.loc[source])
 
         if drop:
             tmp = tmp.drop(source)
 
     return tmp
-
-
-from copy import copy
 
 
 def join_track_pair(target, source):
