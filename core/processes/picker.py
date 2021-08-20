@@ -93,6 +93,8 @@ class picker(ProcessABC):
 
     def run(self, signals):
         for alg in self.sequence:
+            if alg == "condition":
+                pass
             self.signals = getattr(self, "pick_by_" + alg)(signals)
         return self.signals
 

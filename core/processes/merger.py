@@ -1,5 +1,5 @@
 from postprocessor.core.processes.base import ParametersABC, ProcessABC
-from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
+from postprocessor.core.functions.tracks import get_joinable
 
 
 class mergerParameters(ParametersABC):
@@ -52,7 +52,9 @@ class merger(ProcessABC):
         super().__init__(parameters)
 
     def run(self, signal):
-        merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
-        indices = (*zip(*merged.index.tolist()),)
-        names = merged.index.names
-        return {name: ids for name, ids in zip(names, indices)}
+        joinable = get_joinable(signal)
+        # merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
+        # indices = (*zip(*merged.index.tolist()),)
+        # names = merged.index.names
+        # return {name: ids for name, ids in zip(names, indices)}
+        return joinable

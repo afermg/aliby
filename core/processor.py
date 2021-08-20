@@ -27,13 +27,13 @@ class PostProcessorParameters(ParametersABC):
 
     def __init__(
         self,
-        processes={},
-        process_parameters={},
-        process_outpaths={},
+        targets={},
+        parameters={},
+        outpaths={},
     ):
-        self.processes: Dict = processes
-        self.process_parameters: Dict = process_parameters
-        self.process_outpaths: Dict = process_outpaths
+        self.targets: Dict = targets
+        self.parameters: Dict = parameters
+        self.outpaths: Dict = outpaths
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -42,7 +42,7 @@ class PostProcessorParameters(ParametersABC):
     def default(cls, kind=None):
         if kind == "defaults" or kind == None:
             return cls(
-                processes={
+                targets={
                     "prepost": {
                         "merger": "/extraction/general/None/area",
                         "picker": ["/extraction/general/None/area"],
@@ -51,9 +51,14 @@ class PostProcessorParameters(ParametersABC):
                         "dsignal": ["/extraction/general/None/area"],
                         # "savgol": ["/extraction/general/None/area"],
                     },
-                    "process_parameters": {},
-                    "process_outpaths": {},
                 },
+                parameters={
+                    "prepost": {
+                        "merger": mergerParameters.default(),
+                        "picker": pickerParameters.default(),
+                    }
+                },
+                outpaths={},
             )
 
     def to_dict(self):
@@ -68,20 +73,20 @@ class PostProcessor:
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = merger(parameters["processes"]["prepost"]["merger"])
+        self.merger = merger(parameters["parameters"]["prepost"]["merger"])
         self.picker = picker(
-            parameters=parameters["processes"]["prepost"]["picker"],
+            parameters=parameters["parameters"]["prepost"]["picker"],
             cells=Cells.from_source(filename),
         )
-        self.process_classfun = {
+        self.classfun = {
             process: self.get_process(process)
-            for process in parameters["processes"]["processes"].keys()
+            for process in parameters["targets"]["processes"].keys()
         }
-        self.process_parameters = {
+        self.parameters = {
             process: self.get_parameters(process)
-            for process in parameters["processes"]["processes"]
+            for process in parameters["targets"]["processes"]
         }
-        self.processes = parameters["processes"]
+        self.targets = parameters["targets"]
 
     @staticmethod
     def get_process(process):
@@ -103,12 +108,12 @@ class PostProcessor:
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
-        merge_events = self.merger.run(self._signal[self.prepost["merger"]])
+        merge_events = self.merger.run(self._signal[self.targets["prepost"]["merger"]])
 
-        with h5py.File(self.filename, "r") as f:
+        with h5py.File(self._filename, "r") as f:
             prev_idchanges = self._signal.get_id_changes()
 
-        changes_history = prev_idchanges + merge_events + picks
+        changes_history = prev_idchanges + [merge_events]  # + [picks]
         self._writer.write("/id_changes", data=changes_history)
         self._writer.write(
             "/postprocessing/merge_events/",
@@ -116,7 +121,7 @@ class PostProcessor:
             meta={"source": "/cell_info/"},
         )
         changes_history += picks
-        picks = self.picker.run(self._signal[self.processes["picker"][0]])
+        picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
         # self._writer.write()
 
     def run(self):
@@ -124,13 +129,11 @@ class PostProcessor:
 
         for process, datasets in self.processes["processes"].items():
             parameters = (
-                self.process_parameters[process].from_dict(
-                    self.process_parameters[process]
-                )
-                if process in self.parameters["processes"]["process_parameters"]
-                else self.process_parameters[process].default()
+                self.parameters[process].from_dict(self.parameters[process])
+                if process in self.parameters["processes"]["parameters"]
+                else self.parameters[process].default()
             )
-            loaded_process = self.process_classfun[process](parameters)
+            loaded_process = self.classfun[process](parameters)
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
                     signal = [self._signal[d] for d in dataset]
@@ -141,8 +144,8 @@ class PostProcessor:
 
                 result = loaded_process.run(signal)
 
-                if process in self.parameters.to_dict()["process_outpaths"]:
-                    outpath = self.parameters.to_dict()["process_outpaths"][process]
+                if process in self.parameters.to_dict()["outpaths"]:
+                    outpath = self.parameters.to_dict()["outpaths"][process]
                 elif isinstance(dataset, list):
                     # If no outpath defined, place the result in the minimum common
                     # branch of all signals used
