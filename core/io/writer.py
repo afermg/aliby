@@ -85,6 +85,10 @@ class Writer(BridgeH5):
         dset[()] = narray
 
     @staticmethod
+    def write_dynamic(f: h5py.File, path: str, data: Iterable):
+        pass
+
+    @staticmethod
     def write_df(f, path, df):
         if path not in f:
             f.create_group(path)  # TODO check if we can remove this

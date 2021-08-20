@@ -1,3 +1,4 @@
+from itertools import accumulate
 from more_itertools import first_true
 
 import h5py
@@ -15,10 +16,12 @@ class Signal(BridgeH5):
         super().__init__(file, flag=None)
 
     def __getitem__(self, dataset):
+        changes = self.get_id_changes()
         with h5py.File(self.filename, "r") as f:
             print("Reading from ", dataset)
             if isinstance(dataset, str):
-                return self.dset_to_df(f, dataset)
+                df = self.dset_to_df(f, dataset)
+                return self.apply_changes(df, changes)
 
             elif isinstance(dataset, list):
                 is_bgd = [dset.endswith("imBackground") for dset in dataset]
@@ -35,15 +38,26 @@ class Signal(BridgeH5):
 
                 return [dset.loc[intersection] for dset in datasets]
 
-    def get_merge_events(self, signal: str):
-        # fetch merge events going up to the first level
-        paths = (*accumulate(signal.split("/"), lambda x, y: "".join([x, y])),)
-        with h5py.File(self.filename, "r") as f:
-            merge_events = first_true(
-                (f[path].attrs.get("merge_events") for path in paths)
-            )
+    def apply_changes(self, df, changes):
+        if changes:
+            for change, value in changes:
+                if change == "merge":
+                    tmp = copy(df)
+                    for target, source in value:
+                        tmp.loc[target] = join_track_pairs(
+                            tmp.loc[target], tmp.loc[source]
+                        )
 
-        return (*previous_merges, *merge_events)
+                df = tmp
+
+        return df
+
+    def get_id_changes(self):
+        # fetch merge events going up to the first level
+        with h5py.File(self.filename, "r") as f:
+            id_changes = f.get("/id_changes", [])[()]
+
+        return id_changes
 
     @staticmethod
     def dset_to_df(f, dataset):
