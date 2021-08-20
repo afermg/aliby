@@ -27,14 +27,10 @@ class PostProcessorParameters(ParametersABC):
 
     def __init__(
         self,
-        merger=None,
-        picker=None,
         processes={},
         process_parameters={},
         process_outpaths={},
     ):
-        self.merger: mergerParameters = merger
-        self.picker: pickerParameters = picker
         self.processes: Dict = processes
         self.process_parameters: Dict = process_parameters
         self.process_outpaths: Dict = process_outpaths
@@ -46,8 +42,6 @@ class PostProcessorParameters(ParametersABC):
     def default(cls, kind=None):
         if kind == "defaults" or kind == None:
             return cls(
-                merger=mergerParameters.default(),
-                picker=pickerParameters.default(),
                 processes={
                     "prepost": {
                         "merger": "/extraction/general/None/area",
@@ -74,9 +68,9 @@ class PostProcessor:
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = merger(parameters["prepost"]["merger"])
+        self.merger = merger(parameters["processes"]["prepost"]["merger"])
         self.picker = picker(
-            parameters=parameters["prepost"]["picker"],
+            parameters=parameters["processes"]["prepost"]["picker"],
             cells=Cells.from_source(filename),
         )
         self.process_classfun = {
@@ -109,7 +103,7 @@ class PostProcessor:
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
-        merge_events = self.merger.run(self._signal[self.processes["merger"]])
+        merge_events = self.merger.run(self._signal[self.prepost["merger"]])
 
         with h5py.File(self.filename, "r") as f:
             prev_idchanges = self._signal.get_id_changes()
