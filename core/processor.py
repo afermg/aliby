@@ -74,15 +74,16 @@ class PostProcessor:
 
         # self.outpaths = parameters["outpaths"]
         self.merger = merger(parameters["parameters"]["prepost"]["merger"])
+
         self.picker = picker(
             parameters=parameters["parameters"]["prepost"]["picker"],
             cells=Cells.from_source(filename),
         )
         self.classfun = {
             process: self.get_process(process)
-            for process in parameters["targets"]["processes"].keys()
+            for process in parameters["targets"]["processes"]
         }
-        self.parameters = {
+        self.parameters_classfun = {
             process: self.get_parameters(process)
             for process in parameters["targets"]["processes"]
         }
@@ -115,24 +116,27 @@ class PostProcessor:
 
         changes_history = prev_idchanges + [merge_events]  # + [picks]
         self._writer.write("/id_changes", data=changes_history)
-        self._writer.write(
-            "/postprocessing/merge_events/",
-            data=merge_events,
-            meta={"source": "/cell_info/"},
-        )
-        changes_history += picks
-        picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
+        # self._writer.write(
+        #     "/postprocessing/merge_events/",
+        #     data=merge_events,
+        #     meta={"source": "/cell_info/"},
+        # )
+        # changes_history += picks
+        # picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
         # self._writer.write()
 
     def run(self):
         self.run_prepost()
 
-        for process, datasets in self.processes["processes"].items():
-            parameters = (
-                self.parameters[process].from_dict(self.parameters[process])
-                if process in self.parameters["processes"]["parameters"]
-                else self.parameters[process].default()
-            )
+        for process, datasets in self.targets["processes"].items():
+            if process in self.parameters["parameters"].get(
+                "processes", {}
+            ):  # If we assigned parameters
+                parameters = self.parameters_classfun[process](self.parameters[process])
+
+            else:
+                parameters = self.parameters_classfun[process].default()
+
             loaded_process = self.classfun[process](parameters)
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
