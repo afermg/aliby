@@ -23,6 +23,8 @@ from logfile_parser import Parser
 from core.timelapse import TimelapseOMERO, TimelapseLocal
 from core.utils import accumulate
 
+from core.io.writer import Writer
+
 logger = logging.getLogger(__name__)
 
 

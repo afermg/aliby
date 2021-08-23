@@ -15,6 +15,9 @@ from core.traps import identify_trap_locations, get_trap_timelapse, \
     get_traps_timepoint, centre, get_trap_timelapse_omero
 from core.utils import accumulate, get_store_path
 
+from core.io.writer import Writer
+from core.io.metadata_parser import parse_logfiles
+
 trap_template_directory = Path(__file__).parent / 'trap_templates'
 # TODO do we need multiple templates, one for each setup?
 trap_template = np.load(trap_template_directory / 'trap_prime.npy')
@@ -305,6 +308,17 @@ class TimelapseTiler:
         store_file = get_store_path(save_dir, store, position)
         # TODO remove
         print(f'Tiler: Running {position} to {store_file}')
+        # ADD METADATA
+        metadata_writer = Writer(store_file)
+        #metadata_dict = {'baz': 69} # replace this with the actual dict storing metadata
+
+        metadata_dict = parse_logfiles(save_dir)
+
+        # intend to point to root rather than creating a new group called
+        # metadata, but somehow doesn't work -- may need to modify Writer.
+        metadata_writer.write(path = 'metadata',
+                              meta = metadata_dict,
+                              overwrite = True,)
         with h5py.File(store_file, 'a') as h5:
             store = h5.require_group('/trap_info/')
             # RUN TRAP INFO
