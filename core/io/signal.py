@@ -1,5 +1,6 @@
 from itertools import accumulate
-from more_itertools import first_true
+
+# from more_itertools import first_true
 
 import h5py
 import pandas as pd
@@ -90,15 +91,31 @@ class Signal(BridgeH5):
             )
 
     @staticmethod
-    def _if_ext_or_post(name):
-        if name.startswith("extraction") or name.startswith("postprocessing"):
-            if len(name.split("/")) > 3:
-                return name
+    def _if_ext_or_post(name, *args):
+        flag = False
+        if name.startswith("extraction") and len(name.split("/")) == 4:
+            flag = True
+        elif name.startswith("postprocessing") and len(name.split("/")) == 3:
+            flag = True
+
+        if flag:
+            print(name)
+
+    @staticmethod
+    def _if_id_changes(name: str, *args):
+        if name.startswith("id_changes"):
+            print(name)
 
     @property
     def datasets(self):
         with h5py.File(self.filename, "r") as f:
-            dsets = f.visit(self._if_ext_or_post)
+            dsets = f.visititems(self._if_ext_or_post)
+        return dsets
+
+    @property
+    def merge_events(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_id_changes)
         return dsets
 
 
