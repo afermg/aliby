@@ -313,7 +313,7 @@ def get_closest_pairs(pre: List[float], post: List[float], tol: Union[float, int
     result = dMetric[ids] / norm
     ids = ids if len(pre) < len(post) else ids[::-1]
 
-    return [idx for idx, res in zip(zip(*ids), result) if res < tol]
+    return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
 
 
 def solve_matrix(dMetric):
