@@ -102,9 +102,10 @@ class Signal(BridgeH5):
             print(name)
 
     @staticmethod
-    def _if_id_changes(name: str, *args):
-        if name.startswith("id_changes"):
-            print(name)
+    def _if_id_changes(name: str, obj):
+        # if name.startswith("id_changes"):
+        if isinstance(obj, h5py.Dataset) and name.startswith("id_changes"):
+            print("{} merge events".format(sum([len(x) for x in obj[()]])))
 
     @property
     def datasets(self):
@@ -113,14 +114,7 @@ class Signal(BridgeH5):
         return dsets
 
     @property
-    def merge_events(self):
+    def n_id_changes(self):
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_id_changes)
         return dsets
-
-
-# s = Signal(
-#     "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5"
-# )
-
-# s.dataset_to_df(s._hdf, "/extraction/em_ratio_bgsub/np_max/median")
