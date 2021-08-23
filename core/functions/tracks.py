@@ -217,19 +217,25 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
 
     """
 
-    clean = clean_tracks(tracks, min_len=window + 1, min_gr=0.9)  # get useful tracks
-    contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
-    contig = contig.loc[contig.apply(len) > 0]
+    # Commented because we are not smoothing in this step yet
     # candict = {k:v for d in contig.values for k,v in d.items()}
 
     # smooth all relevant tracks
 
-    linear = set([k for v in contig.values for i in v for j in i for k in j])
     if smooth:  # Apply savgol filter TODO fix nans affecting edge placing
+        clean = clean_tracks(
+            tracks, min_len=window + 1, min_gr=0.9
+        )  # get useful tracks
         savgol_on_srs = lambda x: non_uniform_savgol(x.index, x.values, window, degree)
+        contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
+        contig = contig.loc[contig.apply(len) > 0]
+        linear = set([k for v in contig.values for i in v for j in i for k in j])
         smoothed_tracks = clean.loc[linear].apply(savgol_on_srs, 1)
     else:
-        smoothed_tracks = clean.loc[linear].apply(lambda x: np.array(x.values), axis=1)
+        contig = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
+        contig = contig.loc[contig.apply(len) > 0]
+        linear = set([k for v in contig.values for i in v for j in i for k in j])
+        smoothed_tracks = tracks.loc[linear].apply(lambda x: np.array(x.values), axis=1)
 
     # fetch edges from ids TODO (IF necessary, here we can compare growth rates)
     idx_to_edge = lambda preposts: [
