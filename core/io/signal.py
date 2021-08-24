@@ -1,9 +1,11 @@
+from copy import copy
 from itertools import accumulate
 
 # from more_itertools import first_true
 
 import h5py
 import pandas as pd
+from utils_find_1st import find_1st, cmp_larger
 
 from core.io.base import BridgeH5
 
@@ -22,7 +24,7 @@ class Signal(BridgeH5):
             print("Reading from ", dataset)
             if isinstance(dataset, str):
                 df = self.dset_to_df(f, dataset)
-                return self.apply_changes(df, changes)
+                return self.apply_prepost(df, changes)
 
             elif isinstance(dataset, list):
                 is_bgd = [dset.endswith("imBackground") for dset in dataset]
@@ -39,15 +41,14 @@ class Signal(BridgeH5):
 
                 return [dset.loc[intersection] for dset in datasets]
 
-    def apply_changes(self, df, changes):
-        if changes:
-            for change, value in changes:
-                if change == "merge":
-                    tmp = copy(df)
-                    for target, source in value:
-                        tmp.loc[target] = join_track_pairs(
-                            tmp.loc[target], tmp.loc[source]
-                        )
+    def apply_prepost(self, df, changes):
+        if len(changes):
+
+            tmp = copy(df)
+            for target, source in changes:
+                tmp.loc[tuple(target)] = self.join_tracks_pair(
+                    tmp.loc[tuple(target)], tmp.loc[tuple(source)]
+                )
 
                 df = tmp
 
@@ -56,7 +57,9 @@ class Signal(BridgeH5):
     def get_id_changes(self):
         # fetch merge events going up to the first level
         with h5py.File(self.filename, "r") as f:
-            id_changes = f.get("/id_changes", [])[()]
+            id_changes = f.get("id_changes", [])
+            if not isinstance(id_changes, list):
+                id_changes = id_changes[()]
 
         return id_changes
 
@@ -102,9 +105,10 @@ class Signal(BridgeH5):
             print(name)
 
     @staticmethod
-    def _if_id_changes(name: str, *args):
-        if name.startswith("id_changes"):
-            print(name)
+    def _if_id_changes(name: str, obj):
+        # if name.startswith("id_changes"):
+        if isinstance(obj, h5py.Dataset) and name.startswith("id_changes"):
+            print("{} merge events".format(len(obj[()])))
 
     @property
     def datasets(self):
@@ -113,14 +117,14 @@ class Signal(BridgeH5):
         return dsets
 
     @property
-    def merge_events(self):
+    def n_id_changes(self):
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_id_changes)
         return dsets
 
-
-# s = Signal(
-#     "/shared_libs/pipeline-core/scripts/pH_calibration_dual_phl__ura8__by4741__01/ph_5_29_025store.h5"
-# )
-
-# s.dataset_to_df(s._hdf, "/extraction/em_ratio_bgsub/np_max/median")
+    @staticmethod
+    def join_tracks_pair(target, source):
+        tgt_copy = copy(target)
+        end = find_1st(target.values[::-1], 0, cmp_larger)
+        tgt_copy.iloc[-end:] = source.iloc[-end:].values
+        return tgt_copy
