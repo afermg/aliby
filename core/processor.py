@@ -117,8 +117,6 @@ class PostProcessor:
         changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
         self._writer.write("modifiers/merges", data=changes_history)
 
-        # changes_history += picks
-        # TODO add picks dataset
         picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
         self._writer.write("modifiers/picks", data=picks)
 
