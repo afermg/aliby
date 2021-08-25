@@ -46,9 +46,11 @@ class Signal(BridgeH5):
 
             tmp = copy(df)
             for target, source in changes:
-                tmp.loc[tuple(target)] = self.join_tracks_pair(
-                    tmp.loc[tuple(target)], tmp.loc[tuple(source)]
+                df.loc[tuple(target)] = self.join_tracks_pair(
+                    df.loc[tuple(target)], tmp.loc[tuple(source)]
                 )
+                tmp.drop(tuple(source), inplace=True)
+                # df.drop(tuple(source), inplace=True)
 
                 df = tmp
 
@@ -57,7 +59,7 @@ class Signal(BridgeH5):
     def get_id_changes(self):
         # fetch merge events going up to the first level
         with h5py.File(self.filename, "r") as f:
-            id_changes = f.get("id_changes", [])
+            id_changes = f.get("modifiers/id_changes", [])
             if not isinstance(id_changes, list):
                 id_changes = id_changes[()]
 
@@ -106,9 +108,13 @@ class Signal(BridgeH5):
 
     @staticmethod
     def _if_id_changes(name: str, obj):
-        # if name.startswith("id_changes"):
-        if isinstance(obj, h5py.Dataset) and name.startswith("id_changes"):
-            print("{} merge events".format(len(obj[()])))
+        if isinstance(obj, h5py.Dataset) and name.startswith("modifiers/id_changes"):
+            return obj[()]
+
+    @staticmethod
+    def _if_picks(name: str, obj):
+        if isinstance(obj, h5py.Group) and name.endswith("picks"):
+            return obj[()]
 
     @property
     def datasets(self):
@@ -117,9 +123,25 @@ class Signal(BridgeH5):
         return dsets
 
     @property
-    def n_id_changes(self):
+    def datasets(self):
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_id_changes)
+        return dsets
+
+    @property
+    def n_id_changes(self):
+        print("{} merge events".format(len(self.id_changes)))
+
+    @property
+    def id_changes(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_id_changes)
+        return dsets
+
+    @property
+    def picks(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_picks)
         return dsets
 
     @staticmethod
