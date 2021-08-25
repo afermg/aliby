@@ -112,7 +112,7 @@ class PostProcessor:
         merge_events = self.merger.run(self._signal[self.targets["prepost"]["merger"]])
 
         with h5py.File(self._filename, "r") as f:
-            prev_idchanges = self._signal.get_id_changes()
+            prev_idchanges = self._signal.get_merges()
 
         changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
         self._writer.write("modifiers/id_changes", data=changes_history)
