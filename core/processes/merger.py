@@ -45,7 +45,7 @@ class mergerParameters(ParametersABC):
 
 class merger(ProcessABC):
     """
-    TODO Integrate functions/tracks.py inside this class?
+    TODO check why it needs to be run a few times to complete the merging
     """
 
     def __init__(self, parameters):

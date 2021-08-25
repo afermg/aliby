@@ -115,16 +115,12 @@ class PostProcessor:
             prev_idchanges = self._signal.get_id_changes()
 
         changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
-        self._writer.write("id_changes", data=changes_history)
-        # self._writer.write(
-        #     "/postprocessing/merge_events/",
-        #     data=merge_events,
-        #     meta={"source": "/cell_info/"},
-        # )
+        self._writer.write("modifiers/id_changes", data=changes_history)
+
         # changes_history += picks
         # TODO add picks dataset
-        # picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
-        # self._writer.write()
+        picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
+        self._writer.write("modifiers/picks", data=picks)
 
     def run(self):
         self.run_prepost()
