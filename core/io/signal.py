@@ -31,12 +31,6 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 return [self.apply_prepost(dset) for dset in dataset]
 
-                # indices = [dset.index for dset in datasets]
-                # intersection = indices[0]
-                # for index in indices[1:]:
-                #     intersection = intersection.intersection(index)
-                # id_intersect = [dset.loc[intersection] for dset in datasets]
-
     def apply_prepost(self, dataset: str):
         merges = self.get_merges()  # TODO pass as an argument instead?
         with h5py.File(self.filename, "r") as f:
@@ -58,7 +52,7 @@ class Signal(BridgeH5):
         return dsets
 
     @property
-    def datasets(self):
+    def merges(self):
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_merges)
         return dsets
@@ -104,8 +98,8 @@ class Signal(BridgeH5):
 
     def get_picks(self, levels):
         with h5py.File(self.filename, "r") as f:
-            if "modifier/picker" in f:
-                return zip(*[f["modifier/picker/" + level] for level in levels])
+            if "modifiers/picks" in f:
+                return list(zip(*[f["modifiers/picks/" + level] for level in levels]))
             else:
                 return None
 
