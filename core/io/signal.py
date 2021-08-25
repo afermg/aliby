@@ -19,29 +19,67 @@ class Signal(BridgeH5):
         super().__init__(file, flag=None)
 
     def __getitem__(self, dataset):
-        changes = self.get_id_changes()
+
+        if isinstance(dataset, str):
+            return self.apply_prepost(dataset)
+
+        elif isinstance(dataset, list):
+            is_bgd = [dset.endswith("imBackground") for dset in dataset]
+            assert sum(is_bgd) == 0 or sum(is_bgd) == len(
+                dataset
+            ), "Trap data and cell data can't be mixed"
+            with h5py.File(self.filename, "r") as f:
+                return [self.apply_prepost(dset) for dset in dataset]
+
+                # indices = [dset.index for dset in datasets]
+                # intersection = indices[0]
+                # for index in indices[1:]:
+                #     intersection = intersection.intersection(index)
+                # id_intersect = [dset.loc[intersection] for dset in datasets]
+
+    def apply_prepost(self, dataset: str):
+        merges = self.get_merges()  # TODO pass as an argument instead?
         with h5py.File(self.filename, "r") as f:
             print("Reading from ", dataset)
-            if isinstance(dataset, str):
-                df = self.dset_to_df(f, dataset)
-                return self.apply_prepost(df, changes)
+            df = self.dset_to_df(f, dataset)
+            merged = self.apply_merge(df, merges)
 
-            elif isinstance(dataset, list):
-                is_bgd = [dset.endswith("imBackground") for dset in dataset]
-                assert sum(is_bgd) == 0 or sum(is_bgd) == len(
-                    dataset
-                ), "Trap data and cell data can't be mixed"
+        picks = self.get_picks(merged.index.names)
 
-                datasets = [self.dset_to_df(f, dset) for dset in dataset]
+        if picks:
+            return merged.loc[picks]
+        else:
+            return merged
 
-                indices = [dset.index for dset in datasets]
-                intersection = indices[0]
-                for index in indices[1:]:
-                    intersection = intersection.intersection(index)
+    @property
+    def datasets(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_ext_or_post)
+        return dsets
 
-                return [dset.loc[intersection] for dset in datasets]
+    @property
+    def datasets(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_merges)
+        return dsets
 
-    def apply_prepost(self, df, changes):
+    @property
+    def n_merges(self):
+        print("{} merge events".format(len(self.merges)))
+
+    @property
+    def merges(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_merges)
+        return dsets
+
+    @property
+    def picks(self):
+        with h5py.File(self.filename, "r") as f:
+            dsets = f.visititems(self._if_picks)
+        return dsets
+
+    def apply_merge(self, df, changes):
         if len(changes):
 
             tmp = copy(df)
@@ -50,20 +88,26 @@ class Signal(BridgeH5):
                     df.loc[tuple(target)], tmp.loc[tuple(source)]
                 )
                 tmp.drop(tuple(source), inplace=True)
-                # df.drop(tuple(source), inplace=True)
 
                 df = tmp
 
         return df
 
-    def get_id_changes(self):
+    def get_merges(self):
         # fetch merge events going up to the first level
         with h5py.File(self.filename, "r") as f:
-            id_changes = f.get("modifiers/id_changes", [])
-            if not isinstance(id_changes, list):
-                id_changes = id_changes[()]
+            merges = f.get("modifiers/merges", [])
+            if not isinstance(merges, list):
+                merges = merges[()]
 
-        return id_changes
+        return merges
+
+    def get_picks(self, levels):
+        with h5py.File(self.filename, "r") as f:
+            if "modifier/picker" in f:
+                return zip(*[f["modifier/picker/" + level] for level in levels])
+            else:
+                return None
 
     @staticmethod
     def dset_to_df(f, dataset):
@@ -107,42 +151,14 @@ class Signal(BridgeH5):
             print(name)
 
     @staticmethod
-    def _if_id_changes(name: str, obj):
-        if isinstance(obj, h5py.Dataset) and name.startswith("modifiers/id_changes"):
+    def _if_merges(name: str, obj):
+        if isinstance(obj, h5py.Dataset) and name.startswith("modifiers/merges"):
             return obj[()]
 
     @staticmethod
     def _if_picks(name: str, obj):
         if isinstance(obj, h5py.Group) and name.endswith("picks"):
             return obj[()]
-
-    @property
-    def datasets(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_ext_or_post)
-        return dsets
-
-    @property
-    def datasets(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_id_changes)
-        return dsets
-
-    @property
-    def n_id_changes(self):
-        print("{} merge events".format(len(self.id_changes)))
-
-    @property
-    def id_changes(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_id_changes)
-        return dsets
-
-    @property
-    def picks(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_picks)
-        return dsets
 
     @staticmethod
     def join_tracks_pair(target, source):
