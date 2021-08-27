@@ -40,7 +40,7 @@ class Signal(BridgeH5):
 
         picks = self.get_picks(merged.index.names)
 
-        if picks:
+        if picks is not None:
             return merged.loc[picks]
         else:
             return merged
@@ -76,16 +76,17 @@ class Signal(BridgeH5):
     def apply_merge(self, df, changes):
         if len(changes):
 
-            tmp = copy(df)
             for target, source in changes:
                 df.loc[tuple(target)] = self.join_tracks_pair(
-                    df.loc[tuple(target)], tmp.loc[tuple(source)]
+                    df.loc[tuple(target)], df.loc[tuple(source)]
                 )
-                tmp.drop(tuple(source), inplace=True)
-
-                df = tmp
+                df.drop(tuple(source), inplace=True)
 
         return df
+
+    def get_raw(self, dataset):
+        with h5py.File(self.filename, "r") as f:
+            return self.dset_to_df(f, dataset)
 
     def get_merges(self):
         # fetch merge events going up to the first level
