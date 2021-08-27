@@ -1,6 +1,7 @@
 from pathlib import Path, PosixPath
 from typing import Union
 from itertools import groupby
+from collections.abc import Iterable
 
 import h5py
 import numpy as np
@@ -236,7 +237,7 @@ class CellsMat(Cells):
             # Return dict for compatibility with hdf5 output
         return {i: v for i, v in enumerate(segmentations)}
 
-    def labels_at_time(tp):
+    def labels_at_time(self, tp):
         labels = self.trap_info["cellLabel"]
         labels = [_aslist(x) for x in labels[tp]]
         labels = {i: [lbl for lbl in lblset] for i, lblset in enumerate(labels)}
@@ -273,3 +274,4 @@ def _aslist(x):
             x = x.tolist()
     else:
         x = [x]
+    return x
