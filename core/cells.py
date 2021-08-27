@@ -88,6 +88,10 @@ class CellsHDF(Cells):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
     @property
+    def ntraps(self):
+        return len(self._file["/trap_info/trap_locations"][()])
+
+    @property
     def traps(self):
         return list(set(self["trap"]))
 
@@ -126,7 +130,7 @@ class CellsHDF(Cells):
         iterator = groupby(zip(traps, data), lambda x: x[0])
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}
-        return list(d.values())
+        return d
 
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
@@ -225,10 +229,15 @@ class CellsMat(Cells):
                 [self._astype(y, type) for y in x["segmented"]] if x.ndim != 0 else []
                 for x in self.trap_info["cell"][timepoint]
             ]
-        return segmentations
+            # Return dict for compatibility with hdf5 output
+        return {i: v for i, v in enumerate(segmentations)}
 
     def to_hdf(self):
         pass
+
+    @property
+    def ntraps(self):
+        return len(self.trap_info["cellLabel"][0])
 
 
 class ExtractionRunner:
