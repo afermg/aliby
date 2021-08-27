@@ -142,6 +142,10 @@ class CellsHDF(Cells):
         return self.group_by_traps(traps, labels)
 
     @property
+    def tile_size(self):  # TODO read from metadata
+        pass
+
+    @property
     def close(self):
         self._file.close()
 
@@ -232,12 +236,19 @@ class CellsMat(Cells):
             # Return dict for compatibility with hdf5 output
         return {i: v for i, v in enumerate(segmentations)}
 
-    def to_hdf(self):
-        pass
+    def labels_at_time(tp):
+        labels = self.trap_info["cellLabel"]
+        labels = [_aslist(x) for x in labels[tp]]
+        labels = {i: [lbl for lbl in lblset] for i, lblset in enumerate(labels)}
+        return labels
 
     @property
     def ntraps(self):
         return len(self.trap_info["cellLabel"][0])
+
+    @property
+    def tile_size(self):
+        pass
 
 
 class ExtractionRunner:
@@ -254,3 +265,11 @@ class ExtractionRunner:
 
     def run(self, keys, store, **kwargs):
         pass
+
+
+def _aslist(x):
+    if isinstance(x, Iterable):
+        if hasattr(x, "tolist"):
+            x = x.tolist()
+    else:
+        x = [x]
