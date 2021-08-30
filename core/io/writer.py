@@ -54,6 +54,8 @@ class Writer(BridgeH5):
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
         if isinstance(data, pd.DataFrame):
             self.write_df(f, path, data)
+        elif isinstance(data, pd.MultiIndex):
+            self.write_index(f, path, data)
         elif isinstance(data, Iterable):
             self.write_arraylike(f, path, data)
         else:
@@ -87,6 +89,16 @@ class Writer(BridgeH5):
     @staticmethod
     def write_dynamic(f: h5py.File, path: str, data: Iterable):
         pass
+
+    @staticmethod
+    def write_index(f, path, pd_index):
+        if path not in f:
+            f.create_group(path)  # TODO check if we can remove this
+        for name, ids in zip(pd_index.names, pd_index.values):
+            id_path = path + "/" + name
+            f.create_dataset(name=id_path, shape=ids.shape, dtype=df.dtypes[0])
+            indices = f[id_path]
+            indices[()] = ids
 
     @staticmethod
     def write_df(f, path, df):
