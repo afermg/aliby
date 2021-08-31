@@ -41,9 +41,12 @@ class Writer(BridgeH5):
                 self.deldset(f, path)
             else:  # Add a number if needed
                 if path in f:
-                    parent, name = path.rsplit("/", maxsplit=1)
-                    n = sum([x.startswith(name) for x in f[path]])
-                    path = path + str(n).zfill(3)
+                    if path == '/': # bypass if path is root
+                        pass
+                    else:
+                        parent, name = path.rsplit("/", maxsplit=1)
+                        n = sum([x.startswith(name) for x in f[path]])
+                        path = path + str(n).zfill(3)
 
             # f.create_group(path)
             print(

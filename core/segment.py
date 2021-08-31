@@ -345,17 +345,13 @@ class TimelapseTiler:
         # Initialise the store
         store_file = get_store_path(save_dir, store, position)
         # TODO remove
-
         print(f'Tiler: Running {position} to {store_file}')
         # ADD METADATA
         metadata_writer = Writer(store_file)
         metadata_dict = parse_logfiles(save_dir)
-
-        # intend to point to root rather than creating a new group called
-        # metadata, but somehow doesn't work -- may need to modify Writer.
-        metadata_writer.write(path = 'metadata',
+        metadata_writer.write(path = '/',
                               meta = metadata_dict,
-                              overwrite = True,)
+                              overwrite = False,)
         with h5py.File(store_file, 'a') as h5:
             store = h5.require_group('/trap_info/')
         print(f"Tiler: Running {position} to {store_file}")
