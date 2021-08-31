@@ -9,10 +9,6 @@ pytest.mark.skip(reason='All tests still WIP')
 # Todo: data needed: a Shelf storage
 class TestPipeline:
     def test_experiment(self):
-        """
-        Ensure that the regular experiment just saves the corresponding
-        position into the database
-        """
         pass
 
     def test_omero_experiment(self):

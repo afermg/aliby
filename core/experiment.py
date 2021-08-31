@@ -25,6 +25,74 @@ from core.utils import accumulate
 
 logger = logging.getLogger(__name__)
 
+########################### Dask objects ###################################
+##################### ENVIRONMENT INITIALISATION ################
+import omero
+from omero.gateway import BlitzGateway, PixelsWrapper
+from omero.model import enums as omero_enums
+import numpy as np
+
+# Set up the pixels so that we can reuse them across sessions (?)
+PIXEL_TYPES = {
+    omero_enums.PixelsTypeint8: np.int8,
+    omero_enums.PixelsTypeuint8: np.uint8,
+    omero_enums.PixelsTypeint16: np.int16,
+    omero_enums.PixelsTypeuint16: np.uint16,
+    omero_enums.PixelsTypeint32: np.int32,
+    omero_enums.PixelsTypeuint32: np.uint32,
+    omero_enums.PixelsTypefloat: np.float32,
+    omero_enums.PixelsTypedouble: np.float64,
+}
+
+class NonCachedPixelsWrapper(PixelsWrapper):
+    """Extend gateway.PixelWrapper to override _prepareRawPixelsStore."""
+
+    def _prepareRawPixelsStore(self):
+        """
+        Creates RawPixelsStore and sets the id etc
+        This overrides the superclass behaviour to make sure that
+        we don't re-use RawPixelStore in multiple processes since
+        the Store may be closed in 1 process while still needed elsewhere.
+        This is needed when napari requests may planes simultaneously,
+        e.g. when switching to 3D view.
+        """
+        ps = self._conn.c.sf.createRawPixelsStore()
+        ps.setPixelsId(self._obj.id.val, True, self._conn.SERVICE_OPTS)
+        return ps
+
+
+omero.gateway.PixelsWrapper = NonCachedPixelsWrapper
+# Update the BlitzGateway to use our NonCachedPixelsWrapper
+omero.gateway.refreshWrappers()
+
+
+######################  DATA ACCESS ###################
+import dask.array as da
+from dask import delayed
+def get_data_lazy(image) -> da.Array:
+    """Get 5D dask array, with delayed reading from OMERO image."""
+    nt, nc, nz, ny, nx = [getattr(image, f'getSize{x}')() for x in 'TCZYX']
+    pixels = image.getPrimaryPixels()
+    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
+    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
+
+    def get_lazy_plane(zct):
+        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
+
+    # 5D stack: TCZXY
+    t_stacks = []
+    for t in range(nt):
+        c_stacks = []
+        for c in range(nc):
+            z_stack = []
+            for z in range(nz):
+                z_stack.append(get_lazy_plane((z, c, t)))
+            c_stacks.append(da.stack(z_stack))
+        t_stacks.append(da.stack(c_stacks))
+    return da.stack(t_stacks)
+
+
+########################### Old Objects ####################################
 
 class Experiment(abc.ABC):
     """
