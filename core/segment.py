@@ -7,17 +7,22 @@ import h5py
 from skimage import feature
 import numpy as np
 import pandas as pd
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 from core.timelapse import TimelapseOMERO
 from core.io.matlab import matObject
-from core.traps import identify_trap_locations, get_trap_timelapse, \
-    get_traps_timepoint, centre, get_trap_timelapse_omero
+from core.traps import (
+    identify_trap_locations,
+    get_trap_timelapse,
+    get_traps_timepoint,
+    centre,
+    get_trap_timelapse_omero,
+)
 from core.utils import accumulate, get_store_path
 
-trap_template_directory = Path(__file__).parent / 'trap_templates'
+trap_template_directory = Path(__file__).parent / "trap_templates"
 # TODO do we need multiple templates, one for each setup?
-trap_template = np.load(trap_template_directory / 'trap_prime.npy')
+trap_template = np.load(trap_template_directory / "trap_prime.npy")
 
 
 def get_tile_shapes(x, tile_size, max_shape):
@@ -47,21 +52,23 @@ class Tiler:
     def __getitem__(self, pos):
         # Can ask for a position
         if pos not in self.pos_mapper.keys():
-            if self.local: # Use local version
+            if self.local:  # Use local version
                 annotation = self.local
             else:
-                annotation = self.expt.get_position(pos).annotation # Returns
+                annotation = self.expt.get_position(pos).annotation  # Returns
             # none if non-existent
-            self.pos_mapper[pos] = TimelapseTiler(self.expt.get_position(pos),
-                                                  self.trap_template,
-                                                  finished=self.finished,
-                                                  annotation=annotation)
+            self.pos_mapper[pos] = TimelapseTiler(
+                self.expt.get_position(pos),
+                self.trap_template,
+                finished=self.finished,
+                annotation=annotation,
+            )
         return self.pos_mapper[pos]
 
     @property
     def trap_locations(self):
         return self.current_tiler.trap_locations
-    
+
     @property
     def n_timepoints(self):
         return self.current_tiler.n_timepoints
@@ -110,21 +117,22 @@ class Tiler:
     def get_channel_index(self, channel):
         return self.current_position.get_channel_index(channel)
 
-
     def get_trap_timelapse(self, trap_id, tile_size=96, channels=None, z=None):
-        return self.current_tiler.get_trap_timelapse(trap_id,
-                                                     tile_size=tile_size,
-                                                     channels=channels, z=z)
+        return self.current_tiler.get_trap_timelapse(
+            trap_id, tile_size=tile_size, channels=channels, z=z
+        )
 
     def get_traps_timepoint(self, tp, tile_size=96, channels=None, z=None):
-        return self.current_tiler.get_traps_timepoint(tp, tile_size=tile_size,
-                                                      channels=channels, z=z)
+        return self.current_tiler.get_traps_timepoint(
+            tp, tile_size=tile_size, channels=channels, z=z
+        )
 
     def run(self, keys, store, **kwargs):
         save_dir = self.expt.root_dir
         for pos, tps in accumulate(keys):
             self[pos].run(tps, store, save_dir, **kwargs)
         return keys
+
 
 class TrapLocations:
     def __init__(self, initial_location, initial_time=0):
@@ -145,8 +153,7 @@ class TrapLocations:
         return np.stack(self._drifts)
 
     def __getitem__(self, item):
-        return self._initial_location - np.sum(self.drifts[:item],
-                axis=0)
+        return self._initial_location - np.sum(self.drifts[:item], axis=0)
 
     def __setitem__(self, key, value):
         if key in self._timepoints:
@@ -172,7 +179,7 @@ class TimelapseTiler:
     def __init__(self, timelapse, template, finished=True, annotation=None):
         self.timelapse = timelapse
         self.trap_template = template
-        self.trap_locations = [] # Todo: make a dummy TrapLocations with len(0)
+        self.trap_locations = []  # Todo: make a dummy TrapLocations with len(0)
         self._reference = None
         if finished and not annotation:
             self.tile_timelapse()
@@ -193,21 +200,25 @@ class TimelapseTiler:
         """
         self._initialise_locations(0, channel=0)
         for i in range(1, self.timelapse.size_t):
-            self.trap_locations[i] = self._get_drift(self.trap_locations._drifts[-1], i, channel=channel)
+            self.trap_locations[i] = self._get_drift(
+                self.trap_locations._drifts[-1], i, channel=channel
+            )
         return
 
     def _initialise_locations(self, timepoint, channel=0):
         img = np.squeeze(self.timelapse[channel, timepoint, :, :, 0])
 
-        self.trap_locations = TrapLocations(identify_trap_locations(
-            img, self.trap_template
-        ), timepoint)
+        self.trap_locations = TrapLocations(
+            identify_trap_locations(img, self.trap_template), timepoint
+        )
         self._reference = centre(img)
 
     def _get_transform(self, timepoint, channel=0):
         # Todo: switch to this using OpenCV once it has been tested.
-        raise NotImplementedError("This function uses OpenCV and "
-                                  "has not yet been implemented.")
+        raise NotImplementedError(
+            "This function uses OpenCV and " "has not yet been implemented."
+        )
+
     #     image = centre(self.timelapse[channel, timepoint, :, :, 0])
     #     transform, _ = cv2.estimateAffinePartial2D(self._reference, image)
     #     if transform is None:
@@ -234,8 +245,17 @@ class TimelapseTiler:
         :return: drift
         """
         image = centre(np.squeeze(self.timelapse[channel, timepoint, :, :, 0]))
-        drift, _, _, = feature.register_translation(self._reference, image)
-        if any([np.abs(x-y).max() > reference_reset_drift for x,y in zip(drift, prev_drift)]):
+        (
+            drift,
+            _,
+            _,
+        ) = feature.register_translation(self._reference, image)
+        if any(
+            [
+                np.abs(x - y).max() > reference_reset_drift
+                for x, y in zip(drift, prev_drift)
+            ]
+        ):
             return np.zeros(2)
         self._reference = image
         return drift
@@ -255,15 +275,23 @@ class TimelapseTiler:
         """
         # TODO is there a better way of separating the two?
         if isinstance(self.timelapse, TimelapseOMERO):
-            return get_trap_timelapse_omero(self.timelapse,
-                                  self.trap_locations,
-                                  trap_id, tile_size=tile_size,
-                                  channels=channels, z=z, t=t)
-        return get_trap_timelapse(self.timelapse,
-                                  self.trap_locations,
-                                  trap_id, tile_size=tile_size,
-                                  channels=channels, z=z)
-
+            return get_trap_timelapse_omero(
+                self.timelapse,
+                self.trap_locations,
+                trap_id,
+                tile_size=tile_size,
+                channels=channels,
+                z=z,
+                t=t,
+            )
+        return get_trap_timelapse(
+            self.timelapse,
+            self.trap_locations,
+            trap_id,
+            tile_size=tile_size,
+            channels=channels,
+            z=z,
+        )
 
     def get_traps_timepoint(self, tp, tile_size=96, channels=None, z=None):
         """
@@ -275,21 +303,29 @@ class TimelapseTiler:
         :return: A numpy array with the traps in the (trap, C, T, X, Y,
         Z) order
         """
-        return get_traps_timepoint(self.timelapse,
-                                   self.trap_locations,
-                                   tp, tile_size=tile_size, channels=channels,
-                                   z=z)
+        return get_traps_timepoint(
+            self.timelapse,
+            self.trap_locations,
+            tp,
+            tile_size=tile_size,
+            channels=channels,
+            z=z,
+        )
 
     def _check_contiguous_time(self, timepoints):
         # Fixme check fails
         if max(timepoints) < self.n_timepoints:
-            warnings.warn("Requested timepoints {} but timepoints already "
-                             "processed until time {}"
-                             ".".format(timepoints, self.n_timepoints))
+            warnings.warn(
+                "Requested timepoints {} but timepoints already "
+                "processed until time {}"
+                ".".format(timepoints, self.n_timepoints)
+            )
         contiguous = np.arange(self.n_timepoints, max(timepoints) + 1)
-        if not all([x==y for x,y in zip(contiguous,timepoints)]):
-            raise ValueError("Timepoints not contiguous: expected {}, "
-                             "got {}".format(list(contiguous), timepoints))
+        if not all([x == y for x, y in zip(contiguous, timepoints)]):
+            raise ValueError(
+                "Timepoints not contiguous: expected {}, "
+                "got {}".format(list(contiguous), timepoints)
+            )
 
     def clear_cache(self):
         self.timelapse.clear_cache()
@@ -304,40 +340,41 @@ class TimelapseTiler:
         # Initialise the store
         store_file = get_store_path(save_dir, store, position)
         # TODO remove
-        print(f'Tiler: Running {position} to {store_file}')
-        with h5py.File(store_file, 'a') as h5:
-            store = h5.require_group('/trap_info/')
+        print(f"Tiler: Running {position} to {store_file}")
+        with h5py.File(store_file, "a") as h5:
+            store = h5.require_group("/trap_info/")
             # RUN TRAP INFO
-            if 'processed_timepoints' in store:
-                processed = store['processed_timepoints']
+            if "processed_timepoints" in store:
+                processed = store["processed_timepoints"]
             else:
-                processed = store.create_dataset('processed_timepoints',
-                                                 shape=(len(timepoints),),
-                                                 maxshape=(None, ),
-                                                 dtype=np.uint16)
+                processed = store.create_dataset(
+                    "processed_timepoints",
+                    shape=(len(timepoints),),
+                    maxshape=(None,),
+                    dtype=np.uint16,
+                )
             # modify the time points based on the processed values
             timepoints = [t for t in timepoints if t not in processed]
             try:
                 max_tp = max(timepoints)
-            except ValueError: # There are no timepoints left
+            except ValueError:  # There are no timepoints left
                 return timepoints
-            if 'trap_locations' in store:
-                trap_locs = store['trap_locations'][()]
+            if "trap_locations" in store:
+                trap_locs = store["trap_locations"][()]
                 self.trap_locations._initial_location = trap_locs
             else:
                 self._initialise_locations(0)
-                store.create_dataset('trap_locations',
-                                     data=self.trap_locations[0])
+                store.create_dataset("trap_locations", data=self.trap_locations[0])
             # DRIFTS
-            if 'drifts' in store:
-                drifts = store['drifts']
+            if "drifts" in store:
+                drifts = store["drifts"]
                 # Expand the dataset to reach max_tp spots
                 if drifts.shape[0] <= max_tp:
                     drifts.resize(max_tp + 1, axis=0)
             else:  # No drifts yet
-                drifts = store.create_dataset('drifts',
-                                              shape=(max_tp + 1, 2),
-                                              maxshape=(None, 2))
+                drifts = store.create_dataset(
+                    "drifts", shape=(max_tp + 1, 2), maxshape=(None, 2)
+                )
             for tp in timepoints:
                 drift = self._get_drift(self.trap_locations._drifts[-1], tp)
                 self.trap_locations[tp] = drift
@@ -350,36 +387,36 @@ class TimelapseTiler:
             processed[timepoints] = timepoints
         return timepoints
 
+
 def from_matlab(mat_timelapse):
     """Create an initialised Timelapse Tiler from a Matlab Object"""
     if isinstance(mat_timelapse, (str, Path)):
         mat_timelapse = matObject(mat_timelapse)
-    timelapse_traps = mat_timelapse.get('timelapseTrapsOmero',
-                                       mat_timelapse.get('timelapseTraps',
-                                                         None))
+    timelapse_traps = mat_timelapse.get(
+        "timelapseTrapsOmero", mat_timelapse.get("timelapseTraps", None)
+    )
     if timelapse_traps is None:
         warnings.warn("Could not initialise from matlab")
         return None
-    # The image rotation term takes into account the fact that in 
+    # The image rotation term takes into account the fact that in
     # some experiments the images are flipped wrt to the cTimepoint data for some reason??
-    image_rotation = timelapse_traps['image_rotation']
+    image_rotation = timelapse_traps["image_rotation"]
     if image_rotation == -90:
-        order = ['ycenter', 'xcenter']
+        order = ["ycenter", "xcenter"]
     else:
-        order = ['xcenter', 'ycenter']
-        
-    mat_trap_locs = timelapse_traps['cTimepoint']['trapLocations']
+        order = ["xcenter", "ycenter"]
+
+    mat_trap_locs = timelapse_traps["cTimepoint"]["trapLocations"]
     # Rewrite into 3D array of shape (time, trap, x/y) from dictionary
     try:
-        mat_trap_locs = np.dstack([mat_trap_locs[order[0]], mat_trap_locs[
-            order[1]]])
-    except (TypeError, IndexError):            
-        mat_trap_locs = np.dstack([
-                                    [loc[order[0]] for loc in mat_trap_locs
-                                        if isinstance(loc, dict)],
-                                    [loc[order[1]] for loc in mat_trap_locs
-                                        if isinstance(loc, dict)]
-                                   ]).astype(int)
+        mat_trap_locs = np.dstack([mat_trap_locs[order[0]], mat_trap_locs[order[1]]])
+    except (TypeError, IndexError):
+        mat_trap_locs = np.dstack(
+            [
+                [loc[order[0]] for loc in mat_trap_locs if isinstance(loc, dict)],
+                [loc[order[1]] for loc in mat_trap_locs if isinstance(loc, dict)],
+            ]
+        ).astype(int)
     trap_locations = TrapLocations(initial_location=mat_trap_locs[0])
     # Get drifts TODO check order is it loc_(x+1) - loc_(x) or vice versa?
     drifts = mat_trap_locs[1:] - mat_trap_locs[:-1]
@@ -392,19 +429,18 @@ def from_matlab(mat_timelapse):
 
 
 def from_hdf(store_name):
-    with h5py.File(store_name, 'r') as store:
-        traps = store.require_group('trap_info')
-        trap_locations = TrapLocations(initial_location=traps[
-            'trap_locations'])
+    with h5py.File(store_name, "r") as store:
+        traps = store.require_group("trap_info")
+        trap_locations = TrapLocations(initial_location=traps["trap_locations"][()])
         # Drifts
-        for i, drift in enumerate(traps['drifts']):
+        for i, drift in enumerate(traps["drifts"][()]):
             trap_locations[i] = drift
-        return TrapLocations
+        return trap_locations
 
 
 def from_annotation(annotation):
     if isinstance(annotation, matObject):
         return from_matlab(annotation)
-    if isinstance(annotation, str):
+    if isinstance(annotation, str) or isinstance(annotation, PosixPath):
         return from_hdf(annotation)
     return None
