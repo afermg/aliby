@@ -10,9 +10,10 @@ from core.io.base import BridgeH5
 
 #################### Dynamic version ##################################
 
+
 class DynamicWriter:
     data_types = {}
-    group = ''
+    group = ""
     compression = None
 
     def __init__(self, file: str):
@@ -29,8 +30,13 @@ class DynamicWriter:
             # TODO Include sparsity check
             max_shape, dtype = self.datatypes[key]
             shape = (n,) + max_shape[1:]
-            hgroup.create_dataset(key, shape=shape, maxshape=max_shape,
-                                  dtype=dtype, compression=self.compression)
+            hgroup.create_dataset(
+                key,
+                shape=shape,
+                maxshape=max_shape,
+                dtype=dtype,
+                compression=self.compression,
+            )
             hgroup[key][()] = data
         else:
             # The dataset already exists, expand it
@@ -46,9 +52,9 @@ class DynamicWriter:
         max_shape, dtype = self.datatypes[key]
         if key in hgroup:
             del hgroup[key]
-        hgroup.require_dataset(key, shape=(n,),
-                               dtype=dtype,
-                               compression=self.compression)
+        hgroup.require_dataset(
+            key, shape=(n,), dtype=dtype, compression=self.compression
+        )
         hgroup[key][()] = data
 
     def _check_key(self, key):
@@ -58,15 +64,15 @@ class DynamicWriter:
     def write(self, data, overwrite: list):
         # Data is a dictionary, if not, make it one
         # Overwrite data is a dictionary
-        with h5py.File(self.file, 'a') as store:
+        with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
 
             for key, value in data.items():
                 # We're only saving data that has a pre-defined data-type
                 self._check_key(key)
                 try:
-                    if key.startswith('attrs/'):  # metadata
-                        key = key.split('/')[1]  # First thing after attrs
+                    if key.startswith("attrs/"):  # metadata
+                        key = key.split("/")[1]  # First thing after attrs
                         hgroup.attrs[key] = value
                     elif key in overwrite:
                         self._overwrite(value, key, hgroup)
@@ -81,12 +87,12 @@ class DynamicWriter:
 ##################### Special instances #####################
 class TilerWriter(DynamicWriter):
     datatypes = {
-        'trap_locations': ((None, 2), np.uint16),
-        'drifts': ((None, 2), np.float32),
-        'attrs/tile_size': ((1,), np.uint16),
-        'attrs/max_size': ((1,), np.uint16)
+        "trap_locations": ((None, 2), np.uint16),
+        "drifts": ((None, 2), np.float32),
+        "attrs/tile_size": ((1,), np.uint16),
+        "attrs/max_size": ((1,), np.uint16),
     }
-    group = 'trap_info'
+    group = "trap_info"
 
 
 tile_size = 117
@@ -94,21 +100,22 @@ tile_size = 117
 
 class BabyWriter(DynamicWriter):
     # TODO make this YAML
-    compression = 'gzip'
+    compression = "gzip"
     datatypes = {
-        'centres': ((None, 2), np.uint16),
-        'position': ((None,), np.uint16),
-        'angles': ((None,), h5py.vlen_dtype(np.float32)),
-        'radii': ((None,), h5py.vlen_dtype(np.float32)),
-        'edgemasks': ((None, tile_size, tile_size), np.bool),
-        'ellipse_dims': ((None, 2), np.float32),
-        'cell_label': ((None,), np.uint16),
-        'trap': ((None,), np.uint16),
-        'timepoint': ((None,), np.uint16),
-        'mother_assign': ((None,), h5py.vlen_dtype(np.uint16)),
-        'volumes': ((None,), np.float32)
+        "centres": ((None, 2), np.uint16),
+        "position": ((None,), np.uint16),
+        "angles": ((None,), h5py.vlen_dtype(np.float32)),
+        "radii": ((None,), h5py.vlen_dtype(np.float32)),
+        "edgemasks": ((None, tile_size, tile_size), np.bool),
+        "ellipse_dims": ((None, 2), np.float32),
+        "cell_label": ((None,), np.uint16),
+        "trap": ((None,), np.uint16),
+        "timepoint": ((None,), np.uint16),
+        "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
+        "volumes": ((None,), np.float32),
     }
-    group = 'cell_info'
+    group = "cell_info"
+
 
 #################### Extraction version ###############################
 class Writer(BridgeH5):
@@ -228,7 +235,7 @@ class Writer(BridgeH5):
             name=values_path,
             shape=df.shape,
             chunks=(min(df.shape[0], 1), df.shape[1]),
-            dtype=df.dtypes[0],
+            dtype=df.dtypes.iloc[0],
             compression=kwargs.get("compression", None),
         )
         dset = f[values_path]
