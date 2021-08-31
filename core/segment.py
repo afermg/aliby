@@ -166,7 +166,9 @@ class TrapLocations:
         return self.n_timepoints
 
     def __repr__(self):
-        pass
+        return "{} Traps, {} Timepoints, Drifts shape: {}".format(
+            self.n_traps, self.n_timepoints, self.drifts.shape
+        )
 
     def __iter__(self):
         i = 0
