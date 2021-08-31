@@ -1,6 +1,7 @@
 from pathlib import Path, PosixPath
 from typing import Union
 from itertools import groupby
+from collections.abc import Iterable
 
 import h5py
 import numpy as np
@@ -88,6 +89,10 @@ class CellsHDF(Cells):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
     @property
+    def ntraps(self):
+        return len(self._file["/trap_info/trap_locations"][()])
+
+    @property
     def traps(self):
         return list(set(self["trap"]))
 
@@ -126,7 +131,7 @@ class CellsHDF(Cells):
         iterator = groupby(zip(traps, data), lambda x: x[0])
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}
-        return list(d.values())
+        return d
 
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
@@ -136,6 +141,10 @@ class CellsHDF(Cells):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
+
+    @property
+    def tile_size(self):  # TODO read from metadata
+        pass
 
     @property
     def close(self):
@@ -225,9 +234,21 @@ class CellsMat(Cells):
                 [self._astype(y, type) for y in x["segmented"]] if x.ndim != 0 else []
                 for x in self.trap_info["cell"][timepoint]
             ]
-        return segmentations
+            # Return dict for compatibility with hdf5 output
+        return {i: v for i, v in enumerate(segmentations)}
 
-    def to_hdf(self):
+    def labels_at_time(self, tp):
+        labels = self.trap_info["cellLabel"]
+        labels = [_aslist(x) for x in labels[tp]]
+        labels = {i: [lbl for lbl in lblset] for i, lblset in enumerate(labels)}
+        return labels
+
+    @property
+    def ntraps(self):
+        return len(self.trap_info["cellLabel"][0])
+
+    @property
+    def tile_size(self):
         pass
 
 
@@ -245,3 +266,12 @@ class ExtractionRunner:
 
     def run(self, keys, store, **kwargs):
         pass
+
+
+def _aslist(x):
+    if isinstance(x, Iterable):
+        if hasattr(x, "tolist"):
+            x = x.tolist()
+    else:
+        x = [x]
+    return x

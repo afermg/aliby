@@ -18,6 +18,8 @@ class Signal(BridgeH5):
     def __init__(self, file):
         super().__init__(file, flag=None)
 
+        self.names = ["experiment", "position", "trap"]
+
     def __getitem__(self, dataset):
 
         if isinstance(dataset, str):
@@ -40,7 +42,7 @@ class Signal(BridgeH5):
 
         picks = self.get_picks(merged.index.names)
 
-        if picks:
+        if picks is not None:
             return merged.loc[picks]
         else:
             return merged
@@ -76,16 +78,17 @@ class Signal(BridgeH5):
     def apply_merge(self, df, changes):
         if len(changes):
 
-            tmp = copy(df)
             for target, source in changes:
                 df.loc[tuple(target)] = self.join_tracks_pair(
-                    df.loc[tuple(target)], tmp.loc[tuple(source)]
+                    df.loc[tuple(target)], df.loc[tuple(source)]
                 )
-                tmp.drop(tuple(source), inplace=True)
-
-                df = tmp
+                df.drop(tuple(source), inplace=True)
 
         return df
+
+    def get_raw(self, dataset):
+        with h5py.File(self.filename, "r") as f:
+            return self.dset_to_df(f, dataset)
 
     def get_merges(self):
         # fetch merge events going up to the first level
@@ -103,10 +106,9 @@ class Signal(BridgeH5):
             else:
                 return None
 
-    @staticmethod
-    def dset_to_df(f, dataset):
+    def dset_to_df(self, f, dataset):
         dset = f[dataset]
-        names = ["experiment", "position", "trap"]
+        names = copy(self.names)
         if not dataset.endswith("imBackground"):
             names.append("cell_label")
         lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
