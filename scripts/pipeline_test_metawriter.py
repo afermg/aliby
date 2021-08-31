@@ -106,3 +106,12 @@ ext = Extractor.from_object(params, object=tiler)
 tp0 = ext.extract_exp()
 
 expt.close()
+
+from postprocessor.core.processor import PostProcessor, PostProcessorParameters
+
+params = PostProcessorParameters.default()
+pp = PostProcessor(
+    expt.root_dir / f"{position_test}{store_name}",
+    params,
+)
+tmp = pp.run()
