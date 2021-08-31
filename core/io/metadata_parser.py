@@ -15,7 +15,7 @@ from logfile_parser import Parser
 # then pare down on what specific information is really useful later.
 
 # Needed because HDF5 attributes do not support dictionaries
-def flatten_dict(nested_dict, separator='__'):
+def flatten_dict(nested_dict, separator='/'):
     '''
     Flattens nested dictionary
     '''
