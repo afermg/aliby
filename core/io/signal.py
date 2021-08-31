@@ -18,6 +18,8 @@ class Signal(BridgeH5):
     def __init__(self, file):
         super().__init__(file, flag=None)
 
+        self.names = ["experiment", "position", "trap"]
+
     def __getitem__(self, dataset):
 
         if isinstance(dataset, str):
@@ -104,10 +106,9 @@ class Signal(BridgeH5):
             else:
                 return None
 
-    @staticmethod
-    def dset_to_df(f, dataset):
+    def dset_to_df(self, f, dataset):
         dset = f[dataset]
-        names = ["experiment", "position", "trap"]
+        names = copy(self.names)
         if not dataset.endswith("imBackground"):
             names.append("cell_label")
         lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
