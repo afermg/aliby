@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 
@@ -11,9 +13,12 @@ from baby.brain import BabyBrain
 from core.io.omero import Dataset, Image
 from core.haystack import initialise_tf
 from core.baby_client import DummyRunner
-from core.segment import DummyTiler, trap_template
+from core.segment import Tiler, trap_template
 from core.io.writer import TilerWriter, BabyWriter
 
+from extraction.core.extractor import Extractor
+from extraction.core.parameters import Parameters
+from extraction.core.functions.defaults import get_params
 
 def pipeline(image_id, tps=10, tf_version=2):
     name, image_id = image_id
@@ -23,7 +28,7 @@ def pipeline(image_id, tps=10, tf_version=2):
         brain = BabyBrain(session=session, **DummyRunner.model_config)
         with Image(image_id) as image:
             print(f'Getting data for {image.name}')
-            tiler = DummyTiler(image.data, trap_template, image.name)
+            tiler = Tiler(image.data, trap_template, image.name)
             writer = TilerWriter(f'../data/test2/{image.name}.h5')
             runner = DummyRunner(tiler, brain)
             bwriter = BabyWriter(f'../data/test2/{image.name}.h5')
@@ -56,7 +61,7 @@ def create_pipeline(image_id, **config):
         with Image(image_id) as image:
             tiler_config = config.get('tiler', None)
             assert tiler_config is not None  # TODO add defaults
-            tiler = DummyTiler(image.data, trap_template, image.name)
+            tiler = Tiler(image.data, image.metadata)
             writer = TilerWriter(f'{directory}/{image.name}.h5')
             baby_config = config.get('baby', None)
             assert baby_config is not None  # TODO add defaults
@@ -65,6 +70,11 @@ def create_pipeline(image_id, **config):
             brain = BabyBrain(session=session, **DummyRunner.model_config)
             runner = DummyRunner(tiler, brain)
             bwriter = BabyWriter(f'{directory}/{image.name}.h5')
+            # FIXME testing here the extraction
+            params = Parameters(**get_params("batgirl_fast"))
+            ext = Extractor.from_object(params,
+                                        store=f'{directory}/{image.name}.h5',
+                                        object=tiler)
             # RUN
             run_config = baby_config.get('run', dict())
             tps = general_config.get('tps', 0)
@@ -73,6 +83,7 @@ def create_pipeline(image_id, **config):
                 writer.write(trap_info, overwrite=[])
                 seg = runner.run_tp(i, **run_config)
                 bwriter.write(seg, overwrite=['mother_assign'])
+                ext.extract_pos(tps=[i])
             return True
     except Exception as e:  # bug in the trap getting
         print(f'Caught exception in worker thread (x = {name}):')
@@ -119,11 +130,11 @@ def run_config(config):
 if __name__ == "__main__":
     config = dict(
         general=dict(
-            id=19303,
+            id=19993,
             distributed=0,
-            tps=5,
-            strain='Hxt1_022',
-            directory='../data/test2/'
+            tps=2,
+            strain='pos001',
+            directory='../data/test_distrib/'
         ),
         tiler=dict(),
         baby=dict(
@@ -136,3 +147,13 @@ if __name__ == "__main__":
     )
 
     run_config(config)
+
+    # Check results
+    root_dir = Path(config['general']['directory'])
+    position_test = config['general']['strain']
+    store_name =".h5"
+    from core.io.signal import Signal
+    fname = root_dir / f"{position_test}{store_name}"
+    signals = Signal(root_dir / f"{position_test}{store_name}")
+
+    print(signals.datasets)

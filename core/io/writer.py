@@ -122,10 +122,16 @@ class Writer(BridgeH5):
         filename: str Name of file to write into
         flag: str, default=None
             Flag to pass to the default file reader. If None the file remains closed.
+        compression: str, default=None
+            Compression method passed on to h5py writing functions (only used for
+        dataframes and other array-like data.)
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename, compression=None):
         super().__init__(filename, flag=None)
+
+        if compression is None:
+            self.compression = "gzip"
 
     def write(
         self, path: str, data: Iterable = None, meta: Dict = {}, overwrite: bool = True
@@ -155,9 +161,9 @@ class Writer(BridgeH5):
 
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
         if isinstance(data, pd.DataFrame):
-            self.write_df(f, path, data)
+            self.write_df(f, path, data, compression=self.compression)
         elif isinstance(data, pd.MultiIndex):
-            self.write_index(f, path, data)
+            self.write_index(f, path, data)  # , compression=self.compression)
         elif isinstance(data, Iterable):
             self.write_arraylike(f, path, data)
         else:
@@ -180,12 +186,19 @@ class Writer(BridgeH5):
             del f[path].attrs[attr]
 
     @staticmethod
-    def write_arraylike(f: h5py.File, path: str, data: Iterable):
+    def write_arraylike(f: h5py.File, path: str, data: Iterable, **kwargs):
         if path in f:
             del f[path]
 
         narray = np.array(data)
-        dset = f.create_dataset(path, shape=narray.shape, dtype="int")
+
+        dset = f.create_dataset(
+            path,
+            shape=narray.shape,
+            chunks=(1, *narray.shape[1:]),
+            dtype="int",
+            compression=kwargs.get("compression", None),
+        )
         dset[()] = narray
 
     @staticmethod
@@ -193,22 +206,31 @@ class Writer(BridgeH5):
         pass
 
     @staticmethod
-    def write_index(f, path, pd_index):
-        if path not in f:
-            f.create_group(path)  # TODO check if we can remove this
+    def write_index(f, path, pd_index, **kwargs):
+        f.require_group(path)  # TODO check if we can remove this
         for name, ids in zip(pd_index.names, pd_index.values):
             id_path = path + "/" + name
-            f.create_dataset(name=id_path, shape=ids.shape, dtype=df.dtypes[0])
+            f.create_dataset(
+                name=id_path,
+                shape=ids.shape,
+                dtype=df.dtypes[0],
+                compression=kwargs.get("compression", None),
+            )
             indices = f[id_path]
             indices[()] = ids
 
     @staticmethod
-    def write_df(f, path, df):
-        if path not in f:
-            f.create_group(path)  # TODO check if we can remove this
+    def write_df(f, path, df, **kwargs):
+        f.require_group(path)  # TODO check if we can remove this
 
         values_path = path + "/values"
-        f.create_dataset(name=values_path, shape=df.shape, dtype=df.dtypes[0])
+        f.create_dataset(
+            name=values_path,
+            shape=df.shape,
+            chunks=(min(df.shape[0], 1), df.shape[1]),
+            dtype=df.dtypes[0],
+            compression=kwargs.get("compression", None),
+        )
         dset = f[values_path]
         dset[()] = df.values
 
@@ -220,5 +242,9 @@ class Writer(BridgeH5):
             dset[()] = df.index.get_level_values(level=name).tolist()
 
         tp_path = path + "/timepoint"
-        f.create_dataset(name=tp_path, shape=(df.shape[1],), dtype="uint16")
+        f.create_dataset(
+            name=tp_path,
+            shape=(df.shape[1],),
+            dtype="uint16",
+        )
         f[tp_path][()] = df.columns.tolist()

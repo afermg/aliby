@@ -1,3 +1,5 @@
+import h5py
+import omero
 from omero.gateway import BlitzGateway
 from core.experiment import get_data_lazy
 from core.cells import CellsHDF
@@ -30,9 +32,39 @@ class Dataset(Argo):
         super().__init__()
         self.expt_id = expt_id
 
+    @property
+    def dataset(self):
+        return self.conn.getObject("Dataset", self.expt_id)
+
     def get_images(self):
-        dataset = self.conn.getObject("Dataset", self.expt_id)
-        return {im.getName(): im.getId() for im in dataset.listChildren()}
+        return {im.getName(): im.getId() for im in self.dataset.listChildren()}
+
+    @property
+    def files(self):
+        if self._files is None:
+            self._files = {x.getFileName(): x for x in
+                      self.dataset.listAnnotations()
+                 if isinstance(x, omero.gateway.FileAnnotationWrapper)}
+        return self._files
+
+    @property
+    def tags(self):
+        if self._tags is None:
+            self._tags = {x.getName(): x for x in
+                          self.dataset.listAnnotations()
+                         if isinstance(x, omero.gateway.TagAnnotationWrapper)}
+        return self._tags
+
+    def cache_logs(self, root_dir):
+        for annotation in self.files:
+                filepath = root_dir / annotation.getFileName().replace(
+                    '/', '_')
+                if str(filepath).endswith('txt') and not filepath.exists():
+                    # Save only the text files
+                    with open(str(filepath), 'wb') as fd:
+                        for chunk in annotation.getFileInChunks():
+                            fd.write(chunk)
+        return True
 
 
 class Image(Argo):
@@ -55,6 +87,18 @@ class Image(Argo):
     @property
     def data(self):
         return get_data_lazy(self.image_wrap)
+
+    @property
+    def metadata(self):
+        meta = dict()
+        meta['size_x'] = self.image_wrap.getSizeX()
+        meta['size_y'] = self.image_wrap.getSizeY()
+        meta['size_z'] = self.image_wrap.getSizeZ()
+        meta['size_c'] = self.image_wrap.getSizeC()
+        meta['size_t'] = self.image_wrap.getSizeT()
+        meta['channels'] = self.image_wrap.getChannelLabels()
+        meta['name'] = self.image_wrap.getName()
+        return meta
 
 
 class Cells(CellsHDF):
