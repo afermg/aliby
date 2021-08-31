@@ -105,4 +105,11 @@ params = Parameters(**get_params("batgirl_fast"))
 ext = Extractor.from_object(params, object=tiler)
 tp0 = ext.extract_exp()
 
+import pandas as pd
 expt.close()
+
+from core.io.signal import Signal
+fname = expt.root_dir / f"{position_test}{store_name}"
+signals = Signal(expt.root_dir / f"{position_test}{store_name}")
+
+print(signals.datasets)
