@@ -125,7 +125,7 @@ class Writer(BridgeH5):
         f.create_dataset(
             name=values_path,
             shape=df.shape,
-            chunks=(1, df.shape[1]),
+            chunks=(min(df.shape[0], 1), df.shape[1]),
             dtype=df.dtypes[0],
             compression=kwargs.get("compression", None),
         )
