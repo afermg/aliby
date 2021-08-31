@@ -136,7 +136,8 @@ class Tiler:
         self.image = image
         self.name = metadata['name']
         self.channels = metadata['channels']
-        self.trap_template = template or trap_template
+        self.trap_template = template if template is not None else \
+            trap_template
         self.ref_channel = ref_channel
         self.ref_z = ref_z
         self.tile_size = tile_size or min(trap_template.shape)

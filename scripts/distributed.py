@@ -2,6 +2,7 @@ from pathlib import Path
 
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
+import numpy as np
 
 set_start_method("spawn")
 
@@ -51,6 +52,7 @@ def pipeline(image_id, tps=10, tf_version=2):
         if session:
             session.close()
 
+trap_template = np.load('template.npy')
 
 def create_pipeline(image_id, **config):
     name, image_id = image_id
@@ -61,7 +63,7 @@ def create_pipeline(image_id, **config):
         with Image(image_id) as image:
             tiler_config = config.get('tiler', None)
             assert tiler_config is not None  # TODO add defaults
-            tiler = Tiler(image.data, image.metadata)
+            tiler = Tiler(image.data, image.metadata, template=trap_template)
             writer = TilerWriter(f'{directory}/{image.name}.h5')
             baby_config = config.get('baby', None)
             assert baby_config is not None  # TODO add defaults

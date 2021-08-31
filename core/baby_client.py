@@ -71,17 +71,18 @@ class DummyRunner:
         self.tiler = tiler
         self.brain = brain  # BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
+        self.bf_channel = self.tiler.get_channel_index('Brightfield')
 
     def get_data(self, tp):
         # Swap axes x and z, probably shouldn't swap, just move z
-        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1,
-                                                                    3).swapaxes(
-            1, 2)
+        return self.tiler.get_tp_data(tp, self.bf_channel)\
+                .swapaxes(1, 3).swapaxes(1, 2)
 
     def run_tp(self, tp, **kwargs):
         """ Simulating processing time with sleep"""
         # Access the image
-        segmentation = self.crawler.step(self.get_data(tp), **kwargs)
+        img = self.get_data(tp)
+        segmentation = self.crawler.step(img, **kwargs)
         return format_segmentation(segmentation, tp)
 
 
