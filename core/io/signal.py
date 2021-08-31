@@ -40,12 +40,38 @@ class Signal(BridgeH5):
             df = self.dset_to_df(f, dataset)
             merged = self.apply_merge(df, merges)
 
+        # # Get indices corresponding to merged and picked indices
+        # # Select those indices in the dataframe
+        # # Perform merge
+        # # Return result
         picks = self.get_picks(merged.index.names)
 
         if picks is not None:
             return merged.loc[picks]
         else:
             return merged
+
+    # def get_merge_indices(self, dataset):
+    #     assert not dataset.endswith("imBackground"), "Trap metrics not yet supported"
+    #     merges = self.get_merges()
+    #     merged_idx = []
+    #     if merges:
+    #         merged_sets = set([j for i in merges for j in i])
+
+    #         with h5py.File(self.filename, "r") as f:
+    #             tmp = [
+    #                 f["/".join((dataset, name))][()]
+    #                 for name in self.names[-len(merges[0]) :] + ["cell_label"]
+    #             ]
+    #             merged_idx = [tmp.index(indices) for indices in merged_sets]
+
+    #     return merged_idx
+
+    def get_pick_indices(self):
+        pass
+
+    def combine_indices(self):
+        pass
 
     @property
     def datasets(self):
