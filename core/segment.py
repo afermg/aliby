@@ -11,6 +11,7 @@ from pathlib import Path, PosixPath
 
 from skimage.registration import phase_cross_correlation
 
+from core.traps import segment_traps
 from core.timelapse import TimelapseOMERO
 from core.io.matlab import matObject
 from core.traps import (
@@ -132,13 +133,13 @@ class Tiler:
     Does trap finding and image registration."""
 
     def __init__(self, image, metadata, template=None, tile_size=None,
-                 ref_channel=0, ref_z=0):
+                 ref_channel='Brightfield', ref_z=0):
         self.image = image
         self.name = metadata['name']
         self.channels = metadata['channels']
         self.trap_template = template if template is not None else \
             trap_template
-        self.ref_channel = ref_channel
+        self.ref_channel = self.get_channel_index(ref_channel)
         self.ref_z = ref_z
         self.tile_size = tile_size or min(trap_template.shape)
         self.trap_locs = None
@@ -195,8 +196,7 @@ class Tiler:
         max_size = min(self.image.shape[-2:])
         initial_image = self.image[
             0, self.ref_channel, self.ref_z]  # First time point, first channel, first z-position
-        trap_locs = identify_trap_locations(initial_image, trap_template,
-                                            optimize_scale=True, downscale=0.2)
+        trap_locs = segment_traps(initial_image, tile_size)
         trap_locs = [[x, y] for x, y in trap_locs if
                      half_tile < x < max_size - half_tile and half_tile < y < max_size - half_tile]
         self.trap_locs = TrapLocations(trap_locs, tile_size)

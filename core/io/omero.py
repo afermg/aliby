@@ -36,6 +36,10 @@ class Dataset(Argo):
     def dataset(self):
         return self.conn.getObject("Dataset", self.expt_id)
 
+    @property
+    def name(self):
+        return self.dataset.getName()
+
     def get_images(self):
         return {im.getName(): im.getId() for im in self.dataset.listChildren()}
 

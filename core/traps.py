@@ -3,9 +3,45 @@ A set of utilities for dealing with ALCATRAS traps
 """
 
 import numpy as np
-from skimage import transform, feature
-
 from tqdm import tqdm
+
+from skimage import transform, feature
+from skimage.filters.rank import entropy
+from skimage.filters import threshold_otsu
+from skimage.segmentation import clear_border
+from skimage.measure import label, regionprops
+from skimage.morphology import disk, closing, square
+
+
+def segment_traps(image, tile_size, downscale=0.4):
+    # Make image go between 0 and 255
+    img = image  # Keep a memory of image in case need to re-run
+    # TODO Optimise the hyperparameters
+    disk_radius = int(min([0.01 * x for x in img.shape]))
+    min_area = 0.1 * (tile_size ** 2)
+    print(f'Disk: {disk_radius}, area: {min_area}')
+    if downscale != 1:
+        img = transform.rescale(image, downscale)
+    entropy_image = entropy(img, disk(disk_radius))
+    if downscale != 1:
+        entropy_image = transform.rescale(entropy_image, 1 / downscale)
+
+    # apply threshold
+    thresh = threshold_otsu(entropy_image)
+    bw = closing(entropy_image > thresh, square(3))
+
+    # remove artifacts connected to image border
+    cleared = clear_border(bw)
+
+    # label image regions
+    label_image = label(cleared)
+    traps = [region.centroid for region in regionprops(label_image) if
+             region.area > min_area]
+    if len(traps) < 10 and downscale != 1:
+        print('Trying again.')
+        return segment_traps(image, tile_size, downscale=1)
+    return traps
+
 
 def identify_trap_locations(image, trap_template, optimize_scale=True,
                             downscale=0.35, trap_size=None):
@@ -59,7 +95,7 @@ def identify_trap_locations(image, trap_template, optimize_scale=True,
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
         min_distance=int(trap_template.shape[0] * 0.70),
-        exclude_border=(trap_size//3))
+        exclude_border=(trap_size // 3))
     return coordinates
 
 
@@ -153,11 +189,13 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
     # Set the defaults (list is mutable)
     channels = channels if channels is not None else [0]
     z_positions = z if z is not None else [0]
-    times = t if t is not None else np.arange(raw_expt.shape[1])  # TODO choose sub-set of time points
+    times = t if t is not None else np.arange(
+        raw_expt.shape[1])  # TODO choose sub-set of time points
     shape = (len(channels), len(times), tile_size, tile_size, len(z_positions))
     # Get trap location for that id:
     zct_tiles, slices, trap_ids = all_tiles(trap_locations, shape, raw_expt,
-                                  z_positions, channels, times, [trap_id])
+                                            z_positions, channels, times,
+                                            [trap_id])
 
     # TODO Make this an explicit function in TimelapseOMERO
     images = raw_expt.pixels.getTiles(zct_tiles)
@@ -170,12 +208,12 @@ def get_trap_timelapse_omero(raw_expt, trap_locations, trap_id, tile_size=117,
         z_pos = z_positions.index(z)
         timelapse[ch, tp, x[0]:x[1], y[0]:y[1], z_pos] = image
 
-    #for x in timelapse:  # By channel
+    # for x in timelapse:  # By channel
     #    np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
     return timelapse
 
 
-def all_tiles(trap_locations, shape, raw_expt, z_positions, channels, 
+def all_tiles(trap_locations, shape, raw_expt, z_positions, channels,
               times, traps):
     _, _, x, y, _ = shape
     _, _, MAX_X, MAX_Y, _ = raw_expt.shape
@@ -191,11 +229,11 @@ def all_tiles(trap_locations, shape, raw_expt, z_positions, channels,
                     xmin, ymin, xmax, ymax, r_xmin, r_ymin, r_xmax, r_ymax = tile_where(
                         centre, x, y, MAX_X, MAX_Y)
                     slices.append(((r_ymin - ymin, r_ymax - ymin),
-                               (r_xmin - xmin, r_xmax - xmin)
-                               ))
+                                   (r_xmin - xmin, r_xmax - xmin)
+                                   ))
                     tile = (r_ymin, r_xmin, r_ymax - r_ymin, r_xmax - r_xmin)
                     zct_tiles.append((z, ch, t, tile))
-                    trap_ids.append(trap_id) # So we remember the order!
+                    trap_ids.append(trap_id)  # So we remember the order!
     return zct_tiles, slices, trap_ids
 
 
@@ -263,10 +301,10 @@ def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
     z_positions = z if z is not None else [0]
     if isinstance(z_positions, slice):
         n_z = z_positions.stop
-        z_positions = list(range(n_z)) # slice is not iterable error
+        z_positions = list(range(n_z))  # slice is not iterable error
     elif isinstance(z_positions, list):
         n_z = len(z_positions)
-    else: 
+    else:
         n_z = 1
 
     n_traps = len(trap_locations[tp])
@@ -274,18 +312,21 @@ def get_traps_timepoint(raw_expt, trap_locations, tp, tile_size=96,
     shape = (len(channels), 1, tile_size, tile_size, n_z)
     # all tiles
     zct_tiles, slices, trap_ids = all_tiles(trap_locations, shape, raw_expt,
-                                  z_positions, channels, [tp], trap_ids)
+                                            z_positions, channels, [tp],
+                                            trap_ids)
     # TODO Make this an explicit function in TimelapseOMERO
     images = raw_expt.pixels.getTiles(zct_tiles)
     # Initialise empty traps
     traps = np.full((n_traps,) + shape, np.nan)
-    for trap_id, (z, c, _, _), (y, x), image in zip(trap_ids, zct_tiles, slices, images):
+    for trap_id, (z, c, _, _), (y, x), image in zip(trap_ids, zct_tiles,
+                                                    slices, images):
         ch = channels.index(c)
         z_pos = z_positions.index(z)
         traps[trap_id, ch, 0, x[0]:x[1], y[0]:y[1], z_pos] = image
     for x in traps:  # By channel
         np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
     return traps
+
 
 def centre(img, percentage=0.3):
     y, x = img.shape

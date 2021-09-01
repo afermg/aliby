@@ -107,12 +107,17 @@ def run_config(config):
     expt_id = config['general'].get('id')
     distributed = config['general'].get('distributed', 0)
     strain_filter = config['general'].get('strain', '')
+    root_dir = config['general'].get('directory', 'output')
+    root_dir = Path(root_dir)
 
     print('Searching OMERO')
     # Do all initialisation
     with Dataset(int(expt_id)) as conn:
         image_ids = conn.get_images()
+        directory = root_dir / conn.name
 
+    # Modify to the configuration
+    config['general']['directory'] = directory
     # Filter
     image_ids = {k: v for k, v in image_ids.items() if k.startswith(
         strain_filter)}
@@ -136,7 +141,7 @@ if __name__ == "__main__":
             distributed=0,
             tps=2,
             strain='pos001',
-            directory='../data/test_distrib/'
+            directory='../data/'
         ),
         tiler=dict(),
         baby=dict(
@@ -150,12 +155,3 @@ if __name__ == "__main__":
 
     run_config(config)
 
-    # Check results
-    root_dir = Path(config['general']['directory'])
-    position_test = config['general']['strain']
-    store_name =".h5"
-    from core.io.signal import Signal
-    fname = root_dir / f"{position_test}{store_name}"
-    signals = Signal(root_dir / f"{position_test}{store_name}")
-
-    print(signals.datasets)
