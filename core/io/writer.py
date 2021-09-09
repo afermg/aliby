@@ -253,7 +253,8 @@ class Writer(BridgeH5):
                 name=values_path,
                 shape=df.shape,
                 # chunks=(min(df.shape[0], 1), df.shape[1]),
-                dtype=df.dtypes.iloc[0],
+                # dtype=df.dtypes.iloc[0], This is making NaN in ints into negative vals
+                dtype="float",
                 maxshape=(max_ncells, max_tps),
                 compression=kwargs.get("compression", None),
             )
@@ -294,9 +295,12 @@ class Writer(BridgeH5):
                 f, [path + "/" + x for x in df.index.names]
             )
             # Split indices in existing and new
+            new = df.index.tolist()
+            if df.index.nlevels == 1:  # Cover for cases with a single index
+                new = [(x,) for x in df.index.tolist()]
             existing_multis, new_multis = self.find_ids(
                 existing=existing_ids,
-                new=df.index.tolist(),
+                new=new,
             )
             self.existing_indices = np.array(
                 locate_indices(existing_ids, existing_multis)
@@ -343,8 +347,6 @@ class Writer(BridgeH5):
             dset = f[tmp]
             n = dset.shape[0]
             dset.resize(n + len(df.columns), axis=0)
-            if path.endswith("imBackground"):
-                print("stop")
             dset[n:] = df.columns.tolist()
 
     @staticmethod
@@ -367,7 +369,7 @@ class Writer(BridgeH5):
 
 # @staticmethod
 def locate_indices(existing, new):
-    if len(new.shape) > 1:
+    if new.shape[1] > 1:
         return [
             find_1st(
                 (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]), True, cmp_equal
@@ -378,8 +380,13 @@ def locate_indices(existing, new):
         return [find_1st(existing[:, 0] == n, True, cmp_equal) for n in new]
 
 
+# def tuple_or_int(x):
+#     if isinstance(x, Iterable):
+#         return tuple(x)
+#     else:
+#         return x
 def tuple_or_int(x):
-    if isinstance(x, Iterable):
-        return tuple(x)
+    if len(x) == 1:
+        return x[0]
     else:
         return x
