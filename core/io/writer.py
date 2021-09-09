@@ -369,15 +369,18 @@ class Writer(BridgeH5):
 
 # @staticmethod
 def locate_indices(existing, new):
-    if new.shape[1] > 1:
-        return [
-            find_1st(
-                (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]), True, cmp_equal
-            )
-            for n in new
-        ]
+    if new.any():
+        if new.shape[1] > 1:
+            return [
+                find_1st(
+                    (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]), True, cmp_equal
+                )
+                for n in new
+            ]
+        else:
+            return [find_1st(existing[:, 0] == n, True, cmp_equal) for n in new]
     else:
-        return [find_1st(existing[:, 0] == n, True, cmp_equal) for n in new]
+        return []
 
 
 # def tuple_or_int(x):
