@@ -10,6 +10,8 @@ from core.io.writer import Writer
 from core.io.signal import Signal
 
 from core.cells import Cells
+from postprocessor.core.processes.merger import mergerParameters, merger
+from postprocessor.core.processes.picker import pickerParameters, picker
 
 
 class PostProcessorParameters(ParametersABC):
