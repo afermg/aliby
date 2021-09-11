@@ -3,6 +3,7 @@ from pathlib import Path
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
+from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 set_start_method("spawn")
 
@@ -20,6 +21,7 @@ from core.io.writer import TilerWriter, BabyWriter
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
+
 
 def pipeline(image_id, tps=10, tf_version=2):
     name, image_id = image_id
@@ -52,7 +54,9 @@ def pipeline(image_id, tps=10, tf_version=2):
         if session:
             session.close()
 
+
 trap_template = np.load('template.npy')
+
 
 def create_pipeline(image_id, **config):
     name, image_id = image_id
@@ -99,6 +103,12 @@ def create_pipeline(image_id, **config):
             session.close()
 
 
+def post_process(filepath, params):
+    pp = PostProcessor(filepath, params)
+    tmp = pp.run()
+    return tmp
+
+
 def run_config(config):
     # Config holds the general information, use in main
     # Steps holds the description of tasks with their parameters
@@ -131,6 +141,18 @@ def run_config(config):
         for k, v in image_ids.items():
             r = create_pipeline((k, v), **config)
             results.append(r)
+
+    # Post process!
+    params = PostProcessorParameters.default()
+    if distributed != 0:
+        with Pool(distributed) as p:
+            results = p.map(lambda pos_name, _: post_process(directory /
+                                                             f'{pos_name}.h5',
+                                                             params),
+                            image_ids)
+    else:
+        for pos_name in image_ids:
+            tmp = post_process(directory / f'{pos_name}.h5', params)
     return
 
 
@@ -154,4 +176,3 @@ if __name__ == "__main__":
     )
 
     run_config(config)
-
