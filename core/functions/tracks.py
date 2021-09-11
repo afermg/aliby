@@ -9,6 +9,7 @@ from typing import Union, List
 
 import numpy as np
 import pandas as pd
+from utils_find_1st import find_1st, cmp_larger
 
 import more_itertools as mit
 from scipy.signal import savgol_filter
@@ -167,7 +168,7 @@ def rec_bottom(d, k):
         return rec_bottom(d, d[k])
 
 
-def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
+def join_tracks(tracks, joinable_pairs, drop=True) -> pd.DataFrame:
     """
     Join pairs of tracks from later tps towards the start.
 
@@ -185,7 +186,7 @@ def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
 
     tmp = copy(tracks)
     for target, source in joinable_pairs:
-        tmp.loc[target] = join_track_pairs(tmp.loc[target], tmp.loc[source])
+        tmp.loc[target] = join_track_pair(tmp.loc[target], tmp.loc[source])
 
         if drop:
             tmp = tmp.drop(source)
@@ -193,11 +194,11 @@ def join_tracks(tracks, joinable_pairs, drop=False) -> pd.DataFrame:
     return tmp
 
 
-def join_track_pairs(track1, track2):
-    tmp = copy(track1)
-    tmp.loc[track2.dropna().index] = track2.dropna().values
-
-    return tmp
+def join_track_pair(target, source):
+    tgt_copy = copy(target)
+    end = find_1st(target.values[::-1], 0, cmp_larger)
+    tgt_copy.iloc[-end:] = source.iloc[-end:].values
+    return tgt_copy
 
 
 def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
@@ -216,24 +217,25 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
 
     """
 
-    tracks.index.names = [
-        "trap",
-        "cell",
-    ]  # TODO remove this once it is integrated in the tracker
-    # contig=tracks.groupby(['pos','trap']).apply(tracks2contig)
-    clean = clean_tracks(tracks, min_len=window + 1, min_gr=0.9)  # get useful tracks
-    contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
-    contig = contig.loc[contig.apply(len) > 0]
+    # Commented because we are not smoothing in this step yet
     # candict = {k:v for d in contig.values for k,v in d.items()}
 
     # smooth all relevant tracks
 
-    linear = set([k for v in contig.values for i in v for j in i for k in j])
     if smooth:  # Apply savgol filter TODO fix nans affecting edge placing
+        clean = clean_tracks(
+            tracks, min_len=window + 1, min_gr=0.9
+        )  # get useful tracks
         savgol_on_srs = lambda x: non_uniform_savgol(x.index, x.values, window, degree)
-        smoothed_tracks = clean.loc[linear].apply(savgol_on_srs, 1)
+        contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
+        contig = contig.loc[contig.apply(len) > 0]
+        flat = set([k for v in contig.values for i in v for j in i for k in j])
+        smoothed_tracks = clean.loc[flat].apply(savgol_on_srs, 1)
     else:
-        smoothed_tracks = clean.loc[linear].apply(lambda x: np.array(x.values), axis=1)
+        contig = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
+        contig = contig.loc[contig.apply(len) > 0]
+        flat = set([k for v in contig.values for i in v for j in i for k in j])
+        smoothed_tracks = tracks.loc[flat].apply(lambda x: np.array(x.values), axis=1)
 
     # fetch edges from ids TODO (IF necessary, here we can compare growth rates)
     idx_to_edge = lambda preposts: [
@@ -311,7 +313,7 @@ def get_closest_pairs(pre: List[float], post: List[float], tol: Union[float, int
     result = dMetric[ids] / norm
     ids = ids if len(pre) < len(post) else ids[::-1]
 
-    return [idx for idx, res in zip(zip(*ids), result) if res < tol]
+    return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
 
 
 def solve_matrix(dMetric):
@@ -424,116 +426,3 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
 #     for x,y in candidates:
 #         d[x].append(y)
 #     return d
-
-
-def non_uniform_savgol(x, y, window, polynom):
-    """
-    Applies a Savitzky-Golay filter to y with non-uniform spacing
-    as defined in x
-
-    This is based on https://dsp.stackexchange.com/questions/1676/savitzky-golay-smoothing-filter-for-not-equally-spaced-data
-    The borders are interpolated like scipy.signal.savgol_filter would do
-
-    source: https://dsp.stackexchange.com/a/64313
-
-    Parameters
-    ----------
-    x : array_like
-        List of floats representing the x values of the data
-    y : array_like
-        List of floats representing the y values. Must have same length
-        as x
-    window : int (odd)
-        Window length of datapoints. Must be odd and smaller than x
-    polynom : int
-        The order of polynom used. Must be smaller than the window size
-
-    Returns
-    -------
-    np.array of float
-        The smoothed y values
-    """
-    if len(x) != len(y):
-        raise ValueError('"x" and "y" must be of the same size')
-
-    if len(x) < window:
-        raise ValueError("The data size must be larger than the window size")
-
-    if type(window) is not int:
-        raise TypeError('"window" must be an integer')
-
-    if window % 2 == 0:
-        raise ValueError('The "window" must be an odd integer')
-
-    if type(polynom) is not int:
-        raise TypeError('"polynom" must be an integer')
-
-    if polynom >= window:
-        raise ValueError('"polynom" must be less than "window"')
-
-    half_window = window // 2
-    polynom += 1
-
-    # Initialize variables
-    A = np.empty((window, polynom))  # Matrix
-    tA = np.empty((polynom, window))  # Transposed matrix
-    t = np.empty(window)  # Local x variables
-    y_smoothed = np.full(len(y), np.nan)
-
-    # Start smoothing
-    for i in range(half_window, len(x) - half_window, 1):
-        # Center a window of x values on x[i]
-        for j in range(0, window, 1):
-            t[j] = x[i + j - half_window] - x[i]
-
-        # Create the initial matrix A and its transposed form tA
-        for j in range(0, window, 1):
-            r = 1.0
-            for k in range(0, polynom, 1):
-                A[j, k] = r
-                tA[k, j] = r
-                r *= t[j]
-
-        # Multiply the two matrices
-        tAA = np.matmul(tA, A)
-
-        # Invert the product of the matrices
-        tAA = np.linalg.inv(tAA)
-
-        # Calculate the pseudoinverse of the design matrix
-        coeffs = np.matmul(tAA, tA)
-
-        # Calculate c0 which is also the y value for y[i]
-        y_smoothed[i] = 0
-        for j in range(0, window, 1):
-            y_smoothed[i] += coeffs[0, j] * y[i + j - half_window]
-
-        # If at the end or beginning, store all coefficients for the polynom
-        if i == half_window:
-            first_coeffs = np.zeros(polynom)
-            for j in range(0, window, 1):
-                for k in range(polynom):
-                    first_coeffs[k] += coeffs[k, j] * y[j]
-        elif i == len(x) - half_window - 1:
-            last_coeffs = np.zeros(polynom)
-            for j in range(0, window, 1):
-                for k in range(polynom):
-                    last_coeffs[k] += coeffs[k, j] * y[len(y) - window + j]
-
-    # Interpolate the result at the left border
-    for i in range(0, half_window, 1):
-        y_smoothed[i] = 0
-        x_i = 1
-        for j in range(0, polynom, 1):
-            y_smoothed[i] += first_coeffs[j] * x_i
-            x_i *= x[i] - x[half_window]
-
-    # Interpolate the result at the right border
-    for i in range(len(x) - half_window, len(x), 1):
-        y_smoothed[i] = 0
-        x_i = 1
-        for j in range(0, polynom, 1):
-            y_smoothed[i] += last_coeffs[j] * x_i
-            x_i *= x[i] - x[-half_window - 1]
-
-    return y_smoothed

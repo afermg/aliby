@@ -10,7 +10,7 @@ from agora.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
-class PickerParameters(ParametersABC):
+class pickerParameters(ParametersABC):
     def __init__(
         self,
         condition: Tuple[str, Union[float, int]] = None,
@@ -32,7 +32,7 @@ class PickerParameters(ParametersABC):
         )
 
 
-class Picker(ProcessABC):
+class picker(ProcessABC):
     """
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be
@@ -43,7 +43,7 @@ class Picker(ProcessABC):
 
     def __init__(
         self,
-        parameters: PickerParameters,
+        parameters: pickerParameters,
         cells: CellsHDF,
     ):
         super().__init__(parameters=parameters)
@@ -93,6 +93,8 @@ class Picker(ProcessABC):
 
     def run(self, signals):
         for alg in self.sequence:
+            if alg == "condition":
+                pass
             self.signals = getattr(self, "pick_by_" + alg)(signals)
         return self.signals
 
@@ -104,7 +106,7 @@ class Picker(ProcessABC):
     ):
         threshold_asint = _as_int(threshold, signals.shape[1])
         case_mgr = {
-            "present": signals.apply(max_ntps, axis=1) > threshold_asint,
+            "present": signals.notna().sum(axis=1) > threshold_asint,
             "nonstoply_present": signals.apply(max_nonstop_ntps, axis=1)
             > threshold_asint,
             "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
@@ -114,5 +116,5 @@ class Picker(ProcessABC):
 
 def _as_int(threshold: Union[float, int], ntps: int):
     if type(threshold) is float:
-        threshold = threshold / ntps
+        threshold = ntps * threshold
     return threshold

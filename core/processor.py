@@ -1,30 +1,37 @@
+import h5py
 from typing import List, Dict, Union
+from pydoc import locate
+
+import numpy as np
 import pandas as pd
 
 from agora.base import ParametersABC
-from postprocessor.core.processes.merger import MergerParameters, Merger
-from postprocessor.core.processes.picker import PickerParameters, Picker
-from postprocessor.core.io.writer import Writer
-from postprocessor.core.io.signal import Signal
+from core.io.writer import Writer
+from core.io.signal import Signal
 
 from core.cells import Cells
 
 
-class PostProParameters(ParametersABC):
+class PostProcessorParameters(ParametersABC):
     """
     Anthology of parameters used for postprocessing
     :merger:
     :picker: parameters for picker
-    :processes: List of processes that can be found in ./processes
-    :datasets: Dictionary
+    :processes: Dict processes:[objectives], 'processes' are defined in ./processes/
+        while objectives are relative or absolute paths to datasets. If relative paths the
+        post-processed addresses are used.
+
     """
 
-    def __init__(self, merger=None, picker=None, processes=[], datasets=None):
-        self.merger: MergerParameters = merger
-        self.picker: PickerParameters = picker
-        self.processes: List = processes
-
-        self.datasets: Dict = datasets
+    def __init__(
+        self,
+        targets={},
+        parameters={},
+        outpaths={},
+    ):
+        self.targets: Dict = targets
+        self.parameters: Dict = parameters
+        self.outpaths: Dict = outpaths
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -33,13 +40,23 @@ class PostProParameters(ParametersABC):
     def default(cls, kind=None):
         if kind == "defaults" or kind == None:
             return cls(
-                merger=MergerParameters.default(),
-                picker=PickerParameters.default(),
-                datasets={
-                    "merger": "/extraction/general/None/area",
-                    "picker": "/extraction/general/None/area",
-                    "processes": [],
+                targets={
+                    "prepost": {
+                        "merger": "/extraction/general/None/area",
+                        "picker": ["/extraction/general/None/area"],
+                    },
+                    "processes": {
+                        "dsignal": ["/extraction/general/None/area"],
+                        # "savgol": ["/extraction/general/None/area"],
+                    },
                 },
+                parameters={
+                    "prepost": {
+                        "merger": mergerParameters.default(),
+                        "picker": pickerParameters.default(),
+                    }
+                },
+                outpaths={},
             )
 
     def to_dict(self):
@@ -49,24 +66,119 @@ class PostProParameters(ParametersABC):
 class PostProcessor:
     def __init__(self, filename, parameters):
         self.parameters = parameters
-        self._signals = Signal(filename)
+        self._filename = filename
+        self._signal = Signal(filename)
         self._writer = Writer(filename)
 
-        self.datasets = parameters["datasets"]
-        self.merger = Merger(parameters["merger"])
-        self.picker = Picker(
-            parameters=parameters["picker"], cells=Cells.from_source(filename)
+        # self.outpaths = parameters["outpaths"]
+        self.merger = merger(parameters["parameters"]["prepost"]["merger"])
+
+        self.picker = picker(
+            parameters=parameters["parameters"]["prepost"]["picker"],
+            cells=Cells.from_source(filename),
         )
-        self.processes = [
-            self.get_process(process) for process in parameters["processes"]
-        ]
+        self.classfun = {
+            process: self.get_process(process)
+            for process in parameters["targets"]["processes"]
+        }
+        self.parameters_classfun = {
+            process: self.get_parameters(process)
+            for process in parameters["targets"]["processes"]
+        }
+        self.targets = parameters["targets"]
+
+    @staticmethod
+    def get_process(process):
+        """
+        Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        """
+        return locate("postprocessor.core.processes." + process + "." + process)
+
+    @staticmethod
+    def get_parameters(process):
+        """
+        Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        """
+        return locate(
+            "postprocessor.core.processes." + process + "." + process + "Parameters"
+        )
+
+    def run_prepost(self):
+        """Important processes run before normal post-processing ones"""
+        merge_events = self.merger.run(self._signal[self.targets["prepost"]["merger"]])
+
+        with h5py.File(self._filename, "r") as f:
+            prev_idchanges = self._signal.get_merges()
+
+        changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
+        self._writer.write("modifiers/merges", data=changes_history)
+
+        picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
+        self._writer.write("modifiers/picks", data=picks)
 
     def run(self):
-        self.merger.run(self._signals[self.datasets["merger"]])
-        self.picker.run(self._signals[self.datasets["picker"]])
-        for process, dataset in zip(self.processes, self.datasets["processes"]):
-            process_result = process.run(self._signals.get_dataset(dataset))
-            self.writer.write(process_result, dataset)
+        self.run_prepost()
+
+        for process, datasets in self.targets["processes"].items():
+            if process in self.parameters["parameters"].get(
+                "processes", {}
+            ):  # If we assigned parameters
+                parameters = self.parameters_classfun[process](self.parameters[process])
+
+            else:
+                parameters = self.parameters_classfun[process].default()
+
+            loaded_process = self.classfun[process](parameters)
+            for dataset in datasets:
+                if isinstance(dataset, list):  # multisignal process
+                    signal = [self._signal[d] for d in dataset]
+                elif isinstance(dataset, str):
+                    signal = self._signal[dataset]
+                else:
+                    raise ("Incorrect dataset")
+
+                result = loaded_process.run(signal)
+
+                if process in self.parameters.to_dict()["outpaths"]:
+                    outpath = self.parameters.to_dict()["outpaths"][process]
+                elif isinstance(dataset, list):
+                    # If no outpath defined, place the result in the minimum common
+                    # branch of all signals used
+                    prefix = "".join(
+                        prefix + c[0]
+                        for c in takewhile(
+                            lambda x: all(x[0] == y for y in x), zip(*dataset)
+                        )
+                    )
+                    outpath = (
+                        prefix
+                        + "_".join(  # TODO check that it always finishes in '/'
+                            [d[len(prefix) :].replace("/", "_") for d in dataset]
+                        )
+                    )
+                elif isinstance(dataset, str):
+                    outpath = dataset[1:].replace("/", "_")
+                else:
+                    raise ("Outpath not defined", type(dataset))
+
+                if isinstance(result, dict): # Multiple Signals as output
+                    for k, v in result:
+                        self.write_result(
+                            "/postprocessing/" + process + "/" + outpath +
+                            f'/{k}',
+                            v, metadata={}
+                        )
+                else:
+                    self.write_result(
+                        "/postprocessing/" + process + "/" + outpath, result, metadata={}
+                    )
+
+    def write_result(
+        self, path: str, result: Union[List, pd.DataFrame, np.ndarray], metadata: Dict
+    ):
+        self._writer.write(path, result, meta=metadata)
 
 
 def _if_dict(item):

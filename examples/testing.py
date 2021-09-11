@@ -12,6 +12,7 @@ import compress_pickle
 
 from postprocessor.core.postprocessor import PostProcessor
 from postprocessor.core.tracks import get_avg_grs, non_uniform_savgol
+from postprocessor.core.tracks import clean_tracks, merge_tracks, join_tracks
 from postprocessor.core.ph import *
 
 sns.set_context("talk", font_scale=1.8)
@@ -67,8 +68,6 @@ def get_clean_dfs(dfs=None):
     if dfs is None:
         clean_dfs = compress_pickle.load("/home/alan/Documents/tmp/clean_dfs.gz")
     else:
-
-        from postprocessor.core.tracks import clean_tracks, merge_tracks, join_tracks
 
         # Clean timelapse
         clean = clean_tracks(new_dfs[("general", None, "area")])

@@ -1,8 +1,8 @@
 from agora.base import ParametersABC, ProcessABC
-from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
+from postprocessor.core.functions.tracks import get_joinable
 
 
-class MergerParameters(ParametersABC):
+class mergerParameters(ParametersABC):
     """
     :param tol: float or int threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,
@@ -43,13 +43,18 @@ class MergerParameters(ParametersABC):
         )
 
 
-class Merger(ProcessABC):
+class merger(ProcessABC):
     """
-    TODO Integrate functions/tracks.py inside this class?
+    TODO check why it needs to be run a few times to complete the merging
     """
 
     def __init__(self, parameters):
         super().__init__(parameters)
 
     def run(self, signal):
-        merged, joint_pairs = merge_tracks(signal)  # , min_len=self.window + 1)
+        joinable = get_joinable(signal)
+        # merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
+        # indices = (*zip(*merged.index.tolist()),)
+        # names = merged.index.names
+        # return {name: ids for name, ids in zip(names, indices)}
+        return joinable
