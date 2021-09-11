@@ -1,3 +1,5 @@
+import logging
+
 import h5py
 import numpy as np
 import pandas as pd
@@ -167,11 +169,11 @@ class Writer(BridgeH5):
                     path = path + str(n).zfill(3)
             elif overwrite == "skip":
                 if path in f:
-                    print("Skipping dataset {}".format(path))
+                    logging.debug("Skipping dataset {}".format(path))
                     return None
 
             # f.create_group(path)
-            print(
+            logging.debug(
                 "{} {} to {} and {} metadata fields".format(
                     overwrite, type(data), path, len(meta)
                 )
