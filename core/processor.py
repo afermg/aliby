@@ -1,7 +1,7 @@
 from typing import List, Dict, Union
 import pandas as pd
 
-from postprocessor.core.processes.base import ParametersABC
+from agora.base import ParametersABC
 from postprocessor.core.processes.merger import MergerParameters, Merger
 from postprocessor.core.processes.picker import PickerParameters, Picker
 from postprocessor.core.io.writer import Writer

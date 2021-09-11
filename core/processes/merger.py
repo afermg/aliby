@@ -1,4 +1,4 @@
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from agora.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import clean_tracks, merge_tracks, join_tracks
 
 
