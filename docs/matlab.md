@@ -10,7 +10,7 @@ omero_expt = Experiment.from_source(19310, #Experiment ID on OMERO
                                     '***REMOVED***', #OMERO Password
                                     'islay.bio.ed.ac.uk', #OMERO host
                                     port=4064, #This is default
-                                    save_dir='./' #Directory to cache files
+                                    save_dir='../doc/' #Directory to cache files
                                     )
 
 # Download and save the MATLAB files

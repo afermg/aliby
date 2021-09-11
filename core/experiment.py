@@ -94,6 +94,16 @@ def get_data_lazy(image) -> da.Array:
     return da.stack(t_stacks)
 
 
+# Metadata writer
+class Meta:
+    """Small metadata Process that loads log."""
+    def __init__(self):
+        pass
+    def load_logs(self):
+        pass
+    def run(self):
+        pass
+
 ########################### Old Objects ####################################
 
 class Experiment(abc.ABC):

@@ -97,7 +97,6 @@ class TilerWriter(DynamicWriter):
 
 tile_size = 117
 
-
 class BabyWriter(DynamicWriter):
     # TODO make this YAML
     compression = "gzip"
