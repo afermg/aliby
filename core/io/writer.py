@@ -279,7 +279,9 @@ class Writer(BridgeH5):
             # Filter out repeated timepoints
             new_tps = set(df.columns).difference(f[path + "/timepoint"][()])
             if len(new_tps) != df.shape[1]:
-                print("Re-extracting existing timepoints. Skipping duplicated")
+                print(
+                    "Attempting to re-extract existing timepoints. Skipping duplicated"
+                )
                 df = df[new_tps]
 
             if (
@@ -310,10 +312,6 @@ class Writer(BridgeH5):
                 self.id_cache[df.index.nlevels]["found_multi"] = found_multis[
                     incremental_existing
                 ]
-
-                # self.additional_indices = locate_indices(
-                #     existing_ids, self.additional_multis
-                # )
 
             existing_values = df.loc[
                 [
