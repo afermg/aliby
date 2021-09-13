@@ -304,7 +304,7 @@ class Writer(BridgeH5):
                 )
                 found_indices = np.array(locate_indices(existing_ids, found_multis))
 
-                # we sort the existing indices for some pandas indexing I can't remember
+                # We must sort our indices for h5py indexing
                 incremental_existing = np.argsort(found_indices)
                 self.id_cache[df.index.nlevels]["found_indices"] = found_indices[
                     incremental_existing
@@ -373,8 +373,6 @@ class Writer(BridgeH5):
         set_existing = set([tuple(*x) for x in zip(existing.tolist())])
         existing_cells = np.array(list(set_existing.intersection(new)))
         new_cells = np.array(list(set(new).difference(set_existing)))
-        # for i in range(new_cells.shape[1] - 1, -1, -1):
-        #     new_cells = new_cells[new_cells[:, i].argsort(kind="mergesort")]
 
         return (
             existing_cells,
