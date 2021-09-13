@@ -2,6 +2,7 @@
 Utility functions and classes
 """
 import itertools
+import logging
 import operator
 from pathlib import Path
 from typing import Callable
@@ -108,3 +109,14 @@ def get_store_path(save_dir, store, name):
     store = Path(save_dir) / store
     store = store.with_name(name + store.name)
     return store
+
+from functools import wraps
+from time import perf_counter
+def timed(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        t = perf_counter()
+        res = f(*args, **kwargs)
+        logging.debug(f'Timing:{f.__name__}:{perf_counter() - t}s')
+        return res
+    return decorated

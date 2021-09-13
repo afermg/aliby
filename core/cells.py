@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path, PosixPath
+from time import perf_counter
 from typing import Union
 from itertools import groupby
 from collections.abc import Iterable
@@ -9,6 +11,7 @@ from scipy import ndimage
 from scipy.sparse.base import isdense
 
 from core.io.matlab import matObject
+from core.utils import timed
 
 
 def cell_factory(store, type="matlab"):
@@ -18,7 +21,7 @@ def cell_factory(store, type="matlab"):
         mat_object = matObject(store)
         return CellsMat(mat_object)
     elif type == "hdf5":
-        file = h5py.File(store)
+        file = h5py.File(store, 'r')
         return CellsHDF(file)
     else:
         raise TypeError(
@@ -118,14 +121,20 @@ class CellsHDF(Cells):
             [ndimage.morphology.binary_fill_holes(o) for o in outlines]
         )
 
+    @timed
     def at_time(self, timepoint, kind="mask"):
-        edgemasks = self["edgemasks"][self["timepoint"] == timepoint]
-        traps = self["trap"][self["timepoint"] == timepoint]
-
+        t = perf_counter()
+        ix = self["timepoint"] == timepoint
+        logging.debug(f'Timing:MaskIndexing:{perf_counter() - t}s')
+        
+        t = perf_counter()
+        edgemasks = self["edgemasks"][ix]
+        traps = self["trap"][ix]
         masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
+        logging.debug(f'Timing:MaskFetching:{perf_counter() - t}s')
 
         return self.group_by_traps(traps, masks)
-
+    
     def group_by_traps(self, traps, data):
         # returns a dict with traps as keys and labels as value
         iterator = groupby(zip(traps, data), lambda x: x[0])
