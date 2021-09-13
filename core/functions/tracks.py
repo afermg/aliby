@@ -229,13 +229,13 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         savgol_on_srs = lambda x: non_uniform_savgol(x.index, x.values, window, degree)
         contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
         contig = contig.loc[contig.apply(len) > 0]
-        linear = set([k for v in contig.values for i in v for j in i for k in j])
-        smoothed_tracks = clean.loc[linear].apply(savgol_on_srs, 1)
+        flat = set([k for v in contig.values for i in v for j in i for k in j])
+        smoothed_tracks = clean.loc[flat].apply(savgol_on_srs, 1)
     else:
         contig = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
         contig = contig.loc[contig.apply(len) > 0]
-        linear = set([k for v in contig.values for i in v for j in i for k in j])
-        smoothed_tracks = tracks.loc[linear].apply(lambda x: np.array(x.values), axis=1)
+        flat = set([k for v in contig.values for i in v for j in i for k in j])
+        smoothed_tracks = tracks.loc[flat].apply(lambda x: np.array(x.values), axis=1)
 
     # fetch edges from ids TODO (IF necessary, here we can compare growth rates)
     idx_to_edge = lambda preposts: [
