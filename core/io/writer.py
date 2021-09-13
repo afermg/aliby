@@ -100,6 +100,7 @@ class TilerWriter(DynamicWriter):
 
 tile_size = 117
 
+
 class BabyWriter(DynamicWriter):
     # TODO make this YAML
     compression = "gzip"
@@ -159,6 +160,7 @@ class Writer(BridgeH5):
 
 
         """
+        self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
             if overwrite == "overwrite":
                 self.deldset(f, path)
@@ -172,7 +174,6 @@ class Writer(BridgeH5):
                     logging.debug("Skipping dataset {}".format(path))
                     return None
 
-            # f.create_group(path)
             logging.debug(
                 "{} {} to {} and {} metadata fields".format(
                     overwrite, type(data), path, len(meta)
@@ -184,7 +185,6 @@ class Writer(BridgeH5):
                 for attr, metadata in meta.items():
                     self.write_meta(f, path, attr, data=metadata)
 
-    # def write_dset(self, f: h5py.File, path: str, data: Iterable, overwrite: str):
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
         if isinstance(data, pd.DataFrame):
             self.write_df(f, path, data, compression=self.compression)
@@ -196,20 +196,9 @@ class Writer(BridgeH5):
             self.write_atomic(data, f, path)
 
     def write_meta(self, f: h5py.File, path: str, attr: str, data: Iterable):
-        # path, attr = path.split(".")
         obj = f.require_group(path)
 
         obj.attrs[attr] = data
-
-    @staticmethod
-    def deldset(f: h5py.File, path: str):
-        if path in f:
-            del f[path]
-
-    @staticmethod
-    def delmeta(f: h5py.File, path: str, attr: str):
-        if path in f and attr in f[path].attrs:
-            del f[path].attrs[attr]
 
     @staticmethod
     def write_arraylike(f: h5py.File, path: str, data: Iterable, **kwargs):
@@ -227,7 +216,7 @@ class Writer(BridgeH5):
         )
         dset[()] = narray
 
-    @staticmethod
+    @staticmethod  # TODO Use this function to implement Diane's dynamic writer
     def write_dynamic(f: h5py.File, path: str, data: Iterable):
         pass
 
@@ -249,7 +238,7 @@ class Writer(BridgeH5):
         values_path = path + "/values"
         if path not in f:
             max_ncells = 2e5
-            max_tps = 1000
+            max_tps = 1e3
             f.create_dataset(
                 name=values_path,
                 shape=df.shape,
@@ -262,13 +251,12 @@ class Writer(BridgeH5):
             dset = f[values_path]
             dset[()] = df.values
 
-            dtype = "uint16"  # if name != "position" else "str"
             for name in df.index.names:
                 indices_path = "/".join((path, name))
                 f.create_dataset(
                     name=indices_path,
                     shape=(len(df),),
-                    dtype=dtype,
+                    dtype="uint16",  # Assuming we'll always use int indices
                     chunks=True,
                     maxshape=(max_ncells,),
                 )
@@ -285,47 +273,71 @@ class Writer(BridgeH5):
             tps = df.columns.tolist()
             f[tp_path][tps] = tps
 
-        # dset =  f.require_group(path)  # TODO check if we can remove this
-
         else:
-            n_newcells = 0
-            # if len(df.index.names) > 1:
             dset = f[values_path]
-            # if not hasattr(self, "new_ids"):
-            existing_ids = self.get_existing_ids(
-                f, [path + "/" + x for x in df.index.names]
-            )
-            # Split indices in existing and new
-            new = df.index.tolist()
-            if df.index.nlevels == 1:  # Cover for cases with a single index
-                new = [(x,) for x in df.index.tolist()]
-            existing_multis, new_multis = self.find_ids(
-                existing=existing_ids,
-                new=new,
-            )
-            self.existing_indices = np.array(
-                locate_indices(existing_ids, existing_multis)
-            )
-            incremental_existing = np.argsort(self.existing_indices)
-            self.existing_indices = self.existing_indices[incremental_existing]
-            self.existing_multi = existing_multis[incremental_existing]
 
-            self.new_indices = list(locate_indices(existing_ids, new_multis))
-            self.new_multi = new_multis
+            # Filter out repeated timepoints
+            new_tps = set(df.columns).difference(f[path + "/timepoint"][()])
+            if len(new_tps) != df.shape[1]:
+                print("Re-extracting existing timepoints. Skipping duplicated")
+                df = df[new_tps]
+
+            if (
+                not hasattr(self, "id_cache") or not df.index.nlevels in self.id_cache
+            ):  # Use cache dict to store previously-obtained indices
+                self.id_cache[df.index.nlevels] = {}
+                existing_ids = self.get_existing_ids(
+                    f, [path + "/" + x for x in df.index.names]
+                )
+                # Split indices in existing and additional
+                new = df.index.tolist()
+                if df.index.nlevels == 1:  # Cover for cases with a single index
+                    new = [(x,) for x in df.index.tolist()]
+                (
+                    found_multis,
+                    self.id_cache[df.index.nlevels]["additional_multis"],
+                ) = self.find_ids(
+                    existing=existing_ids,
+                    new=new,
+                )
+                found_indices = np.array(locate_indices(existing_ids, found_multis))
+
+                # we sort the existing indices for some pandas indexing I can't remember
+                incremental_existing = np.argsort(found_indices)
+                self.id_cache[df.index.nlevels]["found_indices"] = found_indices[
+                    incremental_existing
+                ]
+                self.id_cache[df.index.nlevels]["found_multi"] = found_multis[
+                    incremental_existing
+                ]
+
+                # self.additional_indices = locate_indices(
+                #     existing_ids, self.additional_multis
+                # )
 
             existing_values = df.loc[
-                [tuple_or_int(x) for x in self.existing_multi]
+                [
+                    _tuple_or_int(x)
+                    for x in self.id_cache[df.index.nlevels]["found_multi"]
+                ]
             ].values
-            new_values = df.loc[[tuple_or_int(x) for x in self.new_multi]].values
+            new_values = df.loc[
+                [
+                    _tuple_or_int(x)
+                    for x in self.id_cache[df.index.nlevels]["additional_multis"]
+                ]
+            ].values
             ncells, ntps = f[values_path].shape
 
             # Add found cells
             dset.resize(dset.shape[1] + df.shape[1], axis=1)
             dset[:, ntps:] = np.nan
             for i, tp in enumerate(df.columns):
-                dset[self.existing_indices, tp] = existing_values[:, i]
+                dset[
+                    self.id_cache[df.index.nlevels]["found_indices"], tp
+                ] = existing_values[:, i]
             # Add new cells
-            n_newcells = len(self.new_indices)
+            n_newcells = len(self.id_cache[df.index.nlevels]["additional_multis"])
             dset.resize(dset.shape[0] + n_newcells, axis=0)
             dset[ncells:, :] = np.nan
 
@@ -339,23 +351,27 @@ class Writer(BridgeH5):
                 n = dset.shape[0]
                 dset.resize(n + n_newcells, axis=0)
                 dset[n:] = (
-                    self.new_multi[:, i]
-                    if len(self.new_multi.shape) > 1
-                    else self.new_multi
+                    self.id_cache[df.index.nlevels]["additional_multis"][:, i]
+                    if len(self.id_cache[df.index.nlevels]["additional_multis"].shape)
+                    > 1
+                    else self.id_cache[df.index.nlevels]["additional_multis"]
                 )
 
             tmp = path + "/timepoint"
             dset = f[tmp]
             n = dset.shape[0]
-            dset.resize(n + len(df.columns), axis=0)
+            dset.resize(n + df.shape[1], axis=0)
             dset[n:] = df.columns.tolist()
 
     @staticmethod
     def get_existing_ids(f, paths):
+        # Fetch indices and convert them to a (nentries, nlevels) ndarray
         return np.array([f[path][()] for path in paths]).T
 
     @staticmethod
     def find_ids(existing, new):
+        # Compare two tuple sets and return the intersection and difference
+        # (elements in the 'new' set not in 'existing')
         set_existing = set([tuple(*x) for x in zip(existing.tolist())])
         existing_cells = np.array(list(set_existing.intersection(new)))
         new_cells = np.array(list(set(new).difference(set_existing)))
@@ -389,7 +405,8 @@ def locate_indices(existing, new):
 #         return tuple(x)
 #     else:
 #         return x
-def tuple_or_int(x):
+def _tuple_or_int(x):
+    # Convert tuple to int if it only contains one value
     if len(x) == 1:
         return x[0]
     else:
