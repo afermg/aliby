@@ -106,7 +106,7 @@ class picker(ProcessABC):
     ):
         threshold_asint = _as_int(threshold, signals.shape[1])
         case_mgr = {
-            "present": signals.notna().sum(axis=1) > threshold_asint,
+            "present": signals.apply(max_ntps, axis=1) > threshold_asint,
             "nonstoply_present": signals.apply(max_nonstop_ntps, axis=1)
             > threshold_asint,
             "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
