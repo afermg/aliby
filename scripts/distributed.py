@@ -16,8 +16,13 @@ from baby.brain import BabyBrain
 from core.io.omero import Dataset, Image
 from core.haystack import initialise_tf
 from core.baby_client import DummyRunner
+<<<<<<< Updated upstream
 from core.segment import Tiler
 from core.io.writer import TilerWriter, BabyWriter
+=======
+from core.segment import Tiler, trap_template
+from core.io.writer import TilerWriter, BabyWriter, BabyFolded
+>>>>>>> Stashed changes
 
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
@@ -46,6 +51,7 @@ def create_pipeline(image_id, **config):
             brain = BabyBrain(session=session, **DummyRunner.model_config)
             runner = DummyRunner(tiler, brain)
             bwriter = BabyWriter(f'{directory}/{image.name}.h5')
+            bwriter2 = BabyFolded(f'{directory}/{image.name}.h5')
             # FIXME testing here the extraction
             params = Parameters(**get_params("batgirl_fast"))
             ext = Extractor.from_object(params,
@@ -66,6 +72,7 @@ def create_pipeline(image_id, **config):
                 logging.debug(f'Timing:Segmentation:{perf_counter() - t}s')
                 t = perf_counter()
                 bwriter.write(seg, overwrite=['mother_assign'])
+                bwriter2.write(seg, overwrite=['mother_assign'])
                 logging.debug(f'Timing:Writing:{perf_counter() - t}s')
                 t = perf_counter()
                 ext.extract_pos(tps=[i])
