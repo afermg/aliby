@@ -116,5 +116,5 @@ class picker(ProcessABC):
 
 def _as_int(threshold: Union[float, int], ntps: int):
     if type(threshold) is float:
-        threshold = threshold / ntps
+        threshold = ntps * threshold
     return threshold
