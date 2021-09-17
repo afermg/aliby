@@ -18,7 +18,7 @@ def cell_factory(store, type="matlab"):
         mat_object = matObject(store)
         return CellsMat(mat_object)
     elif type == "hdf5":
-        file = h5py.File(store)
+        file = h5py.File(store, 'r+')
         return CellsHDF(file)
     else:
         raise TypeError(
