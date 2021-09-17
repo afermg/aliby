@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from core.experiment import MetaData
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
@@ -64,7 +65,11 @@ def create_pipeline(image_id, **config):
     assert general_config is not None
     try:
         directory = general_config.get('directory', '')
+        # Run metadata first
         with Image(image_id) as image:
+            meta = MetaData(directory, f'{directory}/{image.name}.h5')
+            # Run metadata first so it can be used by other processes
+            meta.run()
             tiler_config = config.get('tiler', None)
             assert tiler_config is not None  # TODO add defaults
             tiler = Tiler(image.data, image.metadata, template=trap_template)
@@ -125,6 +130,8 @@ def run_config(config):
     with Dataset(int(expt_id)) as conn:
         image_ids = conn.get_images()
         directory = root_dir / conn.name
+        # Download logs to use for metadata
+        conn.cache_logs(directory)
 
     # Modify to the configuration
     config['general']['directory'] = directory
