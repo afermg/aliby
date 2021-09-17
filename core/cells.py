@@ -12,6 +12,7 @@ from scipy.sparse.base import isdense
 
 from core.io.matlab import matObject
 from core.utils import timed
+from core.io.writer import load_complex
 
 
 def cell_factory(store, type="matlab"):
@@ -22,7 +23,7 @@ def cell_factory(store, type="matlab"):
         return CellsMat(mat_object)
     elif type == "hdf5":
         file = h5py.File(store, 'r+')
-        return CellsHDF(file)
+        return CellsHDF.from_cell_info(file)
     else:
         raise TypeError(
             "Could not get cells for type {}:" "valid types are matlab and hdf5"
@@ -73,11 +74,20 @@ from core.io.hdf5 import hdf_dict
 
 from functools import wraps
 
+def cell_hdf_factory(file):
+    if 'cell_info' in file:
+        return CellsHDF(file)
+    elif 'folded_cell_info' in file:
+        return CellFolded(file)
 
 class CellsHDF(Cells):
     # DONE implement cells information from HDF5 file format
     # TODO combine all the cells of one strain into a cellResults?
     # TODO filtering
+    @staticmethod
+    def from_cell_info(file):
+        return cell_hdf_factory(file)
+
     def __init__(self, file, path="/cell_info"):
         self._file = file
         self._info = hdf_dict(self._file.get(path))
@@ -126,13 +136,11 @@ class CellsHDF(Cells):
         t = perf_counter()
         ix = self["timepoint"] == timepoint
         logging.debug(f'Timing:MaskIndexing:{perf_counter() - t}s')
-        
         t = perf_counter()
         edgemasks = self["edgemasks"][ix]
         traps = self["trap"][ix]
         masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
         logging.debug(f'Timing:MaskFetching:{perf_counter() - t}s')
-
         return self.group_by_traps(traps, masks)
     
     def group_by_traps(self, traps, data):
@@ -159,7 +167,101 @@ class CellsHDF(Cells):
     def close(self):
         self._file.close()
 
+class CellFolded(CellsHDF):
+    def __init__(self, file, path='folded_cell_info'):
+        super().__init__(file, path)
+        self.path = path
+        self._edgem_indices = None
+        self._edgemasks=None
+        
+    def __getitem__(self, item):
+        if item == "edgemasks":
+            return self.edgemasks
+        return super().__getitem__(item)
+        
+    @property
+    def edgem_indices(self):
+        if self._edgem_indices is None:
+            edgem_path = self.path + '/edgemasks/indices'
+            self._edgem_indices = load_complex(self._file[edgem_path])
+        return self._edgem_indices
+    
+    @property
+    def edgemasks(self):
+        if self._edgemasks is None:
+            edgem_path = self.path + '/edgemasks/values'
+            self._edgemasks = self._file[edgem_path]
+        return self._edgemasks
+    
+    def _edgem_where(self, cell_id, trap_id):
+        ix = trap_id + 1j*cell_id
+        return find_1st(self.edgem_indices == ix, True, cmp_equal)
 
+    @property
+    def labels(self):
+        """
+        Return all cell labels in object
+        We use mother_assign to list traps because it is the only propriety that appears even
+        when no cells are found"""
+        return [self.labels_in_trap(trap) for trap in self.traps]
+
+    def where(self, cell_id, trap_id):
+        indices = self._get_idx(cell_id, trap_id)
+        edgem_ix = self._edgem_where(cell_id, trap_id)
+        return self["timepoints"][indices], indices, edgem_ix
+
+    def outline(self, cell_id, trap_id):
+        times, indices, cell_ix = self.where(cell_id, trap_id)
+        return times, self["edgemasks"][cell_ix, indices]
+        
+    def mask(self, cell_id, trap_id):
+        times, outlines = self.outline(cell_id, trap_id)
+        return times, np.array(
+            [ndimage.morphology.binary_fill_holes(o) for o in outlines]
+        )
+        pass
+
+    @timed
+    def at_time(self, timepoint, kind="mask"):
+        t = perf_counter()
+        ix = self["timepoint"] == timepoint
+        cell_ix = self["cell_label"][ix]
+        traps = self["trap"][ix]
+        indices = traps + 1j*cell_ix
+        choose = np.in1d(self.edgem_indices, indices)
+        logging.debug(f'Timing:MaskIndexing_folded:{perf_counter() - t}s')
+        t = perf_counter()
+        edgemasks = self["edgemasks"][choose, timepoint]
+        masks = [self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()]
+        logging.debug(f'Timing:MaskFetching_folded:{perf_counter() - t}s')
+        return self.group_by_traps(traps, masks)
+
+    def group_by_traps(self, traps, data):
+        # returns a dict with traps as keys and labels as value
+        iterator = groupby(zip(traps, data), lambda x: x[0])
+        d = {key: [x[1] for x in group] for key, group in iterator}
+        d = {i: d.get(i, []) for i in self.traps}
+        return d
+        
+    def labels_in_trap(self, trap_id):
+        # Return set of cell ids in a trap.
+        return set((self["cell_label"][self["trap"] == trap_id]))
+        pass
+        
+    def labels_at_time(self, timepoint):
+        labels = self["cell_label"][self["timepoint"] == timepoint]
+        traps = self["trap"][self["timepoint"] == timepoint]
+        return self.group_by_traps(traps, labels)
+        
+    @property
+    def tile_size(self):  # TODO read from metadata
+        pass
+
+    @property
+    def close(self):
+        self._file.close()
+    
+        
 class CellsMat(Cells):
     def __init__(self, mat_object):
         super(CellsMat, self).__init__()
