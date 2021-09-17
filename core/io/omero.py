@@ -34,6 +34,7 @@ class Dataset(Argo):
     def __init__(self, expt_id):
         super().__init__()
         self.expt_id = expt_id
+        self._files = None
 
     @property
     def dataset(self):
@@ -75,7 +76,7 @@ class Dataset(Argo):
         return self._tags
 
     def cache_logs(self, root_dir):
-        for annotation in self.files:
+        for name, annotation in self.files.items():
             filepath = root_dir / annotation.getFileName().replace("/", "_")
             if str(filepath).endswith("txt") and not filepath.exists():
                 # Save only the text files
