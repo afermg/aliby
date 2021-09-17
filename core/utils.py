@@ -112,6 +112,7 @@ def get_store_path(save_dir, store, name):
 
 from functools import wraps
 from time import perf_counter
+import logging
 def timed(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -120,3 +121,4 @@ def timed(f):
         logging.debug(f'Timing:{f.__name__}:{perf_counter() - t}s')
         return res
     return decorated
+

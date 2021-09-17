@@ -4,10 +4,12 @@ from omero.gateway import BlitzGateway
 from core.experiment import get_data_lazy
 from core.cells import CellsHDF
 
+
 class Argo:
     # TODO use the one in extraction?
-    def __init__(self, host='islay.bio.ed.ac.uk', username='upload',
-                 password='***REMOVED***'):
+    def __init__(
+        self, host="islay.bio.ed.ac.uk", username="upload", password="***REMOVED***"
+    ):
         self.conn = None
         self.host = host
         self.username = username
@@ -17,8 +19,9 @@ class Argo:
         pass
 
     def __enter__(self):
-        self.conn = BlitzGateway(host=self.host, username=self.username,
-                                 passwd=self.password)
+        self.conn = BlitzGateway(
+            host=self.host, username=self.username, passwd=self.password
+        )
         self.conn.connect()
         return self
 
@@ -40,34 +43,45 @@ class Dataset(Argo):
     def name(self):
         return self.dataset.getName()
 
+    @property
+    def date(self):
+        return self.dataset.getDate()
+
+    @property
+    def unique_name(self):
+        return "_".join((self.date.strftime("%Y_%m_%d").replace("/", "_"), self.name))
+
     def get_images(self):
         return {im.getName(): im.getId() for im in self.dataset.listChildren()}
 
     @property
     def files(self):
         if self._files is None:
-            self._files = {x.getFileName(): x for x in
-                      self.dataset.listAnnotations()
-                 if isinstance(x, omero.gateway.FileAnnotationWrapper)}
+            self._files = {
+                x.getFileName(): x
+                for x in self.dataset.listAnnotations()
+                if isinstance(x, omero.gateway.FileAnnotationWrapper)
+            }
         return self._files
 
     @property
     def tags(self):
         if self._tags is None:
-            self._tags = {x.getName(): x for x in
-                          self.dataset.listAnnotations()
-                         if isinstance(x, omero.gateway.TagAnnotationWrapper)}
+            self._tags = {
+                x.getName(): x
+                for x in self.dataset.listAnnotations()
+                if isinstance(x, omero.gateway.TagAnnotationWrapper)
+            }
         return self._tags
 
     def cache_logs(self, root_dir):
         for annotation in self.files:
-                filepath = root_dir / annotation.getFileName().replace(
-                    '/', '_')
-                if str(filepath).endswith('txt') and not filepath.exists():
-                    # Save only the text files
-                    with open(str(filepath), 'wb') as fd:
-                        for chunk in annotation.getFileInChunks():
-                            fd.write(chunk)
+            filepath = root_dir / annotation.getFileName().replace("/", "_")
+            if str(filepath).endswith("txt") and not filepath.exists():
+                # Save only the text files
+                with open(str(filepath), "wb") as fd:
+                    for chunk in annotation.getFileInChunks():
+                        fd.write(chunk)
         return True
 
 
@@ -95,19 +109,19 @@ class Image(Argo):
     @property
     def metadata(self):
         meta = dict()
-        meta['size_x'] = self.image_wrap.getSizeX()
-        meta['size_y'] = self.image_wrap.getSizeY()
-        meta['size_z'] = self.image_wrap.getSizeZ()
-        meta['size_c'] = self.image_wrap.getSizeC()
-        meta['size_t'] = self.image_wrap.getSizeT()
-        meta['channels'] = self.image_wrap.getChannelLabels()
-        meta['name'] = self.image_wrap.getName()
+        meta["size_x"] = self.image_wrap.getSizeX()
+        meta["size_y"] = self.image_wrap.getSizeY()
+        meta["size_z"] = self.image_wrap.getSizeZ()
+        meta["size_c"] = self.image_wrap.getSizeC()
+        meta["size_t"] = self.image_wrap.getSizeT()
+        meta["channels"] = self.image_wrap.getChannelLabels()
+        meta["name"] = self.image_wrap.getName()
         return meta
 
 
 class Cells(CellsHDF):
     def __init__(self, filename):
-        file = h5py.File(filename, 'r')
+        file = h5py.File(filename, "r")
         super().__init__(file)
 
     def __enter__(self):

@@ -1,5 +1,6 @@
 import itertools
 import logging
+from time import perf_counter
 
 import h5py
 import numpy as np
@@ -10,6 +11,7 @@ from typing import Dict
 from utils_find_1st import find_1st, cmp_equal
 
 from core.io.base import BridgeH5
+from core.utils import timed
 
 
 #################### Dynamic version ##################################
@@ -120,13 +122,16 @@ class BabyWriter(DynamicWriter):
     }
     group = "cell_info"
 
+@timed
 def save_complex(array, dataset):
     # Dataset needs to be 2D
     n = len(array)
-    dataset.resize(dataset.shape[0] + n, axis=0)
-    dataset[-n:, 0] = array.real
-    dataset[-n:, 1] = array.imag
+    if n >0:
+        dataset.resize(dataset.shape[0] + n, axis=0)
+        dataset[-n:, 0] = array.real
+        dataset[-n:, 1] = array.imag
 
+@timed
 def load_complex(dataset):
     array = dataset[:, 0] + 1j*dataset[:, 1]
     return array
@@ -149,15 +154,17 @@ class BabyFolded(DynamicWriter):
         "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
         "volumes": ((None,), np.float32),
     }
+    group = "folded_cell_info"
 
+    @timed
     def write_edgemasks(self, data, keys, hgroup):
         # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
         key = 'edgemasks'
-        val_key = 'edgemasks/values'
-        idx_key = 'edgemasks/indices'
+        val_key = 'values'
+        idx_key = 'indices'
         # Length of edgemasks
         traps, cell_labels, edgemasks = data
-        n_cells = edgemasks.shape[0]
+        n_cells = len(cell_labels)
         hgroup = hgroup.require_group(key)
         current_indices = np.array(traps) + 1j*np.array(cell_labels)
         if val_key not in hgroup:
@@ -165,7 +172,7 @@ class BabyFolded(DynamicWriter):
             # This holds the edge masks directly and
             # Is of shape (n_tps, n_cells, tile_size, tile_size)
             max_shape, dtype = self.datatypes[key]
-            shape = (1, n_cells,) + max_shape[2:]
+            shape = (n_cells, 1) + max_shape[2:]
             val_dset = hgroup.create_dataset(
                 'values',
                 shape=shape,
@@ -173,17 +180,17 @@ class BabyFolded(DynamicWriter):
                 dtype=dtype,
                 compression=self.compression,
             )
-            val_dset[()] = data['edgemasks']
+            val_dset[:, 0] = edgemasks
             # Create index dataset
             # Holds the (trap, cell_id) description used to index into the
             # values and is of shape (n_cells, 2)
-            ix_max_shape = (max_shape[1], 2)
+            ix_max_shape = (max_shape[0], 2)
             ix_shape = (0, 2)
             ix_dtype = np.uint16
             ix_dset = hgroup.create_dataset(
                 'indices',
                 shape=ix_shape,
-                max_shape=ix_max_shape,
+                maxshape=ix_max_shape,
                 dtype=ix_dtype,
                 compression=self.compression
             )
@@ -199,19 +206,24 @@ class BabyFolded(DynamicWriter):
             all_indices = np.concatenate([existing_indices, missing])
             # TODO SAVE MISSING
 
-            n_tps = val_dset.shape[0] + 1
+            t = perf_counter()
+            n_tps = val_dset.shape[1] + 1
             n_add_cells = len(missing)
             # RESIZE DATASET FOR TIME and FILL with NAN
-            val_dset.resize(n_tps, axis=0)
-            val_dset[:-1] = np.nan
+            val_dset.resize(n_tps, axis=1)
+            #val_dset[:-1] = 0
             # RESIZE DATASET FOR CELLS
-            val_dset.resize(val_dset.shape[1] + n_add_cells, axis=1)
-            val_dset[:, -n_add_cells:] = np.nan
+            val_dset.resize(val_dset.shape[0] + n_add_cells, axis=0)
+            #val_dset[:, -n_add_cells:] = 0
+            logging.debug(f'Timing:resizing:{perf_counter() - t}')
 
             cell_indices = np.where(np.in1d(all_indices, current_indices))[0]
 
             for ix, mask in zip(cell_indices, edgemasks):
-                val_dset[n_tps, ix] = mask
+                try:
+                    val_dset[ix, n_tps-1] = mask
+                except Exception as e: 
+                    logging.debug(f'{ix}, {n_tps}, {val_dset.shape}')
 
             # Save the index values
             save_complex(missing, ix_dset)
