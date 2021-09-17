@@ -191,7 +191,7 @@ if __name__ == "__main__":
         general=dict(
             id=19303,
             distributed=0,
-            tps=10,
+            tps=390,
             strain='Hxt1_025',
             directory='../data/'
         ),
