@@ -58,17 +58,59 @@ def format_segmentation(segmentation, tp):
     merged['mother_assign'] = mother_assign
     return merged
 
+def choose_model_from_params(modelset_filter=None, camera='prime95b', channel='brightfield',
+                             zoom='60x', n_stacks='5z', **kwargs):
+    """
+    Define which model to query from the server based on a set of parameters.
+    
+    Parameters
+    ----------
+    valid_models: List[str]
+                  The names of the models that are available.
+    modelset_filter: str 
+                    A regex filter to apply on the models to start.
+    camera: str
+            The camera used in the experiment (case insensitive).
+    channel:str 
+            The channel used for segmentation (case insensitive).
+    zoom: str 
+          The zoom on the channel.
+    n_stacks: str
+              The number of z_stacks to use in segmentation
+    
+    Returns
+    -------
+    model_name : str
+    """
+    valid_models = list(modelsets().keys())
+    
+    # Apply modelset filter if specified
+    if modelset_filter is not None:
+        msf_regex = re.compile(modelset_filter)
+        valid_models = filter(msf_regex.search, valid_models)
+
+    # Apply parameter filters if specified
+    params = [str(x) if x is not None else '.+' for x in [camera.lower(),
+                                                          channel.lower(),
+                                                          zoom, n_stacks]]
+    params_re = re.compile('^' + '_'.join(params) + '$')
+    valid_models = list(filter(params_re.search, valid_models))
+    # Check that there are valid models
+    if len(valid_models) == 0:
+        raise KeyError(
+            "No model sets found matching {}".format(', '.join(params)))
+    # Pick the first model
+    return valid_models[0]
 
 class DummyRunner:
-    """A dummy BabyRunner object for Dask Demo.
+    """A BabyRunner object for cell segmentation.
 
     Does segmentation one time point at a time."""
-    model_name = 'prime95b_brightfield_60x_5z'
-    model_config = modelsets()[model_name]
-
-    def __init__(self, tiler, brain, *args, **kwargs):
+    
+    def __init__(self, tiler, *args, **kwargs):
         self.tiler = tiler
-        self.brain = brain  # BabyBrain(**self.model_config)
+        self.model_config = modelsets()[choose_model_from_params(**kwargs)]
+        self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
         self.bf_channel = self.tiler.get_channel_index('Brightfield')
 
@@ -77,11 +119,11 @@ class DummyRunner:
         return self.tiler.get_tp_data(tp, self.bf_channel)\
                 .swapaxes(1, 3).swapaxes(1, 2)
 
-    def run_tp(self, tp, **kwargs):
+    def run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """ Simulating processing time with sleep"""
         # Access the image
         img = self.get_data(tp)
-        segmentation = self.crawler.step(img, **kwargs)
+        segmentation = self.crawler.step(img, with_edgemasks=with_edgemasks, assign_mothers=assign_mothers, **kwargs)
         return format_segmentation(segmentation, tp)
 
 
@@ -159,40 +201,7 @@ class DummyClient:
 #
 #
 # # Todo: add defaults!
-# def choose_model_from_params(valid_models,
-#                              modelset_filter=None, camera=None, channel=None,
-#                              zoom=None, n_stacks=None, **kwargs):
-#     """
-#     Define which model to query from the server based on a set of parameters.
-#     This depends on:
-#     :param valid_models: The names of the models that are available.
-#     :param modelset_filter: A regex filter to apply on the models to start.
-#     :param camera: The camera used in the experiment (case insensitive).
-#     :param channel: The channel used for segmentation (case insensitive).
-#     :param zoom: The zoom on the channel.
-#     :param n_stacks: The number of z_stacks to use in segmentation.
-#     :return:
-#     """
-#     # TODO specify which z-stacks in the Segmentation class if the number of
-#     #  stacks is fewer than the total number of available z-stacks.
-#
-#     # Apply modelset filter if specified
-#     if modelset_filter is not None:
-#         msf_regex = re.compile(modelset_filter)
-#         valid_models = filter(msf_regex.search, valid_models)
-#
-#     # Apply parameter filters if specified
-#     params = [str(x) if x is not None else '.+' for x in [camera.lower(),
-#                                                           channel.lower(),
-#                                                           zoom, n_stacks]]
-#     params_re = re.compile('^' + '_'.join(params) + '$')
-#     valid_models = list(filter(params_re.search, valid_models))
-#     # Check that there are valid models
-#     if len(valid_models) == 0:
-#         raise BabyNoMatches(
-#             "No model sets found matching {}".format(', '.join(params)))
-#     # Pick the first model
-#     return valid_models[0]
+
 #
 #
 # def create_request(dims, bit_depth, img, **kwargs):

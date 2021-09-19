@@ -35,12 +35,11 @@ def pipeline(image_id, tps=10, tf_version=2):
     try:
         # Initialise tensorflow
         session = initialise_tf(tf_version)
-        brain = BabyBrain(session=session, **DummyRunner.model_config)
         with Image(image_id) as image:
             print(f'Getting data for {image.name}')
             tiler = Tiler(image.data, image.metadata, image.name)
             writer = TilerWriter(f'../data/test2/{image.name}.h5')
-            runner = DummyRunner(tiler, brain)
+            runner = DummyRunner(tiler)
             bwriter = BabyWriter(f'../data/test2/{image.name}.h5')
             run_config = {"with_edgemasks": True, "assign_mothers": True}
             for i in tqdm(range(0, tps), desc=image.name):
@@ -87,8 +86,7 @@ def create_pipeline(image_id, **config):
             assert baby_config is not None  # TODO add defaults
             tf_version = baby_config.get('tf_version', 1)
             session = initialise_tf(tf_version)
-            brain = BabyBrain(session=session, **DummyRunner.model_config)
-            runner = DummyRunner(tiler, brain)
+            runner = DummyRunner(tiler)
             bwriter = BabyWriter(linear_file)
             bwriter2 = BabyFolded(folded_file)
             # FIXME testing here the extraction
@@ -173,7 +171,7 @@ def run_config(config):
 
     if distributed != 0:  # Gives the number of simultaneous processes
         with Pool(distributed) as p:
-            results = p.map(lambda x: create_pipeline(x, **config), image_ids)
+            results = p.map(lambda x: create_pipeline(x, **config), image_ids.items())
         return results
     else:  # Sequential
         results = []
