@@ -63,7 +63,6 @@ class DummyRunner:
     """A dummy BabyRunner object for Dask Demo.
 
     Does segmentation one time point at a time."""
-    bf_channel = 0
     model_name = 'prime95b_brightfield_60x_5z'
     model_config = modelsets()[model_name]
 

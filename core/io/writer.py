@@ -16,6 +16,10 @@ from core.utils import timed
 
 #################### Dynamic version ##################################
 
+def load_attributes(file: str, group='/'):
+    with h5py.File(file, 'r') as f: 
+        meta = dict(f[group].attrs.items())
+    return meta
 
 class DynamicWriter:
     data_types = {}
@@ -24,6 +28,7 @@ class DynamicWriter:
 
     def __init__(self, file: str):
         self.file = file
+        self.metadata = load_attributes(file)
 
     def _append(self, data, key, hgroup):
         """Append data to existing dataset."""
@@ -141,6 +146,8 @@ class BabyFolded(DynamicWriter):
     compression = "gzip"
     max_ncells = 2e5 # Could just make this None
     max_tps = 1e3 # Could just make this None
+    chunk_cells=25#The number of cells in a chunk for edge masks
+    default_tile_size=117
     datatypes = {
         "centres": ((None, 2), np.uint16),
         "position": ((None,), np.uint16),
@@ -155,9 +162,23 @@ class BabyFolded(DynamicWriter):
         "volumes": ((None,), np.float32),
     }
     group = "folded_cell_info"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Get max_tps and trap info
+        self._traps_initialised = False
+    
+    def __init_trap_info(self):
+        # Should only be run after the traps have been initialised
+        trap_metadata = load_attributes(self.file, 'trap_info')
+        tile_size = trap_metadata.get('tile_size', self.default_tile_size)
+        max_tps = self.metadata['time_settings/ntimepoints'][0]
+        self.datatypes["edgemasks"] = ((self.max_ncells, max_tps, tile_size, tile_size), np.bool)
+        self._traps_initialised = True
 
     @timed
     def write_edgemasks(self, data, keys, hgroup):
+        if not self._traps_initialised: 
+            self.__init_trap_info()
         # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
         key = 'edgemasks'
         val_key = 'values'
@@ -173,11 +194,13 @@ class BabyFolded(DynamicWriter):
             # Is of shape (n_tps, n_cells, tile_size, tile_size)
             max_shape, dtype = self.datatypes[key]
             shape = (n_cells, 1) + max_shape[2:]
+            chunks = (self.chunk_cells, 1) + max_shape[2:]
             val_dset = hgroup.create_dataset(
                 'values',
                 shape=shape,
                 maxshape=max_shape,
                 dtype=dtype,
+                chunks=chunks,
                 compression=self.compression,
             )
             val_dset[:, 0] = edgemasks
