@@ -108,25 +108,6 @@ class TilerWriter(DynamicWriter):
 
 tile_size = 117
 
-
-class BabyWriter(DynamicWriter):
-    # TODO make this YAML
-    compression = "gzip"
-    datatypes = {
-        "centres": ((None, 2), np.uint16),
-        "position": ((None,), np.uint16),
-        "angles": ((None,), h5py.vlen_dtype(np.float32)),
-        "radii": ((None,), h5py.vlen_dtype(np.float32)),
-        "edgemasks": ((None, tile_size, tile_size), np.bool),
-        "ellipse_dims": ((None, 2), np.float32),
-        "cell_label": ((None,), np.uint16),
-        "trap": ((None,), np.uint16),
-        "timepoint": ((None,), np.uint16),
-        "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
-        "volumes": ((None,), np.float32),
-    }
-    group = "cell_info"
-
 @timed
 def save_complex(array, dataset):
     # Dataset needs to be 2D
@@ -142,7 +123,7 @@ def load_complex(dataset):
     return array
 
 
-class BabyFolded(DynamicWriter):
+class BabyWriter(DynamicWriter):
     compression = "gzip"
     max_ncells = 2e5 # Could just make this None
     max_tps = 1e3 # Could just make this None
@@ -161,7 +142,7 @@ class BabyFolded(DynamicWriter):
         "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
         "volumes": ((None,), np.float32),
     }
-    group = "folded_cell_info"
+    group = "cell_info"
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Get max_tps and trap info
@@ -175,6 +156,67 @@ class BabyFolded(DynamicWriter):
         self.datatypes["edgemasks"] = ((self.max_ncells, max_tps, tile_size, tile_size), np.bool)
         self._traps_initialised = True
 
+    def __init_edgemasks(self, hgroup, edgemasks, current_indices, n_cells):
+        # Create values dataset
+        # This holds the edge masks directly and
+        # Is of shape (n_tps, n_cells, tile_size, tile_size)
+        key = "edgemasks"
+        max_shape, dtype = self.datatypes[key]
+        shape = (n_cells, 1) + max_shape[2:]
+        chunks = (self.chunk_cells, 1) + max_shape[2:]
+        val_dset = hgroup.create_dataset(
+                'values',
+                shape=shape,
+                maxshape=max_shape,
+                dtype=dtype,
+                chunks=chunks,
+                compression=self.compression,
+            )
+        val_dset[:, 0] = edgemasks
+        # Create index dataset
+        # Holds the (trap, cell_id) description used to index into the
+        # values and is of shape (n_cells, 2)
+        ix_max_shape = (max_shape[0], 2)
+        ix_shape = (0, 2)
+        ix_dtype = np.uint16
+        ix_dset = hgroup.create_dataset(
+                'indices',
+                shape=ix_shape,
+                maxshape=ix_max_shape,
+                dtype=ix_dtype,
+                compression=self.compression
+            )
+        save_complex(current_indices, ix_dset)
+    
+    
+    def __append_edgemasks(self, hgroup, edgemasks, current_indices):
+        key = "edgemasks"
+        val_dset = hgroup['values']
+        ix_dset = hgroup['indices']
+        existing_indices = load_complex(ix_dset)
+        # Check if there are any new labels
+        available = np.in1d(current_indices, existing_indices)
+        missing = current_indices[~available]
+        all_indices = np.concatenate([existing_indices, missing])
+        # Resizing
+        t = perf_counter()
+        n_tps = val_dset.shape[1] + 1
+        n_add_cells = len(missing)
+        # RESIZE DATASET FOR TIME and Cells
+        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[2:]
+        val_dset.resize(new_shape)
+        logging.debug(f'Timing:resizing:{perf_counter() - t}')
+        # Writing data
+        cell_indices = np.where(np.in1d(all_indices, current_indices))[0]
+        for ix, mask in zip(cell_indices, edgemasks):
+            try:
+                val_dset[ix, n_tps-1] = mask
+            except Exception as e: 
+                logging.debug(f'{ix}, {n_tps}, {val_dset.shape}')
+        # Save the index values
+        save_complex(missing, ix_dset)
+        
+        
     @timed
     def write_edgemasks(self, data, keys, hgroup):
         if not self._traps_initialised: 
@@ -189,67 +231,9 @@ class BabyFolded(DynamicWriter):
         hgroup = hgroup.require_group(key)
         current_indices = np.array(traps) + 1j*np.array(cell_labels)
         if val_key not in hgroup:
-            # Create values dataset
-            # This holds the edge masks directly and
-            # Is of shape (n_tps, n_cells, tile_size, tile_size)
-            max_shape, dtype = self.datatypes[key]
-            shape = (n_cells, 1) + max_shape[2:]
-            chunks = (self.chunk_cells, 1) + max_shape[2:]
-            val_dset = hgroup.create_dataset(
-                'values',
-                shape=shape,
-                maxshape=max_shape,
-                dtype=dtype,
-                chunks=chunks,
-                compression=self.compression,
-            )
-            val_dset[:, 0] = edgemasks
-            # Create index dataset
-            # Holds the (trap, cell_id) description used to index into the
-            # values and is of shape (n_cells, 2)
-            ix_max_shape = (max_shape[0], 2)
-            ix_shape = (0, 2)
-            ix_dtype = np.uint16
-            ix_dset = hgroup.create_dataset(
-                'indices',
-                shape=ix_shape,
-                maxshape=ix_max_shape,
-                dtype=ix_dtype,
-                compression=self.compression
-            )
-            save_complex(current_indices, ix_dset)
+            self.__init_edgemasks(hgroup, edgemasks, current_indices, n_cells)
         else:
-            val_dset = hgroup['values']
-            ix_dset = hgroup['indices']
-            existing_indices = load_complex(ix_dset)
-            # Check if there are any new labels
-            available = np.in1d(current_indices, existing_indices)
-            missing = current_indices[~available]
-
-            all_indices = np.concatenate([existing_indices, missing])
-            # TODO SAVE MISSING
-
-            t = perf_counter()
-            n_tps = val_dset.shape[1] + 1
-            n_add_cells = len(missing)
-            # RESIZE DATASET FOR TIME and FILL with NAN
-            val_dset.resize(n_tps, axis=1)
-            #val_dset[:-1] = 0
-            # RESIZE DATASET FOR CELLS
-            val_dset.resize(val_dset.shape[0] + n_add_cells, axis=0)
-            #val_dset[:, -n_add_cells:] = 0
-            logging.debug(f'Timing:resizing:{perf_counter() - t}')
-
-            cell_indices = np.where(np.in1d(all_indices, current_indices))[0]
-
-            for ix, mask in zip(cell_indices, edgemasks):
-                try:
-                    val_dset[ix, n_tps-1] = mask
-                except Exception as e: 
-                    logging.debug(f'{ix}, {n_tps}, {val_dset.shape}')
-
-            # Save the index values
-            save_complex(missing, ix_dset)
+            self.__append_edgemasks(hgroup, edgemasks, current_indices)
 
 
     def write(self, data, overwrite: list):

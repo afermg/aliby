@@ -8,10 +8,13 @@ from multiprocessing import set_start_method
 import numpy as np
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
-set_start_method("spawn")
+#set_start_method("spawn")
 
 from tqdm import tqdm
 import traceback
+import matplotlib.pyplot as plt
+import seaborn as sns
+import operator
 
 from baby.brain import BabyBrain
 
@@ -19,7 +22,8 @@ from core.io.omero import Dataset, Image
 from core.haystack import initialise_tf
 from core.baby_client import DummyRunner
 from core.segment import Tiler
-from core.io.writer import TilerWriter, BabyWriter, BabyFolded
+from core.io.writer import TilerWriter, BabyWriter
+from core.utils import timed
 
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
@@ -41,11 +45,10 @@ def pipeline(image_id, tps=10, tf_version=2):
             writer = TilerWriter(f'../data/test2/{image.name}.h5')
             runner = DummyRunner(tiler)
             bwriter = BabyWriter(f'../data/test2/{image.name}.h5')
-            run_config = {"with_edgemasks": True, "assign_mothers": True}
             for i in tqdm(range(0, tps), desc=image.name):
                 trap_info = tiler.run_tp(i)
                 writer.write(trap_info, overwrite=[])
-                seg = runner.run_tp(i, **run_config)
+                seg = runner.run_tp(i)
                 bwriter.write(seg, overwrite=['mother_assign'])
             return True
     except Exception as e:  # bug in the trap getting
@@ -61,6 +64,7 @@ def pipeline(image_id, tps=10, tf_version=2):
             session.close()
 
 
+@timed
 def create_pipeline(image_id, **config):
     name, image_id = image_id
     general_config = config.get('general', None)
@@ -68,37 +72,25 @@ def create_pipeline(image_id, **config):
     session = None
     try:
         directory = general_config.get('directory', '')
-        # Run metadata first
         with Image(image_id) as image:
-            linear_file = f'{directory}/{image.name}.h5'
-            folded_file = f'{directory}/{image.name}_folded.h5'
-            for f in [linear_file, folded_file]:
-                meta = MetaData(directory, f)
-                # Run metadata first so it can be used by other processes
-                meta.run()
-            tiler_config = config.get('tiler', None)
-            assert tiler_config is not None  # TODO add defaults
+            filename = f'{directory}/{image.name}.h5'
+            # Run metadata first
+            meta = MetaData(directory, filename)
+            meta.run()
             tiler = Tiler(image.data, image.metadata)
-            writer = TilerWriter(linear_file)
-            writer2 = TilerWriter(folded_file)
-            baby_config = config.get('baby', None)
+            writer = TilerWriter(filename)
             baby_config = config.get('baby', None)
             assert baby_config is not None  # TODO add defaults
             tf_version = baby_config.get('tf_version', 1)
             session = initialise_tf(tf_version)
             runner = DummyRunner(tiler)
-            bwriter = BabyWriter(linear_file)
-            bwriter2 = BabyFolded(folded_file)
+            bwriter = BabyWriter(filename)
             # FIXME testing here the extraction
             params = Parameters(**get_params("batgirl_fast"))
             ext = Extractor.from_object(params,
-                                        store=linear_file,
-                                        object=tiler)
-            ext2 = Extractor.from_object(params,
-                                        store=folded_file,
+                                        store=filename,
                                         object=tiler)
             # RUN
-            run_config = baby_config.get('run', dict())
             tps = general_config.get('tps', 0)
             for i in tqdm(range(0, tps), desc=image.name):
                 t = perf_counter()
@@ -106,23 +98,19 @@ def create_pipeline(image_id, **config):
                 logging.debug(f'Timing:Trap:{perf_counter() - t}s')
                 t = perf_counter()
                 writer.write(trap_info, overwrite=[])
-                writer2.write(trap_info, overwrite=[])
                 logging.debug(f'Timing:Writing-trap:{perf_counter() - t}s')
                 t = perf_counter()
-                seg = runner.run_tp(i, **run_config)
+                seg = runner.run_tp(i)
                 logging.debug(f'Timing:Segmentation:{perf_counter() - t}s')
                 t = perf_counter()
                 bwriter.write(seg, overwrite=['mother_assign'])
-                logging.debug(f'Timing:Writing-baby-linear:{perf_counter() - t}s')
-                t = perf_counter()
-                bwriter2.write(seg, overwrite=['mother_assign'])
-                logging.debug(f'Timing:Writing-baby-folded:{perf_counter() - t}s')
+                logging.debug(f'Timing:Writing-baby:{perf_counter() - t}s')
                 t = perf_counter()
                 ext.extract_pos(tps=[i])
-                logging.debug(f'Timing:Extraction_linear:{perf_counter() - t}s')
-                t = perf_counter()
-                ext2.extract_pos(tps=[i])
-                logging.debug(f'Timing:Extraction_folded:{perf_counter() - t}s')
+                logging.debug(f'Timing:Extraction:{perf_counter() - t}s')
+            # Run post processing
+            post_proc_params = PostProcessorParameters.default()
+            post_process(filename, post_proc_params)
             return True
     except Exception as e:  # bug in the trap getting
         print(f'Caught exception in worker thread (x = {name}):')
@@ -135,13 +123,13 @@ def create_pipeline(image_id, **config):
         if session:
             session.close()
 
-
+@timed
 def post_process(filepath, params):
     pp = PostProcessor(filepath, params)
     tmp = pp.run()
     return tmp
 
-
+@timed
 def run_config(config):
     # Config holds the general information, use in main
     # Steps holds the description of tasks with their parameters
@@ -178,24 +166,9 @@ def run_config(config):
         for k, v in image_ids.items():
             r = create_pipeline((k, v), **config)
             results.append(r)
+            
 
-    # Post process!
-    params = PostProcessorParameters.default()
-    if distributed != 0:
-        with Pool(distributed) as p:
-            results = p.map(lambda pos_name, _: post_process(directory /
-                                                             f'{pos_name}.h5',
-                                                             params),
-                            image_ids)
-    else:
-        for pos_name in image_ids:
-            tmp = post_process(directory / f'{pos_name}.h5', params)
-    return
-
-
-if __name__ == "__main__":
-    import logging
-    log_file = '../data/2tozero_Hxts_02/issues_copy.log'
+def initialise_logging(log_file: str):
     logging.basicConfig(filename=log_file, level=logging.DEBUG)
     for v in logging.Logger.manager.loggerDict.values():
         try:
@@ -203,22 +176,62 @@ if __name__ == "__main__":
                 v.disabled = True
         except:
             pass
+        
+        
+def parse_timing(log_file):
+    timings = dict()
+    # Open the log file
+    with open(log_file, 'r') as f:
+        # Line by line read
+        for line in f.read().splitlines():
+            if not line.startswith('DEBUG:root'):
+                continue
+            words = line.split(':')
+            # Only keep lines that include "Timing"
+            if 'Timing' in words:
+                # Split the last two into key, value
+                k,v = words[-2:]
+                # Dict[key].append(value)
+                if k not in timings:
+                    timings[k] = []
+                timings[k].append(float(v[:-1]))
+    return timings
+
+
+def visualise_timing(timings: dict, save_file: str):
+    plt.figure().clear()
+    plot_data = {x: timings[x] for x in timings if x.startswith(('Trap', 'Writing', 'Segmentation', 'Extraction'))}
+    sorted_keys, fixed_data = zip(*sorted(plot_data.items(), key=operator.itemgetter(1)))
+    #Set up the graph parameters
+    sns.set(style='whitegrid')
+    #Plot the graph
+    sns.stripplot(data=fixed_data, size=1)
+    ax = sns.boxplot(data=fixed_data, whis=np.inf, width=.05)
+    ax.set(xlabel="Stage", ylabel="Time (s)", xticklabels=sorted_keys)
+    ax.tick_params(axis='x', rotation=90);
+    ax.figure.savefig(save_file, bbox_inches='tight', transparent=True)
+    return
+
+
+if __name__ == "__main__":
+    strain = 'Hxt3'
     config = dict(
         general=dict(
             id=19303,
-            distributed=0,
-            tps=50,
-            strain='Hxt1_021',
+            distributed=5,
+            tps=10,
+            strain=strain,
             directory='../data/'
         ),
         tiler=dict(),
-        baby=dict(
-            tf_version=2,
-            run=dict(
-                with_edgemasks=True,
-                assign_mothers=True
-            )
-        )
+        baby=dict(tf_version=2)
     )
-
+    log_file = '../data/2tozero_Hxts_02/issues.log'
+    initialise_logging(log_file)
+    save_timings = f"../data/2tozero_Hxts_02/timings_{strain}.pdf"
+    # Run
     run_config(config)
+    # Get timing results
+    timing = parse_timing(log_file)
+    # Visualise timings and save
+    visualise_timing(timing, save_timings)
