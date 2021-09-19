@@ -1,4 +1,6 @@
+import itertools
 import logging
+from time import perf_counter
 
 import h5py
 import numpy as np
@@ -9,10 +11,15 @@ from typing import Dict
 from utils_find_1st import find_1st, cmp_equal
 
 from core.io.base import BridgeH5
+from core.utils import timed
 
 
 #################### Dynamic version ##################################
 
+def load_attributes(file: str, group='/'):
+    with h5py.File(file, 'r') as f: 
+        meta = dict(f[group].attrs.items())
+    return meta
 
 class DynamicWriter:
     data_types = {}
@@ -21,6 +28,7 @@ class DynamicWriter:
 
     def __init__(self, file: str):
         self.file = file
+        self.metadata = load_attributes(file)
 
     def _append(self, data, key, hgroup):
         """Append data to existing dataset."""
@@ -100,16 +108,33 @@ class TilerWriter(DynamicWriter):
 
 tile_size = 117
 
+@timed
+def save_complex(array, dataset):
+    # Dataset needs to be 2D
+    n = len(array)
+    if n >0:
+        dataset.resize(dataset.shape[0] + n, axis=0)
+        dataset[-n:, 0] = array.real
+        dataset[-n:, 1] = array.imag
+
+@timed
+def load_complex(dataset):
+    array = dataset[:, 0] + 1j*dataset[:, 1]
+    return array
+
 
 class BabyWriter(DynamicWriter):
-    # TODO make this YAML
     compression = "gzip"
+    max_ncells = 2e5 # Could just make this None
+    max_tps = 1e3 # Could just make this None
+    chunk_cells=25#The number of cells in a chunk for edge masks
+    default_tile_size=117
     datatypes = {
         "centres": ((None, 2), np.uint16),
         "position": ((None,), np.uint16),
         "angles": ((None,), h5py.vlen_dtype(np.float32)),
         "radii": ((None,), h5py.vlen_dtype(np.float32)),
-        "edgemasks": ((None, tile_size, tile_size), np.bool),
+        "edgemasks": ((max_ncells, max_tps, tile_size, tile_size), np.bool),
         "ellipse_dims": ((None, 2), np.float32),
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
@@ -118,6 +143,122 @@ class BabyWriter(DynamicWriter):
         "volumes": ((None,), np.float32),
     }
     group = "cell_info"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Get max_tps and trap info
+        self._traps_initialised = False
+    
+    def __init_trap_info(self):
+        # Should only be run after the traps have been initialised
+        trap_metadata = load_attributes(self.file, 'trap_info')
+        tile_size = trap_metadata.get('tile_size', self.default_tile_size)
+        max_tps = self.metadata['time_settings/ntimepoints'][0]
+        self.datatypes["edgemasks"] = ((self.max_ncells, max_tps, tile_size, tile_size), np.bool)
+        self._traps_initialised = True
+
+    def __init_edgemasks(self, hgroup, edgemasks, current_indices, n_cells):
+        # Create values dataset
+        # This holds the edge masks directly and
+        # Is of shape (n_tps, n_cells, tile_size, tile_size)
+        key = "edgemasks"
+        max_shape, dtype = self.datatypes[key]
+        shape = (n_cells, 1) + max_shape[2:]
+        chunks = (self.chunk_cells, 1) + max_shape[2:]
+        val_dset = hgroup.create_dataset(
+                'values',
+                shape=shape,
+                maxshape=max_shape,
+                dtype=dtype,
+                chunks=chunks,
+                compression=self.compression,
+            )
+        val_dset[:, 0] = edgemasks
+        # Create index dataset
+        # Holds the (trap, cell_id) description used to index into the
+        # values and is of shape (n_cells, 2)
+        ix_max_shape = (max_shape[0], 2)
+        ix_shape = (0, 2)
+        ix_dtype = np.uint16
+        ix_dset = hgroup.create_dataset(
+                'indices',
+                shape=ix_shape,
+                maxshape=ix_max_shape,
+                dtype=ix_dtype,
+                compression=self.compression
+            )
+        save_complex(current_indices, ix_dset)
+    
+    
+    def __append_edgemasks(self, hgroup, edgemasks, current_indices):
+        key = "edgemasks"
+        val_dset = hgroup['values']
+        ix_dset = hgroup['indices']
+        existing_indices = load_complex(ix_dset)
+        # Check if there are any new labels
+        available = np.in1d(current_indices, existing_indices)
+        missing = current_indices[~available]
+        all_indices = np.concatenate([existing_indices, missing])
+        # Resizing
+        t = perf_counter()
+        n_tps = val_dset.shape[1] + 1
+        n_add_cells = len(missing)
+        # RESIZE DATASET FOR TIME and Cells
+        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[2:]
+        val_dset.resize(new_shape)
+        logging.debug(f'Timing:resizing:{perf_counter() - t}')
+        # Writing data
+        cell_indices = np.where(np.in1d(all_indices, current_indices))[0]
+        for ix, mask in zip(cell_indices, edgemasks):
+            try:
+                val_dset[ix, n_tps-1] = mask
+            except Exception as e: 
+                logging.debug(f'{ix}, {n_tps}, {val_dset.shape}')
+        # Save the index values
+        save_complex(missing, ix_dset)
+        
+        
+    @timed
+    def write_edgemasks(self, data, keys, hgroup):
+        if not self._traps_initialised: 
+            self.__init_trap_info()
+        # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
+        key = 'edgemasks'
+        val_key = 'values'
+        idx_key = 'indices'
+        # Length of edgemasks
+        traps, cell_labels, edgemasks = data
+        n_cells = len(cell_labels)
+        hgroup = hgroup.require_group(key)
+        current_indices = np.array(traps) + 1j*np.array(cell_labels)
+        if val_key not in hgroup:
+            self.__init_edgemasks(hgroup, edgemasks, current_indices, n_cells)
+        else:
+            self.__append_edgemasks(hgroup, edgemasks, current_indices)
+
+
+    def write(self, data, overwrite: list):
+        with h5py.File(self.file, "a") as store:
+            hgroup = store.require_group(self.group)
+
+            for key, value in data.items():
+                # We're only saving data that has a pre-defined data-type
+                self._check_key(key)
+                try:
+                    if key.startswith("attrs/"):  # metadata
+                        key = key.split("/")[1]  # First thing after attrs
+                        hgroup.attrs[key] = value
+                    elif key in overwrite:
+                        self._overwrite(value, key, hgroup)
+                    elif key == 'edgemasks':
+                        keys = ['trap', 'cell_label', 'edgemasks']
+                        value = [data[x] for x in keys]
+                        self.write_edgemasks(value, keys, hgroup)
+                    else:
+                        self._append(value, key, hgroup)
+                except Exception as e:
+                    print(key, value)
+                    raise (e)
+        return
 
 
 #################### Extraction version ###############################

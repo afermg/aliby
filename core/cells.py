@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path, PosixPath
+from time import perf_counter
 from typing import Union
 from itertools import groupby
 from collections.abc import Iterable
@@ -9,6 +11,8 @@ from scipy import ndimage
 from scipy.sparse.base import isdense
 
 from core.io.matlab import matObject
+from core.utils import timed
+from core.io.writer import load_complex
 
 
 def cell_factory(store, type="matlab"):
@@ -18,7 +22,7 @@ def cell_factory(store, type="matlab"):
         mat_object = matObject(store)
         return CellsMat(mat_object)
     elif type == "hdf5":
-        file = h5py.File(store)
+        file = h5py.File(store, 'r+')
         return CellsHDF(file)
     else:
         raise TypeError(
@@ -58,36 +62,30 @@ class Cells:
         return array
 
 
-# def is_or_in(item, arr): #TODO CLEAN if not being used
-#     if isinstance(arr, (list, np.ndarray)):
-#         return item in arr
-#     else:
-#         return item == arr
-
-
 from core.io.hdf5 import hdf_dict
-
-
 from functools import wraps
 
 
 class CellsHDF(Cells):
-    # DONE implement cells information from HDF5 file format
-    # TODO combine all the cells of one strain into a cellResults?
-    # TODO filtering
-    def __init__(self, file, path="/cell_info"):
+    def __init__(self, file, path='cell_info'):
         self._file = file
         self._info = hdf_dict(self._file.get(path))
-
+        self.path = path
+        self._edgem_indices = None
+        self._edgemasks=None
+        self._tile_size=None
+        
     def __getitem__(self, item):
+        if item == "edgemasks":
+            return self.edgemasks
         _item = "_" + item
         if not hasattr(self, _item):
             setattr(self, _item, self._info[item][()])
         return getattr(self, _item)
-
+    
     def _get_idx(self, cell_id, trap_id):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
-
+    
     @property
     def ntraps(self):
         return len(self._file["/trap_info/trap_locations"][()])
@@ -95,6 +93,30 @@ class CellsHDF(Cells):
     @property
     def traps(self):
         return list(set(self["trap"]))
+            
+    @property
+    def tile_size(self):  # TODO read from metadata
+        if self._tile_size is None:
+            self._tile_size == self.file['trap_info/tile_size'][0]
+        return self._tile_size
+    
+    @property
+    def edgem_indices(self):
+        if self._edgem_indices is None:
+            edgem_path = self.path + '/edgemasks/indices'
+            self._edgem_indices = load_complex(self._file[edgem_path])
+        return self._edgem_indices
+    
+    @property
+    def edgemasks(self):
+        if self._edgemasks is None:
+            edgem_path = self.path + '/edgemasks/values'
+            self._edgemasks = self._file[edgem_path]
+        return self._edgemasks
+    
+    def _edgem_where(self, cell_id, trap_id):
+        ix = trap_id + 1j*cell_id
+        return find_1st(self.edgem_indices == ix, True, cmp_equal)
 
     @property
     def labels(self):
@@ -106,12 +128,13 @@ class CellsHDF(Cells):
 
     def where(self, cell_id, trap_id):
         indices = self._get_idx(cell_id, trap_id)
-        return self["timepoints"][indices], indices
+        edgem_ix = self._edgem_where(cell_id, trap_id)
+        return self["timepoints"][indices], indices, edgem_ix
 
     def outline(self, cell_id, trap_id):
-        times, indices = self.where(cell_id, trap_id)
-        return times, self["edgemasks"][indices]
-
+        times, indices, cell_ix = self.where(cell_id, trap_id)
+        return times, self["edgemasks"][cell_ix, indices]
+        
     def mask(self, cell_id, trap_id):
         times, outlines = self.outline(cell_id, trap_id)
         return times, np.array(
@@ -119,11 +142,13 @@ class CellsHDF(Cells):
         )
 
     def at_time(self, timepoint, kind="mask"):
-        edgemasks = self["edgemasks"][self["timepoint"] == timepoint]
-        traps = self["trap"][self["timepoint"] == timepoint]
-
-        masks = [self._astype(edgemask, kind) for edgemask in edgemasks]
-
+        ix = self["timepoint"] == timepoint
+        cell_ix = self["cell_label"][ix]
+        traps = self["trap"][ix]
+        indices = traps + 1j*cell_ix
+        choose = np.in1d(self.edgem_indices, indices)
+        edgemasks = self["edgemasks"][choose, timepoint]
+        masks = [self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()]
         return self.group_by_traps(traps, masks)
 
     def group_by_traps(self, traps, data):
@@ -132,25 +157,20 @@ class CellsHDF(Cells):
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}
         return d
-
+        
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
         return set((self["cell_label"][self["trap"] == trap_id]))
-
+        
     def labels_at_time(self, timepoint):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
 
-    @property
-    def tile_size(self):  # TODO read from metadata
-        pass
-
-    @property
     def close(self):
         self._file.close()
-
-
+    
+        
 class CellsMat(Cells):
     def __init__(self, mat_object):
         super(CellsMat, self).__init__()

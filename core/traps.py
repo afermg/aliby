@@ -19,7 +19,6 @@ def segment_traps(image, tile_size, downscale=0.4):
     # TODO Optimise the hyperparameters
     disk_radius = int(min([0.01 * x for x in img.shape]))
     min_area = 0.1 * (tile_size ** 2)
-    print(f'Disk: {disk_radius}, area: {min_area}')
     if downscale != 1:
         img = transform.rescale(image, downscale)
     entropy_image = entropy(img, disk(disk_radius))
