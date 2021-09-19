@@ -95,14 +95,23 @@ def get_data_lazy(image) -> da.Array:
 
 
 # Metadata writer
-class Meta:
+from core.io.metadata_parser import parse_logfiles
+class MetaData:
     """Small metadata Process that loads log."""
-    def __init__(self):
-        pass
+    def __init__(self, log_dir, store):
+        self.log_dir = log_dir
+        self.store = store
+
     def load_logs(self):
-        pass
+        parsed_flattened = parse_logfiles(self.log_dir)
+        return parsed_flattened
+
     def run(self):
-        pass
+        metadata_writer = Writer(self.store)
+        metadata_dict = self.load_logs()
+        metadata_writer.write(path='/',
+                              meta=metadata_dict,
+                              overwrite=False)
 
 ########################### Old Objects ####################################
 

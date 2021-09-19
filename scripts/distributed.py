@@ -2,6 +2,7 @@ from pathlib import Path
 from time import perf_counter
 import logging
 
+from core.experiment import MetaData
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
@@ -68,9 +69,14 @@ def create_pipeline(image_id, **config):
     session = None
     try:
         directory = general_config.get('directory', '')
+        # Run metadata first
         with Image(image_id) as image:
             linear_file = f'{directory}/{image.name}.h5'
             folded_file = f'{directory}/{image.name}_folded.h5'
+            for f in [linear_file, folded_file]:
+                meta = MetaData(directory, f)
+                # Run metadata first so it can be used by other processes
+                meta.run()
             tiler_config = config.get('tiler', None)
             assert tiler_config is not None  # TODO add defaults
             tiler = Tiler(image.data, image.metadata)
@@ -154,9 +160,10 @@ def run_config(config):
     with Dataset(int(expt_id)) as conn:
         image_ids = conn.get_images()
         directory = root_dir / conn.name
-    
-    if not directory.exists():
-        directory.mkdir(parents=True)
+        if not directory.exists():
+            directory.mkdir(parents=True)
+            # Download logs to use for metadata
+        conn.cache_logs(directory)
 
     # Modify to the configuration
     config['general']['directory'] = directory
@@ -190,7 +197,7 @@ def run_config(config):
 
 if __name__ == "__main__":
     import logging
-    log_file = '../data/2tozero_Hxts_02/issues.log'
+    log_file = '../data/2tozero_Hxts_02/issues_copy.log'
     logging.basicConfig(filename=log_file, level=logging.DEBUG)
     for v in logging.Logger.manager.loggerDict.values():
         try:
@@ -202,8 +209,8 @@ if __name__ == "__main__":
         general=dict(
             id=19303,
             distributed=0,
-            tps=390,
-            strain='Hxt1_025',
+            tps=50,
+            strain='Hxt1_021',
             directory='../data/'
         ),
         tiler=dict(),
