@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from time import perf_counter
 import logging
 
@@ -64,7 +65,7 @@ def pipeline(image_id, tps=10, tf_version=2):
             session.close()
 
 
-@timed
+@timed('Position')
 def create_pipeline(image_id, **config):
     name, image_id = image_id
     general_config = config.get('general', None)
@@ -123,13 +124,13 @@ def create_pipeline(image_id, **config):
         if session:
             session.close()
 
-@timed
+@timed('Post-processing')
 def post_process(filepath, params):
     pp = PostProcessor(filepath, params)
     tmp = pp.run()
     return tmp
 
-@timed
+@timed('Pipeline')
 def run_config(config):
     # Config holds the general information, use in main
     # Steps holds the description of tasks with their parameters
@@ -205,7 +206,7 @@ def visualise_timing(timings: dict, save_file: str):
     #Set up the graph parameters
     sns.set(style='whitegrid')
     #Plot the graph
-    sns.stripplot(data=fixed_data, size=1)
+    #sns.stripplot(data=fixed_data, size=1)
     ax = sns.boxplot(data=fixed_data, whis=np.inf, width=.05)
     ax.set(xlabel="Stage", ylabel="Time (s)", xticklabels=sorted_keys)
     ax.tick_params(axis='x', rotation=90);
@@ -214,12 +215,13 @@ def visualise_timing(timings: dict, save_file: str):
 
 
 if __name__ == "__main__":
-    strain = 'Hxt3'
+    strain = 'Vph1'
+    tps =390
     config = dict(
         general=dict(
             id=19303,
             distributed=5,
-            tps=10,
+            tps=tps,
             strain=strain,
             directory='../data/'
         ),
@@ -228,10 +230,14 @@ if __name__ == "__main__":
     )
     log_file = '../data/2tozero_Hxts_02/issues.log'
     initialise_logging(log_file)
-    save_timings = f"../data/2tozero_Hxts_02/timings_{strain}.pdf"
+    save_timings = f"../data/2tozero_Hxts_02/timings_{strain}_{tps}.pdf"
+    timings_file = f"../data/2tozero_Hxts_02/timings_{strain}_{tps}.json"
     # Run
-    run_config(config)
+    #run_config(config)
     # Get timing results
     timing = parse_timing(log_file)
     # Visualise timings and save
     visualise_timing(timing, save_timings)
+    # Dump the rest to json
+    with open(timings_file, 'w') as fd: 
+        json.dump(timing, fd)

@@ -108,7 +108,7 @@ class TilerWriter(DynamicWriter):
 
 tile_size = 117
 
-@timed
+@timed()
 def save_complex(array, dataset):
     # Dataset needs to be 2D
     n = len(array)
@@ -117,7 +117,7 @@ def save_complex(array, dataset):
         dataset[-n:, 0] = array.real
         dataset[-n:, 1] = array.imag
 
-@timed
+@timed()
 def load_complex(dataset):
     array = dataset[:, 0] + 1j*dataset[:, 1]
     return array
@@ -217,7 +217,6 @@ class BabyWriter(DynamicWriter):
         save_complex(missing, ix_dset)
         
         
-    @timed
     def write_edgemasks(self, data, keys, hgroup):
         if not self._traps_initialised: 
             self.__init_trap_info()

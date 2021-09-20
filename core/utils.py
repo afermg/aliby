@@ -110,15 +110,26 @@ def get_store_path(save_dir, store, name):
     store = store.with_name(name + store.name)
     return store
 
-from functools import wraps
+def parametrized(dec):
+    def layer(*args, **kwargs):
+        def repl(f):
+            return dec(f, *args, **kwargs)
+        return repl
+    return layer
+
+from functools import wraps, partial
 from time import perf_counter
 import logging
-def timed(f):
+@parametrized
+def timed(f, name=None):
     @wraps(f)
     def decorated(*args, **kwargs):
         t = perf_counter()
         res = f(*args, **kwargs)
-        logging.debug(f'Timing:{f.__name__}:{perf_counter() - t}s')
+        to_print = name or f.__name__
+        logging.debug(f'Timing:{to_print}:{perf_counter() - t}s')
         return res
     return decorated
+
+
 
