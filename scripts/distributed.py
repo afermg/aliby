@@ -3,13 +3,13 @@ import json
 from time import perf_counter
 import logging
 
-from core.experiment import MetaData
+from core.experiment import MetaData, load_attributes
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
-#set_start_method("spawn")
+# set_start_method("spawn")
 
 from tqdm import tqdm
 import traceback
@@ -65,56 +65,59 @@ def pipeline(image_id, tps=10, tf_version=2):
             session.close()
 
 
-@timed('Position')
+@timed("Position")
 def create_pipeline(image_id, **config):
     name, image_id = image_id
-    general_config = config.get('general', None)
+    general_config = config.get("general", None)
     assert general_config is not None
     session = None
     try:
-        directory = general_config.get('directory', '')
+        directory = general_config.get("directory", "")
         with Image(image_id) as image:
-            filename = f'{directory}/{image.name}.h5'
+            filename = f"{directory}/{image.name}.h5"
             # Run metadata first
             meta = MetaData(directory, filename)
             meta.run()
             tiler = Tiler(image.data, image.metadata)
             writer = TilerWriter(filename)
-            baby_config = config.get('baby', None)
+            baby_config = config.get("baby", None)
             assert baby_config is not None  # TODO add defaults
-            tf_version = baby_config.get('tf_version', 1)
+            tf_version = baby_config.get("tf_version", 1)
             session = initialise_tf(tf_version)
             runner = DummyRunner(tiler)
             bwriter = BabyWriter(filename)
             # FIXME testing here the extraction
-            params = Parameters(**get_params("batgirl_fast"))
-            ext = Extractor.from_object(params,
-                                        store=filename,
-                                        object=tiler)
+            meta = load_attributes(filename)
+            namebuild = [meta["microscope"].lower(), "fast"]
+            if "mCherry" in meta["channels/channel"]:
+                namebuild.insert(1, "dual")
+
+            params = Parameters(**get_params("_".join(namebuild)))
+            ext = Extractor.from_tiler(params, store=filename, tiler=tiler)
             # RUN
-            tps = general_config.get('tps', 0)
+            tps = general_config.get("tps", 0)
             for i in tqdm(range(0, tps), desc=image.name):
                 t = perf_counter()
                 trap_info = tiler.run_tp(i)
-                logging.debug(f'Timing:Trap:{perf_counter() - t}s')
+                logging.debug(f"Timing:Trap:{perf_counter() - t}s")
                 t = perf_counter()
                 writer.write(trap_info, overwrite=[])
-                logging.debug(f'Timing:Writing-trap:{perf_counter() - t}s')
+                logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                 t = perf_counter()
                 seg = runner.run_tp(i)
-                logging.debug(f'Timing:Segmentation:{perf_counter() - t}s')
+                logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
                 t = perf_counter()
-                bwriter.write(seg, overwrite=['mother_assign'])
-                logging.debug(f'Timing:Writing-baby:{perf_counter() - t}s')
+                bwriter.write(seg, overwrite=["mother_assign"])
+                logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
                 t = perf_counter()
                 ext.extract_pos(tps=[i])
-                logging.debug(f'Timing:Extraction:{perf_counter() - t}s')
+                logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
             # Run post processing
             post_proc_params = PostProcessorParameters.default()
             post_process(filename, post_proc_params)
             return True
     except Exception as e:  # bug in the trap getting
-        print(f'Caught exception in worker thread (x = {name}):')
+        print(f"Caught exception in worker thread (x = {name}):")
         # This prints the type, value, and stack trace of the
         # current exception being handled.
         traceback.print_exc()
