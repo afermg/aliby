@@ -70,13 +70,9 @@ class Cells:
         return CellsMat(matObject(store))
 
 
-from core.io.hdf5 import hdf_dict
-
-
 class CellsHDF(Cells):
     def __init__(self, filename, path="cell_info"):
         self.filename = filename
-        # self._info = hdf_dict(self._file.get(path))
         self.cinfo_path = path
         self._edgem_indices = None
         self._edgemasks = None
