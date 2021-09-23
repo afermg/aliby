@@ -5,6 +5,7 @@ from typing import Union
 from itertools import groupby
 from collections.abc import Iterable
 
+from utils_find_1st import find_1st, cmp_equal
 import h5py
 import numpy as np
 from scipy import ndimage
@@ -22,8 +23,7 @@ def cell_factory(store, type="matlab"):
         mat_object = matObject(store)
         return CellsMat(mat_object)
     elif type == "hdf5":
-        file = h5py.File(store, 'r+')
-        return CellsHDF(file)
+        return CellsHDF(store)
     else:
         raise TypeError(
             "Could not get cells for type {}:" "valid types are matlab and hdf5"
@@ -61,61 +61,75 @@ class Cells:
             array = ndimage.binary_fill_holes(array).astype(int)
         return array
 
+    @classmethod
+    def hdf(cls, path):
+        return CellsHDF(store)
+
+    @classmethod
+    def mat(cls, path):
+        return CellsMat(matObject(store))
+
 
 from core.io.hdf5 import hdf_dict
-from functools import wraps
 
 
 class CellsHDF(Cells):
-    def __init__(self, file, path='cell_info'):
-        self._file = file
-        self._info = hdf_dict(self._file.get(path))
-        self.path = path
+    def __init__(self, filename, path="cell_info"):
+        self.filename = filename
+        # self._info = hdf_dict(self._file.get(path))
+        self.cinfo_path = path
         self._edgem_indices = None
-        self._edgemasks=None
-        self._tile_size=None
-        
+        self._edgemasks = None
+        self._tile_size = None
+
     def __getitem__(self, item):
         if item == "edgemasks":
             return self.edgemasks
         _item = "_" + item
         if not hasattr(self, _item):
-            setattr(self, _item, self._info[item][()])
+            setattr(self, _item, self._fetch(item))
         return getattr(self, _item)
-    
+
     def _get_idx(self, cell_id, trap_id):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
-    
+
+    def _fetch(self, path):
+        with h5py.File(self.filename, mode="r") as f:
+            return f[self.cinfo_path][path][()]
+
     @property
     def ntraps(self):
-        return len(self._file["/trap_info/trap_locations"][()])
+        with h5py.File(self.filename, mode="r") as f:
+            return len(f["/trap_info/trap_locations"][()])
 
     @property
     def traps(self):
         return list(set(self["trap"]))
-            
+
     @property
     def tile_size(self):  # TODO read from metadata
         if self._tile_size is None:
-            self._tile_size == self.file['trap_info/tile_size'][0]
+            with h5py.File(self.filename, mode="r") as f:
+                self._tile_size == f["trap_info/tile_size"][0]
         return self._tile_size
-    
+
     @property
     def edgem_indices(self):
         if self._edgem_indices is None:
-            edgem_path = self.path + '/edgemasks/indices'
-            self._edgem_indices = load_complex(self._file[edgem_path])
+            edgem_path = "edgemasks/indices"
+            self._edgem_indices = load_complex(self._fetch(edgem_path))
         return self._edgem_indices
-    
+
     @property
     def edgemasks(self):
         if self._edgemasks is None:
-            edgem_path = self.path + '/edgemasks/values'
-            self._edgemasks = self._file[edgem_path]
+            edgem_path = "edgemasks/values"
+            self._edgemasks = self._fetch(edgem_path)
+
         return self._edgemasks
-    
+
     def _edgem_where(self, cell_id, trap_id):
-        ix = trap_id + 1j*cell_id
+        ix = trap_id + 1j * cell_id
         return find_1st(self.edgem_indices == ix, True, cmp_equal)
 
     @property
@@ -127,14 +141,33 @@ class CellsHDF(Cells):
         return [self.labels_in_trap(trap) for trap in self.traps]
 
     def where(self, cell_id, trap_id):
+        """
+        Returns
+        Parameters
+        ----------
+            cell_id: int
+                Cell index
+            trap_id: int
+                Trap index
+
+        Returns
+        ----------
+            indices int array
+            boolean mask array
+            edge_ix int array
+        """
         indices = self._get_idx(cell_id, trap_id)
         edgem_ix = self._edgem_where(cell_id, trap_id)
-        return self["timepoints"][indices], indices, edgem_ix
+        return (
+            self["timepoint"][indices],
+            indices,
+            edgem_ix,
+        )  # FIXME edgem_ix makes output different to matlab's Cell
 
     def outline(self, cell_id, trap_id):
         times, indices, cell_ix = self.where(cell_id, trap_id)
         return times, self["edgemasks"][cell_ix, indices]
-        
+
     def mask(self, cell_id, trap_id):
         times, outlines = self.outline(cell_id, trap_id)
         return times, np.array(
@@ -145,10 +178,12 @@ class CellsHDF(Cells):
         ix = self["timepoint"] == timepoint
         cell_ix = self["cell_label"][ix]
         traps = self["trap"][ix]
-        indices = traps + 1j*cell_ix
+        indices = traps + 1j * cell_ix
         choose = np.in1d(self.edgem_indices, indices)
         edgemasks = self["edgemasks"][choose, timepoint]
-        masks = [self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()]
+        masks = [
+            self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()
+        ]
         return self.group_by_traps(traps, masks)
 
     def group_by_traps(self, traps, data):
@@ -157,20 +192,17 @@ class CellsHDF(Cells):
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}
         return d
-        
+
     def labels_in_trap(self, trap_id):
         # Return set of cell ids in a trap.
         return set((self["cell_label"][self["trap"] == trap_id]))
-        
+
     def labels_at_time(self, timepoint):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
 
-    def close(self):
-        self._file.close()
-    
-        
+
 class CellsMat(Cells):
     def __init__(self, mat_object):
         super(CellsMat, self).__init__()
