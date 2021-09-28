@@ -3,11 +3,12 @@ import json
 from time import perf_counter
 import logging
 
-from core.experiment import MetaData, load_attributes
+from core.experiment import MetaData
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
+from extraction.core.functions.defaults import exparams_from_meta
 
 # set_start_method("spawn")
 
