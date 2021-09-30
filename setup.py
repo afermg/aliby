@@ -9,7 +9,7 @@ setup(
     author='Diane Adjavon',
     author_email='diane.adjavon@ed.ac.uk',
     description='Core utilities for microscopy pipeline',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     include_package_data=True,
     install_requires=[
         'numpy',
