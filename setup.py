@@ -26,7 +26,7 @@ setup(
         'omero-py>=5.6.2',
         'zeroc-ice==3.6.5',
         'tensorflow>=1.14,<=2.3'
-        'baby@git+ssh://git@git.ecdf.ed.ac.uk/jpietsch/baby@dev',
+        'baby@git+ssh://git@git.ecdf.ed.ac.uk/jpietsch/baby.git#dev',
         'logfile_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser.git',
         ],
 )
