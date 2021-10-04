@@ -23,7 +23,7 @@ from core.traps import (
 )
 from core.utils import accumulate, get_store_path
 
-from core.io.writer import Writer
+from core.io.writer import Writer, load_attributes
 from core.io.metadata_parser import parse_logfiles
 
 trap_template_directory = Path(__file__).parent / "trap_templates"
@@ -87,8 +87,9 @@ class TrapLocations:
         self.tile_size = tile_size
         self.max_size = max_size
         self.initial_location = initial_location
-        self.traps = [Trap(centre, self, tile_size, max_size) for centre in
-                      initial_location]
+        self.traps = [
+            Trap(centre, self, tile_size, max_size) for centre in initial_location
+        ]
         self.drifts = []
 
     @property
@@ -107,21 +108,21 @@ class TrapLocations:
     def to_dict(self, tp):
         res = dict()
         if tp == 0:
-            res['trap_locations'] = self.initial_location
-            res['attrs/tile_size'] = self.tile_size
-            res['attrs/max_size'] = self.max_size
-        res['drifts'] = np.expand_dims(self.drifts[tp], axis=0)
+            res["trap_locations"] = self.initial_location
+            res["attrs/tile_size"] = self.tile_size
+            res["attrs/max_size"] = self.max_size
+        res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         # res['processed_timepoints'] = tp
         return res
 
     @classmethod
     def read_hdf5(cls, file):
-        with h5py.File(file, 'r') as hfile:
-            trap_info = hfile['trap_info']
-            initial_locations = trap_info['trap_locations'][()]
-            drifts = trap_info['drifts'][()]
-            max_size = trap_info.attrs['max_size']
-            tile_size = trap_info.attrs['tile_size']
+        with h5py.File(file, "r") as hfile:
+            trap_info = hfile["trap_info"]
+            initial_locations = trap_info["trap_locations"][()]
+            drifts = trap_info["drifts"][()]
+            max_size = trap_info.attrs["max_size"]
+            tile_size = trap_info.attrs["tile_size"]
         trap_locs = cls(initial_locations, tile_size, max_size=max_size)
         trap_locs.drifts = drifts
         return trap_locs
@@ -132,27 +133,37 @@ class Tiler:
 
     Does trap finding and image registration."""
 
-    def __init__(self, image, metadata, template=None, tile_size=None,
-                 ref_channel='Brightfield', ref_z=0):
+    def __init__(
+        self,
+        image,
+        metadata,
+        template=None,
+        tile_size=None,
+        ref_channel="Brightfield",
+        ref_z=0,
+        trap_locs=None,
+    ):
         self.image = image
-        self.name = metadata['name']
-        self.channels = metadata['channels']
-        self.trap_template = template if template is not None else \
-            trap_template
+        # self.name = metadata["name"]
+        self.channels = metadata["channels"]
+        self.trap_template = template if template is not None else trap_template
         self.ref_channel = self.get_channel_index(ref_channel)
         self.ref_z = ref_z
         self.tile_size = tile_size or min(trap_template.shape)
-        self.trap_locs = None
-        self._tiles = None
-        # FIXME REMOVE
-        self.expt = None
+        self.trap_locs = trap_locs
 
     @classmethod
-    def read_hdf5(image, filepath):
-        # TODO
-        # trap_locs = TrapLocations.read_hdf5(filename)
-        # get metadata out of HDF5
-        pass
+    def from_hdf5(cls, image, filepath):
+        trap_locs = TrapLocations.read_hdf5(filepath)
+        metadata = load_attributes(filepath)
+        metadata["channels"] = metadata["channels/channel"].tolist()
+        return Tiler(
+            image=image,
+            metadata=metadata,
+            template=None,
+            tile_size=trap_locs.tile_size,
+            trap_locs=trap_locs,
+        )
 
     @lru_cache(maxsize=100)
     def get_tc(self, t, c):
@@ -161,13 +172,13 @@ class Tiler:
         if self.trap_locs.padding_required(t):
             # Add padding step so edge traps are fixed
             pad_width = (self.tile_size // 2, self.tile_size // 2)
-            full = np.pad(full, ((0, 0), pad_width, pad_width), 'median')
+            full = np.pad(full, ((0, 0), pad_width, pad_width), "median")
         return full
 
     @property
     def shape(self):
         c, t, z, y, x = self.image.shape
-        return (c,t, x, y, z)
+        return (c, t, x, y, z)
 
     @property
     def n_processed(self):
@@ -183,10 +194,6 @@ class Tiler:
     def finished(self):
         return self.n_processed == self.image.shape[0]
 
-    @property
-    def tiles(self):
-        return self._tiles
-
     def _initialise_traps(self, trap_template, tile_size):
         """Find initial trap positions.
 
@@ -195,10 +202,15 @@ class Tiler:
         half_tile = tile_size // 2
         max_size = min(self.image.shape[-2:])
         initial_image = self.image[
-            0, self.ref_channel, self.ref_z]  # First time point, first channel, first z-position
+            0, self.ref_channel, self.ref_z
+        ]  # First time point, first channel, first z-position
         trap_locs = segment_traps(initial_image, tile_size)
-        trap_locs = [[x, y] for x, y in trap_locs if
-                     half_tile < x < max_size - half_tile and half_tile < y < max_size - half_tile]
+        trap_locs = [
+            [x, y]
+            for x, y in trap_locs
+            if half_tile < x < max_size - half_tile
+            and half_tile < y < max_size - half_tile
+        ]
         self.trap_locs = TrapLocations(trap_locs, tile_size)
 
     def find_drift(self, tp):
@@ -206,7 +218,8 @@ class Tiler:
         prev_tp = max(0, tp - 1)
         drift, error, _ = phase_cross_correlation(
             self.image[prev_tp, self.ref_channel, self.ref_z],
-            self.image[tp, self.ref_channel, self.ref_z])
+            self.image[tp, self.ref_channel, self.ref_z],
+        )
         self.trap_locs.drifts.append(drift)
 
     def get_tp_data(self, tp, c):
@@ -216,8 +229,11 @@ class Tiler:
             y, x = trap.as_range(tp)
             trap = full[:, y, x]
             # Check the shape of the trap
-            if trap.shape != (5, self.tile_size,
-                              self.tile_size):  # TODO find a better fix for this
+            if trap.shape != (
+                5,
+                self.tile_size,
+                self.tile_size,
+            ):  # TODO find a better fix for this
                 trap = np.zeros((5, self.tile_size, self.tile_size))
             traps.append(trap)
         return np.stack(traps)
@@ -225,7 +241,7 @@ class Tiler:
     def get_trap_data(self, trap_id, tp, c):
         full = self.get_tc(tp, c)
         trap = self.trap_locs.traps[trap_id]
-        y,x = trap.as_range(tp)
+        y, x = trap.as_range(tp)
         return full[:, y, x]
 
     def run_tp(self, tp):
@@ -258,4 +274,3 @@ class Tiler:
     def get_position_annotation(self):
         # TODO required for matlab support
         return None
-
