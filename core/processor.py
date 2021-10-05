@@ -5,13 +5,13 @@ from pydoc import locate
 import numpy as np
 import pandas as pd
 
-from postprocessor.core.processes.base import ParametersABC
-from postprocessor.core.processes.merger import mergerParameters, merger
-from postprocessor.core.processes.picker import pickerParameters, picker
+from agora.base import ParametersABC
 from core.io.writer import Writer
 from core.io.signal import Signal
 
 from core.cells import Cells
+from postprocessor.core.processes.merger import mergerParameters, merger
+from postprocessor.core.processes.picker import pickerParameters, picker
 
 
 class PostProcessorParameters(ParametersABC):
@@ -165,9 +165,17 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
-                self.write_result(
-                    "/postprocessing/" + process + "/" + outpath, result, metadata={}
-                )
+                if isinstance(result, dict): # Multiple Signals as output
+                    for k, v in result:
+                        self.write_result(
+                            "/postprocessing/" + process + "/" + outpath +
+                            f'/{k}',
+                            v, metadata={}
+                        )
+                else:
+                    self.write_result(
+                        "/postprocessing/" + process + "/" + outpath, result, metadata={}
+                    )
 
     def write_result(
         self, path: str, result: Union[List, pd.DataFrame, np.ndarray], metadata: Dict
