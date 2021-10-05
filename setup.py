@@ -28,5 +28,7 @@ setup(
         'tensorflow>=1.14,<=2.3',
         'baby@git+ssh://git@git.ecdf.ed.ac.uk/jpietsch/baby.git@training',
         'logfile_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser.git',
+        "extraction@git+ssh://git@git.ecdf.ed.ac.uk:swain-lab/python-pipeline/post-processing.git@dev",
+        "postprocessor@ssh://git@git.ecdf.ed.ac.uk:swain-lab/python-pipeline/post-processing.git@dev",
         ],
 )
