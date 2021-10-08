@@ -1,6 +1,8 @@
 from typing import Tuple, Union, List
 from abc import ABC, abstractmethod
 
+from itertools import groupby
+from utils_find_1st import find_1st, cmp_equal
 import numpy as np
 import pandas as pd
 
@@ -15,10 +17,12 @@ class pickerParameters(ParametersABC):
         self,
         condition: Tuple[str, Union[float, int]] = None,
         lineage: str = None,
+        lineage_conditional: str = None,
         sequence: List[str] = ["lineage", "condition"],
     ):
         self.condition = condition
         self.lineage = lineage
+        self.lineage_conditional = lineage_conditional
         self.sequence = sequence
 
     @classmethod
@@ -26,8 +30,9 @@ class pickerParameters(ParametersABC):
         return cls.from_dict(
             {
                 "condition": ["present", 0.8],
-                "lineage": None,
-                "sequence": ["lineage", "condition"],
+                "lineage": "families",
+                "lineage_conditional": "include",
+                "sequence": ["condition", "lineage"],
             }
         )
 
@@ -59,44 +64,93 @@ class picker(ProcessABC):
         for cells in ma:
             for d, m in enumerate(cells):
                 if m:
-                    mb_matrix[c + d, c + m] = True
+                    mb_matrix[c + d, c + m - 1] = True
 
             c += len(cells)
 
         return mb_matrix
 
+    @staticmethod
+    def mother_assign_from_dynamic(ma, label, trap, ntraps: int):
+        """
+        Interpolate the list of lists containing the associated mothers from the mother_assign_dynamic feature
+        """
+        idlist = list(zip(trap, label))
+        cell_gid = np.unique(idlist, axis=0)
+
+        last_lin_preds = [
+            find_1st(((label[::-1] == lbl) & (trap[::-1] == tr)), True, cmp_equal)
+            for tr, lbl in cell_gid
+        ]
+        mother_assign_sorted = ma[last_lin_preds]
+
+        traps = cell_gid[:, 0]
+        iterator = groupby(zip(traps, mother_assign_sorted), lambda x: x[0])
+        d = {key: [x[1] for x in group] for key, group in iterator}
+        nested_massign = [d.get(i, []) for i in range(ntraps)]
+
+        return nested_massign
+
     def pick_by_lineage(self, signals):
         idx = signals.index
 
         if self.lineage:
-            ma = self._cells["mother_assign"]
-            mother_bud_mat = self.mother_assign_to_mb_matrix(ma)
-            daughters, mothers = np.where(mother_bud_mat)
+            ma = self._cells["mother_assign_dynamic"]
+            trap = self._cells["trap"]
+            label = self._cells["cell_label"]
+            nested_massign = self.mother_assign_from_dynamic(
+                ma, label, trap, self._cells.ntraps
+            )
+            # mother_bud_mat = self.mother_assign_to_mb_matrix(nested_massign)
+
+            idx = set(
+                [
+                    (tid, i + 1)
+                    for tid, x in enumerate(nested_massign)
+                    for i in range(len(x))
+                ]
+            )
+            mothers, daughters = zip(
+                *[
+                    ((tid, m), (tid, d))
+                    for tid, trapcells in enumerate(nested_massign)
+                    for d, m in enumerate(trapcells, 1)
+                    if m
+                ]
+            )
+            self.mothers = mothers
+            self.daughters = daughters
+
+            mothers = set(mothers)
+            daughters = set(daughters)
+            # daughters, mothers = np.where(mother_bud_mat)
             if self.lineage == "mothers":
-                idx = idx[mothers]
+                idx = mothers
             elif self.lineage == "daughters":
-                idx = idx[daughters]
+                idx = daughters
             elif self.lineage == "families" or self.lineage == "orphans":
-                families = list(set(np.append(daughters, mothers)))
+                families = mothers.union(daughters)
                 if self.lineage == "families":
-                    idx = idx[families]
-                else:  # orphans
-                    idx = idx[list(set(range(len(idx))).difference(families))]
+                    idx = families
+                elif self.lineage == "orphans":  # orphans
+                    idx = idx.diference(families)
 
-            idx = list(set(idx).intersection(signals.index))
+            idx = idx.intersection(signals.index)
 
-        return signals.loc[idx]
+        return idx
 
     def pick_by_condition(self, signals):
         idx = self.switch_case(self.condition[0], signals, self.condition[1])
-        return signals.loc[idx]
+        return idx
 
     def run(self, signals):
+        indices = set(signals.index)
+        daughters, mothers = (None, None)
         for alg in self.sequence:
-            if alg == "condition":
-                pass
-            self.signals = getattr(self, "pick_by_" + alg)(signals)
-        return self.signals
+            indices = getattr(self, "pick_by_" + alg)(signals)
+
+        daughters, mothers = self.daughters, self.mothers
+        return np.array(daughters), np.array(mothers), np.array(list(indices))
 
     @staticmethod
     def switch_case(
@@ -111,7 +165,7 @@ class picker(ProcessABC):
             > threshold_asint,
             "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
         }
-        return case_mgr[condition]
+        return set(case_mgr[condition].index)
 
 
 def _as_int(threshold: Union[float, int], ntps: int):

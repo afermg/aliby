@@ -109,6 +109,7 @@ class PostProcessor:
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
+
         merge_events = self.merger.run(self._signal[self.targets["prepost"]["merger"]])
 
         with h5py.File(self._filename, "r") as f:
@@ -117,8 +118,54 @@ class PostProcessor:
         changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
         self._writer.write("modifiers/merges", data=changes_history)
 
-        picks = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
-        self._writer.write("modifiers/picks", data=picks)
+        with h5py.File(self._filename, "a") as f:  # TODO Remove this once done tweaking
+            if "modifiers/picks" in f:
+                del f["modifiers/picks"]
+
+        mothers, daughters, indices = self.picker.run(
+            self._signal[self.targets["prepost"]["picker"][0]]
+        )
+        self._writer.write(
+            "postprocessing/lineage",
+            data=pd.MultiIndex.from_arrays(
+                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
+                names=["trap", "mother_label", "daughter_label"],
+            ),
+            overwrite="overwrite",
+        )
+
+        # apply merge to mother-daughter
+        moset = set([tuple(x) for x in mothers])
+        daset = set([tuple(x) for x in daughters])
+        picked_set = set([tuple(x) for x in indices])
+        with h5py.File(self._filename, "a") as f:
+            merge_events = f["modifiers/merges"][()]
+        merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
+            set([*moset, *daset, *picked_set])
+        )
+        for source, target in merge_events:
+            if tuple(source) in merged_moda:
+                mothers[np.isin(mothers, source).all(axis=1)] = target
+                daughters[np.isin(daughters, source).all(axis=1)] = target
+                indices[np.isin(indices, source).all(axis=1)] = target
+
+        self._writer.write(
+            "postprocessing/lineage_merged",
+            data=pd.MultiIndex.from_arrays(
+                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
+                names=["trap", "mother_label", "daughter_label"],
+            ),
+            overwrite="overwrite",
+        )
+
+        self._writer.write(
+            "modifiers/picks",
+            data=pd.MultiIndex.from_arrays(
+                indices.T,
+                names=["trap", "cell_label"],
+            ),
+            overwrite="overwrite",
+        )
 
     def run(self):
         self.run_prepost()
@@ -165,16 +212,18 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
-                if isinstance(result, dict): # Multiple Signals as output
+                if isinstance(result, dict):  # Multiple Signals as output
                     for k, v in result:
                         self.write_result(
-                            "/postprocessing/" + process + "/" + outpath +
-                            f'/{k}',
-                            v, metadata={}
+                            "/postprocessing/" + process + "/" + outpath + f"/{k}",
+                            v,
+                            metadata={},
                         )
                 else:
                     self.write_result(
-                        "/postprocessing/" + process + "/" + outpath, result, metadata={}
+                        "/postprocessing/" + process + "/" + outpath,
+                        result,
+                        metadata={},
                     )
 
     def write_result(
