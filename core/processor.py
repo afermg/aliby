@@ -212,6 +212,7 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
+<<<<<<< HEAD
                 if isinstance(result, dict):  # Multiple Signals as output
                     for k, v in result:
                         self.write_result(
@@ -224,6 +225,18 @@ class PostProcessor:
                         "/postprocessing/" + process + "/" + outpath,
                         result,
                         metadata={},
+=======
+                if isinstance(result, dict): # Multiple Signals as output
+                    for k, v in result:
+                        self.write_result(
+                            "/postprocessing/" + process + "/" + outpath +
+                            f'/{k}',
+                            v, metadata={}
+                        )
+                else:
+                    self.write_result(
+                        "/postprocessing/" + process + "/" + outpath, result, metadata={}
+>>>>>>> 6578a57ac530cb518e07f0d5dcfc9523864973c2
                     )
 
     def write_result(
