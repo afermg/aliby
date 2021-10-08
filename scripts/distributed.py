@@ -7,8 +7,6 @@ from core.experiment import MetaData
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
-from postprocessor.core.processor import PostProcessorParameters, PostProcessor
-from extraction.core.functions.defaults import exparams_from_meta
 
 # set_start_method("spawn")
 
@@ -30,10 +28,12 @@ from core.utils import timed
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
+from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 import warnings
+
 # TODO This is for extraction issue #9, remove when fixed
-warnings.simplefilter('ignore', RuntimeWarning)
+warnings.simplefilter("ignore", RuntimeWarning)
 
 
 def pipeline(image_id, tps=10, tf_version=2):
