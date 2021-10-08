@@ -165,7 +165,7 @@ class Tiler:
             trap_locs=trap_locs,
         )
 
-    @lru_cache(maxsize=100)
+    @lru_cache(maxsize=2)
     def get_tc(self, t, c):
         # Get image
         full = self.image[t, c].compute()  # FORCE THE CACHE
@@ -182,9 +182,15 @@ class Tiler:
 
     @property
     def n_processed(self):
+        if hasattr(self, "_n_processed"):
+            return self._n_processed
         if self.trap_locs:
             return self.trap_locs.shape[1]
         return 0
+
+    @n_processed.setter
+    def n_processed(self, value):
+        self._n_processed = value
 
     @property
     def n_traps(self):
