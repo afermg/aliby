@@ -31,6 +31,7 @@ from core.utils import timed
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
+from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 
 def pipeline(image_id, tps=10, tf_version=2):
