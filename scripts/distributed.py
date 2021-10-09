@@ -8,9 +8,6 @@ from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
 
-from extraction.core.functions.defaults import exparams_from_meta
-from core.io.signal import Signal
-
 # set_start_method("spawn")
 
 from tqdm import tqdm
@@ -27,10 +24,12 @@ from core.baby_client import DummyRunner
 from core.segment import Tiler
 from core.io.writer import TilerWriter, BabyWriter
 from core.utils import timed
+from core.io.signal import Signal
 
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
+from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 
