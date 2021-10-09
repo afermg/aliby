@@ -1,3 +1,4 @@
+import numpy as np
 from copy import copy
 from itertools import accumulate
 
@@ -40,15 +41,27 @@ class Signal(BridgeH5):
             df = self.dset_to_df(f, dataset)
             merged = self.apply_merge(df, merges)
 
-        # # Get indices corresponding to merged and picked indices
-        # # Select those indices in the dataframe
-        # # Perform merge
-        # # Return result
-        picks = self.get_picks(merged.index.names)
+            # Get indices corresponding to merged and picked indices
+            # Select those indices in the dataframe
+            # Perform merge
+            # Return result
+            search = lambda a, b: np.where(
+                np.in1d(
+                    np.ravel_multi_index(a.T, a.max(0) + 1),
+                    np.ravel_multi_index(b.T, a.max(0) + 1),
+                )
+            )
+            if "modifiers/picks" in f:
+                picks = self.get_picks(names=merged.index.names)
+                missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
 
-        if picks is not None:
-            return merged.loc[picks]
-        else:
+                if picks is not None:
+                    # return merged.loc[
+                    #     set(picks).intersection([tuple(x) for x in merged.index])
+                    # ]
+                    return merged.loc[picks]
+                else:
+                    return merged
             return merged
 
     # def get_merge_indices(self, dataset):
@@ -125,10 +138,12 @@ class Signal(BridgeH5):
 
         return merges
 
-    def get_picks(self, levels):
+    # def get_picks(self, levels):
+    def get_picks(self, names, path="modifiers/picks/"):
         with h5py.File(self.filename, "r") as f:
-            if "modifiers/picks" in f:
-                return list(zip(*[f["modifiers/picks/" + level] for level in levels]))
+            if path in f:
+                return list(zip(*[f[path + name] for name in names]))
+                # return f["modifiers/picks"]
             else:
                 return None
 
