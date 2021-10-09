@@ -84,21 +84,13 @@ def create_pipeline(image_id, **config):
             filename = f"{directory}/{image.name}.h5"
             # Run metadata first
             process_from = 0
-            if True:  # not Path(filename).exists():
-                meta = MetaData(directory, filename)
-                meta.run()
-                tiler = Tiler(
-                    image.data,
-                    image.metadata,
-                    tile_size=general_config.get("tile_size", 117),
-                )
-            else:
-                tiler = Tiler.from_hdf5(image.data, filename)
-                s = Signal(filename)
-                process_from = s["/general/None/extraction/volume"].columns[-1]
-                if process_from > 2:
-                    process_from = process_from - 3
-                    tiler.n_processed = process_from
+            meta = MetaData(directory, filename)
+            meta.run()
+            tiler = Tiler(
+                image.data,
+                image.metadata,
+                tile_size=general_config.get("tile_size", 117),
+            )
 
             writer = TilerWriter(filename)
             baby_config = config.get("baby", None)
