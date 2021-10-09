@@ -144,6 +144,7 @@ class BabyWriter(DynamicWriter):
         "trap": ((None,), np.uint16),
         "timepoint": ((None,), np.uint16),
         "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
+        "mother_assign_dynamic": ((None,), np.uint16),
         "volumes": ((None,), np.float32),
     }
     group = "cell_info"
@@ -308,7 +309,8 @@ class Writer(BridgeH5):
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
             if overwrite == "overwrite":
-                self.deldset(f, path)
+                if path in f:
+                    del f[path]
             elif overwrite == "accumulate":  # Add a number if needed
                 if path in f:
                     parent, name = path.rsplit("/", maxsplit=1)
@@ -372,11 +374,12 @@ class Writer(BridgeH5):
     @staticmethod
     def write_index(f, path, pd_index, **kwargs):
         f.require_group(path)  # TODO check if we can remove this
-        for name, ids in zip(pd_index.names, pd_index.values):
+        for i, name in enumerate(pd_index.names):
+            ids = pd_index.get_level_values(i)
             id_path = path + "/" + name
             f.create_dataset(
                 name=id_path,
-                shape=ids.shape,
+                shape=(len(ids),),
                 dtype=pd_index.dtypes.iloc[0],
                 compression=kwargs.get("compression", None),
             )
