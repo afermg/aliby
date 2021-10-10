@@ -388,6 +388,7 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
 
     mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
     mins_d.index = mins_d.index - 1  # make indices equal
+    # TODO add support for skipping time points
     maxes_d = maxes.groupby(maxes).apply(lambda x: x.index.tolist())
 
     common = sorted(set(mins_d.index).intersection(maxes_d.index), reverse=True)
