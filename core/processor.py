@@ -143,11 +143,26 @@ class PostProcessor:
         merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
             set([*moset, *daset, *picked_set])
         )
-        for source, target in merge_events:
-            if tuple(source) in merged_moda:
-                mothers[np.isin(mothers, source).all(axis=1)] = target
-                daughters[np.isin(daughters, source).all(axis=1)] = target
-                indices[np.isin(indices, source).all(axis=1)] = target
+        search = lambda a, b: np.where(
+            np.in1d(
+                np.ravel_multi_index(a.T, a.max(0) + 1),
+                np.ravel_multi_index(b.T, a.max(0) + 1),
+            )
+        )
+
+        for target, source in merge_events:
+            if (
+                tuple(source) in moset
+            ):  # update mother to lowest positive index among the two
+                mother_ids = search(mothers, source)
+                mothers[mother_ids] = (
+                    target[0],
+                    self.pick_mother(mothers[mother_ids][0][1], target[1]),
+                )
+            if tuple(source) in daset:
+                daughters[search(daughters, source)] = target
+            if tuple(source) in picked_set:
+                indices[search(indices, source)] = target
 
         self._writer.write(
             "postprocessing/lineage_merged",
@@ -166,6 +181,17 @@ class PostProcessor:
             ),
             overwrite="overwrite",
         )
+
+    @staticmethod
+    def pick_mother(a, b):
+        """Update the mother id following this priorities:
+
+        The mother has a lower id
+        """
+        x = max(a, b)
+        if min([a, b]):
+            x = [a, b][np.argmin([a, b])]
+        return x
 
     def run(self):
         self.run_prepost()
