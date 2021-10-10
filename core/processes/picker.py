@@ -2,6 +2,7 @@ from typing import Tuple, Union, List
 from abc import ABC, abstractmethod
 
 from itertools import groupby
+
 from utils_find_1st import find_1st, cmp_equal
 import numpy as np
 import pandas as pd
@@ -24,9 +25,11 @@ class pickerParameters(ParametersABC):
         return cls.from_dict(
             {
                 "sequence": [
-                    ("condition", "present", 0.8),
-                    ("lineage", "families", "union"),
-                    ("condition", "present", 10),
+                    # ("lineage", "intersection", "families"),
+                    ("condition", "intersection", "any_present", 0.8),
+                    ("condition", "intersection", "growing", 50),
+                    ("condition", "intersection", "present", 10),
+                    # ("lineage", "full_families", "intersection"),
                 ],
             }
         )
@@ -114,6 +117,8 @@ class picker(ProcessABC):
                         for x in np.array(self.daughters)[search(self.mothers, m)]
                     ]
                 )
+
+                print("associated daughters: ", idx)
             elif how == "mothers_w_daughters":
                 present_daughters = idx.intersection(daughters)
                 idx = set(
@@ -189,18 +194,21 @@ class picker(ProcessABC):
     def run(self, signals):
         indices = set(signals.index)
         self.mothers, self.daughters = self.get_mothers_daughters()
-        for alg, param1, param2 in self.sequence:
+        for alg, op, *params in self.sequence:
             if alg is "lineage":
+                param1 = params[0]
                 new_indices = getattr(self, "pick_by_" + alg)(signals, param1)
-                if param2 is "union":
-                    new_indices = new_indices.intersection(set(signals.index))
-                    indices = indices.union(set(new_indices))
             else:
+                param1, param2 = params
                 new_indices = getattr(self, "pick_by_" + alg)(signals, param1, param2)
+
+            if op is "union":
+                new_indices = new_indices.intersection(set(signals.index))
+                new_indices = indices.union(set(new_indices))
+
             indices = indices.intersection(new_indices)
 
-        mothers, daughters = self.mothers, self.daughters
-        return np.array(mothers), np.array(daughters), np.array(list(indices))
+        return np.array(list(indices))
 
     @staticmethod
     def switch_case(
@@ -212,13 +220,39 @@ class picker(ProcessABC):
         if isinstance(threshold, list):
             thresh_presence = threshold[0]
         case_mgr = {
-            "present": signals.notna().sum(axis=1) > threshold_asint,
-            "nonstoply_present": signals.apply(max_nonstop_ntps, axis=1)
+            "any_present": lambda s, thresh: any_present(s, threshold_asint),
+            "present": lambda s, thresh: signals.notna().sum(axis=1) > threshold_asint,
+            "nonstoply_present": lambda s, thresh: signals.apply(
+                max_nonstop_ntps, axis=1
+            )
             > threshold_asint,
-            "growing": signals.diff(axis=1).sum(axis=1) > threshold,
+            "growing": lambda s, thresh: signals.diff(axis=1).sum(axis=1) > threshold,
             # "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
         }
-        return set(signals.index[case_mgr[condition]])
+        return set(signals.index[case_mgr[condition](signals, threshold)])
+
+
+from copy import copy
+
+
+def any_present(signals, threshold):
+    """
+    Returns a mask for cells, True if there is a cell in that trap that was present for more than :threshold: timepoints.
+    """
+    any_present = pd.Series(
+        np.sum(
+            [
+                np.isin([x[0] for x in signals.index], i) & v
+                for i, v in (signals.notna().sum(axis=1) > threshold)
+                .groupby("trap")
+                .any()
+                .items()
+            ],
+            axis=0,
+        ).astype(bool),
+        index=signals.index,
+    )
+    return any_present
 
 
 def _as_int(threshold: Union[float, int], ntps: int):

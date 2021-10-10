@@ -13,16 +13,16 @@ class mergerParameters(ParametersABC):
 
     def __init__(
         self,
+        tolerance: float,
         smooth: bool = False,
-        tolerance: float = 0.1,
         window: int = 5,
         degree: int = 3,
         min_avg_delta: float = 0.9,
     ):
 
-        self.smooth = smooth
-
         self.tolerance = tolerance
+
+        self.smooth = smooth
 
         self.window = window
 
@@ -35,7 +35,7 @@ class mergerParameters(ParametersABC):
         return cls.from_dict(
             {
                 "smooth": False,
-                "tolerance": 0.1,
+                "tolerance": 0.2,
                 "window": 5,
                 "degree": 3,
                 "min_avg_delta": 0.9,
@@ -52,7 +52,7 @@ class merger(ProcessABC):
         super().__init__(parameters)
 
     def run(self, signal):
-        joinable = get_joinable(signal)
+        joinable = get_joinable(signal, tol=self.parameters.tolerance)
         # merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
         # indices = (*zip(*merged.index.tolist()),)
         # names = merged.index.names

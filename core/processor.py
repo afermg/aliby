@@ -122,9 +122,13 @@ class PostProcessor:
             if "modifiers/picks" in f:
                 del f["modifiers/picks"]
 
-        mothers, daughters, indices = self.picker.run(
-            self._signal[self.targets["prepost"]["picker"][0]]
+        indices = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
+        from collections import Counter
+
+        mothers, daughters = np.array(self.picker.mothers), np.array(
+            self.picker.daughters
         )
+        self.tmp = [y for y in Counter([tuple(x) for x in mothers]).items() if y[1] > 2]
         self._writer.write(
             "postprocessing/lineage",
             data=pd.MultiIndex.from_arrays(
