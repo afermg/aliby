@@ -57,6 +57,20 @@ class PostProcessorParameters(ParametersABC):
                                 "/postprocessing/bud_metric/extraction_general_None_volume"
                             ],
                         ),
+                        (
+                            "aggregate",
+                            [
+                                [
+                                    "/extraction/em_ratio/np_max/mean",
+                                    "/extraction/em_ratio/np_max/median",
+                                    "/extraction/em_ratio_bgsub/np_max/mean",
+                                    "/extraction/em_ratio_bgsub/np_max/median",
+                                    "/extraction/gsum_bgsub/np_max/median",
+                                    "/extraction/gsum_bgsub/np_max/median",
+                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                                ]
+                            ],
+                        ),
                         # "savgol": ["/extraction/general/None/area"],
                     ),
                 },
@@ -66,7 +80,7 @@ class PostProcessorParameters(ParametersABC):
                         "picker": pickerParameters.default(),
                     }
                 },
-                outpaths={},
+                outpaths={"aggregate": "/postprocessing/experiment_wide/aggregated/"},
             )
 
     def to_dict(self):
@@ -250,16 +264,19 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
+                if process not in self.parameters.to_dict()["outpaths"]:
+                    outpath = "/postprocessing/" + process + "/" + outpath
+
                 if isinstance(result, dict):  # Multiple Signals as output
                     for k, v in result:
                         self.write_result(
-                            "/postprocessing/" + process + "/" + outpath + f"/{k}",
+                            outpath + f"/{k}",
                             v,
                             metadata={},
                         )
                 else:
                     self.write_result(
-                        "/postprocessing/" + process + "/" + outpath,
+                        outpath,
                         result,
                         metadata={},
                     )
