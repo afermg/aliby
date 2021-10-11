@@ -5,6 +5,8 @@ from pydoc import locate
 import numpy as np
 import pandas as pd
 
+from tqdm import tqdm
+
 from agora.base import ParametersABC
 from core.io.writer import Writer
 from core.io.signal import Signal
@@ -48,26 +50,47 @@ class PostProcessorParameters(ParametersABC):
                         "picker": ["/extraction/general/None/area"],
                     },
                     "processes": (
-                        ("dsignal", ["/extraction/general/None/area"]),
-                        ("dsignal", ["/extraction/general/None/volume"]),
-                        ("bud_metric", ["/extraction/general/None/volume"]),
+                        (
+                            "bud_metric",
+                            [
+                                "/extraction/general/None/volume",
+                                "/extraction/em_ratio/np_max/mean",
+                                "/extraction/em_ratio/np_max/median",
+                            ],
+                        ),
                         (
                             "dsignal",
                             [
-                                "/postprocessing/bud_metric/extraction_general_None_volume"
+                                "/extraction/general/None/volume",
+                                "/extraction/em_ratio/np_max/mean",
+                                "/extraction/em_ratio/np_max/median",
+                                "/extraction/em_ratio_bgsub/np_max/mean",
+                                "/extraction/em_ratio_bgsub/np_max/median",
+                                "/postprocessing/bud_metric/extraction_general_None_volume",
+                                "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                                "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                             ],
                         ),
                         (
                             "aggregate",
                             [
                                 [
+                                    "/extraction/general/None/volume",
                                     "/extraction/em_ratio/np_max/mean",
                                     "/extraction/em_ratio/np_max/median",
                                     "/extraction/em_ratio_bgsub/np_max/mean",
                                     "/extraction/em_ratio_bgsub/np_max/median",
-                                    "/extraction/gsum_bgsub/np_max/median",
-                                    "/extraction/gsum_bgsub/np_max/median",
+                                    "/extraction/gsum/np_max/median",
+                                    "/extraction/gsum/np_max/mean",
+                                    "/postprocessing/bud_metric/extraction_general_None_volume",
+                                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                                    "postprocessing/dsignal/extraction_general_None_volume",
                                     "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
+                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
+                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_bgsub_np_max_median",
+                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_bgsub_np_max_mean",
                                 ]
                             ],
                         ),
@@ -222,7 +245,7 @@ class PostProcessor:
     def run(self):
         self.run_prepost()
 
-        for process, datasets in self.targets["processes"]:
+        for process, datasets in tqdm(self.targets["processes"]):
             if process in self.parameters["parameters"].get(
                 "processes", {}
             ):  # If we assigned parameters
@@ -233,6 +256,8 @@ class PostProcessor:
 
             loaded_process = self.classfun[process](parameters)
             for dataset in datasets:
+                # print("Processing", process, "for", dataset)
+
                 if isinstance(dataset, list):  # multisignal process
                     signal = [self._signal[d] for d in dataset]
                 elif isinstance(dataset, str):

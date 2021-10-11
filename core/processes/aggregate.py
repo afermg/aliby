@@ -18,7 +18,7 @@ class aggregateParameters(ParametersABC):
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"reduction": "median"})
+        return cls.from_dict({"reduction": "mean"})
 
 
 class aggregate(ProcessABC):
@@ -45,8 +45,8 @@ class aggregate(ProcessABC):
             "postprocessing",
             "extraction",
             "None",
-            "np",
-            "general",
+            "np_max",
+            "",
         }
         get_keywords = lambda df: [
             ind
