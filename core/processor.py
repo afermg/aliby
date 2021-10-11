@@ -47,10 +47,18 @@ class PostProcessorParameters(ParametersABC):
                         "merger": "/extraction/general/None/area",
                         "picker": ["/extraction/general/None/area"],
                     },
-                    "processes": {
-                        "dsignal": ["/extraction/general/None/area"],
+                    "processes": (
+                        ("dsignal", ["/extraction/general/None/area"]),
+                        ("dsignal", ["/extraction/general/None/volume"]),
+                        ("bud_metric", ["/extraction/general/None/volume"]),
+                        (
+                            "dsignal",
+                            [
+                                "/postprocessing/bud_metric/extraction_general_None_volume"
+                            ],
+                        ),
                         # "savgol": ["/extraction/general/None/area"],
-                    },
+                    ),
                 },
                 parameters={
                     "prepost": {
