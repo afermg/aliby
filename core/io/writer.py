@@ -426,8 +426,6 @@ class Writer(BridgeH5):
                 tps = df.columns.tolist()
                 f[tp_path][tps] = tps
             else:
-                if "experiment_wide" in path:
-                    print("stop")
                 f[path].attrs["columns"] = df.columns.tolist()
         else:
             dset = f[values_path]
