@@ -8,6 +8,9 @@ from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
 
+from extraction.core.functions.defaults import exparams_from_meta
+from core.io.signal import Signal
+
 # set_start_method("spawn")
 
 from tqdm import tqdm
@@ -24,12 +27,10 @@ from core.baby_client import DummyRunner
 from core.segment import Tiler
 from core.io.writer import TilerWriter, BabyWriter
 from core.utils import timed
-from core.io.signal import Signal
 
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
-from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 
@@ -84,13 +85,21 @@ def create_pipeline(image_id, **config):
             filename = f"{directory}/{image.name}.h5"
             # Run metadata first
             process_from = 0
-            meta = MetaData(directory, filename)
-            meta.run()
-            tiler = Tiler(
-                image.data,
-                image.metadata,
-                tile_size=general_config.get("tile_size", 117),
-            )
+            if True:  # not Path(filename).exists():
+                meta = MetaData(directory, filename)
+                meta.run()
+                tiler = Tiler(
+                    image.data,
+                    image.metadata,
+                    tile_size=general_config.get("tile_size", 117),
+                )
+            else:
+                tiler = Tiler.from_hdf5(image.data, filename)
+                s = Signal(filename)
+                process_from = s["/general/None/extraction/volume"].columns[-1]
+                if process_from > 2:
+                    process_from = process_from - 3
+                    tiler.n_processed = process_from
 
             writer = TilerWriter(filename)
             baby_config = config.get("baby", None)
@@ -260,30 +269,43 @@ def visualise_timing(timings: dict, save_file: str):
     ax.figure.savefig(save_file, bbox_inches="tight", transparent=True)
     return
 
-if __name__ == "__main__":
-    strain = 'Vph1'
-    tps =390
-    config = dict(
-        general=dict(
-            id=19303,
-            distributed=5,
-            tps=tps,
-            strain=strain,
-            directory='../data/'
-        ),
-        tiler=dict(),
-        baby=dict(tf_version=2)
-    )
-    log_file = '../data/2tozero_Hxts_02/issues.log'
-    initialise_logging(log_file)
-    save_timings = f"../data/2tozero_Hxts_02/timings_{strain}_{tps}.pdf"
-    timings_file = f"../data/2tozero_Hxts_02/timings_{strain}_{tps}.json"
-    # Run
-    #run_config(config)
-    # Get timing results
-    timing = parse_timing(log_file)
-    # Visualise timings and save
-    visualise_timing(timing, save_timings)
-    # Dump the rest to json
-    with open(timings_file, 'w') as fd:
-        json.dump(timing, fd)
+
+
+strain = "YST_1512"
+# exp = 18616
+# exp = 19232
+# exp = 19995
+# exp = 19993
+exp = 20191
+# exp = 19831
+
+with Dataset(exp) as conn:
+    imgs = conn.get_images()
+    exp_name = conn.unique_name
+
+with Image(list(imgs.values())[0]) as im:
+    meta = im.metadata
+tps = int(meta["size_t"])
+
+config = dict(
+    general=dict(
+        id=exp,
+        distributed=4,
+        tps=tps,
+        directory="../data/",
+        strain=strain,
+        tile_size=117,
+    ),
+    # general=dict(id=19303, distributed=0, tps=tps, strain=strain, directory="../data/"),
+    tiler=dict(),
+    baby=dict(tf_version=2),
+    earlystop=dict(
+        min_tp=50,
+        thresh_pos_clogged=0.3,
+        thresh_trap_clogged=7,
+        ntps_to_eval=5,
+    ),
+)
+
+# Run
+run_config(config)
