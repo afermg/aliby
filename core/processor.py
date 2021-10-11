@@ -89,11 +89,11 @@ class PostProcessor:
         )
         self.classfun = {
             process: self.get_process(process)
-            for process in parameters["targets"]["processes"]
+            for process, _ in parameters["targets"]["processes"]
         }
         self.parameters_classfun = {
             process: self.get_parameters(process)
-            for process in parameters["targets"]["processes"]
+            for process, _ in parameters["targets"]["processes"]
         }
         self.targets = parameters["targets"]
 
@@ -208,7 +208,7 @@ class PostProcessor:
     def run(self):
         self.run_prepost()
 
-        for process, datasets in self.targets["processes"].items():
+        for process, datasets in self.targets["processes"]:
             if process in self.parameters["parameters"].get(
                 "processes", {}
             ):  # If we assigned parameters
