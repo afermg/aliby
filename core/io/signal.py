@@ -21,23 +21,33 @@ class Signal(BridgeH5):
 
         self.names = ["experiment", "position", "trap"]
 
-    def __getitem__(self, dataset):
+    @staticmethod
+    def add_name(df, name):
+        df.name = name
+        return df
 
-        if isinstance(dataset, str):
-            return self.apply_prepost(dataset)
+    def __getitem__(self, dsets):
 
-        elif isinstance(dataset, list):
-            is_bgd = [dset.endswith("imBackground") for dset in dataset]
+        if dsets.startswith("postprocessing") or dsets.startswith("/postprocessing"):
+            df = self.get_raw(dsets)
+
+        elif isinstance(dsets, str):
+            df = self.apply_prepost(dsets)
+
+        elif isinstance(dsets, list):
+            is_bgd = [dset.endswith("imBackground") for dset in dsets]
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
-                dataset
+                dsets
             ), "Trap data and cell data can't be mixed"
             with h5py.File(self.filename, "r") as f:
-                return [self.apply_prepost(dset) for dset in dataset]
+                return [self.add_name(self.apply_prepost(dset), dset) for dset in dsets]
+
+        return self.add_name(df, dsets)
 
     def apply_prepost(self, dataset: str):
         merges = self.get_merges()  # TODO pass as an argument instead?
         with h5py.File(self.filename, "r") as f:
-            print("Reading from ", dataset)
+            print("Reading from", dataset)
             df = self.dset_to_df(f, dataset)
             merged = self.apply_merge(df, merges)
 
@@ -64,33 +74,14 @@ class Signal(BridgeH5):
                     return merged
             return merged
 
-    # def get_merge_indices(self, dataset):
-    #     assert not dataset.endswith("imBackground"), "Trap metrics not yet supported"
-    #     merges = self.get_merges()
-    #     merged_idx = []
-    #     if merges:
-    #         merged_sets = set([j for i in merges for j in i])
-
-    #         with h5py.File(self.filename, "r") as f:
-    #             tmp = [
-    #                 f["/".join((dataset, name))][()]
-    #                 for name in self.names[-len(merges[0]) :] + ["cell_label"]
-    #             ]
-    #             merged_idx = [tmp.index(indices) for indices in merged_sets]
-
-    #     return merged_idx
-
-    def get_pick_indices(self):
-        pass
-
-    def combine_indices(self):
-        pass
-
     @property
     def datasets(self):
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_ext_or_post)
         return dsets
+
+    def get_merged(self, dataset):
+        return self.apply_prepost(dataset, skip_pick=True)
 
     @property
     def merges(self):
@@ -157,9 +148,12 @@ class Signal(BridgeH5):
             list(lbls.values()), names=names[-len(lbls) :]
         )
 
-        columns = dset["timepoint"][()]
+        columns = (
+            dset["timepoint"][()] if "timepoint" in dset else dset.attrs["columns"]
+        )
 
         df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
+
         return df
 
     @staticmethod

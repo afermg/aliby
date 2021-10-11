@@ -294,7 +294,7 @@ class Writer(BridgeH5):
         path: str,
         data: Iterable = None,
         meta: Dict = {},
-        overwrite: str = "minimal",
+        overwrite: str = "overwrite",
     ):
         """
         Parameters
@@ -387,7 +387,7 @@ class Writer(BridgeH5):
             indices[()] = ids
 
     def write_df(self, f, path, df, **kwargs):
-        values_path = path + "/values"
+        values_path = path + "values" if path.endswith("/") else path + "/values"
         if path not in f:
             max_ncells = 2e5
             max_tps = 1e3
@@ -415,16 +415,20 @@ class Writer(BridgeH5):
                 dset = f[indices_path]
                 dset[()] = df.index.get_level_values(level=name).tolist()
 
-            tp_path = path + "/timepoint"
-            f.create_dataset(
-                name=tp_path,
-                shape=(df.shape[1],),
-                maxshape=(max_tps,),
-                dtype="uint16",
-            )
-            tps = df.columns.tolist()
-            f[tp_path][tps] = tps
-
+            if df.columns.dtype == np.uint:
+                tp_path = path + "/timepoint"
+                f.create_dataset(
+                    name=tp_path,
+                    shape=(df.shape[1],),
+                    maxshape=(max_tps,),
+                    dtype="uint16",
+                )
+                tps = df.columns.tolist()
+                f[tp_path][tps] = tps
+            else:
+                if "experiment_wide" in path:
+                    print("stop")
+                f[path].attrs["columns"] = df.columns.tolist()
         else:
             dset = f[values_path]
 
