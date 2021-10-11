@@ -1,7 +1,10 @@
+import numpy as np
+import pandas as pd
+
 from agora.base import ParametersABC, ProcessABC
 
 
-class ParametersTemplate(ParametersABC):
+class TemplateParameters(ParametersABC):
     """
     Parameters
     """
@@ -16,12 +19,12 @@ class ParametersTemplate(ParametersABC):
         return cls.from_dict({})
 
 
-class ProcessTemplate(ProcessABC):
+class Template(ProcessABC):
     """
     Template for process class.
     """
 
-    def __init__(self, parameters: ParametersTemplate):
+    def __init__(self, parameters: TemplateParameters):
         super().__init__(parameters)
 
     def run(self):
