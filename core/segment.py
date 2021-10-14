@@ -153,15 +153,17 @@ class Tiler:
         self.trap_locs = trap_locs
 
     @classmethod
-    def from_hdf5(cls, image, filepath):
+    def from_hdf5(cls, image, filepath, tile_size=None):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = metadata["channels/channel"].tolist()
+        if tile_size is None:
+            tile_size = trap_locs.tile_size
         return Tiler(
             image=image,
             metadata=metadata,
             template=None,
-            tile_size=trap_locs.tile_size,
+            tile_size=tile_size,
             trap_locs=trap_locs,
         )
 
@@ -200,7 +202,7 @@ class Tiler:
     def finished(self):
         return self.n_processed == self.image.shape[0]
 
-    def _initialise_traps(self, trap_template, tile_size):
+    def _initialise_traps(self, tile_size):
         """Find initial trap positions.
 
         Removes all those that are too close to the edge so no padding is necessary.
@@ -254,7 +256,7 @@ class Tiler:
         assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
         if self.n_processed == 0:
-            self._initialise_traps(self.trap_template, self.tile_size)
+            self._initialise_traps(self.tile_size)
         self.find_drift(tp)  # Get drift
         # Return result for writer
         return self.trap_locs.to_dict(tp)

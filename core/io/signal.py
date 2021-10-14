@@ -47,7 +47,6 @@ class Signal(BridgeH5):
     def apply_prepost(self, dataset: str):
         merges = self.get_merges()  # TODO pass as an argument instead?
         with h5py.File(self.filename, "r") as f:
-            print("Reading from", dataset)
             df = self.dset_to_df(f, dataset)
             merged = self.apply_merge(df, merges)
 
