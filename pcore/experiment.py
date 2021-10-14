@@ -20,10 +20,10 @@ import omero
 from omero.gateway import BlitzGateway
 from logfile_parser import Parser
 
-from core.timelapse import TimelapseOMERO, TimelapseLocal
-from core.utils import accumulate
+from pcore.timelapse import TimelapseOMERO, TimelapseLocal
+from pcore.utils import accumulate
 
-from core.io.writer import Writer
+from pcore.io.writer import Writer
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ PIXEL_TYPES = {
     omero_enums.PixelsTypefloat: np.float32,
     omero_enums.PixelsTypedouble: np.float64,
 }
+
 
 class NonCachedPixelsWrapper(PixelsWrapper):
     """Extend gateway.PixelWrapper to override _prepareRawPixelsStore."""
@@ -71,9 +72,11 @@ omero.gateway.refreshWrappers()
 ######################  DATA ACCESS ###################
 import dask.array as da
 from dask import delayed
+
+
 def get_data_lazy(image) -> da.Array:
     """Get 5D dask array, with delayed reading from OMERO image."""
-    nt, nc, nz, ny, nx = [getattr(image, f'getSize{x}')() for x in 'TCZYX']
+    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
     pixels = image.getPrimaryPixels()
     dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
     get_plane = delayed(lambda idx: pixels.getPlane(*idx))
@@ -95,9 +98,12 @@ def get_data_lazy(image) -> da.Array:
 
 
 # Metadata writer
-from core.io.metadata_parser import parse_logfiles
+from pcore.io.metadata_parser import parse_logfiles
+
+
 class MetaData:
     """Small metadata Process that loads log."""
+
     def __init__(self, log_dir, store):
         self.log_dir = log_dir
         self.store = store
@@ -109,11 +115,11 @@ class MetaData:
     def run(self):
         metadata_writer = Writer(self.store)
         metadata_dict = self.load_logs()
-        metadata_writer.write(path='/',
-                              meta=metadata_dict,
-                              overwrite=False)
+        metadata_writer.write(path="/", meta=metadata_dict, overwrite=False)
+
 
 ########################### Old Objects ####################################
+
 
 class Experiment(abc.ABC):
     """
@@ -133,12 +139,13 @@ class Experiment(abc.ABC):
     to be continuous
     >>> bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
     """
+
     __metaclass__ = abc.ABCMeta
 
     # metadata_parser = AcqMetadataParser()
 
     def __init__(self):
-        self.exptID = ''
+        self.exptID = ""
         self._current_position = None
         self.position_to_process = 0
 
@@ -162,10 +169,10 @@ class Experiment(abc.ABC):
         arguments are ignored.
         """
         if len(args) > 1:
-            logger.debug('ExperimentOMERO: {}'.format(args, kwargs))
+            logger.debug("ExperimentOMERO: {}".format(args, kwargs))
             return ExperimentOMERO(*args, **kwargs)
         else:
-            logger.debug('ExperimentLocal: {}'.format(args, kwargs))
+            logger.debug("ExperimentLocal: {}".format(args, kwargs))
             return ExperimentLocal(*args, **kwargs)
 
     @property
@@ -190,11 +197,11 @@ class Experiment(abc.ABC):
     def current_position(self, position):
         self._current_position = self.get_position(position)
 
-    def get_hypercube(self, x, y, z_positions, channels,
-                      timepoints):
-        return self.current_position.get_hypercube(x, y,
-                                                   z_positions, channels,
-                                                   timepoints)
+    def get_hypercube(self, x, y, z_positions, channels, timepoints):
+        return self.current_position.get_hypercube(
+            x, y, z_positions, channels, timepoints
+        )
+
 
 # Todo: cache images like in ExperimentLocal
 class ExperimentOMERO(Experiment):
@@ -202,8 +209,8 @@ class ExperimentOMERO(Experiment):
     Experiment class to organise different timelapses.
     Connected to a Dataset object which handles database I/O.
     """
-    def __init__(self, omero_id, host, port=4064,
-                 **kwargs):
+
+    def __init__(self, omero_id, host, port=4064, **kwargs):
         super(ExperimentOMERO, self).__init__()
         self.exptID = omero_id
         # Get annotations
@@ -212,29 +219,34 @@ class ExperimentOMERO(Experiment):
         self._tags = None
 
         # Create a connection
-        self.connection = BlitzGateway(kwargs.get('username') or input('Username: '),
-                                       kwargs.get('password') or getpass('Password: '),
-                                       host=host,
-                                       port=port)
+        self.connection = BlitzGateway(
+            kwargs.get("username") or input("Username: "),
+            kwargs.get("password") or getpass("Password: "),
+            host=host,
+            port=port,
+        )
         connected = self.connection.connect()
         try:
             assert connected is True, "Could not connect to server."
         except AssertionError as e:
             self.connection.close()
-            raise(e)
-        try: # Run everything that could cause the initialisation to fail
+            raise (e)
+        try:  # Run everything that could cause the initialisation to fail
             self.dataset = self.connection.getObject("Dataset", self.exptID)
             self.name = self.dataset.getName()
             # Create positions objects
-            self._positions = {img.getName(): img.getId() for img in
-                           sorted(self.dataset.listChildren(),
-                                  key=lambda x: x.getName())}
+            self._positions = {
+                img.getName(): img.getId()
+                for img in sorted(
+                    self.dataset.listChildren(), key=lambda x: x.getName()
+                )
+            }
             # Set up local cache
-            self.root_dir = Path(kwargs.get('save_dir', './')) / self.name
+            self.root_dir = Path(kwargs.get("save_dir", "./")) / self.name
             if not self.root_dir.exists():
                 self.root_dir.mkdir(parents=True)
-            self.compression = kwargs.get('compression', None)
-            self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
+            self.compression = kwargs.get("compression", None)
+            self.image_cache = h5py.File(self.root_dir / "images.h5", "a")
 
             # Set up the current position as the first in the list
             self._current_position = self.get_position(self.positions[0])
@@ -255,17 +267,21 @@ class ExperimentOMERO(Experiment):
     @property
     def files(self):
         if self._files is None:
-            self._files = {x.getFileName(): x for x in
-                      self.dataset.listAnnotations()
-                 if isinstance(x, omero.gateway.FileAnnotationWrapper)}
+            self._files = {
+                x.getFileName(): x
+                for x in self.dataset.listAnnotations()
+                if isinstance(x, omero.gateway.FileAnnotationWrapper)
+            }
         return self._files
 
     @property
     def tags(self):
         if self._tags is None:
-            self._tags = {x.getName(): x for x in
-                          self.dataset.listAnnotations()
-                         if isinstance(x, omero.gateway.TagAnnotationWrapper)}
+            self._tags = {
+                x.getName(): x
+                for x in self.dataset.listAnnotations()
+                if isinstance(x, omero.gateway.TagAnnotationWrapper)
+            }
         return self._tags
 
     @property
@@ -276,19 +292,20 @@ class ExperimentOMERO(Experiment):
         # Get file annotations filtered by position name and ordered by
         # creation date
         r = re.compile(position)
-        wrappers = sorted([self.files[key]
-                          for key in filter(r.match, self.files)],
-                         key=lambda x: x.creationEventDate(), reverse=True)
+        wrappers = sorted(
+            [self.files[key] for key in filter(r.match, self.files)],
+            key=lambda x: x.creationEventDate(),
+            reverse=True,
+        )
         # Choose newest file
         if len(wrappers) < 1:
             return None
         else:
             # Choose the newest annotation and cache it
             annotation = wrappers[0]
-            filepath = self.root_dir / annotation.getFileName().replace(
-                '/', '_')
+            filepath = self.root_dir / annotation.getFileName().replace("/", "_")
             if not filepath.exists():
-                with open(str(filepath), 'wb') as fd:
+                with open(str(filepath), "wb") as fd:
                     for chunk in annotation.getFileInChunks():
                         fd.write(chunk)
             return filepath
@@ -303,8 +320,14 @@ class ExperimentOMERO(Experiment):
             annotation = None
         return TimelapseOMERO(img, annotation, self.image_cache)
 
-    def cache_locally(self, root_dir='./', positions=None, channels=None,
-                      timepoints=None, z_positions=None):
+    def cache_locally(
+        self,
+        root_dir="./",
+        positions=None,
+        channels=None,
+        timepoints=None,
+        z_positions=None,
+    ):
         """
         Save the experiment locally.
 
@@ -312,8 +335,7 @@ class ExperimentOMERO(Experiment):
         saved. The experiment will be a subdirectory of "root_directory"
         and will be named by its id.
         """
-        logger.warning('Saving experiment {}; may take some time.'.format(
-            self.name))
+        logger.warning("Saving experiment {}; may take some time.".format(self.name))
 
         if positions is None:
             positions = self.positions
@@ -337,35 +359,38 @@ class ExperimentOMERO(Experiment):
 
         self.cache_logs(save_dir)
         # Save the file annotations
-        cache_config = dict(positions=positions, channels=channels,
-                            timepoints=timepoints, z_positions=z_positions)
-        with open(str(save_dir / 'cache.config'), 'w') as fd:
+        cache_config = dict(
+            positions=positions,
+            channels=channels,
+            timepoints=timepoints,
+            z_positions=z_positions,
+        )
+        with open(str(save_dir / "cache.config"), "w") as fd:
             json.dump(cache_config, fd)
-        logger.info('Downloaded experiment {}'.format(self.exptID))
+        logger.info("Downloaded experiment {}".format(self.exptID))
 
     def cache_logs(self, **kwargs):
         # Save the file annotations
-        tags = dict()# and the tag annotations
+        tags = dict()  # and the tag annotations
         for annotation in self.dataset.listAnnotations():
             if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
-                filepath = self.root_dir / annotation.getFileName().replace(
-                    '/', '_')
-                if str(filepath).endswith('txt') and not filepath.exists():
+                filepath = self.root_dir / annotation.getFileName().replace("/", "_")
+                if str(filepath).endswith("txt") and not filepath.exists():
                     # Save only the text files
-                    with open(str(filepath), 'wb') as fd:
+                    with open(str(filepath), "wb") as fd:
                         for chunk in annotation.getFileInChunks():
                             fd.write(chunk)
             if isinstance(annotation, omero.gateway.TagAnnotationWrapper):
                 key = annotation.getDescription()
-                if key == '':
-                    key = 'misc. tags'
+                if key == "":
+                    key = "misc. tags"
                 if key in tags:
                     if not isinstance(tags[key], list):
                         tags[key] = [tags[key]]
                     tags[key].append(annotation.getValue())
                 else:
                     tags[key] = annotation.getValue()
-        with open(str(self.root_dir / 'omero_tags.json'), 'w') as fd:
+        with open(str(self.root_dir / "omero_tags.json"), "w") as fd:
             json.dump(tags, fd)
         return
 
@@ -382,7 +407,6 @@ class ExperimentOMERO(Experiment):
         return keys
 
 
-
 class ExperimentLocal(Experiment):
     def __init__(self, root_dir, finished=True):
         super(ExperimentLocal, self).__init__()
@@ -393,18 +417,18 @@ class ExperimentLocal(Experiment):
         #  experiment is run and that the information in that file is
         #  trustworthy.
         acq_file = self._find_acq_file()
-        acq_parser = Parser('multiDGUI_acq_format')
-        with open(acq_file, 'r') as fd:
+        acq_parser = Parser("multiDGUI_acq_format")
+        with open(acq_file, "r") as fd:
             metadata = acq_parser.parse(fd)
         self.metadata = metadata
-        self.metadata['finished'] = finished
+        self.metadata["finished"] = finished
         self.files = [f for f in self.root_dir.iterdir() if f.is_file()]
-        self.image_cache = h5py.File(self.root_dir / 'images.h5', 'a')
+        self.image_cache = h5py.File(self.root_dir / "images.h5", "a")
         if self.finished:
             cache = self._find_cache()
             # log = self._find_log() # Todo: add log metadata
             if cache is not None:
-                with open(cache, 'r') as fd:
+                with open(cache, "r") as fd:
                     cache_config = json.load(fd)
                 self.metadata.update(**cache_config)
         self._current_position = self.get_position(self.positions[0])
@@ -417,26 +441,28 @@ class ExperimentLocal(Experiment):
             return file[0]
 
     def _find_acq_file(self):
-        file = self._find_file('*[Aa]cq.txt')
+        file = self._find_file("*[Aa]cq.txt")
         if file is None:
-            raise ValueError('Cannot load this experiment. There are either '
-                             'too many or too few acq files.')
+            raise ValueError(
+                "Cannot load this experiment. There are either "
+                "too many or too few acq files."
+            )
         return file
 
     def _find_cache(self):
-        return self._find_file('cache.config')
+        return self._find_file("cache.config")
 
     @property
     def finished(self):
-        return self.metadata['finished']
+        return self.metadata["finished"]
 
     @property
     def running(self):
-        return not self.metadata['finished']
+        return not self.metadata["finished"]
 
     @property
     def positions(self):
-        return self.metadata['positions']['posname']
+        return self.metadata["positions"]["posname"]
 
     def _get_position_annotation(self, position):
         r = re.compile(position)
@@ -450,11 +476,13 @@ class ExperimentLocal(Experiment):
     def get_position(self, position):
         if position not in self._pos_mapper:
             annotation = self._get_position_annotation(position)
-            self._pos_mapper[position] = TimelapseLocal(position,
-                                                        self.root_dir,
-                                                        finished=self.finished,
-                                                        annotation=annotation,
-                                                        cache=self.image_cache)
+            self._pos_mapper[position] = TimelapseLocal(
+                position,
+                self.root_dir,
+                finished=self.finished,
+                annotation=annotation,
+                cache=self.image_cache,
+            )
         return self._pos_mapper[position]
 
     def run(self, keys, store, **kwargs):

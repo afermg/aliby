@@ -21,43 +21,44 @@ import numpy as np
 import pandas as pd
 import scipy
 from numpy.compat import asstr
+
 # TODO only use this if scipy>=1.6 or so
 from scipy.io import matlab
 from scipy.io.matlab.mio5 import MatFile5Reader
 from scipy.io.matlab.mio5_params import mat_struct
 
-from core.io.utils import read_int, read_string, read_delim
+from pcore.io.utils import read_int, read_string, read_delim
 
 
 def read_minimat_vars(rdr):
     rdr.initialize_read()
-    mdict = {'__globals__': []}
+    mdict = {"__globals__": []}
     i = 0
     while not rdr.end_of_stream():
         hdr, next_position = rdr.read_var_header()
         name = asstr(hdr.name)
-        if name == '':
-            name = 'var_%d' % i
+        if name == "":
+            name = "var_%d" % i
             i += 1
         res = rdr.read_var_array(hdr, process=False)
         rdr.mat_stream.seek(next_position)
         mdict[name] = res
         if hdr.is_global:
-            mdict['__globals__'].append(name)
+            mdict["__globals__"].append(name)
     return mdict
 
 
 def read_workspace_vars(fname):
-    fp = open(fname, 'rb')
+    fp = open(fname, "rb")
     rdr = MatFile5Reader(fp, struct_as_record=True, squeeze_me=True)
     vars = rdr.get_variables()
-    fws = vars['__function_workspace__']
+    fws = vars["__function_workspace__"]
     ws_bs = BytesIO(fws.tostring())
     ws_bs.seek(2)
     rdr.mat_stream = ws_bs
     # Guess byte order.
     mi = rdr.mat_stream.read(2)
-    rdr.byte_order = mi == b'IM' and '<' or '>'
+    rdr.byte_order = mi == b"IM" and "<" or ">"
     rdr.mat_stream.read(4)  # presumably byte padding
     mdict = read_minimat_vars(rdr)
     fp.close()
@@ -65,7 +66,7 @@ def read_workspace_vars(fname):
 
 
 class matObject:
-    """ A python read-out of MATLAB objects
+    """A python read-out of MATLAB objects
     The objects pulled out of the
     """
 
@@ -95,22 +96,22 @@ class matObject:
         return self.attrs.get(item, default)
 
     def _init_buffer(self):
-        fp = open(self.filepath, 'rb')
+        fp = open(self.filepath, "rb")
         rdr = MatFile5Reader(fp, struct_as_record=True, squeeze_me=True)
         vars = rdr.get_variables()
-        self.classname = vars['None']['s2'][0].decode('utf-8')
-        self.object_name = vars['None']['s0'][0].decode('utf-8')
-        fws = vars['__function_workspace__']
+        self.classname = vars["None"]["s2"][0].decode("utf-8")
+        self.object_name = vars["None"]["s0"][0].decode("utf-8")
+        fws = vars["__function_workspace__"]
         self.buffer = BytesIO(fws.tostring())
         fp.close()
 
     def _init_heap(self):
         super_data = read_workspace_vars(self.filepath)
-        elem = super_data['var_0'][0, 0]
+        elem = super_data["var_0"][0, 0]
         if isinstance(elem, mat_struct):
-            self.heap = elem.MCOS[0]['arr']
+            self.heap = elem.MCOS[0]["arr"]
         else:
-            self.heap = elem['MCOS'][0]['arr']
+            self.heap = elem["MCOS"][0]["arr"]
 
     def _read_header(self):
         self.buffer.seek(248)  # the start of the header
@@ -121,11 +122,11 @@ class matObject:
 
         # check that the next two are zeros
         reserved = read_int(self.buffer, n=2)
-        assert all([x == 0 for x in
-                    reserved]), 'Non-zero reserved header fields: {}'.format(
-            reserved)
+        assert all(
+            [x == 0 for x in reserved]
+        ), "Non-zero reserved header fields: {}".format(reserved)
         # check that we are at the right place
-        assert self.buffer.tell() == 288, 'String elemnts begin at 288'
+        assert self.buffer.tell() == 288, "String elemnts begin at 288"
         hdrs = []
         for i in range(n_str):
             hdrs.append(read_string(self.buffer))
@@ -156,7 +157,7 @@ class matObject:
         self._to_attrs(object_info, props)
 
     def _to_attrs(self, object_info, props):
-        """ Re-organise the various classes and subclasses into a nested
+        """Re-organise the various classes and subclasses into a nested
         dictionary.
         :return:
         """
@@ -223,8 +224,8 @@ class matObject:
         return props
 
     def to_hdf(self, filename):
-        f = h5py.File(filename, mode='w')
-        save_to_hdf(f, '/', self.attrs)
+        f = h5py.File(filename, mode="w")
+        save_to_hdf(f, "/", self.attrs)
 
 
 def describe(d, indent=0, width=4, out=None):
@@ -233,15 +234,22 @@ def describe(d, indent=0, width=4, out=None):
         if isinstance(value, dict):
             describe(value, indent + 1, out=out)
         elif isinstance(value, np.ndarray):
-            print(f'{"": <{width * (indent + 1)}} {value.shape} array '
-                  f'of type {value.dtype}', file=out)
+            print(
+                f'{"": <{width * (indent + 1)}} {value.shape} array '
+                f"of type {value.dtype}",
+                file=out,
+            )
         elif isinstance(value, scipy.sparse.csc.csc_matrix):
-            print(f'{"": <{width * (indent + 1)}} {value.shape} '
-                  f'sparse matrix of type {value.dtype}', file=out)
-        elif isinstance(value, Iterable) and not isinstance(value,
-                                                            str):
-            print(f'{"": <{width * (indent + 1)}} {type(value)} of len '
-                  f'{len(value)}', file=out)
+            print(
+                f'{"": <{width * (indent + 1)}} {value.shape} '
+                f"sparse matrix of type {value.dtype}",
+                file=out,
+            )
+        elif isinstance(value, Iterable) and not isinstance(value, str):
+            print(
+                f'{"": <{width * (indent + 1)}} {type(value)} of len ' f"{len(value)}",
+                file=out,
+            )
         else:
             print(f'{"": <{width * (indent + 1)}} {value}', file=out)
 
@@ -261,12 +269,15 @@ def parse_prop(n_props, buff, names, heap):
             elif flag == 1:
                 d[item_name] = heap[heap_idx + 2]  # Todo: what is the heap?
             elif flag == 2:
-                assert 0 <= heap_idx <= 1, "Boolean flag has a value other " \
-                                           "than 0 or 1 "
+                assert 0 <= heap_idx <= 1, (
+                    "Boolean flag has a value other " "than 0 or 1 "
+                )
                 d[item_name] = bool(heap_idx)
             else:
-                raise ValueError("unknown flag {} for property {} with heap "
-                                 "index {}".format(flag, item_name, heap_idx))
+                raise ValueError(
+                    "unknown flag {} for property {} with heap "
+                    "index {}".format(flag, item_name, heap_idx)
+                )
     return d
 
 
@@ -276,6 +287,7 @@ def is_object(x):
         return all(x.dtype[ix] == np.object for ix in range(len(x.dtype)))
     else:  # simple object
         return x.dtype == np.object
+
 
 def flatten_obj(arr):
     # TODO turn structured arrays into nested dicts of lists rather that
@@ -311,7 +323,7 @@ def save_to_hdf(h5file, path, dic):
     Saving a MATLAB object to HDF5
     """
     if isinstance(dic, list):
-        dic = {str(i): v for i,v in enumerate(dic)}
+        dic = {str(i): v for i, v in enumerate(dic)}
     for key, item in dic.items():
         if isinstance(item, (int, float, str)):
             h5file[path].attrs.create(key, item)
@@ -325,36 +337,37 @@ def save_to_hdf(h5file, path, dic):
             else:
                 if path + key not in h5file:
                     h5file.create_group(path + key)
-                save_to_hdf(h5file, path + key + '/',
-                            {str(i): x for i, x in enumerate(item)})
+                save_to_hdf(
+                    h5file, path + key + "/", {str(i): x for i, x in enumerate(item)}
+                )
         elif isinstance(item, scipy.sparse.csc.csc_matrix):
             try:
-                h5file.create_dataset(path + key, data=item.todense(),
-                                      compression='gzip')
+                h5file.create_dataset(
+                    path + key, data=item.todense(), compression="gzip"
+                )
             except Exception as e:
                 print(path + key)
                 raise e
         elif isinstance(item, (np.ndarray, np.int64, np.float64)):
-            if item.dtype == np.dtype('<U1'):  # Strings to 'S' type for HDF5
-                item = item.astype('S')
+            if item.dtype == np.dtype("<U1"):  # Strings to 'S' type for HDF5
+                item = item.astype("S")
             try:
-                h5file.create_dataset(path + key, data=item, compression='gzip')
+                h5file.create_dataset(path + key, data=item, compression="gzip")
             except Exception as e:
                 print(path + key)
                 raise e
         elif isinstance(item, dict):
             if path + key not in h5file:
                 h5file.create_group(path + key)
-            save_to_hdf(h5file, path + key + '/',
-                        item)
+            save_to_hdf(h5file, path + key + "/", item)
         elif item is None:
             continue
         else:
-            raise ValueError(
-                f'Cannot save {type(item)} type at key {path + key}')
+            raise ValueError(f"Cannot save {type(item)} type at key {path + key}")
 
 
 ## NOT YET FULLY IMPLEMENTED!
+
 
 class _Info:
     def __init__(self, info):
@@ -369,7 +382,7 @@ class _Info:
             val = val[0]
         if isinstance(val, scipy.sparse.csc.csc_matrix):
             return np.asarray(val.todense())
-        if val.dtype == np.dtype('O'):
+        if val.dtype == np.dtype("O"):
             # 3d "sparse matrix"
             if all(isinstance(x, scipy.sparse.csc.csc_matrix) for x in val):
                 val = np.array([x.todense() for x in val])
@@ -410,8 +423,8 @@ class CellInfo(_Info):
     def identity(self):
         if self._identity is None:
             self._identity = pd.DataFrame(
-                zip(self['trapNum'], self['cellNum']),
-                columns=['trapNum', 'cellNum'])
+                zip(self["trapNum"], self["cellNum"]), columns=["trapNum", "cellNum"]
+            )
         return self._identity
 
     def index(self, trapNum, cellNum):
@@ -425,15 +438,15 @@ class CellInfo(_Info):
 
     @property
     def nucEstConv1(self):
-        return np.asarray(self.info['nuc_est_conv'][0][0].todense())
+        return np.asarray(self.info["nuc_est_conv"][0][0].todense())
 
     @property
     def nucEstConv2(self):
-        return np.asarray(self.info['nuc_est_conv'][0][1].todense())
+        return np.asarray(self.info["nuc_est_conv"][0][1].todense())
 
     @property
     def mothers(self):
-        return np.where((self['births'] != 0).any(axis=1))[0]
+        return np.where((self["births"] != 0).any(axis=1))[0]
 
     def daughters(self, mother_index):
         """
@@ -442,19 +455,18 @@ class CellInfo(_Info):
         :param mother_index: the index of the mother within the data. This is
         different from the mother's cell/trap identity.
         """
-        daughter_ids = np.unique(self['daughterLabel'][mother_index]).tolist()
+        daughter_ids = np.unique(self["daughterLabel"][mother_index]).tolist()
         daughter_ids.remove(0)
-        mother_trap = self.identity['trapNum'].loc[mother_index]
-        daughters = [self.index(mother_trap, cellNum) for cellNum in
-                     daughter_ids]
+        mother_trap = self.identity["trapNum"].loc[mother_index]
+        daughters = [self.index(mother_trap, cellNum) for cellNum in daughter_ids]
         return daughters
 
 
 def _todict(matobj):
     """
-        A recursive function which constructs from matobjects nested dictionaries
-        """
-    if not hasattr(matobj, '_fieldnames'):
+    A recursive function which constructs from matobjects nested dictionaries
+    """
+    if not hasattr(matobj, "_fieldnames"):
         return matobj
     d = {}
     for strg in matobj._fieldnames:
@@ -470,11 +482,11 @@ def _todict(matobj):
 
 def _toarray(ndarray):
     """
-        A recursive function which constructs ndarray from cellarrays
-        (which are loaded as numpy ndarrays), recursing into the elements
-        if they contain matobjects.
-        """
-    if ndarray.dtype != 'float64':
+    A recursive function which constructs ndarray from cellarrays
+    (which are loaded as numpy ndarrays), recursing into the elements
+    if they contain matobjects.
+    """
+    if ndarray.dtype != "float64":
         elem_list = []
         for sub_elem in ndarray:
             if isinstance(sub_elem, matlab.mio5_params.mat_struct):
@@ -517,15 +529,15 @@ class Strain:
             identities = []
             for pos_id, cinfo in enumerate(self.cinfos):
                 identity = cinfo.identity
-                identity['position'] = pos_id
+                identity["position"] = pos_id
                 identities.append(identity)
             self._identity = pd.concat(identities, ignore_index=True)
         return self._identity
 
     def index(self, posNum, trapNum, cellNum):
-        query = "position=={} and trapNum=={} and cellNum=={}".format(posNum,
-                                                                      trapNum,
-                                                                      cellNum)
+        query = "position=={} and trapNum=={} and cellNum=={}".format(
+            posNum, trapNum, cellNum
+        )
         try:
             result = self.identity.query(query).index[0]
         except Exception as e:
@@ -535,7 +547,7 @@ class Strain:
     @property
     def mothers(self):
         # At least two births are needed to be considered a mother cell
-        return np.where(np.count_nonzero(self['births'], axis=1) > 3)[0]
+        return np.where(np.count_nonzero(self["births"], axis=1) > 3)[0]
 
     def daughters(self, mother_index):
         """
@@ -544,11 +556,10 @@ class Strain:
         :param mother_index: the index of the mother within the data. This is
         different from the mother's pos/trap/cell identity.
         """
-        daughter_ids = np.unique(self['daughterLabel'][mother_index]).tolist()
+        daughter_ids = np.unique(self["daughterLabel"][mother_index]).tolist()
         if 0 in daughter_ids:
             daughter_ids.remove(0)
-        mother_pos_trap = self.identity[['position', 'trapNum']].loc[
-            mother_index]
+        mother_pos_trap = self.identity[["position", "trapNum"]].loc[mother_index]
         daughters = []
         for cellNum in daughter_ids:
             try:

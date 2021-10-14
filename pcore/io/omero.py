@@ -1,8 +1,8 @@
 import h5py
 import omero
 from omero.gateway import BlitzGateway
-from core.experiment import get_data_lazy
-from core.cells import CellsHDF
+from pcore.experiment import get_data_lazy
+from pcore.cells import CellsHDF
 
 
 class Argo:

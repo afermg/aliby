@@ -11,9 +11,9 @@ import numpy as np
 from scipy import ndimage
 from scipy.sparse.base import isdense
 
-from core.io.matlab import matObject
-from core.utils import timed
-from core.io.writer import load_complex
+from pcore.io.matlab import matObject
+from pcore.utils import timed
+from pcore.io.writer import load_complex
 
 
 def cell_factory(store, type="matlab"):

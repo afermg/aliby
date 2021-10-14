@@ -8,8 +8,8 @@ from pathlib import Path
 from tqdm import tqdm
 import cv2
 
-from core.io.matlab import matObject
-from core.utils import Cache, imread, get_store_path
+from pcore.io.matlab import matObject
+from pcore.utils import Cache, imread, get_store_path
 
 logger = logging.getLogger(__name__)
 
@@ -28,29 +28,26 @@ def parse_local_fs(pos_dir, tp=None):
     img_mapper = dict()
 
     def channel_idx(img_name):
-        return img_name.stem.split('_')[-2]
+        return img_name.stem.split("_")[-2]
 
     def tp_idx(img_name):
-        return int(img_name.stem.split('_')[-3]) - 1
+        return int(img_name.stem.split("_")[-3]) - 1
 
     def z_idx(img_name):
-        return img_name.stem.split('_')[-1]
+        return img_name.stem.split("_")[-1]
 
     if tp is not None:
         img_list = [img for img in pos_dir.iterdir() if tp_idx(img) in tp]
     else:
         img_list = [img for img in pos_dir.iterdir()]
 
-    for tp, group in itertools.groupby(sorted(img_list, key=tp_idx),
-                                       key=tp_idx):
-        img_mapper[int(tp)] = {channel: {i: item
-                                         for i, item in
-                                         enumerate(sorted(grp, key=z_idx))}
-                               for channel, grp in
-                               itertools.groupby(
-                                   sorted(group, key=channel_idx),
-                                   key=channel_idx)
-                               }
+    for tp, group in itertools.groupby(sorted(img_list, key=tp_idx), key=tp_idx):
+        img_mapper[int(tp)] = {
+            channel: {i: item for i, item in enumerate(sorted(grp, key=z_idx))}
+            for channel, grp in itertools.groupby(
+                sorted(group, key=channel_idx), key=channel_idx
+            )
+        }
     return img_mapper
 
 
@@ -84,7 +81,9 @@ class Timelapse:
         mask = np.isnan(cached)
         if np.any(mask):
             full = self.load_fn(item)
-            shape = self.image_cache[item].shape # TODO speed this up by  recognising the shape from the item
+            shape = self.image_cache[
+                item
+            ].shape  # TODO speed this up by  recognising the shape from the item
             self.image_cache[item] = np.reshape(full, shape)
             return full
         return cached
@@ -119,9 +118,9 @@ class Timelapse:
                 res = parse_slice(subitem)
             else:
                 res = subitem
-                #raise ValueError(f"Cannot parse slice {kw}: {subitem}")
+                # raise ValueError(f"Cannot parse slice {kw}: {subitem}")
 
-            if kw in ['x', 'y']:
+            if kw in ["x", "y"]:
                 # Need exactly two values
                 if res is not None:
                     if len(res) < 2:
@@ -132,11 +131,12 @@ class Timelapse:
             return res
 
         if isinstance(item, int):
-            return self.get_hypercube(x=None, y=None, z_positions=None,
-                                      channels=[item], timepoints=None)
+            return self.get_hypercube(
+                x=None, y=None, z_positions=None, channels=[item], timepoints=None
+            )
         elif isinstance(item, slice):
             return self.get_hypercube(channels=parse_slice(item))
-        keywords = ['channels', 'timepoints', 'x', 'y', 'z_positions']
+        keywords = ["channels", "timepoints", "x", "y", "z_positions"]
         kwargs = dict()
         for kw, subitem in zip(keywords, item):
             kwargs[kw] = parse_subitem(subitem, kw)
@@ -144,8 +144,7 @@ class Timelapse:
 
     @property
     def shape(self):
-        return (self.size_c, self.size_t,
-                self.size_x, self.size_y, self.size_z)
+        return (self.size_c, self.size_t, self.size_x, self.size_y, self.size_z)
 
     @property
     def id(self):
@@ -182,12 +181,15 @@ class Timelapse:
     def get_channel_index(self, channel):
         return self.channels.index(channel)
 
+
 def load_annotation(filepath: Path):
     try:
         return matObject(filepath)
     except Exception as e:
-        raise("Could not load annotation file. \n"
-              "Non MATLAB files currently unsupported") from e
+        raise (
+            "Could not load annotation file. \n"
+            "Non MATLAB files currently unsupported"
+        ) from e
 
 
 class TimelapseOMERO(Timelapse):
@@ -212,15 +214,18 @@ class TimelapseOMERO(Timelapse):
         if annotation is not None:
             self.annotation = load_annotation(annotation)
         # Get an HDF5 dataset to use as a cache.
-        compression = kwargs.get('compression', None)
-        self.image_cache = cache.require_dataset(self.name, self.shape,
-                                                 dtype=np.float16,
-                                                 fillvalue=np.nan,
-                                                 compression=compression)
+        compression = kwargs.get("compression", None)
+        self.image_cache = cache.require_dataset(
+            self.name,
+            self.shape,
+            dtype=np.float16,
+            fillvalue=np.nan,
+            compression=compression,
+        )
 
-    def get_hypercube(self, x=None, y=None,
-                      z_positions=None, channels=None,
-                      timepoints=None):
+    def get_hypercube(
+        self, x=None, y=None, z_positions=None, channels=None, timepoints=None
+    ):
         if x is None and y is None:
             tile = None  # Get full plane
         elif x is None:
@@ -245,11 +250,18 @@ class TimelapseOMERO(Timelapse):
         channels = channels or [0]
         timepoints = timepoints or [0]
 
-        zcttile_list = [(z, c, t, tile) for z, c, t in
-                        itertools.product(z_positions, channels, timepoints)]
+        zcttile_list = [
+            (z, c, t, tile)
+            for z, c, t in itertools.product(z_positions, channels, timepoints)
+        ]
         planes = list(self.pixels.getTiles(zcttile_list))
-        order = (len(z_positions), len(channels), len(timepoints),
-                 planes[0].shape[-2], planes[0].shape[-1])
+        order = (
+            len(z_positions),
+            len(channels),
+            len(timepoints),
+            planes[0].shape[-2],
+            planes[0].shape[-1],
+        )
         result = np.stack([x for x in planes]).reshape(order)
         # Set to C, T, X, Y, Z order
         result = np.moveaxis(result, -1, -2)
@@ -264,14 +276,16 @@ class TimelapseOMERO(Timelapse):
             for channel in tqdm(self.channels, disable=quiet):
                 for z_pos in tqdm(range(self.size_z), disable=quiet):
                     ch_id = self.get_channel_index(channel)
-                    image = self.get_hypercube(x=None, y=None,
-                                               channels=[ch_id],
-                                               z_positions=[z_pos],
-                                               timepoints=[tp])
-                    im_name = "{}_{:06d}_{}_{:03d}.png".format(expt_name,
-                                                               tp + 1,
-                                                               channel,
-                                                               z_pos + 1)
+                    image = self.get_hypercube(
+                        x=None,
+                        y=None,
+                        channels=[ch_id],
+                        z_positions=[z_pos],
+                        timepoints=[tp],
+                    )
+                    im_name = "{}_{:06d}_{}_{:03d}.png".format(
+                        expt_name, tp + 1, channel, z_pos + 1
+                    )
                     cv2.imwrite(str(pos_dir / im_name), np.squeeze(image))
         # TODO update positions table to get the number of timepoints?
         return list(itertools.product([self.name], timepoints))
@@ -290,7 +304,7 @@ class TimelapseOMERO(Timelapse):
         # Create store if it does not exist
         if not store.exists():
             # The first run, add metadata to the store
-            with h5py.File(store, 'w') as pos_store:
+            with h5py.File(store, "w") as pos_store:
                 # TODO Add metadata to the store.
                 pass
         # TODO check how sensible the keys are with what is available
@@ -303,8 +317,9 @@ class TimelapseOMERO(Timelapse):
 
 
 class TimelapseLocal(Timelapse):
-    def __init__(self, position, root_dir, finished=True, annotation=None,
-                 cache=None, **kwargs):
+    def __init__(
+        self, position, root_dir, finished=True, annotation=None, cache=None, **kwargs
+    ):
         """
         Linked to a local directory containing the images for one position
         in an experiment.
@@ -329,32 +344,34 @@ class TimelapseLocal(Timelapse):
         # Check whether there are file annotations for this position
         if annotation is not None:
             self.annotation = load_annotation(annotation)
-        compression = kwargs.get('compression', None)
-        self.image_cache = cache.require_dataset(self.name, self.shape,
-                                                 dtype=np.float16,
-                                                 fillvalue=np.nan,
-                                                 compression=compression)
+        compression = kwargs.get("compression", None)
+        self.image_cache = cache.require_dataset(
+            self.name,
+            self.shape,
+            dtype=np.float16,
+            fillvalue=np.nan,
+            compression=compression,
+        )
 
     def _update_metadata(self):
         self._size_t = len(self.image_mapper)
         # Todo: if cy5 is the first one it causes issues with getting x, y
         #   hence the sorted but it's not very robust
-        self._channels = sorted(list(set.union(*[set(tp.keys())
-                                                 for tp in
-                                                 self.image_mapper.values()])))
+        self._channels = sorted(
+            list(set.union(*[set(tp.keys()) for tp in self.image_mapper.values()]))
+        )
         self._size_c = len(self._channels)
         # Todo: refactor so we don't rely on there being any images at all
-        self._size_z = max([len(self.image_mapper[0][ch])
-                            for ch in self._channels])
-        single_img = self.get_hypercube(x=None, y=None,
-                                        z_positions=None, channels=[0],
-                                        timepoints=[0])
+        self._size_z = max([len(self.image_mapper[0][ch]) for ch in self._channels])
+        single_img = self.get_hypercube(
+            x=None, y=None, z_positions=None, channels=[0], timepoints=[0]
+        )
         self._size_x = single_img.shape[2]
         self._size_y = single_img.shape[3]
 
-    def get_hypercube(self, x=None, y=None,
-                      z_positions=None, channels=None,
-                      timepoints=None):
+    def get_hypercube(
+        self, x=None, y=None, z_positions=None, channels=None, timepoints=None
+    ):
         xmin, xmax = x if x is not None else (None, None)
         ymin, ymax = y if y is not None else (None, None)
 
@@ -367,10 +384,11 @@ class TimelapseLocal(Timelapse):
 
         def z_pos_getter(z_positions, ch_id, t):
             default = np.zeros((self.size_x, self.size_y))
-            names = [self.image_mapper[t][self.channels[ch_id]].get(i, None)
-                     for i in z_positions]
-            res = [imread(name) if name is not None else default
-                   for name in names]
+            names = [
+                self.image_mapper[t][self.channels[ch_id]].get(i, None)
+                for i in z_positions
+            ]
+            res = [imread(name) if name is not None else default for name in names]
             return res
 
         # nested list of images in C, T, X, Y, Z order
@@ -386,7 +404,7 @@ class TimelapseLocal(Timelapse):
     def clear_cache(self):
         self.image_cache.clear()
 
-    def run(self, keys, store, save_dir='./', **kwargs):
+    def run(self, keys, store, save_dir="./", **kwargs):
         """
         Parse file structure and get images for the time points in keys.
         """
@@ -400,12 +418,10 @@ class TimelapseLocal(Timelapse):
         store = get_store_path(save_dir, store, self.name)
         if not store.exists():
             # The first run, add metadata to the store
-            with h5py.File(store, 'w') as pos_store:
+            with h5py.File(store, "w") as pos_store:
                 # TODO Add metadata to the store.
                 pass
         # TODO check how sensible the keys are with what is available
         #   if some of the keys don't make sense, log a warning and remove
         #   them so that the next steps of the pipeline make sense
         return keys
-
-

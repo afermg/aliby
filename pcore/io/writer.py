@@ -10,8 +10,8 @@ from typing import Dict
 
 from utils_find_1st import find_1st, cmp_equal
 
-from core.io.base import BridgeH5
-from core.utils import timed
+from pcore.io.base import BridgeH5
+from pcore.utils import timed
 
 
 #################### Dynamic version ##################################
