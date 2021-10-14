@@ -153,15 +153,17 @@ class Tiler:
         self.trap_locs = trap_locs
 
     @classmethod
-    def from_hdf5(cls, image, filepath):
+    def from_hdf5(cls, image, filepath, tile_size=None):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = metadata["channels/channel"].tolist()
+        if tile_size is None:
+            tile_size = trap_locs.tile_size
         return Tiler(
             image=image,
             metadata=metadata,
             template=None,
-            tile_size=trap_locs.tile_size,
+            tile_size=tile_size,
             trap_locs=trap_locs,
         )
 
@@ -169,10 +171,6 @@ class Tiler:
     def get_tc(self, t, c):
         # Get image
         full = self.image[t, c].compute()  # FORCE THE CACHE
-        if self.trap_locs.padding_required(t):
-            # Add padding step so edge traps are fixed
-            pad_width = (self.tile_size // 2, self.tile_size // 2)
-            full = np.pad(full, ((0, 0), pad_width, pad_width), "median")
         return full
 
     @property
@@ -200,7 +198,7 @@ class Tiler:
     def finished(self):
         return self.n_processed == self.image.shape[0]
 
-    def _initialise_traps(self, trap_template, tile_size):
+    def _initialise_traps(self, tile_size):
         """Find initial trap positions.
 
         Removes all those that are too close to the edge so no padding is necessary.
@@ -231,30 +229,49 @@ class Tiler:
     def get_tp_data(self, tp, c):
         traps = []
         full = self.get_tc(tp, c)
+        # if self.trap_locs.padding_required(tp):
         for trap in self.trap_locs:
-            y, x = trap.as_range(tp)
-            trap = full[:, y, x]
-            # Check the shape of the trap
-            if trap.shape != (
-                5,
-                self.tile_size,
-                self.tile_size,
-            ):  # TODO find a better fix for this
-                trap = np.zeros((5, self.tile_size, self.tile_size))
-            traps.append(trap)
+            ndtrap = self.ifoob_pad(full, trap.as_range(tp))
+
+            traps.append(ndtrap)
         return np.stack(traps)
 
     def get_trap_data(self, trap_id, tp, c):
         full = self.get_tc(tp, c)
         trap = self.trap_locs.traps[trap_id]
-        y, x = trap.as_range(tp)
-        return full[:, y, x]
+        ndtrap = self.ifoob_pad(full, trap.as_range(tp))
+
+        return ndtrap
+
+    @staticmethod
+    def ifoob_pad(full, slices):
+        """
+        Returns the slices padded if it is out of bounds
+
+        Parameters:
+        ----------
+        full: Numpy array image
+        slices: tuple of slices indicating the range
+
+        Returns
+        Trap for given slices, padded with median if needed
+        """
+        max_size = full.shape[-1]
+
+        y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+        trap = full[:, y, x]
+
+        padding = [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
+        if np.array(padding).any():
+            trap = np.pad(trap, [[0, 0]] + padding, "median")
+
+        return trap
 
     def run_tp(self, tp):
         assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
         if self.n_processed == 0:
-            self._initialise_traps(self.trap_template, self.tile_size)
+            self._initialise_traps(self.tile_size)
         self.find_drift(tp)  # Get drift
         # Return result for writer
         return self.trap_locs.to_dict(tp)
