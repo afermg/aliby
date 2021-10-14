@@ -124,8 +124,13 @@ def create_pipeline(image_id, **config):
                     writer.write(trap_info, overwrite=[])
                     logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                     t = perf_counter()
-                    seg = runner.run_tp(i)
-                    logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
+                    try:
+                        seg = runner.run_tp(i)
+                        logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
+                    except:
+                        logging.debug(
+                            f"Segmentation failed:Segmentation:{perf_counter() - t}s"
+                        )
                     t = perf_counter()
                     bwriter.write(seg, overwrite=["mother_assign"])
                     logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
@@ -210,7 +215,6 @@ def run_config(config):
     if distributed != 0:  # Gives the number of simultaneous processes
         with Pool(distributed) as p:
             results = p.map(lambda x: create_pipeline(x, **config), image_ids.items())
-            p.terminate()
         return results
     else:  # Sequential
         results = []
@@ -270,8 +274,8 @@ def visualise_timing(timings: dict, save_file: str):
     return
 
 
-
-strain = "YST_1512"
+# strain = "YST_1511_007"
+strain = ""
 # exp = 18616
 # exp = 19232
 # exp = 19995
@@ -300,7 +304,7 @@ config = dict(
     tiler=dict(),
     baby=dict(tf_version=2),
     earlystop=dict(
-        min_tp=50,
+        min_tp=200,
         thresh_pos_clogged=0.3,
         thresh_trap_clogged=7,
         ntps_to_eval=5,
