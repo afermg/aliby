@@ -250,8 +250,11 @@ class Tiler:
 
         Parameters:
         ----------
-        full: Numpy array image
-        slices: tuple of slices indicating the range
+        full: (zstacks, max_size, max_size) ndarray
+        Entire position with zstacks as first axis
+        slices: tuple of two slices
+        Each slice indicates an axis to index
+
 
         Returns
         Trap for given slices, padded with median if needed
