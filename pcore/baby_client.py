@@ -20,7 +20,7 @@ from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from core.utils import Cache, accumulate, get_store_path
+from pcore.utils import Cache, accumulate, get_store_path
 
 ################### Dask Methods ################################
 def format_segmentation(segmentation, tp):

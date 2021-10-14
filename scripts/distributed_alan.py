@@ -3,13 +3,10 @@ import json
 from time import perf_counter
 import logging
 
-from core.experiment import MetaData
 from pathos.multiprocessing import Pool
 from multiprocessing import set_start_method
 import numpy as np
 
-from extraction.core.functions.defaults import exparams_from_meta
-from core.io.signal import Signal
 
 # set_start_method("spawn")
 
@@ -21,13 +18,16 @@ import operator
 
 from baby.brain import BabyBrain
 
-from core.io.omero import Dataset, Image
-from core.haystack import initialise_tf
-from core.baby_client import DummyRunner
-from core.segment import Tiler
-from core.io.writer import TilerWriter, BabyWriter
-from core.utils import timed
+from pcore.experiment import MetaData
+from pcore.io.omero import Dataset, Image
+from pcore.haystack import initialise_tf
+from pcore.baby_client import DummyRunner
+from pcore.segment import Tiler
+from pcore.io.writer import TilerWriter, BabyWriter
+from pcore.utils import timed
 
+from pcore.io.signal import Signal
+from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
@@ -278,9 +278,9 @@ def visualise_timing(timings: dict, save_file: str):
 strain = ""
 # exp = 18616
 # exp = 19232
-# exp = 19995
+exp = 19995
 # exp = 19993
-exp = 20191
+# exp = 20191
 # exp = 19831
 
 with Dataset(exp) as conn:
@@ -294,17 +294,17 @@ tps = int(meta["size_t"])
 config = dict(
     general=dict(
         id=exp,
-        distributed=4,
+        distributed=5,
         tps=tps,
         directory="../data/",
         strain=strain,
-        tile_size=117,
+        tile_size=96,
     ),
     # general=dict(id=19303, distributed=0, tps=tps, strain=strain, directory="../data/"),
     tiler=dict(),
     baby=dict(tf_version=2),
     earlystop=dict(
-        min_tp=200,
+        min_tp=300,
         thresh_pos_clogged=0.3,
         thresh_trap_clogged=7,
         ntps_to_eval=5,

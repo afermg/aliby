@@ -8,7 +8,7 @@ import h5py
 import pandas as pd
 from utils_find_1st import find_1st, cmp_larger
 
-from core.io.base import BridgeH5
+from pcore.io.base import BridgeH5
 
 
 class Signal(BridgeH5):
