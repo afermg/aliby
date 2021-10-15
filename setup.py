@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name="pipeline-core",
     version="0.1.1-dev",
-    packages=find_packages("python"),
+    packages=find_packages("pcore"),
     url="",
     license="",
     author="Diane Adjavon",
