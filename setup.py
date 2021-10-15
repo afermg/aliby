@@ -4,6 +4,7 @@ setup(
     name="pipeline-core",
     version="0.1.1-dev",
     packages=find_packages("pcore"),
+    include_package_data=True,
     url="",
     license="",
     author="Diane Adjavon",
