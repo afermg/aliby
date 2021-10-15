@@ -8,10 +8,10 @@ import pandas as pd
 from tqdm import tqdm
 
 from agora.base import ParametersABC
-from core.io.writer import Writer
-from core.io.signal import Signal
+from pcore.io.writer import Writer
+from pcore.io.signal import Signal
 
-from core.cells import Cells
+from pcore.cells import Cells
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
 
@@ -82,15 +82,13 @@ class PostProcessorParameters(ParametersABC):
                                     "/extraction/em_ratio_bgsub/np_max/median",
                                     "/extraction/gsum/np_max/median",
                                     "/extraction/gsum/np_max/mean",
-                                    "/postprocessing/bud_metric/extraction_general_None_volume",
-                                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                                    "postprocessing/bud_metric/extraction_general_None_volume",
+                                    "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                                    "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                                     "postprocessing/dsignal/extraction_general_None_volume",
                                     "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
                                     "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
                                     "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
-                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_bgsub_np_max_median",
-                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_bgsub_np_max_mean",
                                 ]
                             ],
                         ),

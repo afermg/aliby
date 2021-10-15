@@ -12,13 +12,13 @@ class aggregateParameters(ParametersABC):
     reduction: str to be passed to a dataframe for collapsing across columns
     """
 
-    def __init__(self, reduction):
+    def __init__(self, reductions):
         super().__init__()
-        self.reduction = reduction
+        self.reductions = reductions
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"reduction": "mean"})
+        return cls.from_dict({"reductions": ["mean", "median", "max"]})
 
 
 class aggregate(ProcessABC):
@@ -31,13 +31,14 @@ class aggregate(ProcessABC):
 
     def run(self, signals):
         names = np.array([signal.index.names for signal in signals])
-        if not np.all(names == names[0]):
-            "Not all indices are the same, selecting smallest set"
-            index = signals[0].index
-            for s in signals[0:]:
-                index = index.intersection(s.index)
+        index = signals[0].index
+        for s in signals[0:]:
+            index = index.intersection(s.index)
 
-            signals = [s.loc[index] for s in signals]
+        tmp_signals = [s.loc[index] for s in signals]
+        for i, s in enumerate(signals):
+            tmp_signals[i].name = s.name
+        signals = tmp_signals
 
         assert len(signals), "Signals is empty"
 
@@ -54,9 +55,17 @@ class aggregate(ProcessABC):
             for ind in item.split("/")
             if ind not in bad_words
         ]
-        colnames = ["_".join(get_keywords(s)) for s in signals]
+        colnames = [
+            "_".join(get_keywords(s) + [red])
+            for s in signals
+            for red in self.parameters.reductions
+        ]
         concat = pd.concat(
-            [getattr(signal, self.parameters.reduction)(axis=1) for signal in signals],
+            [
+                getattr(signal, red)(axis=1)
+                for signal in signals
+                for red in self.parameters.reductions
+            ],
             names=signals[0].index.names,
             axis=1,
         )

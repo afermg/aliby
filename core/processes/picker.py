@@ -10,7 +10,7 @@ from utils_find_1st import find_1st, cmp_equal
 import numpy as np
 import pandas as pd
 
-from core.cells import CellsHDF
+from pcore.cells import CellsHDF
 
 from agora.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
