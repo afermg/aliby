@@ -3,9 +3,9 @@ from setuptools import setup, find_packages
 setup(
     name="pipeline-core",
     version="0.1.1-dev",
-    packages=find_packages(),
     package_dir={"": "pcore"},
-    include_package_data=True,
+    packages=find_packages(where="pcore"),
+    # include_package_data=True,
     url="",
     license="",
     author="Diane Adjavon",
