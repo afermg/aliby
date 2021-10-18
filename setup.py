@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-print(find_packages('pcore'))
+print("find_packages outputs ", find_packages('pcore'))
 setup(
     name="pipeline-core",
     version="0.1.1-dev",
