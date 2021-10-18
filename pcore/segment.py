@@ -28,7 +28,7 @@ from pcore.io.metadata_parser import parse_logfiles
 
 trap_template_directory = Path(__file__).parent / "trap_templates"
 # TODO do we need multiple templates, one for each setup?
-trap_template = np.load(trap_template_directory / "trap_prime.npy")
+trap_template = np.array([])#np.load(trap_template_directory / "trap_prime.npy")
 
 
 def get_tile_shapes(x, tile_size, max_shape):
