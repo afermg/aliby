@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pipeline-core",
-    version="0.1.1-devtile",
+    version="0.1.1-dev",
     # package_dir={"": "pcore"},
     # packages=find_packages(where="pcore"),
     packages=['pcore', 'pcore.io'],
