@@ -1,2 +1,0 @@
-include core/trap_templates/*.npy
-graft pcore
