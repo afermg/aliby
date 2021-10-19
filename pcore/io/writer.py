@@ -54,9 +54,9 @@ class DynamicWriter:
         else:
             # The dataset already exists, expand it
 
-            dset = hgroup[key]
-            dset.resize(dset.shape[0] + n, axis=0)
             try:# FIXME This is broken by bugged mother-bud assignment
+                dset = hgroup[key]
+                dset.resize(dset.shape[0] + n, axis=0)
                 dset[-n:] = data
             except:
                 logging.debug('DynamicWriter:Inconsistency between dataset shape and new empty data')
