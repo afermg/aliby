@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 print("find_packages outputs ", find_packages('pcore'))
 setup(
     name="pipeline-core",
-    version="0.1.1-dev",
+    version="0.1.2-dev",
     packages=find_packages(),
     # package_dir={"": "pcore"},
     # packages=['pcore', 'pcore.io'],
@@ -20,7 +20,7 @@ setup(
         "pathos",
         "tqdm",
         "pandas",
-        "scikit-image>=0.18.3",
+        "scikit-image",
         "opencv-python",
         "requests_toolbelt",
         "h5py==2.10",
@@ -28,8 +28,8 @@ setup(
         "imageio==2.8.0",
         "omero-py>=5.6.2",
         "zeroc-ice==3.6.5",
-        "tensorflow>=1.14,<=2.3",
-        "baby@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby.git@training",
+        "tensorflow>=1.15,<=2.3",
+        "baby@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby.git@training#egg=baby",
         "logfile_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser.git",
         # "extraction@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/extraction.git@dev",
         # "postprocessor@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/post-processing.git@dev",
