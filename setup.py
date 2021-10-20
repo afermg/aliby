@@ -29,7 +29,7 @@ setup(
         "omero-py>=5.6.2",
         "zeroc-ice==3.6.5",
         "tensorflow>=1.14,<=2.3",
-        "baby@git+ssh://git@git.ecdf.ed.ac.uk/jpietsch/baby.git@training",
+        "baby@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby.git@training",
         "logfile_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser.git",
         # "extraction@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/extraction.git@dev",
         # "postprocessor@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/post-processing.git@dev",
