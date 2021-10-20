@@ -20,7 +20,7 @@ setup(
         "pathos",
         "tqdm",
         "pandas",
-        "scikit-image==0.18.3",
+        "scikit-image>=0.18.3",
         "opencv-python",
         "requests_toolbelt",
         "h5py==2.10",
