@@ -21,9 +21,9 @@ class PostProcessorParameters(ParametersABC):
     Anthology of parameters used for postprocessing
     :merger:
     :picker: parameters for picker
-    :processes: Dict processes:[objectives], 'processes' are defined in ./processes/
+    :processes: list processes:[objectives], 'processes' are defined in ./processes/
         while objectives are relative or absolute paths to datasets. If relative paths the
-        post-processed addresses are used.
+        post-processed addresses are used. The order of processes matters.
 
     """
 
@@ -71,7 +71,7 @@ class PostProcessorParameters(ParametersABC):
                                 "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                             ],
                         ],
-                        (
+                        [
                             "aggregate",
                             [
                                 [
@@ -91,7 +91,7 @@ class PostProcessorParameters(ParametersABC):
                                     "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
                                 ]
                             ],
-                        ),
+                        ],
                         # "savgol": ["/extraction/general/None/area"],
                     ],
                 },
