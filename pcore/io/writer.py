@@ -54,12 +54,14 @@ class DynamicWriter:
         else:
             # The dataset already exists, expand it
 
-            try:# FIXME This is broken by bugged mother-bud assignment
+            try:  # FIXME This is broken by bugged mother-bud assignment
                 dset = hgroup[key]
                 dset.resize(dset.shape[0] + n, axis=0)
                 dset[-n:] = data
             except:
-                logging.debug('DynamicWriter:Inconsistency between dataset shape and new empty data')
+                logging.debug(
+                    "DynamicWriter:Inconsistency between dataset shape and new empty data"
+                )
         return
 
     def _overwrite(self, data, key, hgroup):
@@ -298,7 +300,7 @@ class Writer(BridgeH5):
         path: str,
         data: Iterable = None,
         meta: Dict = {},
-        overwrite: str = "overwrite",
+        overwrite: str = None,
     ):
         """
         Parameters
@@ -312,7 +314,7 @@ class Writer(BridgeH5):
         """
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
-            if overwrite == "overwrite":
+            if overwrite == "overwrite":  # TODO refactor overwriting
                 if path in f:
                     del f[path]
             elif overwrite == "accumulate":  # Add a number if needed
@@ -323,7 +325,6 @@ class Writer(BridgeH5):
             elif overwrite == "skip":
                 if path in f:
                     logging.debug("Skipping dataset {}".format(path))
-                    return None
 
             logging.debug(
                 "{} {} to {} and {} metadata fields".format(
@@ -419,7 +420,7 @@ class Writer(BridgeH5):
                 dset = f[indices_path]
                 dset[()] = df.index.get_level_values(level=name).tolist()
 
-            if df.columns.dtype == np.uint:
+            if df.columns.dtype == np.int:
                 tp_path = path + "/timepoint"
                 f.create_dataset(
                     name=tp_path,
