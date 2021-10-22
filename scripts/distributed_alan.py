@@ -34,36 +34,6 @@ from extraction.core.functions.defaults import get_params
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 
-def pipeline(image_id, tps=10, tf_version=2):
-    name, image_id = image_id
-    try:
-        # Initialise tensorflow
-        session = initialise_tf(tf_version)
-        with Image(image_id) as image:
-            print(f"Getting data for {image.name}")
-            tiler = Tiler(image.data, image.metadata, image.name)
-            writer = TilerWriter(f"../data/test2/{image.name}.h5")
-            runner = DummyRunner(tiler)
-            bwriter = BabyWriter(f"../data/test2/{image.name}.h5")
-            for i in tqdm(range(0, tps), desc=image.name):
-                trap_info = tiler.run_tp(i)
-                writer.write(trap_info, overwrite=[])
-                seg = runner.run_tp(i)
-                bwriter.write(seg, overwrite=["mother_assign"])
-            return True
-    except Exception as e:  # bug in the trap getting
-        print(f"Caught exception in worker thread (x = {name}):")
-        # This prints the type, value, and stack trace of the
-        # current exception being handled.
-        traceback.print_exc()
-        print()
-        raise e
-    finally:
-        # Close session
-        if session:
-            session.close()
-
-
 @timed("Position")
 def create_pipeline(image_id, **config):
     name, image_id = image_id
@@ -294,7 +264,7 @@ tps = int(meta["size_t"])
 config = dict(
     general=dict(
         id=exp,
-        distributed=7,
+        distributed=5,
         tps=tps,
         directory="../data/",
         strain=strain,
