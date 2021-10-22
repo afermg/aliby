@@ -1,6 +1,3 @@
-import seaborn as sns
-from matplotlib import pyplot as plt  # TODO DELETE THIS
-
 from typing import Tuple, Union, List
 from abc import ABC, abstractmethod
 
@@ -29,10 +26,10 @@ class pickerParameters(ParametersABC):
             {
                 "sequence": [
                     # ("lineage", "intersection", "families"),
-                    ("condition", "intersection", "any_present", 0.8),
-                    ("condition", "intersection", "growing", 40),
-                    ("condition", "intersection", "present", 8),
-                    ("condition", "intersection", "mother_buds", 5, 0.8),
+                    ["condition", "intersection", "any_present", 0.8],
+                    ["condition", "intersection", "growing", 40],
+                    ["condition", "intersection", "present", 8],
+                    ["condition", "intersection", "mother_buds", 5, 0.8],
                     # ("lineage", "full_families", "intersection"),
                 ],
             }

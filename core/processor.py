@@ -49,16 +49,16 @@ class PostProcessorParameters(ParametersABC):
                         "merger": "/extraction/general/None/area",
                         "picker": ["/extraction/general/None/area"],
                     },
-                    "processes": (
-                        (
+                    "processes": [
+                        [
                             "bud_metric",
                             [
                                 "/extraction/general/None/volume",
                                 "/extraction/em_ratio/np_max/mean",
                                 "/extraction/em_ratio/np_max/median",
                             ],
-                        ),
-                        (
+                        ],
+                        [
                             "dsignal",
                             [
                                 "/extraction/general/None/volume",
@@ -70,7 +70,7 @@ class PostProcessorParameters(ParametersABC):
                                 "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
                                 "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                             ],
-                        ),
+                        ],
                         (
                             "aggregate",
                             [
@@ -93,12 +93,12 @@ class PostProcessorParameters(ParametersABC):
                             ],
                         ),
                         # "savgol": ["/extraction/general/None/area"],
-                    ),
+                    ],
                 },
                 parameters={
                     "prepost": {
-                        "merger": mergerParameters.default(),
-                        "picker": pickerParameters.default(),
+                        "merger": mergerParameters.default().to_dict(),
+                        "picker": pickerParameters.default().to_dict(),
                     }
                 },
                 outpaths={"aggregate": "/postprocessing/experiment_wide/aggregated/"},
