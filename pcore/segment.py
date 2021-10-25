@@ -28,7 +28,7 @@ from pcore.io.metadata_parser import parse_logfiles
 
 trap_template_directory = Path(__file__).parent / "trap_templates"
 # TODO do we need multiple templates, one for each setup?
-trap_template = np.array([])#np.load(trap_template_directory / "trap_prime.npy")
+trap_template = np.array([])  # np.load(trap_template_directory / "trap_prime.npy")
 
 
 def get_tile_shapes(x, tile_size, max_shape):
@@ -231,6 +231,8 @@ class Tiler:
         full = self.get_tc(tp, c)
         # if self.trap_locs.padding_required(tp):
         for trap in self.trap_locs:
+            if tp == 2:
+                print("stop here")
             ndtrap = self.ifoob_pad(full, trap.as_range(tp))
 
             traps.append(ndtrap)
@@ -264,9 +266,15 @@ class Tiler:
         y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
         trap = full[:, y, x]
 
-        padding = [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
-        if np.array(padding).any():
-            trap = np.pad(trap, [[0, 0]] + padding, "median")
+        padding = np.array(
+            [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
+        )
+        if padding.any():
+            tile_size = slices[0].end - slices[0].start
+            if (padding > tile_size) / 3:
+                trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
+            else:
+                trap = np.pad(trap, [[0, 0]] + padding, "median")
 
         return trap
 
