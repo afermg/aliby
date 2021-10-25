@@ -28,7 +28,9 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets):
 
-        if dsets.startswith("postprocessing") or dsets.startswith("/postprocessing"):
+        if isinstance(dsets, str) and (
+            dsets.startswith("postprocessing") or dsets.startswith("/postprocessing")
+        ):
             df = self.get_raw(dsets)
 
         elif isinstance(dsets, str):
@@ -116,8 +118,11 @@ class Signal(BridgeH5):
         return df
 
     def get_raw(self, dataset):
-        with h5py.File(self.filename, "r") as f:
-            return self.dset_to_df(f, dataset)
+        if isinstance(dataset, str):
+            with h5py.File(self.filename, "r") as f:
+                return self.dset_to_df(f, dataset)
+        elif isinstance(dataset, list):
+            return [self.get_raw(dset) for dset in dataset]
 
     def get_merges(self):
         # fetch merge events going up to the first level
