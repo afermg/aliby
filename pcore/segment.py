@@ -231,8 +231,6 @@ class Tiler:
         full = self.get_tc(tp, c)
         # if self.trap_locs.padding_required(tp):
         for trap in self.trap_locs:
-            if tp == 2:
-                print("stop here")
             ndtrap = self.ifoob_pad(full, trap.as_range(tp))
 
             traps.append(ndtrap)
@@ -259,7 +257,7 @@ class Tiler:
 
 
         Returns
-        Trap for given slices, padded with median if needed
+        Trap for given slices, padded with median if needed, or np.nan if the padding is too much
         """
         max_size = full.shape[-1]
 
@@ -270,11 +268,11 @@ class Tiler:
             [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
         )
         if padding.any():
-            tile_size = slices[0].end - slices[0].start
-            if (padding > tile_size) / 3:
+            tile_size = slices[0].stop - slices[0].start
+            if (padding > tile_size / 4).any():
                 trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
             else:
-                trap = np.pad(trap, [[0, 0]] + padding, "median")
+                trap = np.pad(trap, [[0, 0]] + padding.tolist(), np.median(trap))
 
         return trap
 
