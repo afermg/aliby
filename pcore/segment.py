@@ -272,7 +272,8 @@ class Tiler:
             if (padding > tile_size / 4).any():
                 trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
             else:
-                trap = np.pad(trap, [[0, 0]] + padding.tolist(), np.median(trap))
+
+                trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
 
         return trap
 
