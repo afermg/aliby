@@ -40,69 +40,91 @@ class PostProcessorParameters(ParametersABC):
     def __getitem__(self, item):
         return getattr(self, item)
 
+    @staticmethod
+    def find_in_1st(string, lol):
+        pass
+
     @classmethod
-    def default(cls, kind=None):
-        if kind == "defaults" or kind == None:
-            return cls(
-                targets={
-                    "prepost": {
-                        "merger": "/extraction/general/None/area",
-                        "picker": ["/extraction/general/None/area"],
-                    },
-                    "processes": [
+    def default(cls, kind=[]):
+        targets = {
+            "prepost": {
+                "merger": "/extraction/general/None/area",
+                "picker": ["/extraction/general/None/area"],
+            },
+            "processes": [
+                [
+                    "bud_metric",
+                    [
+                        "/extraction/general/None/volume",
+                    ],
+                ],
+                [
+                    "dsignal",
+                    [
+                        "/extraction/general/None/volume",
+                    ],
+                ],
+            ],
+        }
+        parameters = {
+            "prepost": {
+                "merger": mergerParameters.default(),
+                "picker": pickerParameters.default(),
+            }
+        }
+        outpaths = {}
+
+        if "ph_batman" in kind:
+            targets["processes"]["bud_metric"].append(
+                [
+                    [
+                        "/extraction/general/None/volume",
+                        "/extraction/em_ratio/np_max/mean",
+                        "/extraction/em_ratio/np_max/median",
+                    ],
+                ]
+            )
+            targets["processes"]["dsignal"].append(
+                [
+                    "/extraction/em_ratio/np_max/mean",
+                    "/extraction/em_ratio/np_max/median",
+                    "/extraction/em_ratio_bgsub/np_max/mean",
+                    "/extraction/em_ratio_bgsub/np_max/median",
+                    "/postprocessing/bud_metric/extraction_general_None_volume",
+                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                    "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                ]
+            )
+            targets["processes"].append(
+                [
+                    [
+                        "aggregate",
                         [
-                            "bud_metric",
-                            [
-                                "/extraction/general/None/volume",
-                                "/extraction/em_ratio/np_max/mean",
-                                "/extraction/em_ratio/np_max/median",
-                            ],
-                        ],
-                        [
-                            "dsignal",
                             [
                                 "/extraction/general/None/volume",
                                 "/extraction/em_ratio/np_max/mean",
                                 "/extraction/em_ratio/np_max/median",
                                 "/extraction/em_ratio_bgsub/np_max/mean",
                                 "/extraction/em_ratio_bgsub/np_max/median",
-                                "/postprocessing/bud_metric/extraction_general_None_volume",
-                                "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                                "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                            ],
+                                "/extraction/gsum/np_max/median",
+                                "/extraction/gsum/np_max/mean",
+                                "postprocessing/bud_metric/extraction_general_None_volume",
+                                "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                                "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                                "postprocessing/dsignal/extraction_general_None_volume",
+                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
+                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
+                            ]
                         ],
-                        [
-                            "aggregate",
-                            [
-                                [
-                                    "/extraction/general/None/volume",
-                                    "/extraction/em_ratio/np_max/mean",
-                                    "/extraction/em_ratio/np_max/median",
-                                    "/extraction/em_ratio_bgsub/np_max/mean",
-                                    "/extraction/em_ratio_bgsub/np_max/median",
-                                    "/extraction/gsum/np_max/median",
-                                    "/extraction/gsum/np_max/mean",
-                                    "postprocessing/bud_metric/extraction_general_None_volume",
-                                    "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                                    "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                                    "postprocessing/dsignal/extraction_general_None_volume",
-                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
-                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
-                                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
-                                ]
-                            ],
-                        ],
-                        # "savgol": ["/extraction/general/None/area"],
-                    ],
-                },
-                parameters={
-                    "prepost": {
-                        "merger": mergerParameters.default().to_dict(),
-                        "picker": pickerParameters.default().to_dict(),
-                    }
-                },
-                outpaths={"aggregate": "/postprocessing/experiment_wide/aggregated/"},
+                    ]
+                ]
             )
+            outpaths["aggregate"].append(
+                ["/postprocessing/experiment_wide/aggregated/"]
+            )
+
+        return cls(targets=targets, parameters=parameters, outpaths=outpaths)
 
     def to_dict(self):
         return {k: _if_dict(v) for k, v in self.__dict__.items()}
