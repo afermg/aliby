@@ -83,14 +83,23 @@ class Trap:
 
 
 class TrapLocations:
-    def __init__(self, initial_location, tile_size, max_size=1200):
+    def __init__(self, initial_location, tile_size, max_size=1200, drifts=[]):
         self.tile_size = tile_size
         self.max_size = max_size
         self.initial_location = initial_location
         self.traps = [
             Trap(centre, self, tile_size, max_size) for centre in initial_location
         ]
-        self.drifts = []
+        self.drifts = drifts
+
+    @classmethod
+    def from_source(cls, fpath: str):
+        with h5py.File(fpath, "r") as f:
+            # TODO read tile size from file metadata
+            drifts = f["trap_info/drifts"][()]
+            tlocs = cls(f["trap_info/trap_locations"][()], tile_size=96, drifts=drifts)
+
+        return tlocs
 
     @property
     def shape(self):
@@ -272,7 +281,8 @@ class Tiler:
             if (padding > tile_size / 4).any():
                 trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
             else:
-                trap = np.pad(trap, [[0, 0]] + padding.tolist(), np.median(trap))
+
+                trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
 
         return trap
 

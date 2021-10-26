@@ -162,7 +162,7 @@ class CellsHDF(Cells):
 
     def outline(self, cell_id, trap_id):
         times, indices, cell_ix = self.where(cell_id, trap_id)
-        return times, self["edgemasks"][cell_ix, indices]
+        return times, self["edgemasks"][cell_ix, times]
 
     def mask(self, cell_id, trap_id):
         times, outlines = self.outline(cell_id, trap_id)
