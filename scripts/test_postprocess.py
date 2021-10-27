@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # Post process a single file
 from postprocessor.core.processor import PostProcessorParameters, PostProcessor
-from core.io.signal import Signal
+from pcore.io.signal import Signal
 
 # filepath = "/shared_libs/pydask/pipeline-core/data/2021_08_21_KCl_pH_00/YST_1511_005.h5"
-filepath = "/shared_libs/pydask/pipeline-core/data/bak_kcl/YST_1511_005.h5"
+filepath = "/home/alan/Documents/docker_builder/context/stoa_libs/pipeline-core/data/2021_08_21_KCl_pH_00/YST_1510_010.h5"
 import h5py
 
 with h5py.File(filepath, "a") as f:
