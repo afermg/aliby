@@ -385,7 +385,7 @@ class Writer(BridgeH5):
             f.create_dataset(
                 name=id_path,
                 shape=(len(ids),),
-                dtype=pd_index.dtypes.iloc[0],
+                dtype="uint16",
                 compression=kwargs.get("compression", None),
             )
             indices = f[id_path]
