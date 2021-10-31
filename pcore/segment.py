@@ -189,11 +189,9 @@ class Tiler:
 
     @property
     def n_processed(self):
-        if hasattr(self, "_n_processed"):
-            return self._n_processed
-        if self.trap_locs:
-            return self.trap_locs.shape[1]
-        return 0
+        if not hasattr(self, "_n_processed"):
+            self._n_processed = 0
+        return self._n_processed
 
     @n_processed.setter
     def n_processed(self, value):
@@ -292,6 +290,8 @@ class Tiler:
         if self.n_processed == 0:
             self._initialise_traps(self.tile_size)
         self.find_drift(tp)  # Get drift
+        # update n_processed
+        self.n_processed += 1
         # Return result for writer
         return self.trap_locs.to_dict(tp)
 
