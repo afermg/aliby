@@ -4,7 +4,6 @@ from time import perf_counter
 import logging
 
 from pathos.multiprocessing import Pool
-from multiprocessing import set_start_method
 import numpy as np
 
 
@@ -16,7 +15,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import operator
 
-from baby.brain import BabyBrain
 
 from pcore.experiment import MetaData
 from pcore.io.omero import Dataset, Image
@@ -30,8 +28,7 @@ from pcore.io.signal import Signal
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
-from extraction.core.functions.defaults import get_params
-from postprocessor.core.processor import PostProcessorParameters, PostProcessor
+from postprocessor.core.processor import PostProcessor
 
 
 @timed("Position")
@@ -53,6 +50,12 @@ def create_pipeline(image_id, **config):
         directory = general_config.get("directory", "")
         with Image(image_id) as image:
             filename = f"{directory}/{image.name}.h5"
+            import os
+
+            try:
+                os.remove(filename)
+            except:
+                pass
             # Run metadata first
             process_from = 0
             if True:  # not Path(filename).exists():
@@ -94,18 +97,17 @@ def create_pipeline(image_id, **config):
                     writer.write(trap_info, overwrite=[])
                     logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                     t = perf_counter()
-                    try:
-                        seg = runner.run_tp(i)
-                        logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
-                    except:
-                        logging.debug(
-                            f"Segmentation failed:Segmentation:{perf_counter() - t}s"
-                        )
+                    seg = runner.run_tp(i)
+                    logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
+                    # logging.debug(
+                    #     f"Segmentation failed:Segmentation:{perf_counter() - t}s"
+                    # )
                     t = perf_counter()
                     bwriter.write(seg, overwrite=["mother_assign"])
                     logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
                     t = perf_counter()
-                    ext.extract_pos(tps=[i])
+
+                    tmp = ext.extract_pos(tps=[i])
                     logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
                 else:  # Stop if more than 10% traps are clogged
                     logging.debug(
@@ -245,7 +247,7 @@ def visualise_timing(timings: dict, save_file: str):
 
 
 # strain = "YST_1511_007"
-strain = ""
+strain = "phl_ura8_007"
 # exp = 18616
 # exp = 19232
 exp = 19995
