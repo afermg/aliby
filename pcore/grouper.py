@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from core.io.signal import Signal
+from pcore.io.signal import Signal
 
 # fname = "/shared_libs/pipeline-core/data/2021_04_19_pH_calibration_dual_phl__ura8__by4741_Alan4_00"
 fname = "/shared_libs/pydask/pipeline-core/data/2021_08_21_KCl_pH_00/"
