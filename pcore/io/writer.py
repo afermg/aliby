@@ -436,12 +436,10 @@ class Writer(BridgeH5):
             dset = f[values_path]
 
             # Filter out repeated timepoints
-            new_tps = set(df.columns).difference(f[path + "/timepoint"][()])
-            if len(new_tps) != df.shape[1]:
-                print(
-                    "Attempting to re-extract existing timepoints. Skipping duplicated"
-                )
-                df = df[new_tps]
+            new_tps = set(df.columns)
+            if path + "/timepoint" in f:
+                new_tps = new_tps.difference(f[path + "/timepoint"][()])
+            df = df[new_tps]
 
             if (
                 not hasattr(self, "id_cache") or not df.index.nlevels in self.id_cache
