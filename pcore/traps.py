@@ -55,20 +55,22 @@ def segment_traps(image, tile_size, downscale=0.4):
             [
                 region.centroid
                 for region in regionprops(label_image)
-                if (region.area > min_area and region.area < tile_size ** 2 * 0.8)
-                and (
-                    region.centroid[0]
-                    in range(tile_size // 2, image.shape[0] - tile_size // 2)
-                )
-                and (
-                    region.centroid[1]
-                    in range(tile_size // 2, image.shape[1] - tile_size // 2)
-                )
+                if region.area > min_area and region.area < tile_size ** 2 * 0.8
             ]
         )
         .round()
         .astype(int)
     )
+    traps = np.array(
+        [
+            trap
+            for trap in traps
+            if (
+                trap[0] in range(tile_size // 2, image.shape[0] - tile_size // 2)
+                and trap[1] in range(tile_size // 2, image.shape[1] - tile_size // 2)
+            )
+        ]
+    ).astype(int)
     ma = (
         np.array(
             [
