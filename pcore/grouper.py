@@ -151,8 +151,7 @@ class phGrouper(NameGrouper):
 
 
 def concat_signal_ind(path, group_names, group, signal):
-    print(group)
-    print
+    print("Looking at ", group)
     combined = signal[path]
     combined["position"] = group
     combined["group"] = group_names[group]
