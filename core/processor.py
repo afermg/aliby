@@ -62,6 +62,16 @@ class PostProcessorParameters(ParametersABC):
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
+                        "/postprocessing/bud_metric/extraction_general_None_volume",
+                    ],
+                ],
+                [
+                    "aggregate",
+                    [
+                        "/extraction/general/None/volume",
+                        "postprocessing/bud_metric/extraction_general_None_volume",
+                        "postprocessing/dsignal/extraction_general_None_volume",
+                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
                     ],
                 ],
             ],
@@ -78,7 +88,6 @@ class PostProcessorParameters(ParametersABC):
             targets["processes"]["bud_metric"].append(
                 [
                     [
-                        "/extraction/general/None/volume",
                         "/extraction/em_ratio/np_max/mean",
                         "/extraction/em_ratio/np_max/median",
                     ],
@@ -90,35 +99,23 @@ class PostProcessorParameters(ParametersABC):
                     "/extraction/em_ratio/np_max/median",
                     "/extraction/em_ratio_bgsub/np_max/mean",
                     "/extraction/em_ratio_bgsub/np_max/median",
-                    "/postprocessing/bud_metric/extraction_general_None_volume",
                     "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
                     "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                 ]
             )
-            targets["processes"].append(
+            targets["processes"]["aggregate"].append(
                 [
-                    [
-                        "aggregate",
-                        [
-                            [
-                                "/extraction/general/None/volume",
-                                "/extraction/em_ratio/np_max/mean",
-                                "/extraction/em_ratio/np_max/median",
-                                "/extraction/em_ratio_bgsub/np_max/mean",
-                                "/extraction/em_ratio_bgsub/np_max/median",
-                                "/extraction/gsum/np_max/median",
-                                "/extraction/gsum/np_max/mean",
-                                "postprocessing/bud_metric/extraction_general_None_volume",
-                                "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                                "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                                "postprocessing/dsignal/extraction_general_None_volume",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
-                            ]
-                        ],
-                    ]
-                ]
+                    "/extraction/em_ratio/np_max/mean",
+                    "/extraction/em_ratio/np_max/median",
+                    "/extraction/em_ratio_bgsub/np_max/mean",
+                    "/extraction/em_ratio_bgsub/np_max/median",
+                    "/extraction/gsum/np_max/median",
+                    "/extraction/gsum/np_max/mean",
+                    "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                    "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
+                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
+                ],
             )
             outpaths["aggregate"].append(
                 ["/postprocessing/experiment_wide/aggregated/"]
