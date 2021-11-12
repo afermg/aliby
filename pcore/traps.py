@@ -61,16 +61,6 @@ def segment_traps(image, tile_size, downscale=0.4):
         .round()
         .astype(int)
     )
-    traps = np.array(
-        [
-            trap
-            for trap in traps
-            if (
-                trap[0] in range(tile_size // 2, image.shape[0] - tile_size // 2)
-                and trap[1] in range(tile_size // 2, image.shape[1] - tile_size // 2)
-            )
-        ]
-    ).astype(int)
     ma = (
         np.array(
             [
@@ -82,6 +72,15 @@ def segment_traps(image, tile_size, downscale=0.4):
         .round()
         .astype(int)
     )
+    maskx = (tile_size // 2 < traps[:, 0]) & (
+        traps[:, 0] < image.shape[0] - tile_size // 2
+    )
+    masky = (tile_size // 2 < traps[:, 1]) & (
+        traps[:, 1] < image.shape[1] - tile_size // 2
+    )
+
+    traps = traps[maskx & masky, :]
+    ma = ma[maskx & masky]
 
     chosen_trap_coords = np.round(traps[ma.argmin()]).astype(int)
     x, y = chosen_trap_coords
