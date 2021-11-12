@@ -2,15 +2,13 @@
 
 from abc import ABC, abstractmethod, abstractproperty
 from pathlib import Path
+from pathos.multiprocessing import Pool
 
 import h5py
 import numpy as np
 import pandas as pd
 
 from pcore.io.signal import Signal
-
-# fname = "/shared_libs/pipeline-core/data/2021_04_19_pH_calibration_dual_phl__ura8__by4741_Alan4_00"
-fname = "/shared_libs/pydask/pipeline-core/data/2021_08_21_KCl_pH_00/"
 
 
 class Grouper(ABC):
@@ -40,15 +38,13 @@ class Grouper(ABC):
         pass
 
     def concat_signal(self, path, reduce_cols=None, axis=0):
-        signals = []
-        for group, signal in self.signals.items():
-            print("looking at", signal.filename)
-            combined = signal[path]
-            combined["position"] = group
-            combined["group"] = self.group_names[group]
-            combined.set_index(["group", "position"], inplace=True, append=True)
-            combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
-            signals.append(combined)
+        group_names = self.group_names
+        sitems = self.signals.items()
+        with Pool(8) as p:
+            signals = p.map(
+                lambda x: concat_signal_ind(path, group_names, x[0], x[1]),
+                sitems,
+            )
 
         sorted = pd.concat(signals, axis=axis).sort_index()
         if reduce_cols:
@@ -154,28 +150,12 @@ class phGrouper(NameGrouper):
         return aggregated
 
 
-# g = NameGrouper(fname)
-# signame = "/extraction/em_ratio/np_max/mean"
-# shortname = "_".join((signame.split("/")[2], signame.split("/")[4]))
-# c = g.concat_signal(signame)
-# d = c[c.notna().sum(axis=1) > c.shape[1] * 0.8]
-# e = d.melt(var_name="tp", ignore_index=False, value_name=shortname).reset_index()
-# e[shortname] = 1 / e[shortname]
+def concat_signal_ind(path, group_names, group, signal):
+    print("Looking at ", group)
+    combined = signal[path]
+    combined["position"] = group
+    combined["group"] = group_names[group]
+    combined.set_index(["group", "position"], inplace=True, append=True)
+    combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
 
-# Plot comparable to Ivan's
-# sns.lineplot(
-#     data=e,
-#     x="tp",
-#     y=shortname,
-#     hue="group",
-#     palette=["blue", "orange", "yellow", "purple", "green"],
-# )
-# plt.title(signame)
-# plt.ylabel(shortname)
-# plt.show()
-
-# Check if traplocs make sense
-# for traplocs in tlocs.values():
-#     x, y = list(zip(*traplocs))
-#     plt.scatter(x, y)
-#     plt.show()
+    return combined

@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-print("find_packages outputs ", find_packages('pcore'))
+print("find_packages outputs ", find_packages("pcore"))
 setup(
     name="pipeline-core",
     version="0.1.1-dev",
@@ -27,6 +27,7 @@ setup(
         "tables",
         "imageio==2.8.0",
         "omero-py>=5.6.2",
+        "pathos",
         "zeroc-ice==3.6.5",
         "tensorflow>=1.15,<=2.3",
         "baby@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby.git@master",
