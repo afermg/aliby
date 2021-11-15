@@ -247,7 +247,7 @@ def visualise_timing(timings: dict, save_file: str):
 
 
 # strain = "YST_1511_007"
-strain = "phl_ura8_007"
+strain = ""
 # exp = 18616
 # exp = 19232
 exp = 19995

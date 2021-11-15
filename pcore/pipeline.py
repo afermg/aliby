@@ -167,7 +167,7 @@ class Pipeline(ProcessABC):
                 #         tiler.n_processed = process_from
 
                 writer = TilerWriter(filename)
-                runner = DummyRunner(tiler, baby_config=config["baby"])
+                runner = BabyRunner(tiler, baby_config=config["baby"])
                 bwriter = BabyWriter(filename)
                 params = (
                     Parameters.from_dict(config["extraction"])
