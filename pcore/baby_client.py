@@ -113,7 +113,11 @@ class BabyRunner:
     def __init__(self, tiler, parameters=None, *args, **kwargs):
         self.tiler = tiler
         # self.model_config = modelsets()[choose_model_from_params(**kwargs)]
-        self.model_config = parameters.model_config
+        self.model_config = (
+            parameters.model_config
+            if parameters is not None
+            else modelsets()[choose_model_from_params(**kwargs)]
+        )
         self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
         self.bf_channel = self.tiler.get_channel_index("Brightfield")
