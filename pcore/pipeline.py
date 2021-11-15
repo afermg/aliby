@@ -119,6 +119,7 @@ class Pipeline(ProcessABC):
             conn.cache_logs(directory)
 
         # Modify to the configuration
+        self.parameters.general["directory"] = directory
         config["general"]["directory"] = directory
 
         # Filter TODO integrate filter onto class and add regex
@@ -149,7 +150,6 @@ class Pipeline(ProcessABC):
                 except:
                     pass
 
-                session = initialise_tf(2)
                 # Run metadata first
                 process_from = 0
                 # if True:  # not Path(filename).exists():
@@ -167,7 +167,8 @@ class Pipeline(ProcessABC):
                 #         tiler.n_processed = process_from
 
                 writer = TilerWriter(filename)
-                runner = BabyRunner(tiler, baby_config=config["baby"])
+                runner = BabyRunner(tiler)  # , baby_config=config["baby"])
+                session = initialise_tf(2)
                 bwriter = BabyWriter(filename)
                 params = (
                     Parameters.from_dict(config["extraction"])
