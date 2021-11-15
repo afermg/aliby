@@ -1,100 +1,251 @@
 """
 Pipeline and chaining elements.
 """
+import os
 from abc import ABC, abstractmethod
-import itertools
 from typing import List
+from pathlib import Path
+import traceback
+
+import itertools
+import yaml
 
 import pandas as pd
 
-from core.experiment import ExperimentOMERO, ExperimentLocal
+from agora.base import ParametersABC, ProcessABC
+from pcore.experiment import MetaData
+from pcore.io.omero import Dataset, Image
+from pcore.haystack import initialise_tf
+from pcore.baby_client import DummyRunner
+from pcore.segment import Tiler
+from pcore.io.writer import TilerWriter, BabyWriter
+from pcore.io.signal import Signal
+from extraction.core.functions.defaults import exparams_from_meta
+from extraction.core.extractor import Extractor
+from extraction.core.parameters import Parameters
+from postprocessor.core.processor import PostProcessor
+
+# from pcore.experiment import ExperimentOMERO, ExperimentLocal
+# from pcore.utils import timed
 
 
-class PipelineStep(ABC):
-    @abstractmethod
-    def run(self, keys: List[str], store: pd.HDFStore=None, session=None) -> \
-            List[str]:
+class PipelineParameters(ParametersABC):
+    def __init__(self, general, tiler, baby, extraction, postprocessing):
+        self.general = general
+        self.tiler = tiler
+        self.baby = baby
+        self.extraction = extraction
+        self.postprocessing = postprocessing
+
+    @classmethod
+    def default(cls):
         """
-        Abstract run method, when implemented by subclasses, runs analysis
-        on the keys and saves results in store.
-        :param keys: list of keys on which to run analysis
-        :return: A set of keys now available for anlaysis for the next step.
+        Load unit test experiment
         """
-        return keys
+        return cls(
+            general=dict(
+                id=19993,
+                distributed=0,
+                tps=2,
+                directory="../data",
+                strain="",
+                tile_size=96,
+                earlystop=dict(
+                    min_tp=50,
+                    thresh_pos_clogged=0.3,
+                    thresh_trap_clogged=7,
+                    ntps_to_eval=5,
+                ),
+            ),
+            tiler=dict(),
+            baby=dict(tf_version=2),
+            extraction=dict(),
+            postprocessing=dict(),
+        )
 
 
-def create_keys(expt, strain='', timepoints=None, positions=None, exclude=None):
-    """
-    Create a set of keys for use with the pipeline based on a given experiment
-    and an end time point.
-
-    :param expt: The Experiment object on which to work
-    :param strain: The name of the strain, which is assumed to be in the
-    position names. If it is not, use a list in the `positions` argument
-    instead.
-    :param timepoints: The number of timepoints to run. If set to None
-    (default) will run all of the timepoints in the experiment.
-    :param positions: The positions to run. Overrides the `strain` argument.
-    :param exclude: The positions to exclude to exclude. Needs to be an
-    iterable.
-    """
-    # TODO: Make it possible to use groups defined in metadata to choose the
-    # positions to run.
-    # TODO: make it possible to timepoints not from 0
-    if positions is None:
-        # Use strain to try to find the positions
-        positions = [p for p in expt.positions if p.startswith(strain)]
-    if exclude is not None:
-        positions = list(set(positions) - set(exclude))
-    # Get the correct time points for each position
-    run_tps = dict()
-    for pos in positions:
-        # Note that the different posistions can have different shapes
-        position = expt.get_position(pos)
-        n_tps = position.shape[1]
-        if timepoints is None:
-            # Run full experiment
-            run_tps[pos] = list(range(0, n_tps))
-        else:
-            if max(timepoints) > n_tps:
-                raise ValueError(f'Position {pos} only has {n_tps} time '
-                                 f'points but you asked for {timepoints}')
-            # If all the time points are available for that position
-            run_tps[pos] = timepoints
-    keys = [(pos, tp) for pos in run_tps for tp in run_tps[pos]]
-    return keys
-
-class Pipeline:
+class Pipeline(ProcessABC):
     """
     A chained set of Pipeline elements connected through pipes.
     """
-    def __init__(self, config_file):
-        config = parse_config(config_file)
-        self.store = config['directory']
-        self.experiment = experiment_factory(config)
 
-import yaml
-def parse_config(yaml_file):
-    with open(yaml_file) as fd:
-        config = yaml.safe_load(fd)
-    return config
+    ## default values
+    # General
+    tile_size = 96
+    distributed = 0
+    strain = ""
+    directory = "output"
 
-def experiment_factory(config):
-    if 'experiment' not in config:
-        return None
-    expt_conf = config['experiment']
-    # Choose local or remote
-    try:
-        save_dir = expt_conf['local']
-        if 'remote' in expt_conf:
-            omero = expt_conf['remote']
-            omero['save_dir'] = save_dir
-            expt = ExperimentOMERO(**omero)
-        else:
-            expt = ExperimentLocal(save_dir, expt_conf.get('finished', True))
-    except Exception as e:
-        raise Exception('Configuration incorrect: experiment needs a local '
-                        'directory') from e
-    return expt, expt_conf.get('run', None)
+    # Tiling, Segmentation,Extraction and Postprocessing should use their own default parameters
 
+    # Early stop for clogging
+    earlystop = {
+        "min_tp": 50,
+        "thresh_pos_clogged": 0.3,
+        "thresh_trap_clogged": 7,
+        "ntps_to_eval": 5,
+    }
 
+    def __init__(self, parameters: PipelineParameters):
+        super().__init__(parameters)
+        self.store = self.parameters.general["directory"]
+
+    @classmethod
+    def from_yaml(cls, fpath):
+        # This is just a convenience function, think before implementing
+        # for other processes
+        return cls(parameters=PipelineParameters.from_yaml(fpath))
+
+    def run(self):
+        # Config holds the general information, use in main
+        # Steps holds the description of tasks with their parameters
+        # Steps: all holds general tasks
+        # steps: strain_name holds task for a given strain
+        config = self.parameters.to_dict()
+        expt_id = config["general"]["id"]
+        distributed = config["general"]["distributed"]
+        strain_filter = config["general"]["strain"]
+        root_dir = config["general"]["directory"]
+        root_dir = Path(root_dir)
+
+        print("Searching OMERO")
+        # Do all initialis
+        with Dataset(int(expt_id)) as conn:
+            image_ids = conn.get_images()
+            directory = root_dir / conn.unique_name
+            if not directory.exists():
+                directory.mkdir(parents=True)
+                # Download logs to use for metadata
+            conn.cache_logs(directory)
+
+        # Modify to the configuration
+        config["general"]["directory"] = directory
+
+        # Filter TODO integrate filter onto class and add regex
+        image_ids = {k: v for k, v in image_ids.items() if k.startswith(strain_filter)}
+
+        if distributed != 0:  # Gives the number of simultaneous processes
+            with Pool(distributed) as p:
+                results = p.map(lambda x: self.create_pipeline(x), image_ids.items())
+            return results
+        else:  # Sequential
+            results = []
+            for k, v in image_ids.items():
+                r = self.create_pipeline((k, v))
+                results.append(r)
+
+    def create_pipeline(self, image_id):
+        config = self.parameters.to_dict()
+        name, image_id = image_id
+        general_config = config["general"]
+        session = None
+        earlystop = general_config["earlystop"]
+        try:
+            directory = general_config["directory"]
+            with Image(image_id) as image:
+                filename = f"{directory}/{image.name}.h5"
+                try:
+                    os.remove(filename)
+                except:
+                    pass
+
+                session = initialise_tf(2)
+                # Run metadata first
+                process_from = 0
+                # if True:  # not Path(filename).exists():
+                meta = MetaData(directory, filename)
+                meta.run()
+                tiler = Tiler(
+                    image.data, image.metadata, tile_size=general_config["tile_size"]
+                )
+                # else: TODO add support to continue local experiments?
+                #     tiler = Tiler.from_hdf5(image.data, filename)
+                #     s = Signal(filename)
+                #     process_from = s["/general/None/extraction/volume"].columns[-1]
+                #     if process_from > 2:
+                #         process_from = process_from - 3
+                #         tiler.n_processed = process_from
+
+                writer = TilerWriter(filename)
+                runner = DummyRunner(tiler, baby_config=config["baby"])
+                bwriter = BabyWriter(filename)
+                params = (
+                    Parameters.from_dict(config["extraction"])
+                    if config["extraction"]
+                    else Parameters(**exparams_from_meta(filename))
+                )
+                ext = Extractor.from_tiler(params, store=filename, tiler=tiler)
+
+                # RUN
+                tps = general_config["tps"]
+                frac_clogged_traps = 0
+                for i in tqdm(
+                    range(process_from, tps), desc=image.name, initial=process_from
+                ):
+                    if frac_clogged_traps < earlystop["thresh_pos_clogged"]:
+                        t = perf_counter()
+                        trap_info = tiler.run_tp(i)
+                        logging.debug(f"Timing:Trap:{perf_counter() - t}s")
+                        t = perf_counter()
+                        writer.write(trap_info, overwrite=[])
+                        logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
+                        t = perf_counter()
+                        seg = runner.run_tp(i)
+                        logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
+                        # logging.debug(
+                        #     f"Segmentation failed:Segmentation:{perf_counter() - t}s"
+                        # )
+                        t = perf_counter()
+                        bwriter.write(seg, overwrite=["mother_assign"])
+                        logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
+                        t = perf_counter()
+
+                        tmp = ext.extract_pos(tps=[i])
+                        logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
+                    else:  # Stop if more than X% traps are clogged
+                        logging.debug(
+                            f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
+                        )
+                        print(
+                            f"Stopping analysis at time {i} with {frac_clogged_traps} clogged traps"
+                        )
+                        break
+
+                    if (
+                        i > earlystop["min_tp"]
+                    ):  # Calculate the fraction of clogged traps
+                        frac_clogged_traps = self.check_earlystop(filename, earlystop)
+                        logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
+                        print("Frac clogged traps: ", frac_clogged_traps)
+
+                # Run post processing
+                post_proc_params = PostProcessorParameters.from_dict(
+                    self.parameters.postprocessing
+                )
+                PostProcessor(filename, post_proc_params).run()
+                return True
+        except Exception as e:  # bug in the trap getting
+            print(f"Caught exception in worker thread (x = {name}):")
+            # This prints the type, value, and stack trace of the
+            # current exception being handled.
+            traceback.print_exc()
+            print()
+            raise e
+        finally:
+            if session:
+                session.close()
+
+        @staticmethod
+        def check_earlystop(filename, es_parameters):
+            s = Signal(filename)
+            df = s["/extraction/general/None/area"]
+            frac_clogged_traps = (
+                df[df.columns[i - earlystop["ntps_to_eval"] : i]]
+                .dropna(how="all")
+                .notna()
+                .groupby("trap")
+                .apply(sum)
+                .apply(np.mean, axis=1)
+                > earlystop["thresh_trap_clogged"]
+            ).mean()
+            return frac_clogged_traps
