@@ -16,7 +16,7 @@ from agora.base import ParametersABC, ProcessABC
 from pcore.experiment import MetaData
 from pcore.io.omero import Dataset, Image
 from pcore.haystack import initialise_tf
-from pcore.baby_client import DummyRunner
+from pcore.baby_client import BabyRunner
 from pcore.segment import Tiler
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.io.signal import Signal

@@ -19,7 +19,7 @@ import operator
 from pcore.experiment import MetaData
 from pcore.io.omero import Dataset, Image
 from pcore.haystack import initialise_tf
-from pcore.baby_client import DummyRunner
+from pcore.baby_client import BabyRunner
 from pcore.segment import Tiler
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.utils import timed
@@ -79,7 +79,7 @@ def create_pipeline(image_id, **config):
             assert baby_config is not None  # TODO add defaults
             tf_version = baby_config.get("tf_version", 2)
             session = initialise_tf(tf_version)
-            runner = DummyRunner(tiler)
+            runner = BabyRunner(tiler)
             bwriter = BabyWriter(filename)
             params = Parameters(**exparams_from_meta(filename))
             ext = Extractor.from_tiler(params, store=filename, tiler=tiler)
