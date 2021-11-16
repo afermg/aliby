@@ -12,18 +12,22 @@ class aggregateParameters(ParametersABC):
     reduction: str to be passed to a dataframe for collapsing across columns
     """
 
-    def __init__(self, reductions):
+    def __init__(self, reductions, axis, ranges):
         super().__init__()
         self.reductions = reductions
+        self.axis = axis
+        self.ranges = ranges
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"reductions": ["mean", "median", "max"]})
+        return cls.from_dict(
+            {"reductions": ["mean", "median", "max"], "axis": 1, "ranges": None}
+        )
 
 
 class aggregate(ProcessABC):
     """
-    aggregate multiple datasets
+    Aggregate multiple datasets for cell-to-cell feature comparison.
     """
 
     def __init__(self, parameters: aggregateParameters):
@@ -62,13 +66,25 @@ class aggregate(ProcessABC):
         ]
         concat = pd.concat(
             [
-                getattr(signal, red)(axis=1)
+                getattr(signal, red)(axis=self.parameters.axis)
                 for signal in signals
                 for red in self.parameters.reductions
             ],
             names=signals[0].index.names,
-            axis=1,
+            axis=self.parameters.axis,
         )
-        concat.columns = colnames
+        if self.parameters.axis:
+            concat.columns = colnames
+        else:
+            concat.columns = pd.MultiIndex.from_product(
+                (
+                    colnames,
+                    [
+                        "_".join((str(start), str(stop)))
+                        for x in self.parameters.ranges
+                        for start, stop in x
+                    ],
+                )
+            )
 
         return concat

@@ -123,9 +123,6 @@ class PostProcessorParameters(ParametersABC):
 
         return cls(targets=targets, parameters=parameters, outpaths=outpaths)
 
-    def to_dict(self):
-        return {k: _if_dict(v) for k, v in self.__dict__.items()}
-
 
 class PostProcessor:
     def __init__(self, filename, parameters):
@@ -162,8 +159,8 @@ class PostProcessor:
     @staticmethod
     def get_parameters(process):
         """
-        Dynamically import a process class from the 'processes' folder.
-        Assumes process filename and class name are the same
+        Dynamically import parameters from the 'processes' folder.
+        Assumes parameter is the same name as the file with 'Parameters' added at the end.
         """
         return locate(
             "postprocessor.core.processes." + process + "." + process + "Parameters"

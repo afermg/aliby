@@ -1,6 +1,6 @@
 import pandas as pd
 
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from agora.base import ParametersABC, ProcessABC
 
 
 class dsignalParameters(ParametersABC):
