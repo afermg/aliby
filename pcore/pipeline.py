@@ -1,6 +1,7 @@
 """
 Pipeline and chaining elements.
 """
+import logging
 import os
 from abc import ABC, abstractmethod
 from typing import List
@@ -9,6 +10,8 @@ import traceback
 
 import itertools
 import yaml
+from tqdm import tqdm
+from time import perf_counter
 
 import pandas as pd
 
@@ -23,7 +26,7 @@ from pcore.io.signal import Signal
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
-from postprocessor.core.processor import PostProcessor
+from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # from pcore.experiment import ExperimentOMERO, ExperimentLocal
 # from pcore.utils import timed
@@ -60,7 +63,7 @@ class PipelineParameters(ParametersABC):
             tiler=dict(),
             baby=dict(tf_version=2),
             extraction=dict(),
-            postprocessing=dict(),
+            postprocessing=PostProcessorParameters.default().to_dict(),
         )
 
 
@@ -167,8 +170,8 @@ class Pipeline(ProcessABC):
                 #         tiler.n_processed = process_from
 
                 writer = TilerWriter(filename)
-                runner = BabyRunner(tiler)  # , baby_config=config["baby"])
                 session = initialise_tf(2)
+                runner = BabyRunner(tiler)  # , baby_config=config["baby"])
                 bwriter = BabyWriter(filename)
                 params = (
                     Parameters.from_dict(config["extraction"])
