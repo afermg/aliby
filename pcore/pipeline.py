@@ -19,7 +19,7 @@ from agora.base import ParametersABC, ProcessABC
 from pcore.experiment import MetaData
 from pcore.io.omero import Dataset, Image
 from pcore.haystack import initialise_tf
-from pcore.baby_client import BabyRunner
+from pcore.baby_client import BabyRunner, BabyParameters
 from pcore.segment import Tiler
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.io.signal import Signal
@@ -61,7 +61,7 @@ class PipelineParameters(ParametersABC):
                 ),
             ),
             tiler=dict(),
-            baby=dict(tf_version=2),
+            baby=BabyParameters.default(),
             extraction=dict(),
             postprocessing=PostProcessorParameters.default().to_dict(),
         )
@@ -171,7 +171,9 @@ class Pipeline(ProcessABC):
 
                 writer = TilerWriter(filename)
                 session = initialise_tf(2)
-                runner = BabyRunner(tiler)  # , baby_config=config["baby"])
+                runner = BabyRunner.from_tiler(
+                    BabyParameters.from_dict(config["baby"]), tiler
+                )
                 bwriter = BabyWriter(filename)
                 params = (
                     Parameters.from_dict(config["extraction"])
