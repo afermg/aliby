@@ -76,6 +76,7 @@ class BabyParameters(ParametersABC):
         print_info,
         suppress_errors,
         error_dump_dir,
+        tf_version,
     ):
         self.model_config = model_config
         self.tracker_params = tracker_params
@@ -87,6 +88,7 @@ class BabyParameters(ParametersABC):
         self.print_info = print_info
         self.suppress_errors = suppress_errors
         self.error_dump_dir = error_dump_dir
+        self.tf_version = tf_version
 
     @classmethod
     def default(cls, **kwargs):
@@ -102,6 +104,7 @@ class BabyParameters(ParametersABC):
             print_info=False,
             suppress_errors=False,
             error_dump_dir=None,
+            tf_version=2,
         )
 
 
@@ -113,11 +116,13 @@ class BabyRunner:
     def __init__(self, tiler, parameters=None, *args, **kwargs):
         self.tiler = tiler
         # self.model_config = modelsets()[choose_model_from_params(**kwargs)]
-        self.model_config = (
-            parameters.model_config
-            if parameters is not None
-            else modelsets()[choose_model_from_params(**kwargs)]
-        )
+        self.model_config = modelsets()[
+            (
+                parameters.model_config
+                if parameters is not None
+                else choose_model_from_params(**kwargs)
+            )
+        ]
         self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
         self.bf_channel = self.tiler.get_channel_index("Brightfield")
