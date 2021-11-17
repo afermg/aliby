@@ -132,10 +132,12 @@ class PostProcessor:
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = merger(parameters["parameters"]["prepost"]["merger"])
+        self.merger = merger(
+            mergerParameters.from_dict(parameters["parameters"]["prepost"]["merger"])
+        )
 
         self.picker = picker(
-            parameters=parameters["parameters"]["prepost"]["picker"],
+            pickerParameters.from_dict(parameters["parameters"]["prepost"]["picker"]),
             cells=Cells.from_source(filename),
         )
         self.classfun = {
@@ -187,13 +189,18 @@ class PostProcessor:
         mothers, daughters = np.array(self.picker.mothers), np.array(
             self.picker.daughters
         )
-        self.tmp = [y for y in Counter([tuple(x) for x in mothers]).items() if y[1] > 2]
+
+        multii = pd.MultiIndex.from_arrays(
+            (
+                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
+                if daughters
+                else [[], [], []]
+            ),
+            names=["trap", "mother_label", "daughter_label"],
+        )
         self._writer.write(
             "postprocessing/lineage",
-            data=pd.MultiIndex.from_arrays(
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
-                names=["trap", "mother_label", "daughter_label"],
-            ),
+            data=multii,
             overwrite="overwrite",
         )
 
@@ -227,19 +234,24 @@ class PostProcessor:
             if tuple(source) in picked_set:
                 indices[search(indices, source)] = target
 
+        multii = pd.MultiIndex.from_arrays(
+            (
+                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
+                if daughters
+                else [[], [], []]
+            ),
+            names=["trap", "mother_label", "daughter_label"],
+        )
         self._writer.write(
             "postprocessing/lineage_merged",
-            data=pd.MultiIndex.from_arrays(
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
-                names=["trap", "mother_label", "daughter_label"],
-            ),
+            data=multii,
             overwrite="overwrite",
         )
 
         self._writer.write(
             "modifiers/picks",
             data=pd.MultiIndex.from_arrays(
-                indices.T,
+                indices.T if indices.any() else [[], []],
                 names=["trap", "cell_label"],
             ),
             overwrite="overwrite",
@@ -279,7 +291,12 @@ class PostProcessor:
                 else:
                     raise ("Incorrect dataset")
 
-                result = loaded_process.run(signal)
+                if len(signal):
+                    result = loaded_process.run(signal)
+                else:
+                    result = pd.DataFrame(
+                        [], columns=signal.columns, index=signal.index
+                    )
 
                 if process in self.parameters.to_dict()["outpaths"]:
                     outpath = self.parameters.to_dict()["outpaths"][process]

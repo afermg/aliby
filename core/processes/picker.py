@@ -175,21 +175,27 @@ class picker(ProcessABC):
         )
         # mother_bud_mat = self.mother_assign_to_mb_matrix(nested_massign)
 
-        idx = set(
-            [
-                (tid, i + 1)
-                for tid, x in enumerate(nested_massign)
-                for i in range(len(x))
-            ]
-        )
-        mothers, daughters = zip(
-            *[
-                ((tid, m), (tid, d))
-                for tid, trapcells in enumerate(nested_massign)
-                for d, m in enumerate(trapcells, 1)
-                if m
-            ]
-        )
+        if sum([sum(x) for x in nested_massign]):
+
+            idx = set(
+                [
+                    (tid, i + 1)
+                    for tid, x in enumerate(nested_massign)
+                    for i in range(len(x))
+                ]
+            )
+            mothers, daughters = zip(
+                *[
+                    ((tid, m), (tid, d))
+                    for tid, trapcells in enumerate(nested_massign)
+                    for d, m in enumerate(trapcells, 1)
+                    if m
+                ]
+            )
+        else:
+            mothers, daughters = ([], [])
+            print("Warning:Picker: No mother-daughters assigned")
+
         return mothers, daughters
 
     def run(self, signals):
