@@ -20,7 +20,7 @@ from pcore.experiment import MetaData
 from pcore.io.omero import Dataset, Image
 from pcore.haystack import initialise_tf
 from pcore.baby_client import BabyRunner, BabyParameters
-from pcore.segment import Tiler
+from pcore.segment import Tiler, TilerParameters
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.io.signal import Signal
 from extraction.core.functions.defaults import exparams_from_meta
@@ -60,7 +60,7 @@ class PipelineParameters(ParametersABC):
                     ntps_to_eval=5,
                 ),
             ),
-            tiler=dict(),
+            tiler=TilerParameters.default(),
             baby=BabyParameters.default(),
             extraction=dict(),
             postprocessing=PostProcessorParameters.default().to_dict(),
@@ -158,8 +158,8 @@ class Pipeline(ProcessABC):
                 # if True:  # not Path(filename).exists():
                 meta = MetaData(directory, filename)
                 meta.run()
-                tiler = Tiler(
-                    image.data, image.metadata, tile_size=general_config["tile_size"]
+                tiler = Tiler.from_image(
+                    image, TilerParameters.from_dict(config["tiler"])
                 )
                 # else: TODO add support to continue local experiments?
                 #     tiler = Tiler.from_hdf5(image.data, filename)

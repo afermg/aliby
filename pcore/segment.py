@@ -11,6 +11,7 @@ from pathlib import Path, PosixPath
 
 from skimage.registration import phase_cross_correlation
 
+from agora.base import ParametersABC, ProcessABC
 from pcore.traps import segment_traps
 from pcore.timelapse import TimelapseOMERO
 from pcore.io.matlab import matObject
@@ -137,7 +138,25 @@ class TrapLocations:
         return trap_locs
 
 
-class Tiler:
+class TilerParameters(ParametersABC):
+    def __init__(
+        self, tile_size: int, ref_channel: str, ref_z: int, template_name: str = None
+    ):
+        self.tile_size = tile_size
+        self.ref_channel = ref_channel
+        self.ref_z = ref_z
+        self.template_name = template_name
+
+    @classmethod
+    def from_template(cls, template_name: str, ref_channel: str, ref_z: int):
+        return cls(template.shape[0], ref_channel, ref_z, template_path=template_name)
+
+    @classmethod
+    def default(cls):
+        return cls(96, "Brightfield", 0)
+
+
+class Tiler(ProcessABC):
     """A dummy TimelapseTiler object fora Dask Demo.
 
     Does trap finding and image registration."""
@@ -146,20 +165,16 @@ class Tiler:
         self,
         image,
         metadata,
-        template=None,
-        tile_size=None,
-        ref_channel="Brightfield",
-        ref_z=0,
-        trap_locs=None,
+        parameters: TilerParameters,
     ):
+        super().__init__(parameters)
         self.image = image
-        # self.name = metadata["name"]
         self.channels = metadata["channels"]
-        self.trap_template = template if template is not None else trap_template
-        self.ref_channel = self.get_channel_index(ref_channel)
-        self.ref_z = ref_z
-        self.tile_size = tile_size or min(trap_template.shape)
-        self.trap_locs = trap_locs
+        self.ref_channel = self.get_channel_index(parameters.ref_channel)
+
+    @classmethod
+    def from_image(cls, image, parameters: TilerParameters):
+        return cls(image.data, image.metadata, parameters)
 
     @classmethod
     def from_hdf5(cls, image, filepath, tile_size=None):
@@ -287,6 +302,15 @@ class Tiler:
     def run_tp(self, tp):
         assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
+        if self.n_processed == 0:
+            self._initialise_traps(self.tile_size)
+        self.find_drift(tp)  # Get drift
+        # update n_processed
+        self.n_processed += 1
+        # Return result for writer
+        return self.trap_locs.to_dict(tp)
+
+    def run(self, tp):
         if self.n_processed == 0:
             self._initialise_traps(self.tile_size)
         self.find_drift(tp)  # Get drift
