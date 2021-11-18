@@ -23,9 +23,7 @@ from pcore.baby_client import BabyRunner, BabyParameters
 from pcore.segment import Tiler, TilerParameters
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.io.signal import Signal
-from extraction.core.functions.defaults import exparams_from_meta
-from extraction.core.extractor import Extractor
-from extraction.core.parameters import Parameters
+from extraction.core.extractor import Extractor, ExtractorParameters
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # from pcore.experiment import ExperimentOMERO, ExperimentLocal
@@ -45,12 +43,22 @@ class PipelineParameters(ParametersABC):
         """
         Load unit test experiment
         """
+        expt_id = 19993
+        directory = Path("../data")
+        with Dataset(int(expt_id)) as conn:
+            directory = directory / conn.unique_name
+            if not directory.exists():
+                directory.mkdir(parents=True)
+                # Download logs to use for metadata
+            conn.cache_logs(directory)
+        meta = MetaData(directory, None).load_logs()
+
         return cls(
             general=dict(
-                id=19993,
+                id=expt_id,
                 distributed=0,
                 tps=2,
-                directory="../data",
+                directory=directory,
                 strain="",
                 tile_size=96,
                 earlystop=dict(
@@ -62,9 +70,13 @@ class PipelineParameters(ParametersABC):
             ),
             tiler=TilerParameters.default(),
             baby=BabyParameters.default(),
-            extraction=dict(),
-            postprocessing=PostProcessorParameters.default().to_dict(),
+            extraction=ExtractorParameters.from_meta(meta),
+            postprocessing=PostProcessorParameters.default(),
         )
+
+    def load_logs(self):
+        parsed_flattened = parse_logfiles(self.log_dir)
+        return parsed_flattened
 
 
 class Pipeline(ProcessABC):
@@ -175,12 +187,8 @@ class Pipeline(ProcessABC):
                     BabyParameters.from_dict(config["baby"]), tiler
                 )
                 bwriter = BabyWriter(filename)
-                params = (
-                    Parameters.from_dict(config["extraction"])
-                    if config["extraction"]
-                    else Parameters(**exparams_from_meta(filename))
-                )
-                ext = Extractor.from_tiler(params, store=filename, tiler=tiler)
+                exparams = ExtractorParameters.from_dict(config["extraction"])
+                ext = Extractor.from_tiler(exparams, store=filename, tiler=tiler)
 
                 # RUN
                 tps = general_config["tps"]
@@ -206,7 +214,7 @@ class Pipeline(ProcessABC):
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
                         t = perf_counter()
 
-                        tmp = ext.extract_pos(tps=[i])
+                        tmp = ext.run(tps=[i])
                         logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
                     else:  # Stop if more than X% traps are clogged
                         logging.debug(
@@ -226,7 +234,7 @@ class Pipeline(ProcessABC):
 
                 # Run post processing
                 post_proc_params = PostProcessorParameters.from_dict(
-                    self.parameters.postprocessing
+                    self.parameters.postprocessing.to_dict()
                 )
                 PostProcessor(filename, post_proc_params).run()
                 return True
