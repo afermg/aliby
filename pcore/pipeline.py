@@ -14,6 +14,7 @@ from tqdm import tqdm
 from time import perf_counter
 
 import pandas as pd
+from pathos.multiprocessing import Pool
 
 from agora.base import ParametersABC, ProcessABC
 from pcore.experiment import MetaData
@@ -24,10 +25,8 @@ from pcore.segment import Tiler, TilerParameters
 from pcore.io.writer import TilerWriter, BabyWriter
 from pcore.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
+from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
-
-# from pcore.experiment import ExperimentOMERO, ExperimentLocal
-# from pcore.utils import timed
 
 
 class PipelineParameters(ParametersABC):
@@ -39,12 +38,24 @@ class PipelineParameters(ParametersABC):
         self.postprocessing = postprocessing
 
     @classmethod
-    def default(cls):
+    def default(
+        cls,
+        general={},
+        tiler={},
+        baby={},
+        extraction={},
+        postprocessing={},
+    ):
         """
         Load unit test experiment
+        :expt_id: Experiment id
+        :directory: Output directory
+
+        Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
+        timepoints and extraction parameters from there.
         """
-        expt_id = 19993
-        directory = Path("../data")
+        expt_id = general.get("expt_id", 19993)
+        directory = Path(general.get("directory", "../data"))
         with Dataset(int(expt_id)) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
@@ -52,27 +63,29 @@ class PipelineParameters(ParametersABC):
                 # Download logs to use for metadata
             conn.cache_logs(directory)
         meta = MetaData(directory, None).load_logs()
-
-        return cls(
-            general=dict(
+        tps = meta["time_settings/ntimepoints"][0]
+        defaults = {
+            "general": dict(
                 id=expt_id,
                 distributed=0,
-                tps=2,
+                tps=tps,
                 directory=directory,
                 strain="",
-                tile_size=96,
                 earlystop=dict(
                     min_tp=50,
                     thresh_pos_clogged=0.3,
                     thresh_trap_clogged=7,
                     ntps_to_eval=5,
                 ),
-            ),
-            tiler=TilerParameters.default(),
-            baby=BabyParameters.default(),
-            extraction=ExtractorParameters.from_meta(meta),
-            postprocessing=PostProcessorParameters.default(),
-        )
+            )
+        }
+        defaults["tiler"] = TilerParameters.default().to_dict()
+        defaults["baby"] = BabyParameters.default().to_dict()
+        defaults["extraction"] = exparams_from_meta(meta)
+        defaults["postprocessing"] = PostProcessorParameters.default().to_dict()
+        for k in defaults.keys():
+            exec("defaults[k].update(" + k + ")")
+        return cls(**{k: v for k, v in defaults.items()})
 
     def load_logs(self):
         parsed_flattened = parse_logfiles(self.log_dir)
