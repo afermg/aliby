@@ -247,7 +247,7 @@ class Pipeline(ProcessABC):
 
                 # Run post processing
                 post_proc_params = PostProcessorParameters.from_dict(
-                    self.parameters.postprocessing.to_dict()
+                    self.parameters.postprocessing
                 )
                 PostProcessor(filename, post_proc_params).run()
                 return True
@@ -267,7 +267,7 @@ class Pipeline(ProcessABC):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
         frac_clogged_traps = (
-            df[df.columns[i - earlystop["ntps_to_eval"] : i]]
+            df[df.columns[-1 - earlystop["ntps_to_eval"] : -1]]
             .dropna(how="all")
             .notna()
             .groupby("trap")
