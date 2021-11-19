@@ -62,8 +62,8 @@ class Cells:
         return array
 
     @classmethod
-    def hdf(cls, path):
-        return CellsHDF(store)
+    def hdf(cls, fpath):
+        return CellsHDF(fpath)
 
     @classmethod
     def mat(cls, path):
