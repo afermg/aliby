@@ -267,7 +267,7 @@ class Pipeline(ProcessABC):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
         frac_clogged_traps = (
-            df[df.columns[-1 - earlystop["ntps_to_eval"] : -1]]
+            df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]]
             .dropna(how="all")
             .notna()
             .groupby("trap")
