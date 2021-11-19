@@ -274,6 +274,6 @@ class Pipeline(ProcessABC):
             .groupby("trap")
             .apply(sum)
             .apply(np.mean, axis=1)
-            > earlystop["thresh_trap_clogged"]
+            > es_parameters["thresh_trap_clogged"]
         ).mean()
         return frac_clogged_traps
