@@ -262,17 +262,17 @@ class Pipeline(ProcessABC):
             if session:
                 session.close()
 
-        @staticmethod
-        def check_earlystop(filename, es_parameters):
-            s = Signal(filename)
-            df = s["/extraction/general/None/area"]
-            frac_clogged_traps = (
-                df[df.columns[i - earlystop["ntps_to_eval"] : i]]
-                .dropna(how="all")
-                .notna()
-                .groupby("trap")
-                .apply(sum)
-                .apply(np.mean, axis=1)
-                > earlystop["thresh_trap_clogged"]
-            ).mean()
-            return frac_clogged_traps
+    @staticmethod
+    def check_earlystop(filename, es_parameters):
+        s = Signal(filename)
+        df = s["/extraction/general/None/area"]
+        frac_clogged_traps = (
+            df[df.columns[i - earlystop["ntps_to_eval"] : i]]
+            .dropna(how="all")
+            .notna()
+            .groupby("trap")
+            .apply(sum)
+            .apply(np.mean, axis=1)
+            > earlystop["thresh_trap_clogged"]
+        ).mean()
+        return frac_clogged_traps
