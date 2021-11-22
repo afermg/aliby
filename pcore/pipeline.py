@@ -73,7 +73,7 @@ class PipelineParameters(ParametersABC):
                 directory=directory,
                 strain="",
                 earlystop=dict(
-                    min_tp=50,
+                    min_tp=0,
                     thresh_pos_clogged=0.3,
                     thresh_trap_clogged=7,
                     ntps_to_eval=5,
@@ -249,7 +249,7 @@ class Pipeline(ProcessABC):
                 # Run post processing
                 post_proc_params = PostProcessorParameters.from_dict(
                     self.parameters.postprocessing
-                )
+                ).to_dict()
                 PostProcessor(filename, post_proc_params).run()
                 return True
         except Exception as e:  # bug in the trap getting
@@ -263,8 +263,7 @@ class Pipeline(ProcessABC):
             if session:
                 session.close()
 
-    @staticmethod
-    def check_earlystop(filename, es_parameters):
+    def check_earlystop(self, filename, es_parameters):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
         frac_clogged_traps = (
