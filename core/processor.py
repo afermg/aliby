@@ -68,10 +68,12 @@ class PostProcessorParameters(ParametersABC):
                 [
                     "aggregate",
                     [
-                        "/extraction/general/None/volume",
-                        "postprocessing/bud_metric/extraction_general_None_volume",
-                        "postprocessing/dsignal/extraction_general_None_volume",
-                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                        [
+                            "/extraction/general/None/volume",
+                            "postprocessing/bud_metric/extraction_general_None_volume",
+                            "postprocessing/dsignal/extraction_general_None_volume",
+                            "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                        ],
                     ],
                 ],
             ],
@@ -83,6 +85,7 @@ class PostProcessorParameters(ParametersABC):
             }
         }
         outpaths = {}
+        outpaths["aggregate"] = "/postprocessing/experiment_wide/aggregated/"
 
         if "ph_batman" in kind:
             targets["processes"]["bud_metric"].append(
@@ -105,20 +108,19 @@ class PostProcessorParameters(ParametersABC):
             )
             targets["processes"]["aggregate"].append(
                 [
-                    "/extraction/em_ratio/np_max/mean",
-                    "/extraction/em_ratio/np_max/median",
-                    "/extraction/em_ratio_bgsub/np_max/mean",
-                    "/extraction/em_ratio_bgsub/np_max/median",
-                    "/extraction/gsum/np_max/median",
-                    "/extraction/gsum/np_max/mean",
-                    "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                    "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
-                    "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
+                    [
+                        "/extraction/em_ratio/np_max/mean",
+                        "/extraction/em_ratio/np_max/median",
+                        "/extraction/em_ratio_bgsub/np_max/mean",
+                        "/extraction/em_ratio_bgsub/np_max/median",
+                        "/extraction/gsum/np_max/median",
+                        "/extraction/gsum/np_max/mean",
+                        "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                        "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
+                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
+                    ]
                 ],
-            )
-            outpaths["aggregate"].append(
-                ["/postprocessing/experiment_wide/aggregated/"]
             )
 
         return cls(targets=targets, parameters=parameters, outpaths=outpaths)
@@ -193,7 +195,7 @@ class PostProcessor:
         multii = pd.MultiIndex.from_arrays(
             (
                 np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
-                if daughters
+                if daughters.any()
                 else [[], [], []]
             ),
             names=["trap", "mother_label", "daughter_label"],
@@ -237,8 +239,8 @@ class PostProcessor:
         multii = pd.MultiIndex.from_arrays(
             (
                 np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
-                if daughters
-                else [[], [], []]
+                if daughters.any()
+                else np.array([[], [], []])
             ),
             names=["trap", "mother_label", "daughter_label"],
         )
@@ -298,8 +300,8 @@ class PostProcessor:
                         [], columns=signal.columns, index=signal.index
                     )
 
-                if process in self.parameters.to_dict()["outpaths"]:
-                    outpath = self.parameters.to_dict()["outpaths"][process]
+                if process in self.parameters["outpaths"]:
+                    outpath = self.parameters["outpaths"][process]
                 elif isinstance(dataset, list):
                     # If no outpath defined, place the result in the minimum common
                     # branch of all signals used
@@ -320,7 +322,7 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
-                if process not in self.parameters.to_dict()["outpaths"]:
+                if process not in self.parameters["outpaths"]:
                     outpath = "/postprocessing/" + process + "/" + outpath
 
                 if isinstance(result, dict):  # Multiple Signals as output
