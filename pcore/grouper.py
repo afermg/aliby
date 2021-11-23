@@ -37,15 +37,22 @@ class Grouper(ABC):
     def group_names():
         pass
 
-    def concat_signal(self, path, reduce_cols=None, axis=0):
+    def concat_signal(self, path, reduce_cols=None, axis=0, pool=8):
         group_names = self.group_names
         sitems = self.signals.items()
-        with Pool(8) as p:
-            signals = p.map(
-                lambda x: concat_signal_ind(path, group_names, x[0], x[1]),
-                sitems,
-            )
+        if pool:
+            with Pool(pool) as p:
+                signals = p.map(
+                    lambda x: concat_signal_ind(path, group_names, x[0], x[1]),
+                    sitems,
+                )
+        else:
+            signals = [
+                concat_signal_ind(path, group_names, name, signal)
+                for name, signal in sitems
+            ]
 
+        signals = [s for s in signals if s is not None]
         sorted = pd.concat(signals, axis=axis).sort_index()
         if reduce_cols:
             sorted = sorted.apply(np.nanmean, axis=1)
@@ -95,22 +102,26 @@ class NameGrouper(Grouper):
 
         return self._group_names
 
-    def aggregate_multisignals(self, paths=None):
+    def aggregate_multisignals(self, paths=None, **kwargs):
 
         aggregated = pd.concat(
-            [self.concat_signal(path, reduce_cols=np.nanmean) for path in paths], axis=1
-        )
-        ph = pd.Series(
             [
-                self.ph_from_group(x[list(aggregated.index.names).index("group")])
-                for x in aggregated.index
+                self.concat_signal(path, reduce_cols=np.nanmean, **kwargs)
+                for path in paths
             ],
-            index=aggregated.index,
-            name="media_pH",
+            axis=1,
         )
-        self.aggregated = pd.concat((aggregated, ph), axis=1)
+        # ph = pd.Series(
+        #     [
+        #         self.ph_from_group(x[list(aggregated.index.names).index("group")])
+        #         for x in aggregated.index
+        #     ],
+        #     index=aggregated.index,
+        #     name="media_pH",
+        # )
+        # self.aggregated = pd.concat((aggregated, ph), axis=1)
 
-        return self.aggregated
+        return aggregated
 
 
 class phGrouper(NameGrouper):
@@ -152,10 +163,13 @@ class phGrouper(NameGrouper):
 
 def concat_signal_ind(path, group_names, group, signal):
     print("Looking at ", group)
-    combined = signal[path]
-    combined["position"] = group
-    combined["group"] = group_names[group]
-    combined.set_index(["group", "position"], inplace=True, append=True)
-    combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
+    try:
+        combined = signal[path]
+        combined["position"] = group
+        combined["group"] = group_names[group]
+        combined.set_index(["group", "position"], inplace=True, append=True)
+        combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
 
-    return combined
+        return combined
+    except:
+        return None
