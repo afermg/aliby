@@ -335,7 +335,9 @@ class Tiler(ProcessABC):
         return np.stack(res, axis=1)
 
     def get_channel_index(self, item):
-        return self.channels.index(item)
+        for i, ch in enumerate(self.channels):
+            if item in ch:
+                return i
 
     def get_position_annotation(self):
         # TODO required for matlab support
