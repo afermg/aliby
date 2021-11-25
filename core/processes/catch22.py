@@ -13,7 +13,6 @@ class catch22Parameters(ParametersABC):
     """
     Parameters
         :min_len: Prefilter to account only for long-signal cells
-        :n_components: Number of components to use
     """
 
     def __init__(self, min_len, n_components):
@@ -21,7 +20,7 @@ class catch22Parameters(ParametersABC):
 
     @classmethod
     def default(cls):
-        return cls.from_dict({})
+        return cls.from_dict({"min_len": 0.8})
 
 
 class catch22(ProcessABC):
@@ -44,8 +43,3 @@ class catch22(ProcessABC):
         norm = pd.DataFrame(catches, index=signal.index, columns=catches[0]["names"])
 
         return norm
-
-    # pca = decomposition.PCA(n_components=self.n_components)
-    # pca.fit(norm)
-    # Y = pca.transform(norm)
-    # return pd.DataFrame(Y, index=norm.index)
