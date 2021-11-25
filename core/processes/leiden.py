@@ -2,6 +2,7 @@ from itertools import product
 
 import numpy as np
 import pandas as pd
+from itertools import product
 import igraph as ig
 import leidenalg
 
@@ -33,9 +34,7 @@ class leiden(ProcessABC):
 
     def run(self, features: pd.DataFrame):
         # Generate euclidean distance matrix
-        distances = np.linalg.features(
-            features.values - features.values[:, None], axis=2
-        )
+        distances = np.linalg.norm(features.values - features.values[:, None], axis=2)
         ind = [
             "_".join([str(y) for y in x[1:]]) for x in features.index.to_flat_index()
         ]
