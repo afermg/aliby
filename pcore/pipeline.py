@@ -98,13 +98,6 @@ class Pipeline(ProcessABC):
     A chained set of Pipeline elements connected through pipes.
     """
 
-    ## default values
-    # General
-    tile_size = 96
-    distributed = 0
-    strain = ""
-    directory = "output"
-
     # Tiling, Segmentation,Extraction and Postprocessing should use their own default parameters
 
     # Early stop for clogging
