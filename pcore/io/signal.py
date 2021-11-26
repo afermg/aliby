@@ -31,7 +31,7 @@ class Signal(BridgeH5):
         if isinstance(dsets, str) and (
             dsets.startswith("postprocessing")
             or dsets.startswith("/postprocessing")
-            or dset.endswith("imBackground")
+            or dsets.endswith("imBackground")
         ):
             df = self.get_raw(dsets)
 
