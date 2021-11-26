@@ -16,11 +16,13 @@ class catch22Parameters(ParametersABC):
     """
 
     def __init__(self, min_len, n_components):
-        super().__init__()
+        self.min_len = min_len
+        self.n_components = n_components
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"min_len": 0.8})
+        return cls.from_dict({"min_len": 0.8,
+                              "n_components": None,})
 
 
 class catch22(ProcessABC):
@@ -37,9 +39,11 @@ class catch22(ProcessABC):
             if isinstance(self.min_len, int)
             else signal.shape[1] * self.min_len
         )
-        signal = signal.loc[signal.notna().sum(axis=1) > thresh]
+        adf = signal.loc[signal.notna().sum(axis=1) > thresh]
         catches = [catch22_all(adf.iloc[i, :].dropna().values) for i in range(len(adf))]
 
-        norm = pd.DataFrame(catches, index=signal.index, columns=catches[0]["names"])
+        norm = pd.DataFrame([catches[j]['values'] for j in range(len(catches))],
+                            index=adf.index,
+                            columns=catches[0]["names"])
 
         return norm
