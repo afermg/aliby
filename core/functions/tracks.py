@@ -245,9 +245,34 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         )
         for pres, posts in preposts
     ]
+    idx_to_means = lambda preposts: [
+        (
+            [get_means(smoothed_tracks.loc[pre], -window) for pre in pres],
+            [get_means(smoothed_tracks.loc[post], window) for post in posts],
+        )
+        for pres, posts in preposts
+    ]
     edges = contig.apply(idx_to_edge)
+    edges_mean = contig.apply(idx_to_means)
 
-    closest_pairs = edges.apply(get_vec_closest_pairs, tol=tol)
+    edges_dMetric = edges.apply(get_dMetric_wrap, tol=tol)
+    edges_dMetric_mean = edges_mean.apply(get_dMetric_wrap, tol=tol)
+
+    combined_dMetric = pd.Series(
+        [
+            [np.nanmin((a, b), axis=0) for a, b in zip(x, y)]
+            for x, y in zip(edges_dMetric, edges_dMetric_mean)
+        ],
+        index=edges_dMetric.index,
+    )
+    # closest_pairs = combined_dMetric.apply(get_vec_closest_pairs, tol=tol)
+    closest_pairs = pd.Series(
+        [
+            solve_matrices_wrap(dMetrics, edgeset, tol=tol)
+            for dMetrics, edgeset in zip(combined_dMetric, edges)
+        ],
+        index=combined_dMetric.index,
+    )
 
     # match local with global ids
     joinable_ids = [
@@ -258,6 +283,17 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
 
 
 get_val = lambda x, n: x[~np.isnan(x)][n] if len(x[~np.isnan(x)]) else np.nan
+
+
+def get_means(x, i):
+    if not len(x[~np.isnan(x)]):
+        return np.nan
+    if i > 0:
+        v = x[~np.isnan(x)][:i]
+    else:
+        v = x[~np.isnan(x)][i:]
+
+    return np.nanmean(v)
 
 
 def localid_to_idx(local_ids, contig_trap):
@@ -278,8 +314,59 @@ def localid_to_idx(local_ids, contig_trap):
     return lin_pairs
 
 
-def get_vec_closest_pairs(lst: List, **kwags):
-    return [get_closest_pairs(*l, **kwags) for l in lst]
+def get_vec_closest_pairs(lst: List, **kwargs):
+    return [get_closest_pairs(*l, **kwargs) for l in lst]
+
+
+def get_dMetric_wrap(lst: List, **kwargs):
+    return [get_dMetric(*l, **kwargs) for l in lst]
+
+
+def solve_matrices_wrap(dMetric: List, edges: List, **kwargs):
+    return [
+        solve_matrices(dMetric, edgeset, **kwargs)
+        for dMetric, edgeset in zip(dMetric, edges)
+    ]
+
+
+def get_dMetric(pre: List[float], post: List[float], tol: Union[float, int] = 1):
+    """Calculate a cost matrix
+
+    input
+    :param pre: list of floats with edges on left
+    :param post: list of floats with edges on right
+    :param tol: int or float if int metrics of tolerance, if float fraction
+
+    returns
+    :: list of indices corresponding to the best solutions for matrices
+
+    """
+    if len(pre) > len(post):
+        dMetric = np.abs(np.subtract.outer(post, pre))
+    else:
+        dMetric = np.abs(np.subtract.outer(pre, post))
+
+    dMetric[np.isnan(dMetric)] = tol + 1 + np.nanmax(dMetric)  # nans will be filtered
+    return dMetric
+
+
+def solve_matrices(dMetric: np.ndarray, prepost: List, tol: Union[float, int] = 1):
+    """
+    Solve the distance matrices obtained in get_dMetric and/or merged from independent dMetric matrices
+    """
+
+    ids = solve_matrix(dMetric)
+    if not len(ids[0]):
+        return []
+    pre, post = prepost
+
+    norm = (
+        np.array(pre)[ids[len(pre) > len(post)]] if tol < 1 else 1
+    )  # relative or absolute tol
+    result = dMetric[ids] / norm
+    ids = ids if len(pre) < len(post) else ids[::-1]
+
+    return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
 
 
 def get_closest_pairs(pre: List[float], post: List[float], tol: Union[float, int] = 1):
@@ -295,25 +382,9 @@ def get_closest_pairs(pre: List[float], post: List[float], tol: Union[float, int
     :: list of indices corresponding to the best solutions for matrices
 
     """
-    if len(pre) > len(post):
-        dMetric = np.abs(np.subtract.outer(post, pre))
-    else:
-        dMetric = np.abs(np.subtract.outer(pre, post))
-    # dMetric[np.isnan(dMetric)] = tol + 1 + np.nanmax(dMetric) # nans will be filtered
-    # ids = linear_sum_assignment(dMetric)
-    dMetric[np.isnan(dMetric)] = tol + 1 + np.nanmax(dMetric)  # nans will be filtered
+    dMetric = get_dMetric(pre, post, tol)
 
-    ids = solve_matrix(dMetric)
-    if not len(ids[0]):
-        return []
-
-    norm = (
-        np.array(pre)[ids[len(pre) > len(post)]] if tol < 1 else 1
-    )  # relative or absolute tol
-    result = dMetric[ids] / norm
-    ids = ids if len(pre) < len(post) else ids[::-1]
-
-    return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
+    return solve_matrices(dMetric, pre, post, tol)
 
 
 def solve_matrix(dMetric):
