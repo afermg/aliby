@@ -4,12 +4,21 @@
 from pcore.grouper import NameGrouper
 
 folder = Path(
-    "/home/alan/Documents/dev/stoa_libs/pipeline-core/data/2021_11_04_doseResponse_raf_1_15_2_glu_01_2_dual_phluorin_whi5_constantMedia_00/2021_11_04_doseResponse_raf_1_15_2_glu_01_2_dual_phluorin_whi5_constantMedia_00/"
+    "/home/alan/Documents/dev/stoa_libs/pipeline-core/data/2021_11_04_doseResponse_raf_1_15_2_glu_01_2_dual_phluorin_whi5_constantMedia_00/"
 )
 g = NameGrouper(folder)
 # g.signals = {k: v for k, v in g.signals.items() if str(v) != filename}
 # signame = "postprocessing/experiment_wide/aggregated"
 # signame = "extraction/general/None/volume"
+
+
+df = g.signals["raf_2_023"]["extraction/general/None/volume"]
+df2 = df[df.notna().sum(axis=1) > 80]
+sns.heatmap(df2, robust=True)
+plt.show()
+
+
+c = g.concat_signal("extraction/em_ratio/np_max/median")
 
 
 def get_df(signame):
