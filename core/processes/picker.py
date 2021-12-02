@@ -267,8 +267,8 @@ class picker(ProcessABC):
         TODO adjust overlap to minutes using metadata
         """
 
-        if trap == 3:
-            print("stop")
+        # if trap == 21: # Use this to check specific trap problems through a debugger
+        #     print("stop")
         ntps = df.notna().sum(axis=1)
         mother_id = df.index[ntps.argmax()]
         nomother = df.drop(mother_id)
@@ -279,7 +279,7 @@ class picker(ProcessABC):
                 nomother.apply(
                     lambda x: x.first_valid_index()
                     >= df.loc[mother_id].first_valid_index()
-                    and x.last_valid_index() <= df.loc[mother_id].last_valid_index(),
+                    and x.first_valid_index() <= df.loc[mother_id].last_valid_index(),
                     axis=1,
                 )
             ]
@@ -299,7 +299,9 @@ class picker(ProcessABC):
             start = start.loc[score.index]
             start.index = start.index.astype(int)
 
-        d_to_mother = nomother[start] - df.loc[mother_id, start] * min_mobud_ratio
+        d_to_mother = (
+            nomother[start] - df.loc[mother_id, start] * min_mobud_ratio
+        ).sort_index(axis=1)
         size_filter = d_to_mother[
             d_to_mother.apply(lambda x: x.dropna().iloc[0], axis=1) < 0
         ]
@@ -308,6 +310,7 @@ class picker(ProcessABC):
             .apply(pd.Series.first_valid_index, axis=1)
             .sort_values()
         )
+        score = score.loc[cols_sorted.index]
         if not len(cols_sorted):
             bud_candidates = pd.DataFrame()
         else:
