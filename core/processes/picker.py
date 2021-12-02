@@ -7,6 +7,7 @@ from itertools import groupby
 from utils_find_1st import find_1st, cmp_equal
 import numpy as np
 import pandas as pd
+import igraph as ig
 
 from pcore.cells import CellsHDF
 
@@ -28,9 +29,9 @@ class pickerParameters(ParametersABC):
                 "sequence": [
                     # ("lineage", "intersection", "families"),
                     ["condition", "intersection", "any_present", 0.7],
-                    ["condition", "intersection", "growing", 10],
-                    ["condition", "intersection", "present", 5],
-                    ["condition", "intersection", "mother_buds", 8, 0.8],
+                    ["condition", "intersection", "growing", 50],
+                    ["condition", "intersection", "present", 3],
+                    ["condition", "intersection", "mother_buds", 3, 0.7],
                     # ("lineage", "full_families", "intersection"),
                 ],
             }
@@ -261,9 +262,13 @@ class picker(ProcessABC):
         min_initial_size: Minimal mother-bud ratio when it was first identified
         add_ba: Bool that incorporates bud_assignment data after the normal assignment
 
-        # If more than one bud start in the same time point pick the smallest one
+        Thinking this problem  as the Movie Scheduling problem (Skiena's the algorithm design manual chapter 1.2),
+        we will try to pick the set of filtered cells that grow the fastest and don't overlap within 5 time points
+        TODO adjust overlap to minutes using metadata
         """
 
+        if trap == 3:
+            print("stop")
         ntps = df.notna().sum(axis=1)
         mother_id = df.index[ntps.argmax()]
         nomother = df.drop(mother_id)
@@ -280,14 +285,19 @@ class picker(ProcessABC):
             ]
         )
 
+        score = -nomother.apply(  # Get slope of candidate daughters
+            lambda x: self.get_slope(x.dropna()), axis=1
+        )
         start = nomother.apply(pd.Series.first_valid_index, axis=1)
 
         # clean duplicates
         duplicates = start.duplicated(False)
         if duplicates.any():
-            start = self.get_nodup_idx(start, duplicates, nomother)
-            nomother = nomother.loc[start.index]
+            score = self.get_nodup_idx(start, score, duplicates, nomother)
+            nomother = nomother.loc[score.index]
             nomother.index = nomother.index.astype("int")
+            start = start.loc[score.index]
+            start.index = start.index.astype(int)
 
         d_to_mother = nomother[start] - df.loc[mother_id, start] * min_mobud_ratio
         size_filter = d_to_mother[
@@ -301,9 +311,16 @@ class picker(ProcessABC):
         if not len(cols_sorted):
             bud_candidates = pd.DataFrame()
         else:
-            bud_candidates = cols_sorted.loc[
-                [True, *(np.diff(cols_sorted.values) > min_budgrowth_t)]
-            ]
+            # Find the set with the highest number of growing cells and highest avg growth rate for this #
+            mivs = self.max_ind_vertex_sets(cols_sorted.values, min_budgrowth_t)
+            best_set = list(mivs[np.argmin([sum(score.iloc[list(s)]) for s in mivs])])
+            best_indices = cols_sorted.index[best_set]
+
+            start = start.loc[best_indices]
+            bud_candidates = cols_sorted.loc[best_indices]
+            # bud_candidates = cols_sorted.loc[
+            #     [True, *(np.diff(cols_sorted.values) > min_budgrowth_t)]
+            # ]
 
         # Add random-forest bud assignment information here
         new_ba_cells = []
@@ -322,28 +339,45 @@ class picker(ProcessABC):
             todrop, _ = np.where(abs(distances) < min_budgrowth_t)
             bud_candidates = bud_candidates.drop(bud_candidates.index[todrop])
 
-        return (
-            [mother_id] + [int(i) for i in bud_candidates.index.tolist()] + new_ba_cells
-        )
+        return [mother_id] + bud_candidates.index.tolist() + new_ba_cells
 
     @staticmethod
-    def get_nodup_idx(start_df, duplicates, nomother):
+    def max_ind_vertex_sets(values, min_distance):
+        """
+        Generates an adjacency matrix from multiple points, joining neighbours closer than min_distance
+        Then returns the maximal independent vertex sets
+        values: list of int values
+        min_distance: int minimal distance to cluster
+        """
+        adj = np.zeros((len(values), len(values))).astype(bool)
+        dist = abs(np.subtract.outer(values, values))
+        adj[dist <= min_distance] = True
+
+        g = ig.Graph.Adjacency(adj, mode="undirected")
+        miv_sets = g.maximal_independent_vertex_sets()
+        return miv_sets
+
+    def get_nodup_idx(self, start, score, duplicates, nomother):
         """
         Return the start DataFrame without duplicates
 
-        :start_df: pd.Series containing the first non-na index
+        :start: pd.Series indicating the first valid time point
+        :score: pd.Series containing a score to minimise
         :duplicates: Dataframe containing duplicated entries
         :nomother: Dataframe with non-mother cells
         """
-        dup_tps = np.unique(start_df[duplicates])
+        dup_tps = np.unique(start[duplicates])
         idx, tps = zip(
-            *[(nomother.loc[start_df == tp, tp].idxmin(), tp) for tp in dup_tps]
+            *[
+                (score.loc[nomother.loc[start == tp, tp].index].idxmin(), tp)
+                for tp in dup_tps
+            ]
         )
-        start_df = start_df[~duplicates]
-        start_df = pd.concat(
-            (start_df, pd.Series(tps, index=idx, dtype="int", name="cell_label"))
+        score = score[~duplicates]
+        score = pd.concat(
+            (score, pd.Series(tps, index=idx, dtype="int", name="cell_label"))
         )
-        return start_df
+        return score
 
     def mother_buds_wrap(self, signals, *args):
         ids = []
@@ -364,6 +398,10 @@ class picker(ProcessABC):
         idx_srs = pd.Series(False, signals.index).astype(bool)
         idx_srs.loc[ids] = True
         return idx_srs
+
+    @staticmethod
+    def get_slope(x):
+        return np.polyfit(range(len(x)), x, 1)[0]
 
 
 def _as_int(threshold: Union[float, int], ntps: int):
