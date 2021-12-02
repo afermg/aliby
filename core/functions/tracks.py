@@ -216,6 +216,7 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
     :param degree: int value of polynomial degree passed to savgol_filter
 
     """
+    tracks = tracks.loc[tracks.notna().sum(axis=1) > 2]
 
     # Commented because we are not smoothing in this step yet
     # candict = {k:v for d in contig.values for k,v in d.items()}
@@ -245,33 +246,52 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         )
         for pres, posts in preposts
     ]
-    idx_to_means = lambda preposts: [
-        (
-            [get_means(smoothed_tracks.loc[pre], -window) for pre in pres],
-            [get_means(smoothed_tracks.loc[post], window) for post in posts],
-        )
-        for pres, posts in preposts
-    ]
-    edges = contig.apply(idx_to_edge)
-    edges_mean = contig.apply(idx_to_means)
+    # idx_to_means = lambda preposts: [
+    #     (
+    #         [get_means(smoothed_tracks.loc[pre], -window) for pre in pres],
+    #         [get_means(smoothed_tracks.loc[post], window) for post in posts],
+    #     )
+    #     for pres, posts in preposts
+    # ]
 
-    edges_dMetric = edges.apply(get_dMetric_wrap, tol=tol)
-    edges_dMetric_mean = edges_mean.apply(get_dMetric_wrap, tol=tol)
+    def idx_to_pred(preposts):
+        result = []
+        for pres, posts in preposts:
+            pre_res = []
+            for pre in pres:
+                y = get_last_i(smoothed_tracks.loc[pre], -window)
+                pre_res.append(
+                    np.poly1d(np.polyfit(range(len(y)), y, 1))(len(y) + 1),
+                )
+            pos_res = [get_means(smoothed_tracks.loc[post], window) for post in posts]
+            result.append([pre_res, pos_res])
 
-    combined_dMetric = pd.Series(
-        [
-            [np.nanmin((a, b), axis=0) for a, b in zip(x, y)]
-            for x, y in zip(edges_dMetric, edges_dMetric_mean)
-        ],
-        index=edges_dMetric.index,
-    )
+        return result
+
+    edges = contig.apply(idx_to_edge)  # Raw edges
+    # edges_mean = contig.apply(idx_to_means)  # Mean of both
+    pre_pred = contig.apply(idx_to_pred)  # Prediction of pre and mean of post
+
+    # edges_dMetric = edges.apply(get_dMetric_wrap, tol=tol)
+    # edges_dMetric_mean = edges_mean.apply(get_dMetric_wrap, tol=tol)
+    edges_dMetric_pred = pre_pred.apply(get_dMetric_wrap, tol=tol)
+
+    # combined_dMetric = pd.Series(
+    #     [
+    #         [np.nanmin((a, b), axis=0) for a, b in zip(x, y)]
+    #         for x, y in zip(edges_dMetric, edges_dMetric_mean)
+    #     ],
+    #     index=edges_dMetric.index,
+    # )
     # closest_pairs = combined_dMetric.apply(get_vec_closest_pairs, tol=tol)
+    solutions = []
+    # for (i, dMetrics), edgeset in zip(combined_dMetric.items(), edges):
+    for (i, dMetrics), edgeset in zip(edges_dMetric_pred.items(), edges):
+        solutions.append(solve_matrices_wrap(dMetrics, edgeset, tol=tol))
+
     closest_pairs = pd.Series(
-        [
-            solve_matrices_wrap(dMetrics, edgeset, tol=tol)
-            for dMetrics, edgeset in zip(combined_dMetric, edges)
-        ],
-        index=combined_dMetric.index,
+        solutions,
+        index=edges_dMetric_pred.index,
     )
 
     # match local with global ids
@@ -294,6 +314,17 @@ def get_means(x, i):
         v = x[~np.isnan(x)][i:]
 
     return np.nanmean(v)
+
+
+def get_last_i(x, i):
+    if not len(x[~np.isnan(x)]):
+        return np.nan
+    if i > 0:
+        v = x[~np.isnan(x)][:i]
+    else:
+        v = x[~np.isnan(x)][i:]
+
+    return v
 
 
 def localid_to_idx(local_ids, contig_trap):
@@ -324,8 +355,7 @@ def get_dMetric_wrap(lst: List, **kwargs):
 
 def solve_matrices_wrap(dMetric: List, edges: List, **kwargs):
     return [
-        solve_matrices(dMetric, edgeset, **kwargs)
-        for dMetric, edgeset in zip(dMetric, edges)
+        solve_matrices(mat, edgeset, **kwargs) for mat, edgeset in zip(dMetric, edges)
     ]
 
 
