@@ -150,7 +150,7 @@ class fft(ProcessABC):
                     oversampling_factor = self.oversampling_factor,
                 )
             )
-            for row_index in range(len(signal_na_removed))
+            for row_index in range(len(signal))
         ]
 
         freqs_df = pd.DataFrame(
