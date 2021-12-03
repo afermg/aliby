@@ -214,16 +214,17 @@ class picker(ProcessABC):
         indices = set(signals.index)
         self.mothers, self.daughters = self.get_mothers_daughters()
         for alg, op, *params in self.sequence:
-            if alg is "lineage":
-                param1 = params[0]
-                new_indices = getattr(self, "pick_by_" + alg)(
-                    signals.loc[list(indices)], param1
-                )
-            else:
-                param1, *param2 = params
-                new_indices = getattr(self, "pick_by_" + alg)(
-                    signals.loc[list(indices)], param1, param2
-                )
+            if indices:
+                if alg is "lineage":
+                    param1 = params[0]
+                    new_indices = getattr(self, "pick_by_" + alg)(
+                        signals.loc[list(indices)], param1
+                    )
+                else:
+                    param1, *param2 = params
+                    new_indices = getattr(self, "pick_by_" + alg)(
+                        signals.loc[list(indices)], param1, param2
+                    )
 
             if op is "union":
                 # new_indices = new_indices.intersection(set(signals.index))
@@ -383,6 +384,8 @@ class picker(ProcessABC):
         return score
 
     def mother_buds_wrap(self, signals, *args):
+        if not len(signals):
+            return pd.Series([])
         ids = []
         mothers, buds = self.get_mothers_daughters()
         mothers = np.array(mothers)
