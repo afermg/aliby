@@ -2,6 +2,8 @@ import numpy as np
 from copy import copy
 from itertools import accumulate
 
+from numpy import ndarray
+
 # from more_itertools import first_true
 
 import h5py
@@ -49,15 +51,25 @@ class Signal(BridgeH5):
         return self.add_name(df, dsets)
 
     def apply_prepost(self, dataset: str):
-        merges = self.get_merges()  # TODO pass as an argument instead?
+        merges = self.get_merges()
         with h5py.File(self.filename, "r") as f:
             df = self.dset_to_df(f, dataset)
-            merged = self.apply_merge(df, merges)
 
-            # Get indices corresponding to merged and picked indices
-            # Select those indices in the dataframe
-            # Perform merge
-            # Return result
+            merged = df
+            if merges.any():
+                # Split in two dfs, one with rows relevant for merging and one without them
+                mergable_ids = pd.MultiIndex.from_arrays(
+                    np.unique(merges.reshape(-1, 2), axis=0).T,
+                    names=df.index.names,
+                )
+                merged = self.apply_merge(df.loc[mergable_ids], merges)
+
+                nonmergable_ids = df.index.difference(mergable_ids)
+
+                merged = pd.concat(
+                    (merged, df.loc[nonmergable_ids]), names=df.index.names
+                )
+
             search = lambda a, b: np.where(
                 np.in1d(
                     np.ravel_multi_index(a.T, a.max(0) + 1),
@@ -68,13 +80,22 @@ class Signal(BridgeH5):
                 picks = self.get_picks(names=merged.index.names)
                 missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
 
-                if picks is not None:
+                if picks:
                     # return merged.loc[
                     #     set(picks).intersection([tuple(x) for x in merged.index])
                     # ]
                     return merged.loc[picks]
                 else:
-                    return merged
+                    if isinstance(merged.index, pd.MultiIndex):
+                        empty_lvls = [[] for i in merged.index.names]
+                        index = pd.MultiIndex(
+                            levels=empty_lvls,
+                            codes=empty_lvls,
+                            names=merged.index.names,
+                        )
+                    else:
+                        index = pd.Index([], name=merged.index.name)
+                    merged = pd.DataFrame([], index=index)
             return merged
 
     @property
@@ -129,8 +150,8 @@ class Signal(BridgeH5):
     def get_merges(self):
         # fetch merge events going up to the first level
         with h5py.File(self.filename, "r") as f:
-            merges = f.get("modifiers/merges", [])
-            if not isinstance(merges, list):
+            merges = f.get("modifiers/merges", np.array([]))
+            if not isinstance(merges, np.ndarray):
                 merges = merges[()]
 
         return merges
