@@ -339,7 +339,7 @@ class Writer(BridgeH5):
 
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
         if isinstance(data, pd.DataFrame):
-            self.write_df(f, path, data, compression=self.compression)
+            self.write_pd(f, path, data, compression=self.compression)
         elif isinstance(data, pd.MultiIndex):
             self.write_index(f, path, data)  # , compression=self.compression)
         elif isinstance(data, Iterable):
@@ -391,10 +391,11 @@ class Writer(BridgeH5):
             indices = f[id_path]
             indices[()] = ids
 
-    def write_df(self, f, path, df, **kwargs):
+    def write_pd(self, f, path, df, **kwargs):
         values_path = path + "values" if path.endswith("/") else path + "/values"
         if path not in f:
             max_ncells = 2e5
+
             max_tps = 1e3
             f.create_dataset(
                 name=values_path,
