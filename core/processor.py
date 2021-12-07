@@ -59,6 +59,12 @@ class PostProcessorParameters(ParametersABC):
                     ],
                 ],
                 [
+                    "births",
+                    [
+                        "/extraction/general/None/volume",
+                    ],
+                ],
+                [
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
@@ -186,7 +192,6 @@ class PostProcessor:
                 del f["modifiers/picks"]
 
         indices = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
-        from collections import Counter
 
         mothers, daughters = np.array(self.picker.mothers), np.array(
             self.picker.daughters
@@ -212,38 +217,38 @@ class PostProcessor:
         picked_set = set([tuple(x) for x in indices])
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
-        merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
-            set([*moset, *daset, *picked_set])
+        multii = pd.MultiIndex(
+            [[], [], []], [[], [], []], names=["trap", "mother_label", "daughter_label"]
         )
-        search = lambda a, b: np.where(
-            np.in1d(
-                np.ravel_multi_index(a.T, a.max(0) + 1),
-                np.ravel_multi_index(b.T, a.max(0) + 1),
+        if merge_events.any():
+            merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
+                set([*moset, *daset, *picked_set])
             )
-        )
-
-        for target, source in merge_events:
-            if (
-                tuple(source) in moset
-            ):  # update mother to lowest positive index among the two
-                mother_ids = search(mothers, source)
-                mothers[mother_ids] = (
-                    target[0],
-                    self.pick_mother(mothers[mother_ids][0][1], target[1]),
+            search = lambda a, b: np.where(
+                np.in1d(
+                    np.ravel_multi_index(a.T, a.max(0) + 1),
+                    np.ravel_multi_index(b.T, a.max(0) + 1),
                 )
-            if tuple(source) in daset:
-                daughters[search(daughters, source)] = target
-            if tuple(source) in picked_set:
-                indices[search(indices, source)] = target
+            )
 
-        multii = pd.MultiIndex.from_arrays(
-            (
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
-                if daughters.any()
-                else np.array([[], [], []])
-            ),
-            names=["trap", "mother_label", "daughter_label"],
-        )
+            for target, source in merge_events:
+                if (
+                    tuple(source) in moset
+                ):  # update mother to lowest positive index among the two
+                    mother_ids = search(mothers, source)
+                    mothers[mother_ids] = (
+                        target[0],
+                        self.pick_mother(mothers[mother_ids][0][1], target[1]),
+                    )
+                if tuple(source) in daset:
+                    daughters[search(daughters, source)] = target
+                if tuple(source) in picked_set:
+                    indices[search(indices, source)] = target
+
+            multii = pd.MultiIndex.from_arrays(
+                (np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T),
+                names=["trap", "mother_label", "daughter_label"],
+            )
         self._writer.write(
             "postprocessing/lineage_merged",
             data=multii,
