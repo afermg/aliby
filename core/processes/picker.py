@@ -29,7 +29,7 @@ class pickerParameters(ParametersABC):
                 "sequence": [
                     # ("lineage", "intersection", "families"),
                     ["condition", "intersection", "any_present", 0.7],
-                    ["condition", "intersection", "growing", 50],
+                    ["condition", "intersection", "growing", 80],
                     ["condition", "intersection", "present", 3],
                     ["condition", "intersection", "mother_buds", 3, 0.7],
                     # ("lineage", "full_families", "intersection"),
@@ -390,13 +390,17 @@ class picker(ProcessABC):
         mothers, buds = self.get_mothers_daughters()
         mothers = np.array(mothers)
         buds = np.array(buds)
-        ba_bytrap = {i: np.where(buds[:, 0] == i) for i in range(buds[:, 0].max() + 1)}
+        ba = []
+        # if buds.any():
+        #     ba_bytrap = {
+        #         i: np.where(buds[:, 0] == i) for i in range(buds[:, 0].max() + 1)
+        #     }
         for trap in signals.index.unique(level="trap"):
-            ba = list(
-                set(mothers[ba_bytrap[trap], 1][0].tolist()).union(
-                    buds[ba_bytrap[trap], 1][0].tolist()
-                )
-            )
+            # ba = list(
+            #     set(mothers[ba_bytrap[trap], 1][0].tolist()).union(
+            #         buds[ba_bytrap[trap], 1][0].tolist()
+            #     )
+            # )
             df = signals.loc[trap]
             selected_ids = self.mother_buds(df, ba, trap, *args)
             ids += [(trap, i) for i in selected_ids]
