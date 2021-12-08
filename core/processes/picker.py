@@ -70,7 +70,7 @@ class picker(ProcessABC):
         return mb_matrix
 
     @staticmethod
-    def mother_assign_from_dynamic(ma, label, trap, ntraps: int):
+    def mother_assign_from_dynamic(ma, cell_label, trap, ntraps: int):
         """
         Interpolate the list of lists containing the associated mothers from the mother_assign_dynamic feature
         """
@@ -81,7 +81,7 @@ class picker(ProcessABC):
             find_1st(((label[::-1] == lbl) & (trap[::-1] == tr)), True, cmp_equal)
             for tr, lbl in cell_gid
         ]
-        mother_assign_sorted = ma[last_lin_preds]
+        mother_assign_sorted = ma[::-1][last_lin_preds]
 
         traps = cell_gid[:, 0]
         iterator = groupby(zip(traps, mother_assign_sorted), lambda x: x[0])
