@@ -38,14 +38,18 @@ class bud_metric(ProcessABC):
 
         nomother = signal.drop(mother_id)
 
-        starts = nomother.apply(pd.Series.first_valid_index, axis=1).sort_values()
+        if not len(nomother):
+            bud_metric = [np.nan for i in range(len(signal.columns))]
 
-        ranges = [np.arange(i, j) for i, j in zip(starts[:-1], starts[1:])]
-        ranges.append(np.arange(starts.iloc[-1], signal.columns[-1]))
+        else:
+            starts = nomother.apply(pd.Series.first_valid_index, axis=1).sort_values()
 
-        bud_metric = pd.concat(
-            [signal.loc[i, rng] for i, rng in zip(starts.index, ranges)]
-        )
+            ranges = [np.arange(i, j) for i, j in zip(starts[:-1], starts[1:])]
+            ranges.append(np.arange(starts.iloc[-1], signal.columns[-1]))
+
+            bud_metric = pd.concat(
+                [signal.loc[i, rng] for i, rng in zip(starts.index, ranges)]
+            )
         srs = pd.Series(bud_metric, index=signal.columns, name=mother_id)
 
         return srs

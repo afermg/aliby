@@ -38,7 +38,7 @@ class mergerParameters(ParametersABC):
                 "tolerance": 0.2,
                 "window": 5,
                 "degree": 3,
-                "min_avg_delta": 0.9,
+                "min_avg_delta": 0.5,
             }
         )
 

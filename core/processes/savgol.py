@@ -36,7 +36,7 @@ class savgol(ProcessABC):
         savgol_on_srs = lambda x: self.non_uniform_savgol(
             x.index, x.values, self.parameters.window, self.parameters.polynom
         )
-        return signal.apply(savgol_on_srs, 1)
+        return signal.apply(savgol_on_srs, 1).apply(pd.Series)
 
     @staticmethod
     def non_uniform_savgol(x, y, window: int, polynom: int):

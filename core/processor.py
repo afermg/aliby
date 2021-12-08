@@ -59,9 +59,27 @@ class PostProcessorParameters(ParametersABC):
                     ],
                 ],
                 [
+                    "births",
+                    [
+                        "/extraction/general/None/volume",
+                    ],
+                ],
+                [
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
+                        "/postprocessing/bud_metric/extraction_general_None_volume",
+                    ],
+                ],
+                [
+                    "aggregate",
+                    [
+                        [
+                            "/extraction/general/None/volume",
+                            "postprocessing/bud_metric/extraction_general_None_volume",
+                            "postprocessing/dsignal/extraction_general_None_volume",
+                            "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
+                        ],
                     ],
                 ],
             ],
@@ -73,12 +91,12 @@ class PostProcessorParameters(ParametersABC):
             }
         }
         outpaths = {}
+        outpaths["aggregate"] = "/postprocessing/experiment_wide/aggregated/"
 
         if "ph_batman" in kind:
             targets["processes"]["bud_metric"].append(
                 [
                     [
-                        "/extraction/general/None/volume",
                         "/extraction/em_ratio/np_max/mean",
                         "/extraction/em_ratio/np_max/median",
                     ],
@@ -90,44 +108,28 @@ class PostProcessorParameters(ParametersABC):
                     "/extraction/em_ratio/np_max/median",
                     "/extraction/em_ratio_bgsub/np_max/mean",
                     "/extraction/em_ratio_bgsub/np_max/median",
-                    "/postprocessing/bud_metric/extraction_general_None_volume",
                     "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
                     "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                 ]
             )
-            targets["processes"].append(
+            targets["processes"]["aggregate"].append(
                 [
                     [
-                        "aggregate",
-                        [
-                            [
-                                "/extraction/general/None/volume",
-                                "/extraction/em_ratio/np_max/mean",
-                                "/extraction/em_ratio/np_max/median",
-                                "/extraction/em_ratio_bgsub/np_max/mean",
-                                "/extraction/em_ratio_bgsub/np_max/median",
-                                "/extraction/gsum/np_max/median",
-                                "/extraction/gsum/np_max/mean",
-                                "postprocessing/bud_metric/extraction_general_None_volume",
-                                "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                                "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                                "postprocessing/dsignal/extraction_general_None_volume",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
-                                "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
-                            ]
-                        ],
+                        "/extraction/em_ratio/np_max/mean",
+                        "/extraction/em_ratio/np_max/median",
+                        "/extraction/em_ratio_bgsub/np_max/mean",
+                        "/extraction/em_ratio_bgsub/np_max/median",
+                        "/extraction/gsum/np_max/median",
+                        "/extraction/gsum/np_max/mean",
+                        "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
+                        "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
+                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
+                        "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
                     ]
-                ]
-            )
-            outpaths["aggregate"].append(
-                ["/postprocessing/experiment_wide/aggregated/"]
+                ],
             )
 
         return cls(targets=targets, parameters=parameters, outpaths=outpaths)
-
-    def to_dict(self):
-        return {k: _if_dict(v) for k, v in self.__dict__.items()}
 
 
 class PostProcessor:
@@ -138,10 +140,12 @@ class PostProcessor:
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
-        self.merger = merger(parameters["parameters"]["prepost"]["merger"])
+        self.merger = merger(
+            mergerParameters.from_dict(parameters["parameters"]["prepost"]["merger"])
+        )
 
         self.picker = picker(
-            parameters=parameters["parameters"]["prepost"]["picker"],
+            pickerParameters.from_dict(parameters["parameters"]["prepost"]["picker"]),
             cells=Cells.from_source(filename),
         )
         self.classfun = {
@@ -165,8 +169,8 @@ class PostProcessor:
     @staticmethod
     def get_parameters(process):
         """
-        Dynamically import a process class from the 'processes' folder.
-        Assumes process filename and class name are the same
+        Dynamically import parameters from the 'processes' folder.
+        Assumes parameter is the same name as the file with 'Parameters' added at the end.
         """
         return locate(
             "postprocessor.core.processes." + process + "." + process + "Parameters"
@@ -188,18 +192,22 @@ class PostProcessor:
                 del f["modifiers/picks"]
 
         indices = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
-        from collections import Counter
 
         mothers, daughters = np.array(self.picker.mothers), np.array(
             self.picker.daughters
         )
-        self.tmp = [y for y in Counter([tuple(x) for x in mothers]).items() if y[1] > 2]
+
+        multii = pd.MultiIndex.from_arrays(
+            (
+                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
+                if daughters.any()
+                else [[], [], []]
+            ),
+            names=["trap", "mother_label", "daughter_label"],
+        )
         self._writer.write(
             "postprocessing/lineage",
-            data=pd.MultiIndex.from_arrays(
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
-                names=["trap", "mother_label", "daughter_label"],
-            ),
+            data=multii,
             overwrite="overwrite",
         )
 
@@ -209,43 +217,48 @@ class PostProcessor:
         picked_set = set([tuple(x) for x in indices])
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
-        merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
-            set([*moset, *daset, *picked_set])
+        multii = pd.MultiIndex(
+            [[], [], []], [[], [], []], names=["trap", "mother_label", "daughter_label"]
         )
-        search = lambda a, b: np.where(
-            np.in1d(
-                np.ravel_multi_index(a.T, a.max(0) + 1),
-                np.ravel_multi_index(b.T, a.max(0) + 1),
+        if merge_events.any():
+            merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
+                set([*moset, *daset, *picked_set])
             )
-        )
-
-        for target, source in merge_events:
-            if (
-                tuple(source) in moset
-            ):  # update mother to lowest positive index among the two
-                mother_ids = search(mothers, source)
-                mothers[mother_ids] = (
-                    target[0],
-                    self.pick_mother(mothers[mother_ids][0][1], target[1]),
+            search = lambda a, b: np.where(
+                np.in1d(
+                    np.ravel_multi_index(a.T, a.max(0) + 1),
+                    np.ravel_multi_index(b.T, a.max(0) + 1),
                 )
-            if tuple(source) in daset:
-                daughters[search(daughters, source)] = target
-            if tuple(source) in picked_set:
-                indices[search(indices, source)] = target
+            )
 
+            for target, source in merge_events:
+                if (
+                    tuple(source) in moset
+                ):  # update mother to lowest positive index among the two
+                    mother_ids = search(mothers, source)
+                    mothers[mother_ids] = (
+                        target[0],
+                        self.pick_mother(mothers[mother_ids][0][1], target[1]),
+                    )
+                if tuple(source) in daset:
+                    daughters[search(daughters, source)] = target
+                if tuple(source) in picked_set:
+                    indices[search(indices, source)] = target
+
+            multii = pd.MultiIndex.from_arrays(
+                (np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T),
+                names=["trap", "mother_label", "daughter_label"],
+            )
         self._writer.write(
             "postprocessing/lineage_merged",
-            data=pd.MultiIndex.from_arrays(
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T,
-                names=["trap", "mother_label", "daughter_label"],
-            ),
+            data=multii,
             overwrite="overwrite",
         )
 
         self._writer.write(
             "modifiers/picks",
             data=pd.MultiIndex.from_arrays(
-                indices.T,
+                indices.T if indices.any() else [[], []],
                 names=["trap", "cell_label"],
             ),
             overwrite="overwrite",
@@ -285,10 +298,15 @@ class PostProcessor:
                 else:
                     raise ("Incorrect dataset")
 
-                result = loaded_process.run(signal)
+                if len(signal):
+                    result = loaded_process.run(signal)
+                else:
+                    result = pd.DataFrame(
+                        [], columns=signal.columns, index=signal.index
+                    )
 
-                if process in self.parameters.to_dict()["outpaths"]:
-                    outpath = self.parameters.to_dict()["outpaths"][process]
+                if process in self.parameters["outpaths"]:
+                    outpath = self.parameters["outpaths"][process]
                 elif isinstance(dataset, list):
                     # If no outpath defined, place the result in the minimum common
                     # branch of all signals used
@@ -309,7 +327,7 @@ class PostProcessor:
                 else:
                     raise ("Outpath not defined", type(dataset))
 
-                if process not in self.parameters.to_dict()["outpaths"]:
+                if process not in self.parameters["outpaths"]:
                     outpath = "/postprocessing/" + process + "/" + outpath
 
                 if isinstance(result, dict):  # Multiple Signals as output
