@@ -76,11 +76,11 @@ class picker(ProcessABC):
         """
         Interpolate the list of lists containing the associated mothers from the mother_assign_dynamic feature
         """
-        idlist = list(zip(trap, label))
+        idlist = list(zip(trap, cell_label))
         cell_gid = np.unique(idlist, axis=0)
 
         last_lin_preds = [
-            find_1st(((label[::-1] == lbl) & (trap[::-1] == tr)), True, cmp_equal)
+            find_1st(((cell_label[::-1] == lbl) & (trap[::-1] == tr)), True, cmp_equal)
             for tr, lbl in cell_gid
         ]
         mother_assign_sorted = ma[::-1][last_lin_preds]
