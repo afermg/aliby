@@ -215,7 +215,7 @@ class picker(ProcessABC):
         self.mothers, self.daughters = self.get_mothers_daughters()
         for alg, op, *params in self.sequence:
             if indices:
-                if alg is "lineage":
+                if alg == "lineage":
                     param1 = params[0]
                     new_indices = getattr(self, "pick_by_" + alg)(
                         signals.loc[list(indices)], param1
