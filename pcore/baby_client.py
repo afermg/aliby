@@ -44,13 +44,16 @@ def format_segmentation(segmentation, tp):
     # mother_assign = None
     for i, x in enumerate(segmentation):
         x["trap"] = [i] * len(x["cell_label"])
+        x["mother_assign_dynamic"] = np.array(x["mother_assign"])[
+            np.array(x["cell_label"], dtype=int) - 1
+        ]
     # Merge into a dictionary of lists, by column
     merged = {
         k: list(itertools.chain.from_iterable(res[k] for res in segmentation))
         for k in segmentation[0].keys()
     }
     # Special case for mother_assign
-    merged["mother_assign_dynamic"] = merged["mother_assign"]
+    # merged["mother_assign_dynamic"] = [merged["mother_assign"]]
     if "mother_assign" in merged:
         del merged["mother_assign"]
         mother_assign = [x["mother_assign"] for x in segmentation]
