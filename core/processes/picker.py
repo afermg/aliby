@@ -27,11 +27,11 @@ class pickerParameters(ParametersABC):
         return cls.from_dict(
             {
                 "sequence": [
-                    # ("lineage", "intersection", "families"),
-                    ["condition", "intersection", "any_present", 0.7],
-                    ["condition", "intersection", "growing", 80],
-                    ["condition", "intersection", "present", 3],
-                    ["condition", "intersection", "mother_buds", 3, 0.7],
+                    ["lineage", "intersection", "families"],
+                    # ["condition", "intersection", "any_present", 0.7],
+                    # ["condition", "intersection", "growing", 80],
+                    # ["condition", "intersection", "present", 3],
+                    # ["condition", "intersection", "mb_guess", 3, 0.7],
                     # ("lineage", "full_families", "intersection"),
                 ],
             }
@@ -247,12 +247,12 @@ class picker(ProcessABC):
             "present": lambda s, thresh: s.notna().sum(axis=1) > thresh,
             "nonstoply_present": lambda s, thresh: s.apply(thresh, axis=1) > thresh,
             "growing": lambda s, thresh: s.diff(axis=1).sum(axis=1) > thresh,
-            "mother_buds": lambda s, p1, p2: self.mother_buds_wrap(s, p1, p2)
+            "mb_guess": lambda s, p1, p2: self.mb_guess_wrap(s, p1, p2)
             # "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
         }
         return set(signals.index[case_mgr[condition](signals, *threshold)])
 
-    def mother_buds(self, df, ba, trap, min_budgrowth_t, min_mobud_ratio):
+    def mb_guess(self, df, ba, trap, min_budgrowth_t, min_mobud_ratio):
         """
         Parameters
         ----------
@@ -383,7 +383,7 @@ class picker(ProcessABC):
         )
         return score
 
-    def mother_buds_wrap(self, signals, *args):
+    def mb_guess_wrap(self, signals, *args):
         if not len(signals):
             return pd.Series([])
         ids = []
@@ -402,7 +402,7 @@ class picker(ProcessABC):
             #     )
             # )
             df = signals.loc[trap]
-            selected_ids = self.mother_buds(df, ba, trap, *args)
+            selected_ids = self.mb_guess(df, ba, trap, *args)
             ids += [(trap, i) for i in selected_ids]
 
         idx_srs = pd.Series(False, signals.index).astype(bool)
