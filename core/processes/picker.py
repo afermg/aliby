@@ -32,7 +32,7 @@ class pickerParameters(ParametersABC):
                     # ["condition", "intersection", "growing", 80],
                     # ["condition", "intersection", "present", 3],
                     # ["condition", "intersection", "mb_guess", 3, 0.7],
-                    # ("lineage", "full_families", "intersection"),
+                    # ("lineage", "intersection", "full_families"),
                 ],
             }
         )
@@ -200,14 +200,6 @@ class picker(ProcessABC):
             print("Warning:Picker: No mother-daughters assigned")
 
         return mothers, daughters
-
-    # def mbud_ensemble(self):
-    #     """
-    #     Method that combines mother-bud random forest information
-
-    #     1. Use mother_assign_dynamic to set ground truths for buds
-    #     2. Fill the necessary spaces while avoiding overriding the 'ground truth'
-    #     """
 
     def run(self, signals):
         self.orig_signals = signals
