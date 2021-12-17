@@ -1,12 +1,12 @@
 from setuptools import setup, find_packages
 
-print("find_packages outputs ", find_packages("pcore"))
+print("find_packages outputs ", find_packages("aliby"))
 setup(
     name="pipeline-core",
     version="0.1.1-dev",
     packages=find_packages(),
-    # package_dir={"": "pcore"},
-    # packages=['pcore', 'pcore.io'],
+    # package_dir={"": "aliby"},
+    # packages=['aliby', 'aliby.io'],
     # include_package_data=True,
     url="",
     license="",

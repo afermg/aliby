@@ -16,15 +16,15 @@ import seaborn as sns
 import operator
 
 
-from pcore.experiment import MetaData
-from pcore.io.omero import Dataset, Image
-from pcore.haystack import initialise_tf
-from pcore.baby_client import BabyRunner
-from pcore.segment import Tiler
-from pcore.io.writer import TilerWriter, BabyWriter
-from pcore.utils import timed
+from aliby.experiment import MetaData
+from aliby.io.omero import Dataset, Image
+from aliby.haystack import initialise_tf
+from aliby.baby_client import BabyRunner
+from aliby.segment import Tiler
+from aliby.io.writer import TilerWriter, BabyWriter
+from aliby.utils import timed
 
-from pcore.io.signal import Signal
+from aliby.io.signal import Signal
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
