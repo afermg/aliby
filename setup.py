@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 print("find_packages outputs ", find_packages("aliby"))
 setup(
-    name="pipeline-core",
-    version="0.1.1-dev",
+    name="aliby",
+    version="0.1.2",
     packages=find_packages(),
     # package_dir={"": "aliby"},
     # packages=['aliby', 'aliby.io'],
