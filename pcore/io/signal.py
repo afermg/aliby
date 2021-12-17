@@ -28,6 +28,14 @@ class Signal(BridgeH5):
         df.name = name
         return df
 
+    def mothers(self, signal, cutoff=0.8):
+        df = self[signal]
+        get_mothers = lambda df: df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
+        if isinstance(df, pd.DataFrame):
+            return get_mothers(df)
+        elif isinstance(df, list):
+            return [get_mothers(d) for d in df]
+
     def __getitem__(self, dsets):
 
         if isinstance(dsets, str) and (
