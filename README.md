@@ -176,7 +176,7 @@ cTimelapse['timelapseTrapsOmero']['cTimepoint']['trapLocations']
 ```
 
 For more information about using MATLAB files in python objects, please see
- [this page](./doc/matlab.md).
+ [this page](docs/matlab.md).
 
 ## Development guidelines
 In order to separate the python2, python3, and "currently working" versions 
