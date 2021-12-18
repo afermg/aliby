@@ -57,7 +57,7 @@ class PipelineParameters(ParametersABC):
         """
         expt_id = general.get("expt_id", 19993)
         directory = Path(general.get("directory", "../data"))
-        with Dataset(int(expt_id)) as conn:
+        with Dataset(int(expt_id), **general.get("server_info")) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -132,7 +132,7 @@ class Pipeline(ProcessABC):
 
         print("Searching OMERO")
         # Do all initialis
-        with Dataset(int(expt_id)) as conn:
+        with Dataset(int(expt_id), **self.general["server_info"]) as conn:
             image_ids = conn.get_images()
             directory = root_dir / conn.unique_name
             if not directory.exists():
@@ -165,7 +165,7 @@ class Pipeline(ProcessABC):
         earlystop = general_config["earlystop"]
         try:
             directory = general_config["directory"]
-            with Image(image_id) as image:
+            with Image(image_id, **self.general['server_info']) as image:
                 filename = f"{directory}/{image.name}.h5"
                 try:
                     os.remove(filename)

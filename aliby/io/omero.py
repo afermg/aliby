@@ -31,8 +31,8 @@ class Argo:
 
 
 class Dataset(Argo):
-    def __init__(self, expt_id):
-        super().__init__()
+    def __init__(self, expt_id, **server_info):
+        super().__init__(**server_info)
         self.expt_id = expt_id
         self._files = None
 
@@ -87,8 +87,8 @@ class Dataset(Argo):
 
 
 class Image(Argo):
-    def __init__(self, image_id):
-        super().__init__()
+    def __init__(self, image_id, **server_info):
+        super().__init__(**server_info)
         self.image_id = image_id
         self._image_wrap = None
 
