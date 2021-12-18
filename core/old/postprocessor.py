@@ -51,7 +51,7 @@ class PostProcessor:
             self.expt = Experiment.from_source(
                 self.expt_id,  #Experiment ID on OMERO
                 'upload',  #OMERO Username
-                '***REMOVED***',  #OMERO Password
+                'gothamc1ty',  #OMERO Password
                 'islay.bio.ed.ac.uk',  #OMERO host
                 port=4064  #This is default
             )

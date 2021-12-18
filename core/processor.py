@@ -8,10 +8,10 @@ import pandas as pd
 from tqdm import tqdm
 
 from agora.base import ParametersABC
-from pcore.io.writer import Writer
-from pcore.io.signal import Signal
+from aliby.io.writer import Writer
+from aliby.io.signal import Signal
 
-from pcore.cells import Cells
+from aliby.cells import Cells
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
 
