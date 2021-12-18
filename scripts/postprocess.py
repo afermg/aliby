@@ -5,9 +5,7 @@ from postprocessor.core.processor import PostProcessorParameters, PostProcessor
 
 from pathlib import Path
 
-fpath = Path(
-    "/home/alan/Documents/dev/stoa_libs/pipeline-core/data/2021_11_04_doseResponse_raf_1_15_2_glu_01_2_dual_phluorin_whi5_constantMedia_00/glu_01_016.h5"
-)
+fpath = Path("/home/alan/Downloads/Vph1_005.h5")
 
 with h5py.File(fpath, "a") as f:
     if "postprocessing" in f:
@@ -18,3 +16,13 @@ with h5py.File(fpath, "a") as f:
 params = PostProcessorParameters.default().to_dict()
 pp = PostProcessor(fpath, params)
 pp.run()
+
+from aliby.io.signal import Signal
+
+s = Signal(fpath)
+vol = s["extraction/general/None/volume"]
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.heatmap(vol.sort_index(), robust=True)
+plt.show()
