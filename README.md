@@ -36,74 +36,44 @@ docker-compose stop
 ```
 
 ### Raw data access
-Raw data access can be found in `core.experiment` and `core.timelapse`, and 
-is organised inspired by the Swain Lab MATLAB pipeline.
- 
-The `Experiment` classes are basically the only ones that really need to be 
-accessed by a user. The `ExperimentOMERO` and `ExperimentLocal` classes 
-implement the different possible sources of the data. 
-If the experiment is saved locally, we expect the organisation to be as in
-[this repository](https://github.com/SynthSys/omero_connect_demo/tree/master/test_data)
-`Experiment` cannot be instantiated as it is an abstract class, but calling 
-`Experiment.from_source()` will instantiate either an `ExperimentOMERO` or an 
-`ExperimentLocal` class depending on the arguments, and the differences between
-the two are invisible to the user from then on. 
-
-```python
-from core.experiment import Experiment
-local_expt = Experiment.from_source('path/to/data/directory/')
-omero_expt = Experiment.from_source(10421, #Experiment ID on OMERO
-                                    'user', #OMERO Username
-                                    'password', #OMERO Password
-                                    'host.omero.ed.ac.uk', #OMERO host
-                                    port=4064 #This is default
-                                    )
-```
- 
-Data is organised in each experiment as `Timelapse` classes. These are also
-separated into `TimelapseOMERO` and `TimelapseLocal`.
-The main function of these objects is to give a direct interface to the raw
-data, whatever form it is saved in. 
-These objects are sliceable, meaning that data can be accessed like a numpy
-array (with some reservations). This can be done directly through the
- `Experiment` object. 
 
  ```python
-bf_1 = expt[0, 0, :, :, :] # First channel, first timepoint, all x,y,z
+from aliby.io.omero import Dataset, Image
+
+server_info= {
+            "host": "host_address",
+            "username": "user",
+            "password": "xxxxxx"}
+expt_id = XXXX
+tps = [0, 1] # Subset of positions to get.
+
+with Dataset(expt_id, **server_info) as conn:
+    image_ids = conn.get_images()
+
+#To get the first position
+with Image(list(image_ids.values())[0], **server_info) as image:
+    dimg = image.data
+    imgs = dimg[tps, image.metadata["channels"].index("Brightfield"), 2, ...].compute()
+    # tps timepoints, Brightfield channel, z=2, all x,y
 ```
  
-Aside from the argument parsing, this is implemented through the
-`get_hypercube()` function, which can be called directly from the `Experiment` 
-object.
-
-```python
-x, y, width, height, z_positions, channels, timepoints = [None]*7 #Get full pos
-expt.get_hypercube(x, y, width, height, z_positions, channels,
-                      timepoints)
-```
-To change position (`Timelapse`), one simply needs to set `Experiment
-.curent_position` to the desired position name. 
-
-```python
-position = expt.positions[0] #This is the default position when expt initalized
-expt.current_position = positions
-```
-
 ### Tiling the raw data
 
-The tiling of raw data is done through a `Tiler` object. 
-It takes a raw `Experiment` object as an argument.
+A `Tiler` object performs trap registration. It is built in different ways, the easiest one is using an image and a the default parameters set.
 
 ```python
-from core.segment import Tiler
-seg_expt = Tiler(expt)
+from aliby.segment import Tiler, TilerParameters
+with Image(list(image_ids.values())[0], **server_info) as image:
+    tiler = Tiler.from_image(image, TilerParameters.default())
 ```
 
-The initialization should take a few seconds, as it needs to align the images
+The initialisation should take a few seconds, as it needs to align the images
 in time. 
 
+It fetches the metadata from the Image object, and uses the TilerParameters values (all Processes in aliby depend on an associated Parameters class, which is in essence a dictionary turned into a class.)
+
 #### Get a timelapse for a given trap
-From there, you can obtain a timelapse for a single trap as follows:
+TODO: Update this
 ```python
 channels = [0] #Get only the first channel, this is also the default
 z = [0, 1, 2, 3, 4] #Get all z-positions
