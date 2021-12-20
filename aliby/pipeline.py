@@ -172,7 +172,7 @@ class Pipeline(ProcessABC):
         earlystop = general_config["earlystop"]
         try:
             directory = general_config["directory"]
-            with Image(image_id, **self.general['server_info']) as image:
+            with Image(image_id, **self.general["server_info"]) as image:
                 filename = f"{directory}/{image.name}.h5"
                 try:
                     os.remove(filename)
@@ -201,6 +201,33 @@ class Pipeline(ProcessABC):
                     BabyParameters.from_dict(config["baby"]), tiler
                 )
                 bwriter = BabyWriter(filename)
+
+                # Limit extraction parameters during run using the available channels in tiler
+                av_channels = set((*tiler.channels, "general"))
+                config["extraction"]["tree"] = {
+                    k: v
+                    for k, v in config["extraction"]["tree"].items()
+                    if k in av_channels
+                }
+                config["extraction"]["sub_bg"] = av_channels.intersection(
+                    config["extraction"]["sub_bg"]
+                )
+
+                av_channels_wsub = av_channels.union(
+                    [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
+                )
+                for op in config["extraction"]["multichannel_ops"]:
+                    config["extraction"]["multichannel_ops"][op] = [
+                        x
+                        for x in config["extraction"]["multichannel_ops"]
+                        if len(x[0]) == len(av_channels_wsub.intersection(x[0]))
+                    ]
+                config["extraction"]["multichannel_ops"] = {
+                    k: v
+                    for k, v in config["extraction"]["multichannel_ops"].items()
+                    if len(v)
+                }
+
                 exparams = ExtractorParameters.from_dict(config["extraction"])
                 ext = Extractor.from_tiler(exparams, store=filename, tiler=tiler)
 
