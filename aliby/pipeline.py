@@ -146,9 +146,13 @@ class Pipeline(ProcessABC):
 
         # Filter TODO integrate filter onto class and add regex
         if isinstance(strain_filter, str):
-            image_ids = {k: v for k, v in image_ids.items() if k.startswith(strain_filter)}
+            image_ids = {
+                k: v for k, v in image_ids.items() if k.startswith(strain_filter)
+            }
         elif isinstance(strain_filter, int):
-            image_ids = {k:v for i,( k,v ) in enumerate( image_ids.items() ) if i==0}
+            image_ids = {
+                k: v for i, (k, v) in enumerate(image_ids.items()) if i == strain_filter
+            }
 
         if distributed != 0:  # Gives the number of simultaneous processes
             with Pool(distributed) as p:
