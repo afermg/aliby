@@ -52,7 +52,9 @@ class merger(ProcessABC):
         super().__init__(parameters)
 
     def run(self, signal):
-        joinable = get_joinable(signal, tol=self.parameters.tolerance)
+        joinable = []
+        if signal.shape[1] > 4:
+            joinable = get_joinable(signal, tol=self.parameters.tolerance)
         # merged, _ = merge_tracks(signal)  # , min_len=self.window + 1)
         # indices = (*zip(*merged.index.tolist()),)
         # names = merged.index.names
