@@ -1,32 +1,18 @@
 image: python:3.7
 
-stages:
-  - test
-  - lint
-  - types
-  - deploy
-
 before_script:
-  - pip install poetry
-  - poetry config virtualenvs.create false
+  - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+  - export PATH="$PATH:$HOME/.poetry/bin/"
+  - source $HOME/.poetry/env
   - poetry install
+  - source `poetry env info --path`/bin/activate
 
-Unit Tests:
+build:
+  stage: build
+  script:
+    - echo 123
+
+test:
   stage: test
   script:
-    - poetry run pytest
-
-Python Code Lint:
-  stage: lint
-  script:
-    - poetry run black .
-
-Static Type check:
-  stage: types
-  script:
-    - poetry run mypy .
-
-Deploy:
-  stage: deploy
-  script:
-    - echo "Insert deployment script here"
+    - echo 123
