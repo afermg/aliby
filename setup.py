@@ -32,6 +32,7 @@ setup(
         "tensorflow>=1.15,<=2.3",
         "baby@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby.git@master",
         "logfile_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser.git",
+        # "aliby_parser@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/aliby_parser.git",
         # "extraction@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/extraction.git@dev",
         # "postprocessor@git+ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/post-processing.git@dev",
     ],
