@@ -6,14 +6,6 @@ authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.11"
-# extraction = {git = "ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/extraction"}
-# postprocessor = {git = "ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/post-processing"}
-# baby = {git = "ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/baby"}
-# logfile_parser = {git = "ssh://git@git.ecdf.ed.ac.uk/swain-lab/python-pipeline/logfile_parser"}
-# extraction = {path="../extraction", develop=false}
-# postprocessor = {path="../postprocessor", develop=false}
-# baby = {path="../baby", develop=false}
-# logfile_parser = {path="../logfile_parser", develop=false}
 ray = {version = "1.4.0", extras = ["tune"]}
 numpy = "^1.21.4"
 dask = "^2021.12.0"
@@ -37,7 +29,10 @@ aliby-baby = "*"
 
 
 [tool.poetry.dev-dependencies]
-black = "^21.9b0"
+black = "^21.12b0"
+Sphinx = "^4.3.2"
+pytest = "^6.2.5"
+mypy = "^0.930"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.0.0"]
