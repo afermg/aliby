@@ -52,7 +52,7 @@ Bump version and release:
     - git add pyproject.toml poetry.lock
     - git commit -m "Bump version"
     # - git pull  && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
-    - git pull  && git push -o ci.skip origin HEAD:master
+    # - git pull  && git push -o ci.skip origin HEAD:master
     - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
   artifacts:
     reports:
