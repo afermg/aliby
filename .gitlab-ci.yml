@@ -23,7 +23,11 @@ before_script:
   - git remote rm origin && git remote add origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
   - git pull
   - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry update ${TRIGGER_PYPI_NAME}; fi
-  - poetry install -vv
+  - poetry export -f requirements.txt --output requirements.txt
+  - sed '/^zeroc-ice/,/^[z.*]/{/z.*/!d}' requirements.txt | grep -v zeroc-ice > nozice.txt
+  - tail 12 nozice.txt
+  # - poetry install -vv Use pip to skip zeroc-ice installation
+  - pip install -r nozice.txt --no-deps && pip install pytest black mypy
 
 Unit test:
   stage: test
