@@ -21,7 +21,8 @@ before_script:
   - poetry config virtualenvs.in-project true
   - pip install --upgrade pip
   - git remote rm origin && git remote add origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
-  - git pull
+  - git config pull.rebase false
+  - git pull origin HEAD:master
   - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry update ${TRIGGER_PYPI_NAME}; fi
   - poetry export -f requirements.txt --output requirements.txt
   - sed '/^zeroc-ice/,/^[z.*]/{/z.*/!d}' requirements.txt | grep -v zeroc-ice > nozice.txt
