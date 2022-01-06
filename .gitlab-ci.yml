@@ -31,7 +31,7 @@ before_script:
 
 Unit test:
   stage: test
-  allow_failure: true
+  # allow_failure: true
   script:
     - poetry run pytest ./tests/
 
