@@ -1,44 +1,68 @@
 image: python:3.7
 
+cache:
+    key: "project-${CI_JOB_NAME}"
+    paths:
+      - .cache/pip
+      - .venv
+    key:
+      files:
+        - poetry.lock
+
 stages:
   - test
   - check
-  - deploy
+  - release
 
 before_script:
-  - test -e $HOME/.poetry/bin/ || curl -sSL curl -sSL https://install.python-poetry.org | python3 -
+  - test -e $HOME/.poetry/bin/ || curl -sSL https://install.python-poetry.org | python3 -
   - export PATH="$PATH:$HOME/.local/bin/"
-  - poetry config virtualenvs.create false
-  - rm -f poetry.lock
+  - poetry --version
+  - poetry config virtualenvs.in-project true
   - pip install --upgrade pip
-  - poetry install
+  - git remote rm origin && git remote add origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
+  - git pull
+  - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry update ${TRIGGER_PYPI_NAME}; fi
+  - poetry install -vv
 
 Unit test:
   stage: test
+  allow_failure: true
   script:
-    - pytest ./tests/
+    - poetry run pytest ./tests/
 
 Python Code Lint:
   stage: check
   script:
-    - black .
+    - poetry run black .
 
 Static Type:
   stage: check
   allow_failure: true
   script:
-    - mypy . --exclude 'setup\.py$'
+    - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
-Publish to pypi and update repository:
-  stage: deploy
+Bump version and release:
+  stage: release
   script:
     - poetry version ${BUMP_RULE}
     - git config --global user.email ${GITLAB_USER_EMAIL}
     - git config --global user.name ${GITLAB_USER_NAME}
-    - git add pyproject.toml
+    - git add pyproject.toml poetry.lock
     - git commit -m "Bump version"
-    - git remote set-url origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
-    - git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
+    # - git pull  && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
+    - git pull  && git push -o ci.skip origin HEAD:master
+    - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
   only:
     - master
+  except:
+    changes:
+      - tests/*
+  needs:
+    job: Unit test
+
+## Custom stages ##

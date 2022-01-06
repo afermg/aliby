@@ -13,19 +13,8 @@ from skimage.registration import phase_cross_correlation
 
 from agora.base import ParametersABC, ProcessABC
 from aliby.traps import segment_traps
-from aliby.timelapse import TimelapseOMERO
-from aliby.io.matlab import matObject
-from aliby.traps import (
-    identify_trap_locations,
-    get_trap_timelapse,
-    get_traps_timepoint,
-    centre,
-    get_trap_timelapse_omero,
-)
-from aliby.utils import accumulate, get_store_path
 
-from aliby.io.writer import Writer, load_attributes
-from aliby.io.metadata_parser import parse_logfiles
+from aliby.io.writer import load_attributes
 
 trap_template_directory = Path(__file__).parent / "trap_templates"
 # TODO do we need multiple templates, one for each setup?
