@@ -27,7 +27,7 @@ before_script:
   - poetry export -f requirements.txt --output requirements.txt
   - sed '/^zeroc-ice/,/^[z.*]/{/z.*/!d}' requirements.txt | grep -v zeroc-ice > nozice.txt
   # - poetry install -vv Use pip to skip zeroc-ice installation
-  - pip install tomli && pip install -r nozice.txt --no-deps && pip install pytest black mypy
+  - pip install -r nozice.txt --no-deps && pip install pytest black mypy
 
 Unit test:
   stage: test
