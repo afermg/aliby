@@ -1,5 +1,5 @@
 # Example of argo experiment explorer
-from agora.argo import Argo
+from aliby.utils.argo import Argo
 from extraction.core.extractor import Extractor
 from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params

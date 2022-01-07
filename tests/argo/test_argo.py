@@ -1,6 +1,6 @@
 # Example of argo experiment explorer
 import pytest
-from agora.argo import Argo
+from aliby.utils.argo import Argo
 
 
 @pytest.mark.skip(reason="no way of testing this without sensitive info")
