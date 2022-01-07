@@ -38,7 +38,7 @@ docker-compose stop
 ### Raw data access
 
  ```python
-from argo.omero import Dataset, Image
+from aliby.io.omero import Dataset, Image
 
 server_info= {
             "host": "host_address",
@@ -62,7 +62,7 @@ with Image(list(image_ids.values())[0], **server_info) as image:
 A `Tiler` object performs trap registration. It is built in different ways, the easiest one is using an image and a the default parameters set.
 
 ```python
-from agora.tile.tiler import Tiler, TilerParameters
+from aliby.tile.tiler import Tiler, TilerParameters
 with Image(list(image_ids.values())[0], **server_info) as image:
     tiler = Tiler.from_image(image, TilerParameters.default())
 ```
@@ -117,7 +117,7 @@ seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None,
 At the moment the best/only way to read matlab files is through a `matObject`:
 
 ```python
-from core.io.matlab import matObject
+from aliby.io.matlab import matObject
 cTimelapse = matObject('/path/to/cTimelapse.mat')
 ```
 

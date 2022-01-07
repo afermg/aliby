@@ -26,7 +26,7 @@ from extraction.core.functions.utils import depth
 from agora.abc import ProcessABC, ParametersABC
 from agora.io.writer import Writer, load_attributes
 from agora.io.cells import Cells
-from agora.tile.tiler import Tiler
+from aliby.tile.tiler import Tiler
 
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()

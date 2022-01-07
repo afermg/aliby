@@ -32,6 +32,7 @@ tensorflow = ">=1.15,<=2.3"
 aliby-agora = "*"
 aliby-baby = "*"
 aliby-post = "*"
+omni-gaussian = "*"
 
 
 [tool.poetry.dev-dependencies]

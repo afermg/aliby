@@ -5,7 +5,7 @@ from pathlib import Path
 from aliby.baby_client import BabyRunner
 from aliby.experiment import ExperimentOMERO
 from aliby.pipeline import ExperimentLocal
-from agora.tile.tiler import Tiler
+from aliby.tile.tiler import Tiler
 
 
 class TestLocal(unittest.TestCase):

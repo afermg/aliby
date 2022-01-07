@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from agora.tile.tiler import align_timelapse_images
+from aliby.tile.tiler import align_timelapse_images
 
 
 class TestCase(unittest.TestCase):
