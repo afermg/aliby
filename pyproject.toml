@@ -30,7 +30,6 @@ omero-py = ">=5.6.2"
 zeroc-ice = "3.6.5"
 tensorflow = ">=1.15,<=2.3"
 aliby-agora = "*"
-aliby-argo = "*"
 aliby-baby = "*"
 aliby-post = "*"
 
