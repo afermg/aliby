@@ -20,8 +20,8 @@ import omero
 from omero.gateway import BlitzGateway
 from logfile_parser import Parser
 
+from agora.io.utils import accumulate
 from aliby.timelapse import TimelapseOMERO, TimelapseLocal
-from aliby.utils import accumulate
 
 from agora.io.writer import Writer
 
