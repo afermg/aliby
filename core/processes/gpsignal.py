@@ -5,7 +5,8 @@ from postprocessor.core.processes.base import ParametersABC, ProcessABC
 import numpy as np
 import pandas as pd
 
-import gaussian_processes.gaussianprocess as gp
+import gaussianprocess as gp
+
 
 def estimate_gr(volume, dt, noruns, bounds, verbose):
     """
@@ -40,25 +41,32 @@ def estimate_gr(volume, dt, noruns, bounds, verbose):
         mg.results()  # Prints out the hyperparameters
     mg.predict(x, derivs=2)  # Saves the predictions to object
     # Save the predictions to a csv file so they can be reused
-    results = dict(time=mg.x, volume=mg.y, fit_time=mg.xnew, fit_volume=mg.f,
-                   growth_rate=mg.df, d_growth_rate=mg.ddf,
-                   volume_var=mg.fvar, growth_rate_var=mg.dfvar,
-                   d_growth_rate_var=mg.ddfvar)
+    results = dict(
+        time=mg.x,
+        volume=mg.y,
+        fit_time=mg.xnew,
+        fit_volume=mg.f,
+        growth_rate=mg.df,
+        d_growth_rate=mg.ddf,
+        volume_var=mg.fvar,
+        growth_rate_var=mg.dfvar,
+        d_growth_rate_var=mg.ddfvar,
+    )
     for name, value in results.items():
-        results[name] = np.full((n, ), np.nan)
+        results[name] = np.full((n,), np.nan)
         results[name][idx] = value
     return results
+
 
 # Give that to a writer: NOTE the writer needs to learn how to write the
 # output of a process that returns multiple signals like this one does.
 
+
 class gpParameters(ParametersABC):
-    default_dict = dict(dt=5,
-             noruns=5,
-             bounds={0: (-2, 3),
-                     1: (-2, 1),
-                     2: (-4, -1)},
-             verbose=False)
+    default_dict = dict(
+        dt=5, noruns=5, bounds={0: (-2, 3), 1: (-2, 1), 2: (-4, -1)}, verbose=False
+    )
+
     def __init__(self, dt, noruns, bounds, verbose):
         """
         Parameters
@@ -83,15 +91,16 @@ class gpParameters(ParametersABC):
 
 
 class GPSignal(ProcessABC):
-    """Gaussian process fit of a Signal.
-    """
+    """Gaussian process fit of a Signal."""
+
     def __init__(self, parameters: gpParameters):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
-        results = signal.apply(lambda x: estimate_gr(x,
-                                                     **self.parameters.to_dict()),
-                               result_type='expand').T
-        multi_signal = {name: pd.DataFrame(np.vstack(results[name]))
-                        for name in results.columns}
+        results = signal.apply(
+            lambda x: estimate_gr(x, **self.parameters.to_dict()), result_type="expand"
+        ).T
+        multi_signal = {
+            name: pd.DataFrame(np.vstack(results[name])) for name in results.columns
+        }
         return multi_signal
