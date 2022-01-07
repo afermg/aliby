@@ -4,7 +4,7 @@ from pathlib import Path
 
 import tensorflow as tf
 
-from aliby.io.writer import DynamicWriter
+from agora.io.writer import DynamicWriter
 
 
 def initialise_tf(version):

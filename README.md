@@ -38,7 +38,7 @@ docker-compose stop
 ### Raw data access
 
  ```python
-from aliby.io.omero import Dataset, Image
+from argo.omero import Dataset, Image
 
 server_info= {
             "host": "host_address",

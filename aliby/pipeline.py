@@ -17,14 +17,14 @@ import numpy as np
 import pandas as pd
 from pathos.multiprocessing import Pool
 
-from agora.base import ParametersABC, ProcessABC
 from aliby.experiment import MetaData
-from aliby.io.omero import Dataset, Image
 from aliby.haystack import initialise_tf
 from aliby.baby_client import BabyRunner, BabyParameters
 from aliby.segment import Tiler, TilerParameters
-from aliby.io.writer import TilerWriter, BabyWriter
-from aliby.io.signal import Signal
+from argo.io.omero import Dataset, Image
+from agora.abc import ParametersABC, ProcessABC
+from agora.io.writer import TilerWriter, BabyWriter
+from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters

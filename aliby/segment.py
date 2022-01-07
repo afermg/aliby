@@ -14,7 +14,7 @@ from skimage.registration import phase_cross_correlation
 from agora.base import ParametersABC, ProcessABC
 from aliby.traps import segment_traps
 
-from aliby.io.writer import load_attributes
+from agora.io.writer import load_attributes
 
 trap_template_directory = Path(__file__).parent / "trap_templates"
 # TODO do we need multiple templates, one for each setup?

@@ -23,7 +23,7 @@ from logfile_parser import Parser
 from aliby.timelapse import TimelapseOMERO, TimelapseLocal
 from aliby.utils import accumulate
 
-from aliby.io.writer import Writer
+from agora.io.writer import Writer
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from aliby.io.signal import Signal
+from agora.io.signal import Signal
 
 
 class Grouper(ABC):
