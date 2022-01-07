@@ -1,0 +1,28 @@
+{
+    "@@CONFIG@@": {
+        "regex_preprocessing": ["^\\d{2}-[A-Z][a-z]{2}-\\d{4} \\d{2}:\\d{2}:\\d{2}\\s*(.*)$"]
+    },
+    "extractmethod": {
+        "trigger_startswith": "extractionParameters:",
+        "type": "regex",
+        "regex": "^extractFunction:\\s*(.*)$",
+        "use_unmatched": true
+    },
+    "segmethod": {
+        "trigger_re": "Start .* segmentation",
+        "type": "regex",
+        "regex": "^.*Start (.*) segmentation.*$"
+    },
+    "segcomplete": {
+        "trigger_re": "Successfully completed .* segmentation",
+        "type": "regex",
+        "regex": "^(\\d{2}-[A-Z][a-z]{2}-\\d{4} \\d{2}:\\d{2}:\\d{2}).*$",
+        "map": "datetime:%d-%b-%Y %H:%M:%S"
+    },
+    "compiled": {
+        "trigger_startswith": "Successfully completed compiling cell information",
+        "type": "regex",
+        "regex": "^(\\d{2}-[A-Z][a-z]{2}-\\d{4} \\d{2}:\\d{2}:\\d{2}).*$",
+        "map": "datetime:%d-%b-%Y %H:%M:%S"
+    }
+}

@@ -1,0 +1,64 @@
+{
+    "date": {
+        "trigger_re": "^\\d{2}-[A-Z][a-z]{2}-\\d{4}$",
+        "type": "regex",
+        "regex": "^\\d{2}-[A-Z][a-z]{2}-\\d{4}$",
+        "map": "datetime:%d-%b-%Y"
+    },
+    "multiDGUI_commit": {
+        "trigger_startswith": "Swain lab microscope control software",
+        "type": "regex",
+        "regex": "^.*commit number:([0-9a-z]+)$",
+        "next_section": "date"
+    },
+    "microscope": {
+        "trigger_startswith": "Microscope name is:",
+        "type": "regex",
+        "regex": "^Microscope name is:\\s+(.*)$"
+    },
+    "acqfile": {
+        "trigger_startswith": "Acquisition settings are saved in:",
+        "type": "regex",
+        "regex": "^(.*)$",
+        "skip": true
+    },
+    "details": {
+        "trigger_startswith": "Experiment details:"
+    },
+    "setup": {
+        "trigger_startswith": "Microscope setup for used channels:"
+    },
+    "omero_project": {
+        "trigger_startswith": "Omero project:",
+        "type": "regex",
+        "regex": "^(.*)$",
+        "skip": true
+    },
+    "omero_tags": {
+        "trigger_startswith": "Omero tags:",
+        "type": "list"
+    },
+    "omero_tags_stop": {
+        "trigger_startswith": "PFS is locked"
+    },
+    "omero_tag_descriptions": {
+        "trigger_startswith": "Omero tag descriptions:",
+        "type": "list"
+    },
+    "expt_start": {
+        "trigger_startswith": "Experiment started at:",
+        "type": "regex",
+        "regex": "^.*at:(\\d{2}-[A-Z][a-z]{2}-\\d{4} \\d{2}:\\d{2}:\\d{2})$",
+        "map": "datetime:%d-%b-%Y %H:%M:%S"
+    },
+    "first_capture": {
+        "trigger_startswith": "------Time point_1",
+        "type": "regex",
+        "regex": "^Channel:.*set at:(\\d{2}-[A-Z][a-z]{2}-\\d{4} \\d{2}:\\d{2}:\\d{2})$",
+        "map": "datetime:%d-%b-%Y %H:%M:%S"
+    },
+    "stop": {
+        "trigger_startswith": "------Time point_2",
+        "type": "stop"
+    }
+}
