@@ -78,11 +78,14 @@ python-versions = "*"
 
 [[package]]
 name = "aliby-agora"
-version = "0.2.0"
+version = "0.2.1"
 description = "A gathering of shared utilities for the Swain Lab image processing pipeline."
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<3.11"
+
+[package.dependencies]
+PyYAML = ">=6.0,<7.0"
 
 [[package]]
 name = "aliby-baby"
@@ -2048,8 +2051,8 @@ alabaster = [
     {file = "alabaster-0.7.12.tar.gz", hash = "sha256:a661d72d58e6ea8a57f7a86e37d86716863ee5e92788398526d58b26a4e4dc02"},
 ]
 aliby-agora = [
-    {file = "aliby-agora-0.2.0.tar.gz", hash = "sha256:36163dedd5c1875e00e950bd7270e24c03e0ed5d91e54dcc9220d2d8d3acc084"},
-    {file = "aliby_agora-0.2.0-py3-none-any.whl", hash = "sha256:889545dc64a16d78d88e332736fa054a6de7655a762fd11d069ca0768af516a0"},
+    {file = "aliby-agora-0.2.1.tar.gz", hash = "sha256:abb61e598eca87bb970b606f29a542834b6d8e16810cd5b41166bce99351d5cb"},
+    {file = "aliby_agora-0.2.1-py3-none-any.whl", hash = "sha256:86c2c723d15d2a1b66b5a7a899563e400fd0a28de592e3097cf05be15898bddf"},
 ]
 aliby-baby = [
     {file = "aliby-baby-0.1.2.tar.gz", hash = "sha256:564a12b44fc7e4889fb70d5a82e39e7fb01f37eeb60669c684bd18677160de93"},
