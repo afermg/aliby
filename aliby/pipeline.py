@@ -20,11 +20,11 @@ from pathos.multiprocessing import Pool
 from aliby.experiment import MetaData
 from aliby.haystack import initialise_tf
 from aliby.baby_client import BabyRunner, BabyParameters
-from aliby.segment import Tiler, TilerParameters
-from argo.io.omero import Dataset, Image
+from agora.tile.tiler import Tiler, TilerParameters
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import TilerWriter, BabyWriter
 from agora.io.signal import Signal
+from argo.io.omero import Dataset, Image
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters

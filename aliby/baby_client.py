@@ -13,7 +13,7 @@ import requests
 import tensorflow as tf
 from tqdm import tqdm
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 import baby.errors
 from baby import modelsets
 from baby.brain import BabyBrain
