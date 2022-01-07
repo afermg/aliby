@@ -7,11 +7,11 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from agora.base import ParametersABC
-from aliby.io.writer import Writer
-from aliby.io.signal import Signal
+from agora.abc import ParametersABC
+from agora.io.writer import Writer
+from agora.io.signal import Signal
+from agora.io.cells import Cells
 
-from aliby.cells import Cells
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
 

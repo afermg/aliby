@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import igraph as ig
 
-from aliby.cells import CellsHDF
+from agora.abc import ParametersABC, ProcessABC
+from agora.io.cells import CellsHDF
 
-from agora.base import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
