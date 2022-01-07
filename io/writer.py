@@ -10,7 +10,7 @@ from typing import Dict
 
 from utils_find_1st import find_1st, cmp_equal
 
-from aliby.io.bridge import BridgeH5
+from agora.io.bridge import BridgeH5
 from aliby.utils import timed
 
 
