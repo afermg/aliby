@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn import decomposition
 from catch22 import catch22_all
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 
 
 class catch22Parameters(ParametersABC):
@@ -21,8 +21,12 @@ class catch22Parameters(ParametersABC):
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"min_len": 0.8,
-                              "n_components": None,})
+        return cls.from_dict(
+            {
+                "min_len": 0.8,
+                "n_components": None,
+            }
+        )
 
 
 class catch22(ProcessABC):
@@ -42,8 +46,10 @@ class catch22(ProcessABC):
         adf = signal.loc[signal.notna().sum(axis=1) > thresh]
         catches = [catch22_all(adf.iloc[i, :].dropna().values) for i in range(len(adf))]
 
-        norm = pd.DataFrame([catches[j]['values'] for j in range(len(catches))],
-                            index=adf.index,
-                            columns=catches[0]["names"])
+        norm = pd.DataFrame(
+            [catches[j]["values"] for j in range(len(catches))],
+            index=adf.index,
+            columns=catches[0]["names"],
+        )
 
         return norm

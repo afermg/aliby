@@ -1,4 +1,4 @@
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 from postprocessor.core.functions.tracks import get_joinable
 
 

@@ -3,7 +3,7 @@ from itertools import cycle
 import numpy as np
 import pandas as pd
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 
 
 class aggregateParameters(ParametersABC):

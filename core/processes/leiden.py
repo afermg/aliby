@@ -6,7 +6,7 @@ from itertools import product
 import igraph as ig
 import leidenalg
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 
 
 class leidenParameters(ParametersABC):

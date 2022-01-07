@@ -3,12 +3,13 @@ import pandas as pd
 from collections import namedtuple
 from scipy.signal import periodogram
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
+
 
 class fftParameters(ParametersABC):
     """
     Parameters for the 'fft' process.
-    
+
     Attributes
     ----------
     sampling_period: float
@@ -25,7 +26,7 @@ class fftParameters(ParametersABC):
         sampling_period,
         oversampling_factor,
     ):
-        #super().__init__()
+        # super().__init__()
         self.sampling_period = sampling_period
         self.oversampling_factor = oversampling_factor
 
@@ -35,9 +36,13 @@ class fftParameters(ParametersABC):
         # 'time_settings/timeinterval' attribute, unit seconds).  When using
         # this processor in a typical routine, use the sampling period from
         # there rather than relying on this default value of 5 minutes.
-        return cls.from_dict({
-            "sampling_period": 5,
-            "oversampling_factor": 1,})
+        return cls.from_dict(
+            {
+                "sampling_period": 5,
+                "oversampling_factor": 1,
+            }
+        )
+
 
 class fft(ProcessABC):
     """
@@ -56,10 +61,10 @@ class fft(ProcessABC):
         super().__init__(parameters)
 
     def classical_periodogram(
-            self,
-            timeseries,
-            sampling_period,
-            oversampling_factor,
+        self,
+        timeseries,
+        sampling_period,
+        oversampling_factor,
     ):
         """
         Estimates the power spectral density using a periodogram.
@@ -96,20 +101,20 @@ class fft(ProcessABC):
         """
         freqs, power = periodogram(
             timeseries,
-            fs = 1/(oversampling_factor * sampling_period),
-            nfft = len(timeseries) * oversampling_factor,
-            detrend = 'constant',
-            return_onesided = True,
-            scaling = 'spectrum'
+            fs=1 / (oversampling_factor * sampling_period),
+            nfft=len(timeseries) * oversampling_factor,
+            detrend="constant",
+            return_onesided=True,
+            scaling="spectrum",
         )
         # Required to correct units; units will be expressed in min-1 (or any other
         # unit)
         freqs = oversampling_factor * freqs
         # Normalisation (Scargle, 1982; Glynn et al., 2006)
-        power = power * (0.5*len(timeseries))
+        power = power * (0.5 * len(timeseries))
         # Normalisation by variance to allow comparing different time series
         # (Scargle, 1982)
-        power = power / np.var(timeseries, ddof = 1)
+        power = power / np.var(timeseries, ddof=1)
         return freqs, power
 
     def run(self, signal: pd.DataFrame):
@@ -139,28 +144,21 @@ class fft(ProcessABC):
             Power spectrum from each time series, with labels preserved from
             'signal'.
         """
-        FftAxes = namedtuple('FftAxes', ['freqs', 'power'])
+        FftAxes = namedtuple("FftAxes", ["freqs", "power"])
         # Each element in this list is a named tuple: (freqs, power)
         axes = [
             FftAxes(
                 *self.classical_periodogram(
-                    timeseries = \
-                        signal.iloc[row_index, :].dropna().values,
-                    sampling_period = self.sampling_period,
-                    oversampling_factor = self.oversampling_factor,
+                    timeseries=signal.iloc[row_index, :].dropna().values,
+                    sampling_period=self.sampling_period,
+                    oversampling_factor=self.oversampling_factor,
                 )
             )
             for row_index in range(len(signal))
         ]
 
-        freqs_df = pd.DataFrame(
-            [element.freqs for element in axes],
-            index = signal.index
-        )
+        freqs_df = pd.DataFrame([element.freqs for element in axes], index=signal.index)
 
-        power_df = pd.DataFrame(
-            [element.power for element in axes],
-            index = signal.index
-        )
+        power_df = pd.DataFrame([element.power for element in axes], index=signal.index)
 
         return freqs_df, power_df
