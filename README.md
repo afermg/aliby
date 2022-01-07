@@ -62,7 +62,7 @@ with Image(list(image_ids.values())[0], **server_info) as image:
 A `Tiler` object performs trap registration. It is built in different ways, the easiest one is using an image and a the default parameters set.
 
 ```python
-from aliby.segment import Tiler, TilerParameters
+from agora.tile.tiler import Tiler, TilerParameters
 with Image(list(image_ids.values())[0], **server_info) as image:
     tiler = Tiler.from_image(image, TilerParameters.default())
 ```

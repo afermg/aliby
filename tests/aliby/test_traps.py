@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from agora.tile.traps import identify_trap_locations
+from aliby.tile.traps import identify_trap_locations
 
 
 class TestCase(unittest.TestCase):
