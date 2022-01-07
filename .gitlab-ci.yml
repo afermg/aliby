@@ -34,7 +34,7 @@ Unit test:
   stage: test
   # allow_failure: true
   script:
-    - apt-get install ffmpeg libsm6 libxext6  -y
+    - apt update && apt install ffmpeg libsm6 libxext6  -y
     - poetry run pytest ./tests/
 
 Python Code Lint:
