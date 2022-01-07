@@ -34,6 +34,7 @@ Unit test:
   stage: test
   # allow_failure: true
   script:
+    - apt-get install ffmpeg libsm6 libxext6  -y
     - poetry run pytest ./tests/
 
 Python Code Lint:
@@ -48,7 +49,7 @@ Static Type:
     - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
-Bump version and release:
+Bump_release:
   stage: release
   script:
     - poetry version ${BUMP_RULE}
