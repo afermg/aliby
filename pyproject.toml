@@ -6,7 +6,6 @@ authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
     { include = "aliby" },
     { include = "extraction" },
-    { include = "utils" },
 ]
 
 [tool.poetry.dependencies]
