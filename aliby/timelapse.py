@@ -9,7 +9,7 @@ from tqdm import tqdm
 import cv2
 
 from aliby.io.matlab import matObject
-from aliby.utils.cache import Cache, imread, get_store_path
+from agora.io.utils import Cache, imread, get_store_path
 
 logger = logging.getLogger(__name__)
 
