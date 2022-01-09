@@ -21,7 +21,7 @@ from baby.crawler import BabyCrawler
 from requests.exceptions import Timeout, HTTPError
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
-from agora.io.utils import Cache, accumulate, get_store_path
+from aliby.utils.cache import Cache, accumulate, get_store_path
 
 
 ################### Dask Methods ################################
