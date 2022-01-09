@@ -1,11 +1,11 @@
 import numpy as np
 from pathlib import Path
-from extraction.core.extractor import Extractor
-from extraction.core.parameters import Parameters
-from extraction.core.functions.defaults import get_params
+from extraction.core.extractor import Extractor, ExtractorParameters
 
-params = Parameters(**get_params("batman_dual"))
-ext = Extractor(params, source=19310)
+params = ExtractorParameters.from_meta(
+    {"channels/channel": ["Brightfield", "GFPFast", "pHluorin405", "mCherry"]}
+)
+ext = Extractor(params)
 ext.load_funs()
 
 

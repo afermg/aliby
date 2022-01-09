@@ -1,7 +1,7 @@
 from itertools import product
 import pytest
 
-from extraction.core.extractor import hollowExtractor, Parameters
+from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions import cell
 from extraction.core.functions.trap import imBackground
 from extraction.core.functions.loaders import (
@@ -11,7 +11,6 @@ from extraction.core.functions.loaders import (
     load_redfuns,
 )
 from extraction.examples import data
-from extraction.core.functions.defaults import get_params
 
 dsets1z = data.load_1z()
 dsets = data.load()
@@ -46,7 +45,9 @@ def test_extractor(imgs, masks, tree):
 
     Tests reduce-extract
     """
-    extractor = hollowExtractor(Parameters(**get_params("batgirl_fast")))
+    extractor = Extractor(
+        ExtractorParameters.from_meta({"channels/channel": ["Brightfield", "GFP"]})
+    )
     # Load all available functions
     extractor._all_funs = load_funs()[2]
     extractor._all_cell_funs = load_cellfuns()

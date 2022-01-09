@@ -102,11 +102,17 @@ class Extractor(ProcessABC):
 
     default_meta = {"pixel_size": 0.236, "z_size": 0.6, "spacing": 0.6}
 
-    def __init__(self, parameters: ExtractorParameters, store: str, tiler: Tiler):
+    def __init__(
+        self, parameters: ExtractorParameters, store: str = None, tiler: Tiler = None
+    ):
         self.params = parameters
-        self.local = store
-        self.load_meta()
-        self.tiler = tiler
+        if store:
+            self.local = store
+            self.load_meta()
+        else:  # In case no h5 file is used, just use the parameters straight ahead
+            self.meta = {"channel": parameters.to_dict()["tree"].keys()}
+        if tiler:
+            self.tiler = tiler
         self.load_funs()
 
     @classmethod
@@ -532,3 +538,12 @@ def fill_tree(tree):
         d[None] = tree
         tree = d
     return tree
+
+
+class hollowExtractor(Extractor):
+    """Extractor that only cares about receiving image and masks,
+    used for testing.
+    """
+
+    def __init__(self, parameters):
+        self.params = parameters

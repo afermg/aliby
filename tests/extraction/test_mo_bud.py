@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pickle
 
-from extraction.core.tracks import get_joinable, get_joint_ids
+from extraction.core.tracks import get_joinable, get_joint_ids, merge_tracks
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.lineage import reassign_mo_bud
 
@@ -31,10 +31,11 @@ def test_mobud_translation(tracks_pkl=None, mo_bud_pkl=None):
     with open(DATA_DIR / mo_bud_pkl, "rb") as f:
         mo_bud = pickle.load(f)
 
-    params = Parameters(**get_params("batman_dual"))
-    ext = Extractor(params)
+    ext = Extractor(
+        ExtractorParameters.from_meta({"channels/channel": ["Brightfield"]})
+    )
 
-    joinable = get_joinable(tracks, **ext.params.merge_tracks)
+    joinable = get_joinable(tracks, merge_tracks)
     trans = get_joint_ids(joinable)
 
     # Check that we have reassigned cell labels

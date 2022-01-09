@@ -23,6 +23,7 @@ from logfile_parser import Parser
 from agora.io.utils import accumulate
 from aliby.timelapse import TimelapseOMERO, TimelapseLocal
 
+from agora.io.metadata_parser import parse_logfiles
 from agora.io.writer import Writer
 
 logger = logging.getLogger(__name__)
@@ -95,10 +96,6 @@ def get_data_lazy(image) -> da.Array:
             c_stacks.append(da.stack(z_stack))
         t_stacks.append(da.stack(c_stacks))
     return da.stack(t_stacks)
-
-
-# Metadata writer
-from aliby.io.metadata_parser import parse_logfiles
 
 
 class MetaData:
