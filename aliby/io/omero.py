@@ -2,7 +2,7 @@ import h5py
 import omero
 from omero.gateway import BlitzGateway
 from aliby.experiment import get_data_lazy
-from aliby.cells import CellsHDF
+from agora.io.cells import CellsHDF
 
 
 class Argo:

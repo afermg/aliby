@@ -11,6 +11,7 @@ from skimage.filters import threshold_otsu
 from skimage.segmentation import clear_border
 from skimage.measure import label, regionprops
 from skimage.morphology import disk, closing, square
+from skimage.registration import phase_cross_correlation
 
 
 def stretch_image(image):
@@ -462,7 +463,7 @@ def align_timelapse_images(
     for i in range(1, size_t):
         img = centre(np.squeeze(raw_data[channel, i, :, :, 0]))
 
-        shifts, _, _ = feature.register_translation(ref, img)
+        shifts, _, _ = phase_cross_correlation(ref, img)
         # If a huge move is detected at a single time point it is taken
         # to be inaccurate and the correction from the previous time point
         # is used.

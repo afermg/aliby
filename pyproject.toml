@@ -30,8 +30,8 @@ zeroc-ice = "3.6.5"
 tensorflow = ">=1.15,<=2.3"
 aliby-agora = ">=0.2.0"
 aliby-baby = "*"
-aliby-post = "*"
 omni-gaussian = "*"
+aliby-post = "^0.1.1"
 
 
 [tool.poetry.dev-dependencies]

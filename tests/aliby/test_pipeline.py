@@ -1,19 +1,29 @@
-import os
 import unittest
+
+import pytest
+import os
+
 from pathlib import Path
 
 from aliby.baby_client import BabyRunner
-from aliby.experiment import ExperimentOMERO
-from aliby.pipeline import ExperimentLocal
+from aliby.experiment import ExperimentOMERO, ExperimentLocal
 from aliby.tile.tiler import Tiler
 
 
+@pytest.fixture
+def server_user():
+    return os.environ.get("SERVER_USER")
+
+
+@pytest.fixture
+def server_password():
+    return os.environ.get("SERVER_PASSWORD")
+
+
+@pytest.mark.skip(reason="Local analysis not yet implemented")
 class TestLocal(unittest.TestCase):
     def setUp(self) -> None:
-        self.root_dir = (
-            "/Users/s1893247/PhD/pipeline-core/data/glclvl_0"
-            ".1_mig1_msn2_maf1_sfp1_dot6_03"
-        )
+        self.root_dir = "./data/" ".1_mig1_msn2_maf1_sfp1_dot6_03"
         self.raw_expt = ExperimentLocal(self.root_dir, finished=True)
         self.tiler = Tiler(self.raw_expt, finished=False)
 
@@ -50,9 +60,11 @@ class TestLocal(unittest.TestCase):
             p.unlink()
 
 
+# FIXME reimplement this being careful with credentials
+@pytest.mark.skip(reason="credentials are not present in current repo")
 class TestRemote(unittest.TestCase):
     def setUp(self) -> None:
-        self.root_dir = "/Users/s1893247/PhD/pipeline-core/data/ome_test"
+        self.root_dir = "./"
         self.raw_expt = ExperimentOMERO(
             51,
             username="root",

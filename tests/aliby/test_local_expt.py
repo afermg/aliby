@@ -1,3 +1,5 @@
+import pytest
+
 import logging
 from logging.handlers import RotatingFileHandler
 import unittest
@@ -31,6 +33,7 @@ data_directory = Path(__file__).parent.parent / "data/"
 root_directory = data_directory / "glclvl_0.1_mig1_msn2_maf1_sfp1_dot6_03"
 
 
+@pytest.mark.skip(reason="No longer usable, requires local files. Kept until replaced.")
 class TestCase(unittest.TestCase):
     def setUp(self):
         self.expt = Experiment.from_source(root_directory, finished=True)
