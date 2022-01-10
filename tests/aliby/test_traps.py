@@ -14,7 +14,7 @@ class TestCase(unittest.TestCase):
             self.data, self.template, optimize_scale=False, downscale=1
         )
         self.assertEqual(len(coords), 1)
-        self.assertItemsEqual(coords[0], [12, 12])
+        self.assertEqual(coords[0].tolist(), [12, 12])
 
 
 if __name__ == "__main__":

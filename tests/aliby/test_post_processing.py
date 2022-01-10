@@ -46,7 +46,7 @@ class VolumeEstimation(unittest.TestCase):
         plt.ylabel("Estimated")
         plt.title("Disk")
         plt.legend()
-        plt.show()
+        # plt.show()
 
     def test_ellipse_error(self):
         x_radii = range(3, 30)
@@ -74,7 +74,7 @@ class VolumeEstimation(unittest.TestCase):
         plt.ylabel("Estimated")
         plt.title("Ellipse")
         plt.legend()
-        plt.show()
+        # plt.show()
 
     def test_minor_major_error(self):
         r = np.random.choice(list(range(3, 30)))
@@ -106,7 +106,7 @@ class VolumeEstimation(unittest.TestCase):
         plt.ylabel("Estimated / Analytical")
         plt.title(f"Error by circularity, r = {r}")
         plt.legend()
-        plt.show()
+        # plt.show()
 
 
 if __name__ == "__main__":

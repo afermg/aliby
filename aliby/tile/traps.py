@@ -184,7 +184,7 @@ def identify_trap_locations(
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
-        min_distance=int(trap_template.shape[0] * 0.70),
+        min_distance=int(trap_template.shape[0] * 0.80),
         exclude_border=(trap_size // 3),
     )
     return coordinates
@@ -478,4 +478,4 @@ def align_timelapse_images(
         #   If the images have drifted too far from the reference or too
         #   much time has passed we change the reference and keep track of
         #   which images are kept as references
-    return np.stack(drift)
+    return np.stack(drift), ref

@@ -12,7 +12,7 @@ from pathlib import Path, PosixPath
 from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, ProcessABC
-from aliby.traps import segment_traps
+from aliby.tile.traps import segment_traps
 
 from agora.io.writer import load_attributes
 

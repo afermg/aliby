@@ -1,9 +1,13 @@
 import unittest
+import pytest
 import numpy as np
 
 from aliby.tile.traps import align_timelapse_images
 
 
+@pytest.mark.skip(
+    reason="align_timelapse_images functionality was replaced with a method in tile.tiler.Tiler. Reimplement a test for that."
+)
 class TestCase(unittest.TestCase):
     def setUp(self):
         self.data = np.ones((1, 3, 5, 5, 5))
