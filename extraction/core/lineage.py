@@ -1,7 +1,9 @@
 from copy import copy
 
+
 def reassign_mo_bud(mo_bud, trans):
     """
+    FIXME:
     Update mother_bud dictionary using another dict with tracks joined
 
     input
@@ -14,18 +16,21 @@ def reassign_mo_bud(mo_bud, trans):
 
     val2lst = lambda x: [j for i in x.values() for j in i]
 
-    bud_inter=set(val2lst(mo_bud)).intersection(trans.keys())
+    bud_inter = set(val2lst(mo_bud)).intersection(trans.keys())
+
+    # translate mothers and carry  untranslated daughters
+    new_mb = copy(mo_bud)
+    for origin, target in trans:
+        if target in new_mb:
+            new_mb[target] = new_mb.get(target, set()).union(new_mb[origin])
+        del new_mb[origin]
 
     # translate daughters
-    mo_bud = copy(mo_bud)
-    for k,das in mo_bud.items():
-        for da in bud_inter.intersection(das):
-            mo_bud[k][mo_bud[k].index(da)] = trans[da]
+    for origin, target in trans:
+        if origin in bud_inter:  # Limit scope of searcg
+            for mo, da in new_mb.items():
+                if origin in da:
+                    da.remove(origin)
+                    new_mb[mo] = da.union(target)
 
-    # translate mothers
-    mo_inter = set(mo_bud.keys()).intersection(trans.keys())
-    for k in mo_inter:
-        mo_bud[trans[k]] = mo_bud.get(trans[k], []) + mo_bud[k]
-        del mo_bud[k]
-
-    return mo_bud
+    return new_mb
