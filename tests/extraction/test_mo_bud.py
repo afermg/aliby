@@ -15,6 +15,7 @@ from extraction.core.lineage import reassign_mo_bud
 DATA_DIR = Path(os.path.dirname(os.path.realpath(__file__))) / Path("data")
 
 
+@pytest.mark.skip(reason="reassign_mo_bud no longer in use")
 def test_mobud_translation(tracks_pkl=None, mo_bud_pkl=None):
 
     if tracks_pkl is None:
