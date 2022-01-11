@@ -3,7 +3,6 @@ image: python:3.7
 cache:
     key: "project-${CI_JOB_NAME}"
     paths:
-      - .cache/pip
       - .venv
     key:
       files:
@@ -57,11 +56,13 @@ Bump_release:
 
     - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
     - echo "Exporting TRIGGER_PYPI_NAME as ${TRIGGER_PYPI_NAME}"
-  artifacts:
-    reports:
-      dotenv: build.env
   only:
     - master
+  except:
+    changes:
+      - tests/
+      - .*
+
   needs:
     job: Unit test
 
