@@ -9,6 +9,9 @@ cache:
       files:
         - poetry.lock
 
+variables:
+  TRIGGER_PYPI_NAME: ""
+
 stages:
   - test
   - check
@@ -23,16 +26,12 @@ before_script:
   - git remote rm origin && git remote add origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
   - git config pull.rebase false
   - git pull origin HEAD:master
-  - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry update ${TRIGGER_PYPI_NAME}; fi
-  - rm -f poetry.lock
+  - rm -rf ~/.cache/pypoetry
+  - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
   - poetry install -vv
-  # - poetry export -f requirements.txt --output requirements.txt
-  # - sed '/^zeroc-ice/,/^[z.*]/{/z.*/!d}' requirements.txt | grep -v zeroc-ice > nozice.txt
-  # - pip install -r nozice.txt --no-deps && pip install pytest black mypy
 
 Unit test:
   stage: test
-  # allow_failure: true
   script:
     - apt update && apt install ffmpeg libsm6 libxext6  -y
     - poetry run pytest ./tests/
@@ -52,14 +51,12 @@ Static Type:
 Bump_release:
   stage: release
   script:
-    - poetry version ${BUMP_RULE}
     - git config --global user.email ${GITLAB_USER_EMAIL}
     - git config --global user.name ${GITLAB_USER_NAME}
-    - git add pyproject.toml poetry.lock
-    - git commit -m "Bump version"
-    # - git pull  && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
-    # - git pull  && git push -o ci.skip origin HEAD:master
+    # - git pull origin HEAD:MASTER && poetry version ${BUMP_RULE} && git add pypoetry add pyproject.toml poetry.lock && git commit -m "Bump version" && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
+
     - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
+    - echo "Exporting TRIGGER_PYPI_NAME as ${TRIGGER_PYPI_NAME}"
   artifacts:
     reports:
       dotenv: build.env
