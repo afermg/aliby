@@ -3,7 +3,7 @@ import pandas as pd
 from collections import namedtuple
 import scipy.linalg as linalg
 
-from agora.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, ProcessABC
 
 # TODO: Provide the option of whether to optimise AR order
 # TODO: Provide the functionality of 'smoothing' a time series with AR
