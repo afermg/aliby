@@ -299,23 +299,24 @@ class autoreg(ProcessABC):
         """
         AutoregAxes = namedtuple("AutoregAxes", ["freqs", "power"])
         # Each element in this list is a named tuple: (freqs, power)
-        axes = [
-            AutoregAxes(
-                *self.autoreg_periodogram(
-                    timeseries=signal.iloc[row_index, :].dropna().values,
-                    sampling_period=self.sampling_period,
-                    freq_npoints=self.freq_npoints,
-                    # Make this bit more readable
-                    ar_order=self.optimise_ar_order(
-                        signal.iloc[row_index, :].dropna().values,
-                        int(
-                            3 * np.sqrt(len(signal.iloc[row_index, :].dropna().values))
-                        ),
-                    ),
-                )
+        axes = []
+        # Use enumerate instead?
+        for row_index in range(len(signal)):
+            timeseries = signal.iloc[row_index, :].dropna().values
+            optimal_ar_order = self.optimise_ar_order(
+                timeseries, int(3 * np.sqrt(len(timeseries)))
             )
-            for row_index in range(len(signal))
-        ]
+            axes.insert(
+                row_index,
+                AutoregAxes(
+                    *self.autoreg_periodogram(
+                        timeseries=timeseries,
+                        sampling_period=self.sampling_period,
+                        freq_npoints=self.freq_npoints,
+                        ar_order=optimal_ar_order,
+                    )
+                ),
+            )
 
         freqs_df = pd.DataFrame([element.freqs for element in axes], index=signal.index)
         power_df = pd.DataFrame([element.power for element in axes], index=signal.index)
