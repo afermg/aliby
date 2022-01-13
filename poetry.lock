@@ -78,13 +78,16 @@ python-versions = "*"
 
 [[package]]
 name = "aliby-agora"
-version = "0.2.3"
+version = "0.2.8"
 description = "A gathering of shared utilities for the Swain Lab image processing pipeline."
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<3.11"
 
 [package.dependencies]
+h5py = "2.10"
+pandas = ">=1.3.5,<2.0.0"
+py-find-1st = ">=1.1.5,<2.0.0"
 PyYAML = ">=6.0,<7.0"
 
 [[package]]
@@ -110,20 +113,21 @@ xgboost = "1.4.2"
 
 [[package]]
 name = "aliby-post"
-version = "0.1.1"
+version = "0.1.2"
 description = "Post-processing tools for aliby pipeline."
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<3.11"
 
 [package.dependencies]
-aliby-agora = ">=0.2.0"
+aliby-agora = ">=0.2.7,<0.3.0"
 catch22 = ">=0.2.0,<0.3.0"
 leidenalg = ">=0.8.8,<0.9.0"
 more-itertools = ">=8.12.0,<9.0.0"
 numpy = ">=1.17.3"
 omni-gaussian = "*"
 pandas = ">=1.3.5,<2.0.0"
+pathos = ">=0.2.8,<0.3.0"
 PyYAML = ">=6.0,<7.0"
 scipy = ">=1.4.1"
 
@@ -1913,7 +1917,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "e1e7066cb95566d8b8151a3dc7fc74d2dce27c535c55e6acdb708ce6a6b55c19"
+content-hash = "2df95f3e88418a2193aa261bbe8823aea1e3830add76236b5e38e1b98ec740d4"
 
 [metadata.files]
 absl-py = [
@@ -2011,16 +2015,16 @@ alabaster = [
     {file = "alabaster-0.7.12.tar.gz", hash = "sha256:a661d72d58e6ea8a57f7a86e37d86716863ee5e92788398526d58b26a4e4dc02"},
 ]
 aliby-agora = [
-    {file = "aliby-agora-0.2.3.tar.gz", hash = "sha256:a3a56a773243c04fb4dffb54301d77ff7869e98047d6ba9261cbe4864f715744"},
-    {file = "aliby_agora-0.2.3-py3-none-any.whl", hash = "sha256:003f5b52dfa5513ea02497701c11dd50014496c264de75f474534358df89416b"},
+    {file = "aliby-agora-0.2.8.tar.gz", hash = "sha256:e340e917ff62c7694e174ceb2d0c32f1c8335b501be7af0dc7145058ebd1d5a1"},
+    {file = "aliby_agora-0.2.8-py3-none-any.whl", hash = "sha256:4e02b79d76db6941c55a25f2d0936bc80039f3b63b9bfd94facc07dafd32f363"},
 ]
 aliby-baby = [
     {file = "aliby-baby-0.1.2.tar.gz", hash = "sha256:564a12b44fc7e4889fb70d5a82e39e7fb01f37eeb60669c684bd18677160de93"},
     {file = "aliby_baby-0.1.2-py3-none-any.whl", hash = "sha256:f8f11b82db89a74ad8cc48059370af889f246a83d4cbc45ce75d9475a15605f7"},
 ]
 aliby-post = [
-    {file = "aliby-post-0.1.1.tar.gz", hash = "sha256:426510854767402adc06ed62b7867866dcad054838432ffe26ebb91861c85828"},
-    {file = "aliby_post-0.1.1-py3-none-any.whl", hash = "sha256:6bd666a37b83ee750c9837ce08a8541d16290811fadcf020378b6122f3b1f8bd"},
+    {file = "aliby-post-0.1.2.tar.gz", hash = "sha256:73940768cd3bc77908525ec7700c6712f520cb768e505019db644ee391feafc5"},
+    {file = "aliby_post-0.1.2-py3-none-any.whl", hash = "sha256:ed01d4f96ebd24a0832d8f27de4dc38d649609d47507ffa760ff57b255e4fde4"},
 ]
 appdirs = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},

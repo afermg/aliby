@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.7"
+version = "0.1.8"
 description = ""
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -28,10 +28,10 @@ imageio = "2.8.0"
 omero-py = ">=5.6.2"
 zeroc-ice = "3.6.5"
 tensorflow = ">=1.15,<=2.3"
-aliby-agora = ">=0.2.0"
-aliby-baby = "*"
-omni-gaussian = "*"
-aliby-post = "^0.1.1"
+aliby-agora = "^0.2.4"
+aliby-baby = "^0.1.2"
+omni-gaussian = "^0.1.1"
+aliby-post = "^0.1.2"
 
 
 [tool.poetry.dev-dependencies]
