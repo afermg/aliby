@@ -192,8 +192,8 @@ class ExperimentCompiler(Compiler):
         return pd.DataFrame(tups, columns=["position", "axis", "value"])
 
 
-# df2 = pd.DataFrame(tups, columns=["position", "axis", "value"])
-
+compiler = ExperimentCompiler(None, dir)
+tmp = compiler.run()
 # fig = plt.figure(tight_layout=True)
 # gs = Grid_plot = plt.GridSpec(3, 2, wspace=0.8, hspace=0.6)
 
@@ -212,8 +212,9 @@ class PageOrganiser(object):
     def __init__(self, data: Dict[str, pd.DataFrame], grid_spec: tuple = None):
         if grid_spec is None:
             grid_spec = plt.GridSpec(1, 1)
-            self.fig = plt.figure(tight_layout=True)
-            self.gs = plt.GridSpec(*grid_spec, wspace=0.8, hspace=0.6)
+        self.fig = plt.figure(tight_layout=True)
+        self.gs = plt.GridSpec(*grid_spec, wspace=0.8, hspace=0.6)
+        self.data = data
 
         def place_plot(self, func, xloc=None, yloc=None, *args, **kwargs):
             if xloc is None:
@@ -226,6 +227,33 @@ class PageOrganiser(object):
                 ax=self.fig.add_subplot(self.gs[xloc, yloc]),
                 **kwargs,
             )
+
+        def plot(self):
+            how = [
+                {
+                    "data": "slice",
+                    "func": sns.stripplot,
+                    "args": ("count", "position"),
+                    "kwargs": {
+                        "hue": None,
+                    },
+                    "loc": (0, None),
+                }
+            ]
+            self.place_plot(
+                lambda x: how["func"](
+                    data=tmp[how["data"]],
+                    *how["args"],
+                    **how["kwargs"] * how["loc"],
+                    ax=x,
+                )
+            )
+
+        def show(self):
+            plt.show()
+
+        def save(self):
+            pass
 
     # plot.set_title("Trap identification robustness")
     # plot.set_xlabel("Axis")
@@ -267,3 +295,5 @@ import numpy as np
 # # for i in range(2):
 # #     axes[i].plot(signal[:, i])
 # # plt.show()
+
+po = PageOrganiser(tmp, (2, 2))
