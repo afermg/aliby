@@ -8,7 +8,6 @@ from agora.abc import ParametersABC, ProcessABC
 # TODO: Provide the option of whether to optimise AR order -- see issue #1
 # TODO: Provide the functionality of 'smoothing' a time series with AR -- see
 # issue #1
-# TODO: Add DataFrame of orders to output of run()
 
 
 class autoregParameters(ParametersABC):
@@ -292,13 +291,17 @@ class autoreg(ProcessABC):
             Power spectrum from each time series, with labels preserved from
             'signal'.
 
+        order_df: pandas.DataFrame
+            Optimised order of the autoregressive model fitted to each time
+            series, with labels preserved from 'signal'.
+
         Examples
         --------
         FIXME: Add docs.
 
         """
-        AutoregAxes = namedtuple("AutoregAxes", ["freqs", "power"])
-        # Each element in this list is a named tuple: (freqs, power)
+        AutoregAxes = namedtuple("AutoregAxes", ["freqs", "power", "order"])
+        # Each element in this list is a named tuple: (freqs, power, order)
         axes = []
         # Use enumerate instead?
         for row_index in range(len(signal)):
@@ -314,12 +317,13 @@ class autoreg(ProcessABC):
                         sampling_period=self.sampling_period,
                         freq_npoints=self.freq_npoints,
                         ar_order=optimal_ar_order,
-                    )
+                    ),
+                    optimal_ar_order
                 ),
             )
 
         freqs_df = pd.DataFrame([element.freqs for element in axes], index=signal.index)
         power_df = pd.DataFrame([element.power for element in axes], index=signal.index)
-        # order_df = pd.DataFrame()
+        order_df = pd.DataFrame([element.order for element in axes], index=signal.index)
 
-        return freqs_df, power_df  # , order_df
+        return freqs_df, power_df, order_df
