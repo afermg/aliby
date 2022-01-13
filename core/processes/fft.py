@@ -80,7 +80,7 @@ class fft(ProcessABC):
         Parameters
         ---------
         timeseries: array_like
-            Time series of mesurement values.
+            Time series of measurement values.
 
         sampling_period: float
             Sampling period of measurement values, in unit time.
