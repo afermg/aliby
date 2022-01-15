@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Callable
 
 import h5py
-import imageio
 import cv2
 import numpy as np
+
 
 def repr_obj(obj, indent=0):
     """
@@ -22,9 +22,11 @@ def repr_obj(obj, indent=0):
         obj.OMERO_CLASS,
         obj.getId(),
         obj.getName(),
-        obj.getAnnotation())
+        obj.getAnnotation(),
+    )
 
     return string
+
 
 def imread(path):
     return cv2.imread(str(path), -1)
@@ -34,12 +36,13 @@ class ImageCache:
     """HDF5-based image cache for faster loading of the images once they've
     been read.
     """
+
     def __init__(self, file, name, shape, remote_fn):
-        self.store = h5py.File(file, 'a')
+        self.store = h5py.File(file, "a")
         # Create a dataset
-        self.dataset = self.store.create_dataset(name, shape,
-                                                 dtype=np.float,
-                                                 fill_value=np.nan)
+        self.dataset = self.store.create_dataset(
+            name, shape, dtype=np.float, fill_value=np.nan
+        )
         self.remote_fn = remote_fn
 
     def __getitem__(self, item):
@@ -57,6 +60,7 @@ class Cache:
     Fixed-length mapping to use as a cache.
     Deletes items in FIFO manner when maximum allowed length is reached.
     """
+
     def __init__(self, max_len=5000, load_fn: Callable = imread):
         """
         :param max_len: Maximum number of items in the cache.
@@ -66,7 +70,7 @@ class Cache:
         self._dict = dict()
         self._queue = []
         self.load_fn = load_fn
-        self.max_len=max_len
+        self.max_len = max_len
 
     def __getitem__(self, item):
         if item not in self._dict:
@@ -110,16 +114,22 @@ def get_store_path(save_dir, store, name):
     store = store.with_name(name + store.name)
     return store
 
+
 def parametrized(dec):
     def layer(*args, **kwargs):
         def repl(f):
             return dec(f, *args, **kwargs)
+
         return repl
+
     return layer
+
 
 from functools import wraps, partial
 from time import perf_counter
 import logging
+
+
 @parametrized
 def timed(f, name=None):
     @wraps(f)
@@ -127,9 +137,7 @@ def timed(f, name=None):
         t = perf_counter()
         res = f(*args, **kwargs)
         to_print = name or f.__name__
-        logging.debug(f'Timing:{to_print}:{perf_counter() - t}s')
+        logging.debug(f"Timing:{to_print}:{perf_counter() - t}s")
         return res
+
     return decorated
-
-
-
