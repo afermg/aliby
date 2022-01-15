@@ -33,11 +33,10 @@ class births(ProcessABC):
         # vals = signal.groupby("trap").apply(lambda x: len(x) - 1)
         birth_events = signal.groupby("trap").apply(lambda x: x.first_valid_index())
         fvi = signal.apply(lambda x: x.first_valid_index(), axis=1)
-        fvi_list = fvi.groupby("trap").apply(list)
-
         mothers = signal.groupby("trap").apply(
             lambda x: x.index[x.notna().sum(axis=1).argmax()]
         )
+        fvi_list = fvi.groupby("trap").apply(set)
 
         births = pd.DataFrame(
             np.zeros((mothers.shape[0], signal.shape[1])).astype(bool),
