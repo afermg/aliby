@@ -14,6 +14,7 @@ from agora.io.cells import Cells
 
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
+from postprocessor.core.processes.lineageprocess import LineageProcessParameters
 
 
 class PostProcessorParameters(ParametersABC):
@@ -245,13 +246,13 @@ class PostProcessor:
                 if tuple(source) in picked_set:
                     indices[search(indices, source)] = target
 
-            multii = pd.MultiIndex.from_arrays(
+            self.lineage_merged = pd.MultiIndex.from_arrays(
                 (np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T),
                 names=["trap", "mother_label", "daughter_label"],
             )
         self._writer.write(
             "postprocessing/lineage_merged",
-            data=multii,
+            data=self.lineage_merged,
             overwrite="overwrite",
         )
 
@@ -287,7 +288,21 @@ class PostProcessor:
             else:
                 parameters = self.parameters_classfun[process].default()
 
-            loaded_process = self.classfun[process](parameters)
+            if isinstance(parameters, LineageProcessParameters):
+                with h5py.File(self._filename, "r") as f:
+                    trap_mo_da = f[parameters.lineage_location]
+                    lineage = np.array(
+                        (
+                            trap_mo_da["trap"],
+                            trap_mo_da["mother_label"],
+                            trap_mo_da["daughter_label"],
+                        )
+                    ).T
+                loaded_process = self.classfun[process](parameters)
+                loaded_process.load_lineage(lineage)
+            else:
+                loaded_process = self.classfun[process](parameters)
+
             for dataset in datasets:
                 # print("Processing", process, "for", dataset)
 
