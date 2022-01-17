@@ -31,7 +31,7 @@ tensorflow = ">=1.15,<=2.3"
 aliby-agora = "^0.2.4"
 aliby-baby = "^0.1.2"
 omni-gaussian = "^0.1.1"
-aliby-post = "^0.1.2"
+aliby-post = "^0.1.4"
 
 
 [tool.poetry.dev-dependencies]
