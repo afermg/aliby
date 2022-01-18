@@ -10,7 +10,7 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
     """
     meta = meta if isinstance(meta, dict) else load_attributes(meta)
     base = {
-        "tree": {"general": {"None": ["area", "volume"]}},
+        "tree": {"general": {"None": ["area", "volume", "eccentricity"]}},
         "multichannel_ops": {},
     }
 
