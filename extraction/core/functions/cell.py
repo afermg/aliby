@@ -54,7 +54,10 @@ def max5px_med(cell_mask, trap_image):
     top_vals = sorted_vals[-5:]
     max5px = np.mean(top_vals, dtype=float)
 
-    return max5px / sorted_vals[len(sorted_vals) // 2]
+    if max5px:
+        return max5px / sorted_vals[len(sorted_vals) // 2]
+    else:
+        return max2p5px
 
 
 def max2p5pc_med(cell_mask, trap_image):
@@ -65,7 +68,10 @@ def max2p5pc_med(cell_mask, trap_image):
     top_vals = sorted_vals[-top_pixels:]
     max2p5pc = np.mean(top_vals, dtype=float)
 
-    return max2p5pc / sorted_vals[len(sorted_vals) // 2]
+    if max2p5pc:
+        return max2p5pc / sorted_vals[len(sorted_vals) // 2]
+    else:
+        return max2p5pc
 
 
 def std(cell_mask, trap_image):
