@@ -49,6 +49,25 @@ def max5px(cell_mask, trap_image):
     return max5px
 
 
+def max5px_med(cell_mask, trap_image):
+    sorted_vals = np.sort(trap_image[np.where(cell_mask)], axis=None)
+    top_vals = sorted_vals[-5:]
+    max5px = np.mean(top_vals, dtype=float)
+
+    return max5px / sorted_vals[len(sorted_vals) // 2]
+
+
+def max5pc_med(cell_mask, trap_image):
+    npixels = cell_mask.sum()
+    top_pixels = int(np.ceil(npixels * 0.025))
+
+    sorted_vals = np.sort(trap_image[np.where(cell_mask)], axis=None)
+    top_vals = sorted_vals[-top_pixels:]
+    max2p5pc = np.mean(top_vals, dtype=float)
+
+    return max5pc / sorted_vals[len(sorted_vals) // 2]
+
+
 def std(cell_mask, trap_image):
     return np.std(trap_image[np.where(cell_mask)], dtype=float)
 
@@ -84,20 +103,19 @@ def volume(cell_mask, trap_image=None):
     Assumes rotational symmetry around the major axis.
     """
     min_ax, maj_ax = min_maj_approximation(cell_mask, trap_image)
-    return (4 * math.pi * min_ax**2 * maj_ax) / 3
+    return (4 * math.pi * min_ax ** 2 * maj_ax) / 3
 
 
 def conical_volume(cell_mask, trap_image=None):
-    padded = np.pad(cell_mask, 1, mode='constant', constant_values=0)
-    nearest_neighbor = ndimage.morphology.distance_transform_edt(
-        padded == 1) * padded
+    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    nearest_neighbor = ndimage.morphology.distance_transform_edt(padded == 1) * padded
     return 4 * (nearest_neighbor.sum())
 
 
 def spherical_volume(cell_mask, trap_image=None):
     area = cell_mask.sum()
     r = np.sqrt(area / np.pi)
-    return (4 * np.pi * r**3) / 3
+    return (4 * np.pi * r ** 3) / 3
 
 
 def min_maj_approximation(cell_mask, trap_image=None):
@@ -108,17 +126,15 @@ def min_maj_approximation(cell_mask, trap_image=None):
     :param trap_image:
     :return:
     """
-    padded = np.pad(cell_mask,1, mode='constant', constant_values=0)
+    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
     dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded
     cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
     min_ax = np.round(nn.max())
-    maj_ax = np.round(dn.max() + cone_top.sum()/2)
+    maj_ax = np.round(dn.max() + cone_top.sum() / 2)
     return min_ax, maj_ax
 
 
 def eccentricity(cell_mask, trap_image=None):
     min_ax, maj_ax = min_maj_approximation(cell_mask)
-    return np.sqrt(maj_ax**2 - min_ax**2)/maj_ax
-
-
+    return np.sqrt(maj_ax ** 2 - min_ax ** 2) / maj_ax

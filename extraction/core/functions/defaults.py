@@ -26,7 +26,15 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
     }
 
     default_reductions = {"np_max"}
-    default_metrics = {"mean", "median", "imBackground", "max2p5pc"}
+    default_metrics = {
+        "mean",
+        "median",
+        "imBackground",
+        "max2p5pc",
+        "max2p5pc_med",
+        "max2p5px",
+        "max2p5px_med",
+    }
     default_rm = {r: default_metrics for r in default_reductions}
 
     av_flch = av_channels.intersection(meta["channels/channel"]).difference(
