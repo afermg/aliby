@@ -31,7 +31,9 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
         "median",
         "imBackground",
         "max2p5pc",
+        "max2p5pc_med",
         "max5px",
+        "max5px_med",
     }
     default_rm = {r: default_metrics for r in default_reductions}
 
