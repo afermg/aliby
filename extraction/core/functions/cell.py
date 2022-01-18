@@ -57,7 +57,7 @@ def max5px_med(cell_mask, trap_image):
     return max5px / sorted_vals[len(sorted_vals) // 2]
 
 
-def max5pc_med(cell_mask, trap_image):
+def max2p5pc_med(cell_mask, trap_image):
     npixels = cell_mask.sum()
     top_pixels = int(np.ceil(npixels * 0.025))
 
