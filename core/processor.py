@@ -221,6 +221,7 @@ class PostProcessor:
         multii = pd.MultiIndex(
             [[], [], []], [[], [], []], names=["trap", "mother_label", "daughter_label"]
         )
+        self.lineage_merged = multii
         if merge_events.any():
             merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
                 set([*moset, *daset, *picked_set])

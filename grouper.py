@@ -163,10 +163,15 @@ class phGrouper(NameGrouper):
         return aggregated
 
 
-def concat_signal_ind(path, group_names, group, signal, raw=False):
+def concat_signal_ind(path, group_names, group, signal, mode="mothers"):
     print("Looking at ", group)
     # try:
-    combined = signal.get_raw(path) if raw else signal[path]
+    if mode == "mothers":
+        combined = signal.mothers(path)
+    elif mode == "raw":
+        combined = signal.get_raw(path)
+    elif mode == "families":
+        combined = signal[path]
     combined["position"] = group
     combined["group"] = group_names[group]
     combined.set_index(["group", "position"], inplace=True, append=True)
