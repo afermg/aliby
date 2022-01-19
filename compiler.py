@@ -6,12 +6,18 @@ Main dataframe structure
 | position | group | ntraps |robustness index | initial_ncells | final_ncells
 """
 # dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
-dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/tmp/"
+# dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
+dirs = [
+    "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00"
+    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_08_24_2Raf_00/2021_08_24_2Raf_00",
+    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06",
+    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_17_0_1_Raf_00/2021_09_17_0_1_Raf_00",
+]
 import h5py
 
 from abc import abstractclassmethod, abstractmethod
 from typing import Iterable, Union, Dict, Tuple
-from pathlib import PosixPath
+from pathlib import PosixPath, Path
 import warnings
 from collections import Counter
 
@@ -97,29 +103,33 @@ class ExperimentCompiler(Compiler):
         """
         return {pos: coords.shape[0] for pos, coords in self.grouper.traplocs().items()}
 
-    def concat_signal(self, sigloc=None, raw=None, *args, **kwargs) -> pd.DataFrame:
+    def concat_signal(
+        self, sigloc=None, mode="mothers", *args, **kwargs
+    ) -> pd.DataFrame:
 
         if sigloc == None:
             sigloc = "extraction/general/None/volume"
         self.sigloc = sigloc
 
-        if raw == None:
-            raw = True
+        if mode == None:
+            mode = "mothers"
 
         if not hasattr(self, "_concat") or self.sigloc != sigloc:
-            self._concat = self.grouper.concat_signal(self.sigloc, pool=7, raw=raw)
+            self._concat = self.grouper.concat_signal(
+                self.sigloc, pool=7, mode="mothers"
+            )
 
         return self._concat
 
-    def get_tp(self, sigloc=None, tp=None, raw=None, *args, **kwargs) -> pd.Series:
+    def get_tp(self, sigloc=None, tp=None, mode=None, *args, **kwargs) -> pd.Series:
 
         if tp is None:
             tp = 0
 
-        if raw == None:
-            raw = True
+        if mode == None:
+            mode = True
 
-        return self.concat_signal(sigloc=sigloc, raw=raw, *args, **kwargs).iloc[:, tp]
+        return self.concat_signal(sigloc=sigloc, mode=mode, *args, **kwargs).iloc[:, tp]
 
     def compile_slices(self, nslices=2, *args, **kwargs):
         tps = [
@@ -139,7 +149,7 @@ class ExperimentCompiler(Compiler):
         return self.compile_slice(tp=-1, *args, **kwargs)
 
     def compile_slice(
-        self, sigloc=None, tp=None, metrics=None, raw=None, *args, **kwargs
+        self, sigloc=None, tp=None, metrics=None, mode=None, *args, **kwargs
     ) -> pd.DataFrame:
 
         if sigloc == None:
@@ -151,13 +161,13 @@ class ExperimentCompiler(Compiler):
         if metrics == None:
             metrics = ("max", "mean", "median", "count", "std", "sem")
 
-        if raw == None:
-            raw = True
+        if mode == None:
+            mode = True
 
         df = pd.concat(
             [
                 getattr(
-                    self.get_tp(sigloc=sigloc, tp=tp, raw=raw, *args, **kwargs)
+                    self.get_tp(sigloc=sigloc, tp=tp, mode=mode, *args, **kwargs)
                     .groupby(["group", "position", "trap"])
                     .max()
                     .groupby(["group", "position"]),
@@ -411,9 +421,8 @@ class PageOrganiser(object):
         plt.show()
 
     def save(self, path: PosixPath):
-        pp = PdfPages("foo.pdf")
-        for i in self.plots:
-            pp.savefig(i)
+        pp = PdfPages(path)
+        pp.savefig(self.fig)
         pp.close()
 
     def gen_sns_wrapper(self, how):
@@ -429,10 +438,15 @@ class PageOrganiser(object):
         return sns_wrapper
 
 
-compiler = ExperimentCompiler(None, dir)
-tmp = compiler.run()
-po = PageOrganiser(tmp, grid_spec=(3, 2))
-po.plot()
+for dir in dirs:
+    print(dir)
+    compiler = ExperimentCompiler(None, dir)
+    tmp = compiler.run()
+    po = PageOrganiser(tmp, grid_spec=(3, 2))
+    po.plot()
+    po.save(Path(dir) / "report.pdf")
+
+    #### Live editing
 
 # plot.set_title("Trap identification robustness")
 # plot.set_xlabel("Axis")
@@ -469,5 +483,3 @@ import numpy as np
 # # for i in range(2):
 # #     axes[i].plot(signal[:, i])
 # # plt.show()
-
-po.save(None)
