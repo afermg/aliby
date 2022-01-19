@@ -113,14 +113,14 @@ xgboost = "1.4.2"
 
 [[package]]
 name = "aliby-post"
-version = "0.1.4"
+version = "0.1.5"
 description = "Post-processing tools for aliby pipeline."
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<3.11"
 
 [package.dependencies]
-aliby-agora = ">=0.2.7,<0.3.0"
+aliby-agora = ">=0.2.8,<0.3.0"
 catch22 = ">=0.2.0,<0.3.0"
 leidenalg = ">=0.8.8,<0.9.0"
 more-itertools = ">=8.12.0,<9.0.0"
@@ -1917,7 +1917,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "b6cf9e778262fb9be9713d3bd9f4f3028784c01c0d5c99ff64c3fc59cd38c9d8"
+content-hash = "b9c999b005d53a0efb0a37f1581fe3eac5702ca8ae43fdf11fc669a7413b7a8c"
 
 [metadata.files]
 absl-py = [
@@ -2023,8 +2023,8 @@ aliby-baby = [
     {file = "aliby_baby-0.1.2-py3-none-any.whl", hash = "sha256:f8f11b82db89a74ad8cc48059370af889f246a83d4cbc45ce75d9475a15605f7"},
 ]
 aliby-post = [
-    {file = "aliby-post-0.1.4.tar.gz", hash = "sha256:9551a764ebeba126414e8a564a36a58c0265eb5ef49df42c059ed1be80c72217"},
-    {file = "aliby_post-0.1.4-py3-none-any.whl", hash = "sha256:b5537eb53c2e0758888e65285a399832562f8f2e6d8a71f144c147a1d6e42dbc"},
+    {file = "aliby-post-0.1.5.tar.gz", hash = "sha256:f4724ff026414dc6c6c50621a303dafba42d5e85f7ee07d57db85319499027e9"},
+    {file = "aliby_post-0.1.5-py3-none-any.whl", hash = "sha256:fb2f281b481624c2cfe262d63e21199aefd397e3deedcf8df64b26932761271d"},
 ]
 appdirs = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
