@@ -104,15 +104,20 @@ class MetaData:
     def __init__(self, log_dir, store):
         self.log_dir = log_dir
         self.store = store
+        self.metadata_writer = Writer(self.store)
 
     def load_logs(self):
         parsed_flattened = parse_logfiles(self.log_dir)
         return parsed_flattened
 
     def run(self):
-        metadata_writer = Writer(self.store)
         metadata_dict = self.load_logs()
-        metadata_writer.write(path="/", meta=metadata_dict, overwrite=False)
+        self.metadata_writer.write(path="/", meta=metadata_dict, overwrite=False)
+
+    def add_omero_id(self, omero_id):
+        self.metadata_writer.write(
+            path="/", meta={"omero_id": omero_id}, overwrite=False
+        )
 
 
 ########################### Old Objects ####################################
