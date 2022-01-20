@@ -8,14 +8,15 @@ from typing import List
 from pathlib import Path
 import traceback
 
-import itertools
+from itertools import groupby
 import yaml
 from tqdm import tqdm
 from time import perf_counter
+from pathos.multiprocessing import Pool
 
 import numpy as np
 import pandas as pd
-from pathos.multiprocessing import Pool
+from scipy import ndimage
 
 from aliby.experiment import MetaData
 from aliby.haystack import initialise_tf
@@ -28,6 +29,13 @@ from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
+
+logging.basicConfig(
+    filename="aliby.log",
+    filemode="w",
+    format="%(name)s - %(levelname)s - %(message)s",
+    level=logging.DEBUG,
+)
 
 
 class PipelineParameters(ParametersABC):
@@ -184,6 +192,7 @@ class Pipeline(ProcessABC):
                 # if True:  # not Path(filename).exists():
                 meta = MetaData(directory, filename)
                 meta.run()
+                meta.add_omero_id(config["general"]["id"])
                 tiler = Tiler.from_image(
                     image, TilerParameters.from_dict(config["tiler"])
                 )
@@ -256,9 +265,15 @@ class Pipeline(ProcessABC):
                         t = perf_counter()
                         bwriter.write(seg, overwrite=["mother_assign"])
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
-                        t = perf_counter()
 
-                        tmp = ext.run(tps=[i])
+                        t = perf_counter()
+                        labels, masks = groupby_traps(
+                            seg["trap"],
+                            seg["cell_label"],
+                            seg["edgemasks"],
+                            tiler.n_traps,
+                        )
+                        tmp = ext.run(tps=[i], masks=masks, labels=labels)
                         logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
                     else:  # Stop if more than X% traps are clogged
                         logging.debug(
@@ -283,6 +298,9 @@ class Pipeline(ProcessABC):
                 PostProcessor(filename, post_proc_params).run()
                 return True
         except Exception as e:  # bug in the trap getting
+            logging.exception(
+                f"Caught exception in worker thread (x = {name}):", exc_info=True
+            )
             print(f"Caught exception in worker thread (x = {name}):")
             # This prints the type, value, and stack trace of the
             # current exception being handled.
@@ -306,3 +324,19 @@ class Pipeline(ProcessABC):
             > es_parameters["thresh_trap_clogged"]
         ).mean()
         return frac_clogged_traps
+
+
+def groupby_traps(traps, labels, edgemasks, ntraps):
+    # Group data by traps to pass onto extractor without re-reading hdf5
+    iterators = [
+        groupby(zip(traps, dset), lambda x: x[0]) for dset in (labels, edgemasks)
+    ]
+    label_d = {key: [x[1] for x in group] for key, group in iterators[0]}
+    mask_d = {
+        key: np.dstack([ndimage.morphology.binary_fill_holes(x[1]) for x in group])
+        for key, group in iterators[1]
+    }
+    labels = {i: label_d.get(i, []) for i in range(ntraps)}
+    masks = {i: mask_d.get(i, []) for i in range(ntraps)}
+
+    return labels, masks

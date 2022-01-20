@@ -1,7 +1,9 @@
 import os
 from pathlib import Path, PosixPath
-import pkg_resources
+
 from collections.abc import Iterable
+import logging
+from time import perf_counter
 
 # from copy import copy
 from typing import Union, List, Dict, Callable
@@ -27,6 +29,8 @@ from agora.abc import ProcessABC, ParametersABC
 from agora.io.writer import Writer, load_attributes
 from agora.io.cells import Cells
 from aliby.tile.tiler import Tiler
+
+import matplotlib.pyplot as plt
 
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
@@ -87,17 +91,17 @@ class ExtractorParameters(ParametersABC):
 
 class Extractor(ProcessABC):
     """
-        Base class to perform feature extraction.
+    Base class to perform feature extraction.
 
-        Parameters
-        ----------
-        parameters: core.extractor Parameters
-            Parameters that include with channels, reduction and
-    b            extraction functions to use.
-        store: str
-            Path to hdf5 storage file. Must contain cell outlines.
-        tiler: pipeline-core.core.segmentation tiler
-            Class that contains or fetches the image to be used for segmentation.
+    Parameters
+    ----------
+    parameters: core.extractor Parameters
+        Parameters that include with channels, reduction and
+            extraction functions to use.
+    store: str
+        Path to hdf5 storage file. Must contain cell outlines.
+    tiler: pipeline-core.core.segmentation tiler
+        Class that contains or fetches the image to be used for segmentation.
     """
 
     default_meta = {"pixel_size": 0.236, "z_size": 0.6, "spacing": 0.6}
@@ -300,7 +304,13 @@ class Extractor(ProcessABC):
         return reduce_z(img, method)
 
     def extract_tp(
-        self, tp: int, tree: dict = None, tile_size: int = 117, **kwargs
+        self,
+        tp: int,
+        tree: dict = None,
+        tile_size: int = 117,
+        masks=None,
+        labels=None,
+        **kwargs,
     ) -> dict:
         """
         :param tp: int timepoint from which to extract results
@@ -317,18 +327,27 @@ class Extractor(ProcessABC):
         cells = Cells.hdf(self.local)
 
         # labels
-        raw_labels = cells.labels_at_time(tp)
-        labels = {
-            trap_id: raw_labels.get(trap_id, []) for trap_id in range(cells.ntraps)
-        }
+        if labels is None:
+            raw_labels = cells.labels_at_time(tp)
+            labels = {
+                trap_id: raw_labels.get(trap_id, []) for trap_id in range(cells.ntraps)
+            }
 
         # masks
-        raw_masks = cells.at_time(tp, kind="mask")
+        t = perf_counter()
+        if masks is None:
+            raw_masks = cells.at_time(tp, kind="mask")
+            nmasks = len([y.shape for x in raw_masks.values() for y in x])
+            # plt.imshow(np.dstack(raw_masks.get(1, [[]])).sum(axis=2))
+            # plt.savefig(f"{tp}.png")
+            # plt.close()
+            logging.debug(f"Timing:nmasks:{nmasks}")
+            logging.debug(f"Timing:MasksFetch:TP_{tp}:{perf_counter() - t}s")
 
-        masks = {trap_id: [] for trap_id in range(cells.ntraps)}
-        for trap_id, cells in raw_masks.items():
-            if len(cells):
-                masks[trap_id] = np.dstack(np.array(cells)).astype(bool)
+            masks = {trap_id: [] for trap_id in range(cells.ntraps)}
+            for trap_id, cells in raw_masks.items():
+                if len(cells):
+                    masks[trap_id] = np.dstack(np.array(cells)).astype(bool)
 
         masks = [np.array(v) for v in masks.values()]
 
