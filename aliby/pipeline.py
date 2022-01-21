@@ -39,12 +39,15 @@ logging.basicConfig(
 
 
 class PipelineParameters(ParametersABC):
-    def __init__(self, general, tiler, baby, extraction, postprocessing):
+    def __init__(
+        self, general, tiler, baby, extraction, postprocessing, reporting=None
+    ):
         self.general = general
         self.tiler = tiler
         self.baby = baby
         self.extraction = extraction
         self.postprocessing = postprocessing
+        self.reporting = reporting
 
     @classmethod
     def default(
@@ -54,6 +57,7 @@ class PipelineParameters(ParametersABC):
         baby={},
         extraction={},
         postprocessing={},
+        reporting={},
     ):
         """
         Load unit test experiment
