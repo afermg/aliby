@@ -114,10 +114,14 @@ class MetaData:
         metadata_dict = self.load_logs()
         self.metadata_writer.write(path="/", meta=metadata_dict, overwrite=False)
 
-    def add_omero_id(self, omero_id):
+    def add_field(self, field_name, field_value):
         self.metadata_writer.write(
-            path="/", meta={"omero_id": omero_id}, overwrite=False
+            path="/", meta={field_name: field_value}, overwrite=False
         )
+
+    def add_fields(self, fields_values: dict):
+        for field, value in field_values.items():
+            self.add_field(field, value)
 
 
 ########################### Old Objects ####################################

@@ -142,7 +142,7 @@ class TilerParameters(ParametersABC):
 
     @classmethod
     def default(cls):
-        return cls(96, "Brightfield", 0)
+        return cls(117, "Brightfield", 0)
 
 
 class Tiler(ProcessABC):

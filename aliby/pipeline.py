@@ -196,7 +196,9 @@ class Pipeline(ProcessABC):
                 # if True:  # not Path(filename).exists():
                 meta = MetaData(directory, filename)
                 meta.run()
-                meta.add_omero_id(config["general"]["id"])
+                meta.add_fields(
+                    {"omero_id,": config["general"]["id"], "image_id": image_id}
+                )
                 tiler = Tiler.from_image(
                     image, TilerParameters.from_dict(config["tiler"])
                 )
