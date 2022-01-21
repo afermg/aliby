@@ -53,7 +53,7 @@ class Trap:
     def at_time(self, tp):
         """Return trap centre at time tp"""
         drifts = self.parent.drifts
-        return self.centre - np.sum(drifts[:tp], axis=0)
+        return self.centre - np.sum(drifts[: tp + 1], axis=0)
 
     def as_tile(self, tp):
         """Return trap in the OMERO tile format of x, y, w, h
@@ -155,28 +155,27 @@ class Tiler(ProcessABC):
         image,
         metadata,
         parameters: TilerParameters,
+        trap_locs=None,
     ):
         super().__init__(parameters)
         self.image = image
         self.channels = metadata["channels"]
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
+        self.trap_locs = trap_locs
 
     @classmethod
     def from_image(cls, image, parameters: TilerParameters):
         return cls(image.data, image.metadata, parameters)
 
     @classmethod
-    def from_hdf5(cls, image, filepath, tile_size=None):
+    def from_hdf5(cls, image, filepath):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = metadata["channels/channel"].tolist()
-        if tile_size is None:
-            tile_size = trap_locs.tile_size
-        return Tiler(
-            image=image,
-            metadata=metadata,
-            template=None,
-            tile_size=tile_size,
+        return cls(
+            image.data,
+            metadata,
+            TilerParameters.default(),
             trap_locs=trap_locs,
         )
 
