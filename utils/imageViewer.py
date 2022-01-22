@@ -126,18 +126,21 @@ import matplotlib.pyplot as plt
 fpath = "/home/alan/Documents/dev/skeletons/data/2021_11_01_01_Raf_00/2021_11_01_01_Raf_00/d1134002.h5"
 riv = remoteImageViewer(fpath)
 # pos = riv.get_tc(0)
-out, img = riv.get_labeled_trap(93, list(range(0, 30)))
-out = out.astype(float)
+out, img = riv.get_labeled_trap(9, list(range(0, 30)))
+out_bak = out
+out = dilation(out).astype(float)
 out[out == 0] = np.nan
 plt.imshow(
-    np.concatenate(np.array_split(img, 6, axis=1)), interpolation=None, cmap="Greys_r"
+    np.concatenate(np.array_split(img, 6, axis=1)),
+    interpolation=None,
+    cmap="Greys_r",
 )
 plt.imshow(
-    np.concatenate(np.array_split(out, 6, axis=1)), cmap="Set1", interpolation=None
+    np.concatenate(np.array_split(out, 6, axis=1)),
+    cmap="Set1",
+    interpolation=None,
 )
 plt.show()
-
-plt.imshow()
 
 concat = lambda a: np.concatenate([x for x in a])
 add = lambda a: np.sum(a, axis=0)
