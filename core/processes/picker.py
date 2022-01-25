@@ -30,7 +30,7 @@ class pickerParameters(ParametersABC):
                     ["lineage", "intersection", "families"],
                     # ["condition", "intersection", "any_present", 0.7],
                     # ["condition", "intersection", "growing", 80],
-                    # ["condition", "intersection", "present", 3],
+                    ["condition", "intersection", "present", 7],
                     # ["condition", "intersection", "mb_guess", 3, 0.7],
                     # ("lineage", "intersection", "full_families"),
                 ],
