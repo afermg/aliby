@@ -57,9 +57,15 @@ class ParametersABC(ABC):
         return dump(self.to_dict())
 
     @classmethod
-    def from_yaml(cls, path: Union[PosixPath, str]):
-        with open(Path(path)) as f:
-            params = safe_load(f)
+    def from_yaml(cls, source: Union[PosixPath, str]):
+        """Returns class from a yaml filename or stdin"""
+        fpath = Path(source)
+        if fpath.exists():
+            with open(fpath) as f:
+                params = safe_load(f)
+        else:
+            params = safe_load(source)
+
         return cls(**params)
 
     @classmethod
