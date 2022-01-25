@@ -120,7 +120,7 @@ class MetaData:
         )
 
     def add_fields(self, fields_values: dict):
-        for field, value in field_values.items():
+        for field, value in fields_values.items():
             self.add_field(field, value)
 
 

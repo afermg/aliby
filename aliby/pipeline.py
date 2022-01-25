@@ -29,6 +29,7 @@ from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
+from postprocessor.compiler import ExperimentCompiler, PageOrganiser
 
 logging.basicConfig(
     filename="aliby.log",
@@ -82,7 +83,7 @@ class PipelineParameters(ParametersABC):
                 id=expt_id,
                 distributed=0,
                 tps=tps,
-                directory=directory,
+                directory=str(directory),
                 strain="",
                 earlystop=dict(
                     min_tp=180,
@@ -129,6 +130,13 @@ class Pipeline(ProcessABC):
         # This is just a convenience function, think before implementing
         # for other processes
         return cls(parameters=PipelineParameters.from_yaml(fpath))
+
+    @classmethod
+    def from_existing_h5(cls, fpath):
+        with h5py.File(fpath, "r") as f:
+            pipeline_parameters = PipelineParameters.from_yaml(f.attrs["parameters"])
+
+        return cls(pipeline_parameters)
 
     def run(self):
         # Config holds the general information, use in main
@@ -302,6 +310,7 @@ class Pipeline(ProcessABC):
                     self.parameters.postprocessing
                 ).to_dict()
                 PostProcessor(filename, post_proc_params).run()
+
                 return True
         except Exception as e:  # bug in the trap getting
             logging.exception(
@@ -316,6 +325,15 @@ class Pipeline(ProcessABC):
         finally:
             if session:
                 session.close()
+
+        try:
+            compiler = ExperimentCompiler(None, filepath)
+            tmp = compiler.run()
+            po = PageOrganiser(tmp, grid_spec=(3, 2))
+            po.plot()
+            po.save(fullpath / f"{directory}report.pdf")
+        except Exception as e:
+            print(e)
 
     def check_earlystop(self, filename, es_parameters):
         s = Signal(filename)
