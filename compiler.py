@@ -438,15 +438,16 @@ class PageOrganiser(object):
         return sns_wrapper
 
 
-for dir in dirs:
-    print(dir)
-    compiler = ExperimentCompiler(None, dir)
-    tmp = compiler.run()
-    po = PageOrganiser(tmp, grid_spec=(3, 2))
-    po.plot()
-    po.save(Path(dir) / "report.pdf")
+# for dir in dirs:
+#     print(f"Compiling {dir}")
+#     fullpath = Path("/home/alan/Documents/dev/skeletons/data/") / dir / dir
+#     compiler = ExperimentCompiler(None, fullpath)
+#     tmp = compiler.run()
+#     po = PageOrganiser(tmp, grid_spec=(3, 2))
+#     po.plot()
+#     po.save(fullpath / f"{dir.rstrip('/')}_report.pdf")
 
-    #### Live editing
+#### Live editing
 
 # plot.set_title("Trap identification robustness")
 # plot.set_xlabel("Axis")
