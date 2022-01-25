@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.10"
+version = "0.1.11"
 description = ""
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -31,7 +31,7 @@ tensorflow = ">=1.15,<=2.3"
 aliby-agora = "^0.2.4"
 aliby-baby = "^0.1.2"
 omni-gaussian = "^0.1.1"
-aliby-post = "^0.1.5"
+aliby-post = "^0.1.7"
 
 
 [tool.poetry.dev-dependencies]
