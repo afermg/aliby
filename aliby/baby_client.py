@@ -4,6 +4,7 @@ import json
 import time
 from pathlib import Path
 from typing import Iterable
+from time import perf_counter
 
 import h5py
 import numpy as np
@@ -23,6 +24,8 @@ from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 from agora.io.utils import Cache, accumulate, get_store_path
 
+
+import logging
 
 ################### Dask Methods ################################
 def format_segmentation(segmentation, tp):
@@ -141,10 +144,14 @@ class BabyRunner:
     def run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
         # Access the image
+        t = perf_counter()
         img = self.get_data(tp)
+        logging.debug(f"Timing:BF_fetch:{perf_counter()-t}s")
+        t = perf_counter()
         segmentation = self.crawler.step(
             img, with_edgemasks=with_edgemasks, assign_mothers=assign_mothers, **kwargs
         )
+        logging.debug(f"Timing:crawler_step:{perf_counter()-t}s")
         return format_segmentation(segmentation, tp)
 
 
