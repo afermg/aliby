@@ -38,7 +38,7 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
     default_rm = {r: default_metrics for r in default_reductions}
 
     av_flch = av_channels.intersection(meta["channels/channel"]).difference(
-        {"Brightfield, DIC"}
+        {"Brightfield", "DIC", "BrightfieldGFP"}
     )
 
     for ch in av_flch:
