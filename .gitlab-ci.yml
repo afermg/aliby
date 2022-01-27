@@ -52,7 +52,7 @@ Bump_release:
   script:
     - git config --global user.email ${GITLAB_USER_EMAIL}
     - git config --global user.name ${GITLAB_USER_NAME}
-    - git pull origin HEAD:MASTER && poetry version ${BUMP_RULE} && git add pypoetry add pyproject.toml poetry.lock && git commit -m "Bump version" && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
+    - git pull origin HEAD:MASTER && poetry version ${BUMP_RULE} && git add poetry.lock add pyproject.toml poetry.lock && git commit -m "Bump version" && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
 
     - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
     - echo "Exporting TRIGGER_PYPI_NAME as ${TRIGGER_PYPI_NAME}"

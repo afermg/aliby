@@ -9,6 +9,7 @@ from pathlib import Path
 import traceback
 
 from itertools import groupby
+import h5py
 import yaml
 from tqdm import tqdm
 from time import perf_counter
@@ -86,7 +87,7 @@ class PipelineParameters(ParametersABC):
                 directory=str(directory),
                 strain="",
                 earlystop=dict(
-                    min_tp=180,
+                    min_tp=100,
                     thresh_pos_clogged=0.3,
                     thresh_trap_clogged=7,
                     ntps_to_eval=5,
@@ -109,21 +110,17 @@ class PipelineParameters(ParametersABC):
 class Pipeline(ProcessABC):
     """
     A chained set of Pipeline elements connected through pipes.
+    Tiling, Segmentation,Extraction and Postprocessing should use their own default parameters.
+    These can be overriden passing the key:value of parameters to override to a PipelineParameters class
+
     """
 
-    # Tiling, Segmentation,Extraction and Postprocessing should use their own default parameters
-
-    # Early stop for clogging
-    earlystop = {
-        "min_tp": 180,
-        "thresh_pos_clogged": 0.3,
-        "thresh_trap_clogged": 7,
-        "ntps_to_eval": 5,
-    }
-
-    def __init__(self, parameters: PipelineParameters):
+    def __init__(self, parameters: PipelineParameters, store=None):
         super().__init__(parameters)
-        self.store = self.parameters.general["directory"]
+
+        if store is None:
+            store = self.parameters.general["directory"]
+        self.store = store
 
     @classmethod
     def from_yaml(cls, fpath):
@@ -192,31 +189,54 @@ class Pipeline(ProcessABC):
         earlystop = general_config["earlystop"]
         try:
             directory = general_config["directory"]
+
             with Image(image_id, **self.general["server_info"]) as image:
                 filename = f"{directory}/{image.name}.h5"
-                try:
-                    os.remove(filename)
-                except:
-                    pass
-
-                # Run metadata first
-                process_from = 0
-                # if True:  # not Path(filename).exists():
                 meta = MetaData(directory, filename)
-                meta.run()
-                meta.add_fields(
-                    {"omero_id,": config["general"]["id"], "image_id": image_id}
-                )
-                tiler = Tiler.from_image(
-                    image, TilerParameters.from_dict(config["tiler"])
-                )
-                # else: TODO add support to continue local experiments?
-                #     tiler = Tiler.from_hdf5(image.data, filename)
-                #     s = Signal(filename)
-                #     process_from = s["/general/None/extraction/volume"].columns[-1]
-                #     if process_from > 2:
-                #         process_from = process_from - 3
-                #         tiler.n_processed = process_from
+                from_start = True
+                if (
+                    not general_config.get("overwrite", False)
+                    and Path(filename).exists()
+                ):
+                    try:
+                        print(f"Existing file {filename} will be used.")
+                        with h5py.File(filename, "r") as f:
+                            tiler = Tiler.from_hdf5(image.data, filename)
+                            s = Signal(filename)
+                            process_from = (
+                                f.attrs["last_processed"]
+                                or s.get_raw("/general/None/extraction/volume").columns[
+                                    -1
+                                ]
+                                or 0
+                            )
+                            # get state array
+                            state_array = f.get("state_array", 0)
+                        if process_from > 2:
+                            processFalsefrom = process_from - 3
+                            tiler.n_processed = process_from
+                        from_start = False
+                    except:
+                        pass
+
+                if from_start:  # New experiment or overwriting
+                    try:
+                        os.remove(filename)
+                    except:
+                        pass
+
+                    process_from = 0
+                    try:
+                        meta.run()
+                        meta.add_fields(
+                            {"omero_id,": config["general"]["id"], "image_id": image_id}
+                        )
+                        tiler = Tiler.from_image(
+                            image, TilerParameters.from_dict(config["tiler"])
+                        )
+                    except:
+                        # Remove and try to run again?
+                        pass
 
                 writer = TilerWriter(filename)
                 session = initialise_tf(2)
@@ -305,13 +325,14 @@ class Pipeline(ProcessABC):
                         logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
                         print("Frac clogged traps: ", frac_clogged_traps)
 
+                    meta.add_fields({"last_processed": i})
                 # Run post processing
                 post_proc_params = PostProcessorParameters.from_dict(
                     self.parameters.postprocessing
                 ).to_dict()
                 PostProcessor(filename, post_proc_params).run()
 
-                return True
+                return 1
         except Exception as e:  # bug in the trap getting
             logging.exception(
                 f"Caught exception in worker thread (x = {name}):", exc_info=True
