@@ -59,12 +59,11 @@ class ParametersABC(ABC):
     @classmethod
     def from_yaml(cls, source: Union[PosixPath, str]):
         """Returns class from a yaml filename or stdin"""
-        fpath = Path(source)
-        if fpath.exists():
-            with open(fpath) as f:
-                params = safe_load(f)
-        else:
+        try:
             params = safe_load(source)
+        except:
+            with open(source) as f:
+                params = safe_load(f)
 
         return cls(**params)
 
