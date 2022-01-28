@@ -9,6 +9,7 @@ from pathlib import Path
 import traceback
 
 from itertools import groupby
+import re
 import h5py
 import yaml
 from tqdm import tqdm
@@ -143,7 +144,7 @@ class Pipeline(ProcessABC):
         config = self.parameters.to_dict()
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
-        strain_filter = config["general"]["strain"]
+        strain_filter = config["general"]["filter"]
         root_dir = config["general"]["directory"]
         root_dir = Path(root_dir)
 
@@ -164,13 +165,14 @@ class Pipeline(ProcessABC):
         # Filter TODO integrate filter onto class and add regex
         if isinstance(strain_filter, str):
             image_ids = {
-                k: v for k, v in image_ids.items() if k.startswith(strain_filter)
+                k: v for k, v in image_ids.items() if re.search(strain_filter, k)
             }
         elif isinstance(strain_filter, int):
             image_ids = {
                 k: v for i, (k, v) in enumerate(image_ids.items()) if i == strain_filter
             }
 
+        assert len(image_ids), "No images to segment"
         if distributed != 0:  # Gives the number of simultaneous processes
             with Pool(distributed) as p:
                 results = p.map(lambda x: self.create_pipeline(x), image_ids.items())
