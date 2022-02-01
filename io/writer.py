@@ -372,10 +372,6 @@ class Writer(BridgeH5):
         )
         dset[()] = narray
 
-    @staticmethod  # TODO Use this function to implement Diane's dynamic writer
-    def write_dynamic(f: h5py.File, path: str, data: Iterable):
-        pass
-
     @staticmethod
     def write_index(f, path, pd_index, **kwargs):
         f.require_group(path)  # TODO check if we can remove this
@@ -421,7 +417,11 @@ class Writer(BridgeH5):
                 dset = f[indices_path]
                 dset[()] = df.index.get_level_values(level=name).tolist()
 
-            if df.columns.dtype == np.int or df.columns.dtype == np.dtype("uint"):
+            if (
+                df.columns.dtype == np.int
+                or df.columns.dtype == np.dtype("uint")
+                or df.columns.name == "timepoint"
+            ):
                 tp_path = path + "/timepoint"
                 f.create_dataset(
                     name=tp_path,
