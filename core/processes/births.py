@@ -69,6 +69,7 @@ class births(LineageProcess):
             index=mothers.index,
             columns=signal.columns,
         )
+        births.columns.names = ["timepoint"]
         for mother_id, daughters in traps_mothers.items():
             daughters_idx = set(
                 fvi.loc[
