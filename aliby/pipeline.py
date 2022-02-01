@@ -26,7 +26,7 @@ from aliby.baby_client import BabyRunner, BabyParameters
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.io.omero import Dataset, Image
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import TilerWriter, BabyWriter
+from agora.io.writer import TilerWriter, BabyWriter, StateWriter
 from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
@@ -86,9 +86,9 @@ class PipelineParameters(ParametersABC):
                 distributed=0,
                 tps=tps,
                 directory=str(directory),
-                strain="",
+                filter="",
                 earlystop=dict(
-                    min_tp=100,
+                    min_tp=50,
                     thresh_pos_clogged=0.3,
                     thresh_trap_clogged=7,
                     ntps_to_eval=5,
@@ -219,7 +219,7 @@ class Pipeline(ProcessABC):
                     try:
                         print(f"Existing file {filename} will be used.")
                         with h5py.File(filename, "r") as f:
-                            tiler = Tiler.from_hdf5(image.data, filename)
+                            tiler = Tiler.from_hdf5(image, filename)
                             s = Signal(filename)
                             process_from = (
                                 f.attrs["last_processed"]
@@ -230,9 +230,8 @@ class Pipeline(ProcessABC):
                             )
                             # get state array
                             state_array = f.get("state_array", 0)
-                        if process_from > 2:
-                            processFalsefrom = process_from - 3
                             tiler.n_processed = process_from
+                            process_from += 1
                         from_start = False
                     except:
                         pass
@@ -244,17 +243,17 @@ class Pipeline(ProcessABC):
                         pass
 
                     process_from = 0
+                    meta.run()
+                    meta.add_fields(
+                        {"omero_id,": config["general"]["id"], "image_id": image_id}
+                    )
                     try:
-                        meta.run()
-                        meta.add_fields(
-                            {"omero_id,": config["general"]["id"], "image_id": image_id}
-                        )
                         tiler = Tiler.from_image(
                             image, TilerParameters.from_dict(config["tiler"])
                         )
                     except:
                         # Remove and try to run again?
-                        pass
+                        meta.add_fields({"end_status": "Untiled"})
 
                 writer = TilerWriter(filename)
                 session = initialise_tf(2)
@@ -306,7 +305,7 @@ class Pipeline(ProcessABC):
                         trap_info = tiler.run_tp(i)
                         logging.debug(f"Timing:Trap:{perf_counter() - t}s")
                         t = perf_counter()
-                        writer.write(trap_info, overwrite=[])
+                        writer.write(trap_info, overwrite=[], tp=i)
                         logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                         t = perf_counter()
                         seg = runner.run_tp(i)
@@ -318,6 +317,8 @@ class Pipeline(ProcessABC):
                         bwriter.write(seg, overwrite=["mother_assign"])
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
 
+                        # TODO add time-skipping for cases when the
+                        # an interruption happens after writing segmentation but before extraction
                         t = perf_counter()
                         labels, masks = groupby_traps(
                             seg["trap"],
@@ -334,6 +335,7 @@ class Pipeline(ProcessABC):
                         print(
                             f"Stopping analysis at time {i} with {frac_clogged_traps} clogged traps"
                         )
+                        meta.add_fields({"end_status": "Clogged"})
                         break
 
                     if (
@@ -345,12 +347,15 @@ class Pipeline(ProcessABC):
 
                     meta.add_fields({"last_processed": i})
                 # Run post processing
+
+                meta.add_fields({"end_status": "Success"})
                 post_proc_params = PostProcessorParameters.from_dict(
                     self.parameters.postprocessing
                 ).to_dict()
                 PostProcessor(filename, post_proc_params).run()
 
                 return 1
+
         except Exception as e:  # bug in the trap getting
             logging.exception(
                 f"Caught exception in worker thread (x = {name}):", exc_info=True

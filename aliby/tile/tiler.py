@@ -82,14 +82,14 @@ class TrapLocations:
         ]
         self.drifts = drifts
 
-    @classmethod
-    def from_source(cls, fpath: str):
-        with h5py.File(fpath, "r") as f:
-            # TODO read tile size from file metadata
-            drifts = f["trap_info/drifts"][()]
-            tlocs = cls(f["trap_info/trap_locations"][()], tile_size=96, drifts=drifts)
+        # @classmethod
+        # def from_source(cls, fpath: str):
+        #     with h5py.File(fpath, "r") as f:
+        #         # TODO read tile size from file metadata
+        #         drifts = f["trap_info/drifts"][()].tolist()
+        #         tlocs = cls(f["trap_info/trap_locations"][()], tile_size=96, drifts=drifts)
 
-        return tlocs
+        # return tlocs
 
     @property
     def shape(self):
@@ -106,12 +106,12 @@ class TrapLocations:
 
     def to_dict(self, tp):
         res = dict()
-        if tp == 0:
-            res["trap_locations"] = self.initial_location
-            res["attrs/tile_size"] = self.tile_size
-            res["attrs/max_size"] = self.max_size
+        # if tp == 0:
+        res["trap_locations"] = self.initial_location
+        res["attrs/tile_size"] = self.tile_size
+        res["attrs/max_size"] = self.max_size
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
-        # res['processed_timepoints'] = tp
+        # res["processed_timepoints"] = tp
         return res
 
     @classmethod
@@ -119,7 +119,7 @@ class TrapLocations:
         with h5py.File(file, "r") as hfile:
             trap_info = hfile["trap_info"]
             initial_locations = trap_info["trap_locations"][()]
-            drifts = trap_info["drifts"][()]
+            drifts = trap_info["drifts"][()].tolist()
             max_size = trap_info.attrs["max_size"]
             tile_size = trap_info.attrs["tile_size"]
         trap_locs = cls(initial_locations, tile_size, max_size=max_size)
@@ -234,7 +234,10 @@ class Tiler(ProcessABC):
             self.image[prev_tp, self.ref_channel, self.ref_z],
             self.image[tp, self.ref_channel, self.ref_z],
         )
-        self.trap_locs.drifts.append(drift)
+        if 0 < tp < len(self.trap_locs.drifts):
+            self.trap_locs.drifts[tp] = drift.tolist()
+        else:
+            self.trap_locs.drifts.append(drift.tolist())
 
     def get_tp_data(self, tp, c):
         traps = []
@@ -288,13 +291,13 @@ class Tiler(ProcessABC):
         return trap
 
     def run_tp(self, tp):
-        assert tp >= self.n_processed, "Time point already processed"
+        # assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
         if self.n_processed == 0:
             self._initialise_traps(self.tile_size)
         self.find_drift(tp)  # Get drift
         # update n_processed
-        self.n_processed += 1
+        self.n_processed = tp + 1
         # Return result for writer
         return self.trap_locs.to_dict(tp)
 
