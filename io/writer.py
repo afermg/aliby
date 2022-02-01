@@ -82,7 +82,7 @@ class DynamicWriter:
 
     def write(self, data, overwrite: list):
         # Data is a dictionary, if not, make it one
-        # Overwrite data is a dictionary
+        # Overwrite data is a list
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
 
@@ -112,6 +112,22 @@ class TilerWriter(DynamicWriter):
         "attrs/max_size": ((1,), np.uint16),
     }
     group = "trap_info"
+
+    def write(self, data, overwrite: list, tp: int):
+        """
+        Skips writing data if it were to overwrite it,using drift as a marker
+        """
+
+        skip = False
+        with h5py.File(self.file, "a") as store:
+            hgroup = store.require_group(self.group)
+
+            nprev = hgroup.get("drifts", None)
+            if nprev and tp < nprev.shape[0]:
+                print(f"Tiler: Skipping timepoint {tp}")
+                skip = True
+        if not skip:
+            super().write(data=data, overwrite=overwrite)
 
 
 tile_size = 117
