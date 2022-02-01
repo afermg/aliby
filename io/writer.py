@@ -67,12 +67,12 @@ class DynamicWriter:
     def _overwrite(self, data, key, hgroup):
         """Overwrite existing dataset with new data"""
         # We do not append to mother_assign; raise error if already saved
-        n = len(data)
+        data_shape = np.shape(data)
         max_shape, dtype = self.datatypes[key]
         if key in hgroup:
             del hgroup[key]
         hgroup.require_dataset(
-            key, shape=(n,), dtype=dtype, compression=self.compression
+            key, shape=data_shape, dtype=dtype, compression=self.compression
         )
         hgroup[key][()] = data
 
@@ -294,10 +294,10 @@ class StateWriter(DynamicWriter):
         "tp_back": ((None, 1), np.uint16),
         "trap": ((None, 1), np.uint16),
         "cell_label": ((None, 1), np.uint16),
-        "features": ((None, None, 1), np.float32),
-        "lifetime": ((None, 1), np.uint16),
-        "p_was_bud": ((None, None), np.float32),
-        "p_is_mother": ((None, None), np.float32),
+        "prev_feats": ((None, None), np.float32),
+        "lifetime": ((None, 2), np.uint16),
+        "p_was_bud": ((None, 2), np.float32),
+        "p_is_mother": ((None, 2), np.float32),
         "ba_cum": ((None, None), np.float32),
     }
     group = "last_state"
@@ -305,33 +305,66 @@ class StateWriter(DynamicWriter):
     @staticmethod
     def format_field(states: list, field: str):
         # Flatten a field in the states list to save as an hdf5 dataset
-        states = [pos_state[field] for pos_state in states]
-        return state
+        fields = [pos_state[field] for pos_state in states]
+        return fields
 
-    def format_states(self, states: list):
-        formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
-        tp_back, trap, cell_label = zip(
+    @staticmethod
+    def format_values_tpback(states: list, val_name: str):
+        tp_back, trap, value = zip(
             *[
                 (tp_back, trap, cell_label)
                 for trap, state in enumerate(states)
-                for tp_back, cell_labels in enumerate(
-                    self.format_field(states, "cell_label")
-                )
-                for cell_label in cell_labels
+                for tp_back, value in enumerate(state[val_name])
+                for cell_label in value
             ]
         )
+        return tp_back, trap, value
+
+    @staticmethod
+    def format_values_traps(states: list, val_name: str):
+        formatted = np.array(
+            [
+                (trap, clabel_val)
+                for trap, state in enumerate(states)
+                for clabel_val in state[val_name]
+            ]
+        )
+        return formatted
+
+    @staticmethod
+    def pad_if_needed(array: np.ndarray, pad_size: int):
+        padded = np.zeros((pad_size, pad_size)).astype(float)
+        length = len(array)
+        padded[:length, :length] = array
+
+        return padded
+
+    def format_states(self, states: list):
+        formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
+        tp_back, trap, cell_label = self.format_values_tpback(states, "cell_lbls")
+        _, _, prev_feats = self.format_values_tpback(states, "prev_feats")
 
         # Heterogeneous datasets
         formatted_state["tp_back"] = tp_back
         formatted_state["trap"] = trap
         formatted_state["cell_label"] = cell_label
-        formatted_state["features"] = np.array(self.format_field(states, "features"))
+        formatted_state["prev_feats"] = np.array(prev_feats)
 
-        #
-        for k in ("lifetime", "p_was_bud", "p_is_mother", "ba_cum"):
-            formatted_state[k] = np.array(self.format_field(states, k))
+        # One entry per cell label - tp_back independent
+        for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
+            formatted_state[val_name] = self.format_values_traps(states, val_name)
+
+        bacum_max = max([len(state["ba_cum"]) for state in states])
+
+        formatted_state["ba_cum"] = np.array(
+            [self.pad_if_needed(state["ba_cum"], bacum_max) for state in states]
+        )
 
         return formatted_state
+
+    def write(self, data, overwrite: Iterable):
+        formatted_data = self.format_states(data)
+        super().write(data=formatted_data, overwrite=overwrite)
 
 
 #################### Extraction version ###############################
