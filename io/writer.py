@@ -288,6 +288,52 @@ class BabyWriter(DynamicWriter):
         return
 
 
+class StateWriter(DynamicWriter):
+    datatypes = {
+        "max_lbl": ((None, 1), np.uint16),
+        "tp_back": ((None, 1), np.uint16),
+        "trap": ((None, 1), np.uint16),
+        "cell_label": ((None, 1), np.uint16),
+        "features": ((None, None, 1), np.float32),
+        "lifetime": ((None, 1), np.uint16),
+        "p_was_bud": ((None, None), np.float32),
+        "p_is_mother": ((None, None), np.float32),
+        "ba_cum": ((None, None), np.float32),
+    }
+    group = "last_state"
+
+    @staticmethod
+    def format_field(states: list, field: str):
+        # Flatten a field in the states list to save as an hdf5 dataset
+        states = [pos_state[field] for pos_state in states]
+        return state
+
+    def format_states(self, states: list):
+        formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
+        tp_back, trap, cell_label = zip(
+            *[
+                (tp_back, trap, cell_label)
+                for trap, state in enumerate(states)
+                for tp_back, cell_labels in enumerate(
+                    self.format_field(states, "cell_label")
+                )
+                for cell_label in cell_labels
+            ]
+        )
+
+        # Heterogeneous datasets
+        formatted_state["tp_back"] = tp_back
+        formatted_state["trap"] = trap
+        formatted_state["cell_label"] = cell_label
+        formatted_state["features"] = np.array(self.format_field(states, "features"))
+
+        #
+        for k in ("lifetime", "p_was_bud", "p_is_mother", "ba_cum"):
+            formatted_state[k] = np.array(self.format_field(states, k))
+
+        return formatted_state
+
+
 #################### Extraction version ###############################
 class Writer(BridgeH5):
     """
