@@ -263,7 +263,7 @@ class BabyWriter(DynamicWriter):
         else:
             self.__append_edgemasks(hgroup, edgemasks, current_indices)
 
-    def write(self, data, overwrite: list):
+    def write(self, data, overwrite: list, tp: int = None):
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
 
@@ -279,7 +279,12 @@ class BabyWriter(DynamicWriter):
                     elif key == "edgemasks":
                         keys = ["trap", "cell_label", "edgemasks"]
                         value = [data[x] for x in keys]
-                        self.write_edgemasks(value, keys, hgroup)
+
+                        edgemask_dset = hgroup.get(key + "/values", None)
+                        if edgemask_dset and tp <= edgemask_dset[()].shape[1]:
+                            print("BabyWriter: Skipping tp {tp}")
+                        else:
+                            self.write_edgemasks(value, keys, hgroup)
                     else:
                         self._append(value, key, hgroup)
                 except Exception as e:
@@ -293,7 +298,7 @@ class StateWriter(DynamicWriter):
         "max_lbl": ((None, 1), np.uint16),
         "tp_back": ((None, 1), np.uint16),
         "trap": ((None, 1), np.int16),
-        "cell_label": ((None, 1), np.uint16),
+        "cell_lbls": ((None, 1), np.uint16),
         "prev_feats": ((None, None), np.float32),
         "lifetime": ((None, 2), np.uint16),
         "p_was_bud": ((None, 2), np.float32),
@@ -347,7 +352,7 @@ class StateWriter(DynamicWriter):
         # Heterogeneous datasets
         formatted_state["tp_back"] = tp_back
         formatted_state["trap"] = trap
-        formatted_state["cell_label"] = cell_label
+        formatted_state["cell_lbls"] = cell_label
         formatted_state["prev_feats"] = np.array(prev_feats)
 
         # One entry per cell label - tp_back independent

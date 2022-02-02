@@ -37,12 +37,12 @@ class StateReader(DynamicReader):
         "max_lbl": ((None, 1), np.uint16),
         "tp_back": ((None, 1), np.uint16),
         "trap": ((None, 1), np.int16),
-        "cell_label": ((None, 1), np.uint16),
-        "prev_feats": ((None, None), np.float32),
+        "cell_lbls": ((None, 1), np.uint16),
+        "prev_feats": ((None, None), np.float64),
         "lifetime": ((None, 2), np.uint16),
-        "p_was_bud": ((None, 2), np.float32),
-        "p_is_mother": ((None, 2), np.float32),
-        "ba_cum": ((None, None), np.float32),
+        "p_was_bud": ((None, 2), np.float64),
+        "p_is_mother": ((None, 2), np.float64),
+        "ba_cum": ((None, None), np.float64),
     }
     group = "last_state"
 
@@ -82,24 +82,35 @@ class StateReader(DynamicReader):
         trap_as_idx = copy(data["trap"])
 
         states = {k: {"max_lbl": v} for k, v in enumerate(data["max_lbl"])}
-        for val_name in ("cell_label", "prev_feats"):
+        for val_name in ("cell_lbls", "prev_feats"):
+            for k in states.keys():
+                if val_name == "cell_lbls":
+                    states[k][val_name] = [[] for _ in range(ntps_back)]
+                else:
+                    states[k][val_name] = [
+                        np.zeros((0, data[val_name].shape[1]), dtype=np.float64)
+                        for _ in range(ntps_back)
+                    ]
+
             data[val_name] = list(zip(trap_as_idx, tpback_as_idx, data[val_name]))
             for k, v in groupsort(data[val_name]).items():
                 states[k][val_name] = [
-                    [w[0] for w in val] for val in groupsort(v).values()
+                    np.array([w[0] for w in val]) for val in groupsort(v).values()
                 ]
 
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
+            for k in states.keys():
+                states[k][val_name] = np.array([])
             # This contains no time points back
             for k, v in groupsort(data[val_name]).items():
-                states[k][val_name] = [val[0] for val in v]
+                states[k][val_name] = np.array([val[0] for val in v])
 
         for trap_id, ba_matrix in enumerate(data["ba_cum"]):
-            states[trap_id]["ba_cum"] = np.array([])
-            if ba_matrix.sum():
-                states[trap_id]["ba_cum"] = ba_matrix
+            states[trap_id]["ba_cum"] = np.zeros((0, 0), dtype=np.float64)
+            if ba_matrix.any():
+                states[trap_id]["ba_cum"] = np.array(ba_matrix, dtype=np.float64)
 
-        return states
+        return [val for val in states.values()]
 
     def get_formatted_states(self):
         return self.reconstruct_states(self.read_all())
