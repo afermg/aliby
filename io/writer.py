@@ -292,7 +292,7 @@ class StateWriter(DynamicWriter):
     datatypes = {
         "max_lbl": ((None, 1), np.uint16),
         "tp_back": ((None, 1), np.uint16),
-        "trap": ((None, 1), np.uint16),
+        "trap": ((None, 1), np.int16),
         "cell_label": ((None, 1), np.uint16),
         "prev_feats": ((None, None), np.float32),
         "lifetime": ((None, 2), np.uint16),
