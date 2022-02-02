@@ -213,6 +213,7 @@ class Pipeline(ProcessABC):
                 filename = f"{directory}/{image.name}.h5"
                 meta = MetaData(directory, filename)
                 from_start = True
+                trackers_state = None
                 if (
                     not general_config.get("overwrite", False)
                     and Path(filename).exists()
@@ -230,7 +231,9 @@ class Pipeline(ProcessABC):
                                 or 0
                             )
                             # get state array
-                            state_array = StateReader(filename).get_formatted_states()
+                            trackers_state = StateReader(
+                                filename
+                            ).get_formatted_states()
                             tiler.n_processed = process_from
                             process_from += 1
                         from_start = False
@@ -261,9 +264,10 @@ class Pipeline(ProcessABC):
                 runner = BabyRunner.from_tiler(
                     BabyParameters.from_dict(config["baby"]), tiler
                 )
-                bwriter = BabyWriter(filename)
+                if trackers_state:
+                    runner.crawler.trackers_state = trackers_state
 
-                # State Writer to recover interrupted experiments
+                bwriter = BabyWriter(filename)
                 swriter = StateWriter(filename)
 
                 # Limit extraction parameters during run using the available channels in tiler
@@ -318,11 +322,7 @@ class Pipeline(ProcessABC):
                         #     f"Segmentation failed:Segmentation:{perf_counter() - t}s"
                         # )
                         t = perf_counter()
-                        bwriter.write(seg, overwrite=["mother_assign"])
-                        swriter.write(
-                            data=runner.crawler.tracker_states,
-                            overwrite=swriter.datatypes.keys(),
-                        )
+                        bwriter.write(seg, overwrite=["mother_assign"], tp=i)
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
 
                         # TODO add time-skipping for cases when the
@@ -353,6 +353,11 @@ class Pipeline(ProcessABC):
                         logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
                         print("Frac clogged traps: ", frac_clogged_traps)
 
+                    # State Writer to recover interrupted experiments
+                    swriter.write(
+                        data=runner.crawler.tracker_states,
+                        overwrite=swriter.datatypes.keys(),
+                    )
                     meta.add_fields({"last_processed": i})
                 # Run post processing
 
