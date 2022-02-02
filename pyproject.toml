@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.15"
+version = "0.1.16"
 description = ""
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [

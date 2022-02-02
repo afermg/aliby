@@ -27,6 +27,7 @@ from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.io.omero import Dataset, Image
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import TilerWriter, BabyWriter, StateWriter
+from agora.io.reader import StateReader
 from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
@@ -88,7 +89,7 @@ class PipelineParameters(ParametersABC):
                 directory=str(directory),
                 filter="",
                 earlystop=dict(
-                    min_tp=50,
+                    min_tp=100,
                     thresh_pos_clogged=0.3,
                     thresh_trap_clogged=7,
                     ntps_to_eval=5,
@@ -229,7 +230,7 @@ class Pipeline(ProcessABC):
                                 or 0
                             )
                             # get state array
-                            state_array = f.get("state_array", 0)
+                            state_array = StateReader(filename).get_formatted_states()
                             tiler.n_processed = process_from
                             process_from += 1
                         from_start = False
