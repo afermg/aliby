@@ -263,6 +263,9 @@ class Pipeline(ProcessABC):
                 )
                 bwriter = BabyWriter(filename)
 
+                # State Writer to recover interrupted experiments
+                swriter = StateWriter(filename)
+
                 # Limit extraction parameters during run using the available channels in tiler
                 av_channels = set((*tiler.channels, "general"))
                 config["extraction"]["tree"] = {
@@ -316,6 +319,10 @@ class Pipeline(ProcessABC):
                         # )
                         t = perf_counter()
                         bwriter.write(seg, overwrite=["mother_assign"])
+                        swriter.write(
+                            data=runner.crawler.tracker_states,
+                            overwrite=swriter.datatypes.keys(),
+                        )
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
 
                         # TODO add time-skipping for cases when the
