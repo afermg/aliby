@@ -300,7 +300,8 @@ class Pipeline(ProcessABC):
                 ext = Extractor.from_tiler(exparams, store=filename, tiler=tiler)
 
                 # RUN
-                tps = general_config["tps"]
+                # Adjust tps based on how many tps are available on the server
+                tps = min(general_config["tps"], image.data.shape[0])
                 frac_clogged_traps = 0
                 for i in tqdm(
                     range(process_from, tps), desc=image.name, initial=process_from
@@ -359,6 +360,17 @@ class Pipeline(ProcessABC):
                         overwrite=swriter.datatypes.keys(),
                     )
                     meta.add_fields({"last_processed": i})
+
+                    import pickle as pkl
+
+                    with open(
+                        Path(bwriter.file).parent / f"{i}_live_state.pkl", "wb"
+                    ) as f:
+                        pkl.dump(runner.crawler.tracker_states, f)
+                    with open(
+                        Path(bwriter.file).parent / f"{i}_read_state.pkl", "wb"
+                    ) as f:
+                        pkl.dump(StateReader(bwriter.file).get_formatted_states(), f)
                 # Run post processing
 
                 meta.add_fields({"end_status": "Success"})
