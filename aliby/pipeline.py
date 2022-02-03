@@ -234,13 +234,18 @@ class Pipeline(ProcessABC):
                             trackers_state = StateReader(
                                 filename
                             ).get_formatted_states()
+                            # print(
+                            #     f"Loaded trackers_state with control values {trackers_state[20]['prev_feats']}"
+                            # )
                             tiler.n_processed = process_from
                             process_from += 1
                         from_start = False
-                    except:
+                    except Exception as e:
+                        # print(e)
                         pass
 
                 if from_start:  # New experiment or overwriting
+                    # print("Starting from scratch")
                     try:
                         os.remove(filename)
                     except:
@@ -265,7 +270,7 @@ class Pipeline(ProcessABC):
                     BabyParameters.from_dict(config["baby"]), tiler
                 )
                 if trackers_state:
-                    runner.crawler.trackers_state = trackers_state
+                    runner.crawler.tracker_states = trackers_state
 
                 bwriter = BabyWriter(filename)
                 swriter = StateWriter(filename)
@@ -303,13 +308,18 @@ class Pipeline(ProcessABC):
                 # Adjust tps based on how many tps are available on the server
                 tps = min(general_config["tps"], image.data.shape[0])
                 frac_clogged_traps = 0
+                # print(f"Processing from {process_from}")
                 for i in tqdm(
                     range(process_from, tps), desc=image.name, initial=process_from
                 ):
+                    # print(f"Processing timepoint {i}")
                     if (
                         frac_clogged_traps < earlystop["thresh_pos_clogged"]
                         or i < earlystop["min_tp"]
                     ):
+
+                        # if tps - process_from > 2 and i == 2:
+                        #     exit()
                         t = perf_counter()
                         trap_info = tiler.run_tp(i)
                         logging.debug(f"Timing:Trap:{perf_counter() - t}s")
@@ -317,6 +327,14 @@ class Pipeline(ProcessABC):
                         writer.write(trap_info, overwrite=[], tp=i)
                         logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                         t = perf_counter()
+
+                        # try:
+                        #     print(
+                        #         f"Performing seg with control values {runner.crawler.tracker_states[20]['prev_feats']}"
+                        #     )
+                        # except:
+                        #     pass
+
                         seg = runner.run_tp(i)
                         logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
                         # logging.debug(
@@ -324,6 +342,14 @@ class Pipeline(ProcessABC):
                         # )
                         t = perf_counter()
                         bwriter.write(seg, overwrite=["mother_assign"], tp=i)
+                        print(
+                            f"Writing state in tp {i} with control values {runner.crawler.tracker_states[20]['prev_feats']}"
+                        )
+                        swriter.write(
+                            data=runner.crawler.tracker_states,
+                            overwrite=swriter.datatypes.keys(),
+                            tp=i,
+                        )
                         logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
 
                         # TODO add time-skipping for cases when the
@@ -355,22 +381,19 @@ class Pipeline(ProcessABC):
                         print("Frac clogged traps: ", frac_clogged_traps)
 
                     # State Writer to recover interrupted experiments
-                    swriter.write(
-                        data=runner.crawler.tracker_states,
-                        overwrite=swriter.datatypes.keys(),
-                    )
+
                     meta.add_fields({"last_processed": i})
 
-                    import pickle as pkl
+                    # import pickle as pkl
 
-                    with open(
-                        Path(bwriter.file).parent / f"{i}_live_state.pkl", "wb"
-                    ) as f:
-                        pkl.dump(runner.crawler.tracker_states, f)
-                    with open(
-                        Path(bwriter.file).parent / f"{i}_read_state.pkl", "wb"
-                    ) as f:
-                        pkl.dump(StateReader(bwriter.file).get_formatted_states(), f)
+                    # with open(
+                    #     Path(bwriter.file).parent / f"{i}_live_state.pkl", "wb"
+                    # ) as f:
+                    #     pkl.dump(runner.crawler.tracker_states, f)
+                    # with open(
+                    #     Path(bwriter.file).parent / f"{i}_read_state.pkl", "wb"
+                    # ) as f:
+                    #     pkl.dump(StateReader(bwriter.file).get_formatted_states(), f)
                 # Run post processing
 
                 meta.add_fields({"end_status": "Success"})
