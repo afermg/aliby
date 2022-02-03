@@ -70,6 +70,15 @@ def max2p5pc_med(cell_mask, trap_image):
     return max2p5pc / med if med else max2p5pc
 
 
+def foci_area_otsu(cell_mask, trap_image):
+    # Use otsu threshold to calculate the are of high-expression blobs inside a cell.
+    cell_pixels = trap_image[cell_mask]
+    cell_pixels = cell_pixels[~np.isnan(cell_pixels)]
+    threshold = threshold_otsu(cell_pixels)
+
+    return np.sum(cell_pixels > threshold)
+
+
 def std(cell_mask, trap_image):
     return np.std(trap_image[np.where(cell_mask)], dtype=float)
 
