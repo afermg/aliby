@@ -106,9 +106,7 @@ class StateReader(DynamicReader):
                 states[k][val_name] = np.array([val[0] for val in v])
 
         for trap_id, ba_matrix in enumerate(data["ba_cum"]):
-            states[trap_id]["ba_cum"] = np.zeros((0, 0), dtype=np.float64)
-            if ba_matrix.any():
-                states[trap_id]["ba_cum"] = np.array(ba_matrix, dtype=np.float64)
+            states[trap_id]["ba_cum"] = np.array(ba_matrix, dtype=np.float64)
 
         return [val for val in states.values()]
 
