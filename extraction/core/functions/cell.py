@@ -16,10 +16,19 @@ import math
 import numpy as np
 from scipy import ndimage
 from sklearn.cluster import KMeans
+from skimage.filters import threshold_otsu
+
+
+# Basic extraction functions
 
 
 def area(cell_mask, trap_image=None):
     return np.sum(cell_mask, dtype=int)
+
+
+def eccentricity(cell_mask, trap_image=None):
+    min_ax, maj_ax = min_maj_approximation(cell_mask)
+    return np.sqrt(maj_ax ** 2 - min_ax ** 2) / maj_ax
 
 
 def mean(cell_mask, trap_image):
@@ -70,6 +79,11 @@ def max2p5pc_med(cell_mask, trap_image):
     return max2p5pc / med if med else max2p5pc
 
 
+def std(cell_mask, trap_image):
+    return np.std(trap_image[np.where(cell_mask)], dtype=float)
+
+
+## Specialised extraction functions
 def foci_area_otsu(cell_mask, trap_image):
     # Use otsu threshold to calculate the are of high-expression blobs inside a cell.
     cell_pixels = trap_image[cell_mask]
@@ -77,10 +91,6 @@ def foci_area_otsu(cell_mask, trap_image):
     threshold = threshold_otsu(cell_pixels)
 
     return np.sum(cell_pixels > threshold)
-
-
-def std(cell_mask, trap_image):
-    return np.std(trap_image[np.where(cell_mask)], dtype=float)
 
 
 def k2_top_median(cell_mask, trap_image):
@@ -144,8 +154,3 @@ def min_maj_approximation(cell_mask, trap_image=None):
     min_ax = np.round(nn.max())
     maj_ax = np.round(dn.max() + cone_top.sum() / 2)
     return min_ax, maj_ax
-
-
-def eccentricity(cell_mask, trap_image=None):
-    min_ax, maj_ax = min_maj_approximation(cell_mask)
-    return np.sqrt(maj_ax ** 2 - min_ax ** 2) / maj_ax
