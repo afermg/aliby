@@ -106,10 +106,10 @@ class TrapLocations:
 
     def to_dict(self, tp):
         res = dict()
-        # if tp == 0:
-        res["trap_locations"] = self.initial_location
-        res["attrs/tile_size"] = self.tile_size
-        res["attrs/max_size"] = self.max_size
+        if tp == 0:
+            res["trap_locations"] = self.initial_location
+            res["attrs/tile_size"] = self.tile_size
+            res["attrs/max_size"] = self.max_size
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         # res["processed_timepoints"] = tp
         return res
