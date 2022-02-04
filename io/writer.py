@@ -306,6 +306,7 @@ class StateWriter(DynamicWriter):
         "ba_cum": ((None, None), np.float32),
     }
     group = "last_state"
+    compression = "gzip"
 
     @staticmethod
     def format_field(states: list, field: str):
@@ -370,26 +371,29 @@ class StateWriter(DynamicWriter):
     def write(self, data, overwrite: Iterable, tp: int = None):
         # formatted_data = self.format_states(data)
         # super().write(data=formatted_data, overwrite=overwrite)
-        last_tp = 0
-        if tp is None:
-            tp = 0
+        if len(data):
+            last_tp = 0
+            if tp is None:
+                tp = 0
 
-        try:
-            with h5py.File(self.file, "r") as f:
-                gr = f.get(self.group, None)
-                if gr:
-                    last_tp = gr.attrs.get("tp", None)
+            try:
+                with h5py.File(self.file, "r") as f:
+                    gr = f.get(self.group, None)
+                    if gr:
+                        last_tp = gr.attrs.get("tp", 0)
 
-            if not tp or tp > last_tp:
-                formatted_data = self.format_states(data)
-                super().write(data=formatted_data, overwrite=overwrite)
-                with h5py.File(self.file, "a") as f:
-                    print(f"Writing tp {tp}")
-                    f[self.group].attrs["tp"] = tp
-            elif tp and tp <= last_tp:
-                print(f"Skipping timepoint {tp}")
-        except Exception as e:
-            raise (e)
+                if not tp or tp > last_tp:
+                    formatted_data = self.format_states(data)
+                    super().write(data=formatted_data, overwrite=overwrite)
+                    with h5py.File(self.file, "a") as f:
+                        # print(f"Writing tp {tp}")
+                        f[self.group].attrs["tp"] = tp
+                elif tp and tp <= last_tp:
+                    print(f"Skipping timepoint {tp}")
+            except Exception as e:
+                raise (e)
+        else:
+            print("Skipping overwriting empty state")
 
 
 #################### Extraction version ###############################
