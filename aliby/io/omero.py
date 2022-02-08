@@ -50,7 +50,13 @@ class Dataset(Argo):
 
     @property
     def unique_name(self):
-        return "_".join((self.date.strftime("%Y_%m_%d").replace("/", "_"), self.name))
+        return "_".join(
+            (
+                str(self.expt_id),
+                self.date.strftime("%Y_%m_%d").replace("/", "_"),
+                self.name,
+            )
+        )
 
     def get_images(self):
         return {im.getName(): im.getId() for im in self.dataset.listChildren()}

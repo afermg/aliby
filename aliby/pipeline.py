@@ -153,7 +153,7 @@ class Pipeline(ProcessABC):
         # Do all initialis
         with Dataset(int(expt_id), **self.general["server_info"]) as conn:
             image_ids = conn.get_images()
-            directory = root_dir / conn.unique_name
+            directory = root_dir  # / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
                 # Download logs to use for metadata
@@ -312,34 +312,26 @@ class Pipeline(ProcessABC):
                 for i in tqdm(
                     range(process_from, tps), desc=image.name, initial=process_from
                 ):
-                    # print(f"Processing timepoint {i}")
+
                     if (
                         frac_clogged_traps < earlystop["thresh_pos_clogged"]
                         or i < earlystop["min_tp"]
                     ):
 
-                        # if tps - process_from > 2 and i == 2:
-                        #     exit()
                         t = perf_counter()
                         trap_info = tiler.run_tp(i)
+                        if i == 0:
+                            print(f"Number of traps found: {tiler.n_traps}")
+
                         logging.debug(f"Timing:Trap:{perf_counter() - t}s")
                         t = perf_counter()
                         writer.write(trap_info, overwrite=[], tp=i)
                         logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
                         t = perf_counter()
 
-                        # try:
-                        #     print(
-                        #         f"Performing seg with control values {runner.crawler.tracker_states[20]['prev_feats']}"
-                        #     )
-                        # except:
-                        #     pass
-
                         seg = runner.run_tp(i)
                         logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
-                        # logging.debug(
-                        #     f"Segmentation failed:Segmentation:{perf_counter() - t}s"
-                        # )
+
                         t = perf_counter()
                         bwriter.write(seg, overwrite=["mother_assign"], tp=i)
                         # print(
