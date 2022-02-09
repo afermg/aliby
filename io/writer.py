@@ -281,9 +281,14 @@ class BabyWriter(DynamicWriter):
                         value = [data[x] for x in keys]
 
                         edgemask_dset = hgroup.get(key + "/values", None)
-                        if edgemask_dset and tp <= edgemask_dset[()].shape[1]:
-                            print(f"BabyWriter: Skipping tp {tp}")
+                        if (
+                            # tp > 0
+                            edgemask_dset
+                            and tp < edgemask_dset[()].shape[1]
+                        ):
+                            print(f"BabyWriter: Skipping edgemasks in tp {tp}")
                         else:
+                            # print(f"BabyWriter: Writing edgemasks in tp {tp}")
                             self.write_edgemasks(value, keys, hgroup)
                     else:
                         self._append(value, key, hgroup)
@@ -382,14 +387,16 @@ class StateWriter(DynamicWriter):
                     if gr:
                         last_tp = gr.attrs.get("tp", 0)
 
-                if not tp or tp > last_tp:
+                # print(f"{ self.file } - tp: {tp}, last_tp: {last_tp}")
+                if tp == 0 or tp > last_tp:
+                    # print(f"Writing timepoint {tp}")
                     formatted_data = self.format_states(data)
                     super().write(data=formatted_data, overwrite=overwrite)
                     with h5py.File(self.file, "a") as f:
                         # print(f"Writing tp {tp}")
                         f[self.group].attrs["tp"] = tp
-                elif tp and tp <= last_tp:
-                    print(f"Skipping timepoint {tp}")
+                elif tp > 0 and tp <= last_tp:
+                    print(f"BabyWriter: Skipping timepoint {tp}")
             except Exception as e:
                 raise (e)
         else:
