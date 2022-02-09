@@ -90,8 +90,9 @@ class PipelineParameters(ParametersABC):
                 filter="",
                 earlystop=dict(
                     min_tp=100,
-                    thresh_pos_clogged=0.3,
-                    thresh_trap_clogged=7,
+                    thresh_pos_clogged=0.4,
+                    thresh_trap_ncells=8,
+                    thresh_trap_area=0.9,
                     ntps_to_eval=5,
                 ),
             )
