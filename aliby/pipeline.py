@@ -369,7 +369,9 @@ class Pipeline(ProcessABC):
                     if (
                         i > earlystop["min_tp"]
                     ):  # Calculate the fraction of clogged traps
-                        frac_clogged_traps = self.check_earlystop(filename, earlystop)
+                        frac_clogged_traps = self.check_earlystop(
+                            filename, earlystop, tiler.tile_size
+                        )
                         logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
                         print("Frac clogged traps: ", frac_clogged_traps)
 
@@ -420,19 +422,23 @@ class Pipeline(ProcessABC):
         except Exception as e:
             print(e)
 
-    def check_earlystop(self, filename, es_parameters):
+    @staticmethod
+    def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
-        frac_clogged_traps = (
-            df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]]
-            .dropna(how="all")
-            .notna()
-            .groupby("trap")
-            .apply(sum)
-            .apply(np.mean, axis=1)
-            > es_parameters["thresh_trap_clogged"]
-        ).mean()
-        return frac_clogged_traps
+        cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
+            how="all"
+        )
+        traps_above_nthresh = (
+            cells_used.groupby("trap").count().apply(np.mean, axis=1)
+            > es_parameters["thresh_trap_ncells"]
+        )
+        traps_above_athresh = (
+            cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size ** 2
+            > es_parameters["thresh_trap_area"]
+        )
+
+        return (traps_above_nthresh & traps_above_athresh).mean()
 
 
 def groupby_traps(traps, labels, edgemasks, ntraps):
