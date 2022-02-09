@@ -1,69 +1,86 @@
+from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
-from agora.abc import ParametersABC, ProcessABC
+
+from agora.utils.lineage import mb_array_to_dict
+from postprocessor.core.processes.lineageprocess import (
+    LineageProcess,
+    LineageProcessParameters,
+)
 
 
-class bud_metricParameters(ParametersABC):
+class bud_metricParameters(LineageProcessParameters):
     """
     Parameters
     """
 
-    def __init__(self, mode="longest"):
+    def __init__(self, lineage_location: str):
         super().__init__()
-        self.mode = mode
+        self.lineage_location = lineage_location
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"mode": "longest"})
+        return cls.from_dict({"lineage_location": "postprocessing/lineage_merged"})
 
 
-class bud_metric(ProcessABC):
+class bud_metric(LineageProcess):
     """
-    Obtain the volume of daughter cells
-    if 'longest' assumes a single mother per trap.
+    Requires mother-bud information to create a new dataframe where the indices are mother ids and
+    values are the daughters' values for a given signal.
     """
 
     def __init__(self, parameters: bud_metricParameters):
         super().__init__(parameters)
 
-    def run(self, signal: pd.DataFrame):
-        if self.parameters.mode is "longest":
-            result = self.get_bud_metric_wrap(signal)
+    def run(
+        self,
+        signal: pd.DataFrame,
+        mother_bud_ids: Dict[pd.Index, Tuple[pd.Index]] = None,
+    ):
+        if mother_bud_ids is None:
+            filtered_lineage = self.filter_signal_cells(signal)
+            mother_bud_ids = mb_array_to_dict(filtered_lineage)
 
-        return result
+        return self.get_bud_metric(signal, mother_bud_ids)
 
     @staticmethod
-    def get_bud_metric(signal):
-        mother_id = signal.index[signal.notna().sum(axis=1).argmax()]
+    def get_bud_metric(signal: pd.DataFrame, md: Dict[Tuple, Tuple[Tuple]]):
+        """
 
-        nomother = signal.drop(mother_id)
+        signal: Daughter-inclusive dataframe
+        md: Mother-daughters dictionary where key is mother's index and value a list of daugher indices
 
-        if not len(nomother):
-            bud_metric = [np.nan for i in range(len(signal.columns))]
+        Get fvi (First Valid Index) for all cells
+        Create empty matrix
+        for every mother:
+         - Get daughters' subdataframe
+         - sort  daughters by cell label
+         - get series of fvis
+         - concatenate the values of these ranges from the dataframe
+        Fill the empty matrix
+        Convert matrix into dataframe using mother indices
 
-        else:
-            starts = nomother.apply(pd.Series.first_valid_index, axis=1).sort_values()
+        """
+        mothers_mat = np.zeros((len(md), signal.shape[1]))
+        for i, daughters in enumerate(md.values()):
+            dau_vals = signal.loc[set(daughters)].droplevel("trap")
+            sorted_da_ids = dau_vals.sort_index(level="cell_label")
+            tp_fvt = sorted_da_ids.apply(lambda x: x.last_valid_index(), axis=0)
 
-            ranges = [np.arange(i, j) for i, j in zip(starts[:-1], starts[1:])]
-            ranges.append(np.arange(starts.iloc[-1], signal.columns[-1]))
+            tp_fvt = sorted_da_ids.index.get_indexer(tp_fvt)
+            tp_fvt[tp_fvt < 0] = sorted_da_ids.shape[0] - 1
 
-            bud_metric = pd.concat(
-                [signal.loc[i, rng] for i, rng in zip(starts.index, ranges)]
-            )
-        srs = pd.Series(bud_metric, index=signal.columns, name=mother_id)
+            buds_metric = np.choose(tp_fvt, sorted_da_ids.values)
+            # mothers_mat[i, tp_fvt[0] : tp_fvt[0] + len(buds_metric)] = buds_metric
+            mothers_mat[i] = buds_metric
 
-        return srs
+        df = pd.DataFrame(mothers_mat, index=md.keys(), columns=signal.columns)
+        df.index.names = signal.index.names
+        return df
 
-    def get_bud_metric_wrap(self, signals):
-        srs = [
-            self.get_bud_metric(signals.loc[trap])
-            for trap in signals.index.unique(level="trap")
-        ]
-        index = [
-            (trap, mother.name)
-            for trap, mother in zip(signals.index.unique(level="trap"), srs)
-        ]
+    def load_lineage(self, lineage):
+        """
+        Reshape the lineage information if needed
+        """
 
-        concatenated = pd.concat(srs, keys=index, axis=1, sort=True).T.sort_index()
-        concatenated.index.names = ["trap", "cell_label"]
-        return concatenated
+        self.lineage = lineage

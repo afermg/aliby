@@ -73,14 +73,14 @@ class PostProcessorParameters(ParametersABC):
                         # "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
-                # [
-                #     "bud_metric",
-                #     [
-                #         "/extraction/general/None/volume",
-                #         "/postprocessing/dsignal/savgol_extraction_general_None_volume",
-                #         "/postprocessing/dsignal/extraction_general_None_volume",
-                #     ],
-                # ],
+                [
+                    "bud_metric",
+                    [
+                        "/extraction/general/None/volume",
+                        "/postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+                        "/postprocessing/dsignal/extraction_general_None_volume",
+                    ],
+                ],
                 [
                     "aggregate",
                     [
