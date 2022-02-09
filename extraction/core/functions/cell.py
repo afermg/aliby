@@ -84,13 +84,13 @@ def std(cell_mask, trap_image):
 
 
 ## Specialised extraction functions
-def foci_area_otsu(cell_mask, trap_image):
-    # Use otsu threshold to calculate the are of high-expression blobs inside a cell.
-    cell_pixels = trap_image[cell_mask]
-    cell_pixels = cell_pixels[~np.isnan(cell_pixels)]
-    threshold = threshold_otsu(cell_pixels)
+# def foci_area_otsu(cell_mask, trap_image):
+#     # Use otsu threshold to calculate the are of high-expression blobs inside a cell.
+#     cell_pixels = trap_image[cell_mask]
+#     cell_pixels = cell_pixels[~np.isnan(cell_pixels)]
+#     threshold = threshold_otsu(cell_pixels)
 
-    return np.sum(cell_pixels > threshold)
+#     return np.sum(cell_pixels > threshold)
 
 
 def k2_top_median(cell_mask, trap_image):
