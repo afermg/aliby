@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.signal import savgol_filter
 
 from postprocessor.core.processes.base import ParametersABC, ProcessABC
 
@@ -20,7 +21,7 @@ class savgolParameters(ParametersABC):
 
     @classmethod
     def default(cls):
-        return cls.from_dict({"window": 3, "polynom": 2})
+        return cls.from_dict({"window": 7, "polynom": 3})
 
 
 class savgol(ProcessABC):
@@ -33,10 +34,20 @@ class savgol(ProcessABC):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
-        savgol_on_srs = lambda x: self.non_uniform_savgol(
-            x.index, x.values, self.parameters.window, self.parameters.polynom
-        )
-        return signal.apply(savgol_on_srs, 1).apply(pd.Series)
+        try:
+            post_savgol = pd.DataFrame(
+                savgol_filter(signal, self.parameters.window, self.parameters.polynom),
+                index=signal.index,
+                columns=signal.columns,
+            )
+        except Exception as e:
+            print(e)
+
+            savgol_on_srs = lambda x: self.non_uniform_savgol(
+                x.index, x.values, self.parameters.window, self.parameters.polynom
+            )
+            post_savgol = signal.apply(savgol_on_srs, 1).apply(pd.Series)
+        return post_savgol
 
     @staticmethod
     def non_uniform_savgol(x, y, window: int, polynom: int):

@@ -53,14 +53,14 @@ class PostProcessorParameters(ParametersABC):
                 "picker": ["/extraction/general/None/area"],
             },
             "processes": [
-                # [
-                # "bud_metric",
-                # [
-                #     "/extraction/general/None/volume",
-                # ],
-                # ],
                 [
                     "births",
+                    [
+                        "/extraction/general/None/volume",
+                    ],
+                ],
+                [
+                    "savgol",
                     [
                         "/extraction/general/None/volume",
                     ],
@@ -69,9 +69,18 @@ class PostProcessorParameters(ParametersABC):
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
+                        "/postprocessing/savgol/extraction_general_None_volume",
                         # "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
+                # [
+                #     "bud_metric",
+                #     [
+                #         "/extraction/general/None/volume",
+                #         "/postprocessing/dsignal/savgol_extraction_general_None_volume",
+                #         "/postprocessing/dsignal/extraction_general_None_volume",
+                #     ],
+                # ],
                 [
                     "aggregate",
                     [
