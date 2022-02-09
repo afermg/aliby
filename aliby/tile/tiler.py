@@ -168,14 +168,18 @@ class Tiler(ProcessABC):
         return cls(image.data, image.metadata, parameters)
 
     @classmethod
-    def from_hdf5(cls, image, filepath):
+    def from_hdf5(cls, image, filepath, parameters=None):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = metadata["channels/channel"].tolist()
+
+        if parameters is None:
+            parameters = TilerParameters.default()
+
         return cls(
             image.data,
             metadata,
-            TilerParameters.default(),
+            parameters,
             trap_locs=trap_locs,
         )
 
