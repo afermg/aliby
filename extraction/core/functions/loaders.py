@@ -8,7 +8,11 @@ from extraction.core.functions.distributors import trap_apply
 
 def load_cellfuns_core():
     # Generate str -> trap_function dict from functions in core.cell
-    return {f[0]: f[1] for f in getmembers(cell) if isfunction(f[1])}
+    return {
+        f[0]: f[1]
+        for f in getmembers(cell)
+        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+    }
 
 
 def load_custom_args():
