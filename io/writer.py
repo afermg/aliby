@@ -448,14 +448,14 @@ class Writer(BridgeH5):
             if overwrite == "overwrite":  # TODO refactor overwriting
                 if path in f:
                     del f[path]
-            elif overwrite == "accumulate":  # Add a number if needed
-                if path in f:
-                    parent, name = path.rsplit("/", maxsplit=1)
-                    n = sum([x.startswith(name) for x in f[path]])
-                    path = path + str(n).zfill(3)
-            elif overwrite == "skip":
-                if path in f:
-                    logging.debug("Skipping dataset {}".format(path))
+            # elif overwrite == "accumulate":  # Add a number if needed
+            #     if path in f:
+            #         parent, name = path.rsplit("/", maxsplit=1)
+            #         n = sum([x.startswith(name) for x in f[path]])
+            #         path = path + str(n).zfill(3)
+            # elif overwrite == "skip":
+            #     if path in f:
+            #         logging.debug("Skipping dataset {}".format(path))
 
             logging.debug(
                 "{} {} to {} and {} metadata fields".format(
@@ -473,6 +473,9 @@ class Writer(BridgeH5):
             self.write_pd(f, path, data, compression=self.compression)
         elif isinstance(data, pd.MultiIndex):
             self.write_index(f, path, data)  # , compression=self.compression)
+        elif isinstance(data, Dict) and np.all([isinstance(x, pd.DataFrame) for x in data.values]):
+            for k,df in data.items():
+                self.write_dset(f, path + f'/{k}', df)
         elif isinstance(data, Iterable):
             self.write_arraylike(f, path, data)
         else:
