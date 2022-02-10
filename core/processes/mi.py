@@ -58,6 +58,14 @@ class miParameters(ParametersABC):
         the optimal gamma is one of the boundary values.
 
         See https://scikit-learn.org/stable/auto_examples/svm/plot_rbf_parameters.html
+
+
+    train_test_split_seeding: boolean, optional (default: False)
+
+        If True, force a random state for the train-test split in each bootstrap. This is
+        useful in case the user requires reproducibility e.g. code testing.
+
+        See https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
     """
 
     def __init__(
@@ -196,6 +204,7 @@ class mi(ProcessABC):
             # find mutual information for each bootstrapped dataset
             mi = np.empty(self.n_bootstraps)
             for i in range(self.n_bootstraps):
+                # force random state, useful for code testing/reproducibility
                 if self.train_test_split_seeding:
                     random_state = i
                 else:
