@@ -17,9 +17,14 @@ def load_cellfuns_core():
 
 def load_custom_args():
     """
-    Load custom functions. If they have extra arguments also load these
+    Load custom functions. If they have extra arguments (starting at index 2,
+    after mask and image) also load these.
     """
-    funs = {f[0]: f[1] for f in getmembers(localisation) if isfunction(f[1])}
+    funs = {
+        f[0]: f[1]
+        for f in getmembers(localisation)
+        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+    }
     args = {
         k: getargspec(v).args[2:]
         for k, v in funs.items()
@@ -30,6 +35,12 @@ def load_custom_args():
 
 
 def load_cellfuns():
+    """
+    Input:
+
+    Returns:
+       Dict(str, function)
+    """
     # Generate str -> trap_function dict from core.cell and core.trap functions
     cell_funs = load_cellfuns_core()
     CELLFUNS = {}
@@ -44,11 +55,22 @@ def load_cellfuns():
 
 
 def load_trapfuns():
-    TRAPFUNS = {f[0]: f[1] for f in getmembers(trap) if isfunction(f[1])}
+    """
+    Load functions that are applied to an entire trap (or tile, or subsection of a given image),
+    instead of being applied to single cells.
+    """
+    TRAPFUNS = {
+        f[0]: f[1]
+        for f in getmembers(trap)
+        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+    }
     return TRAPFUNS
 
 
 def load_funs():
+    """
+    Combine all automatically-loaded functions
+    """
     CELLFUNS = load_cellfuns()
     TRAPFUNS = load_trapfuns()
 
@@ -56,6 +78,9 @@ def load_funs():
 
 
 def load_redfuns():  # TODO make defining reduction functions more flexible
+    """
+    Load z-stack reduction functions.
+    """
     RED_FUNS = {
         "np_max": np.maximum,
         "np_mean": np.mean,
@@ -66,5 +91,8 @@ def load_redfuns():  # TODO make defining reduction functions more flexible
 
 
 def load_mergefuns():
+    """
+    Load functions to merge multiple channels
+    """
     MERGE_FUNS = {"div0": div0, "np_add": np.add}
     return MERGE_FUNS
