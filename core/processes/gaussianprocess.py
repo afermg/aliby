@@ -102,7 +102,7 @@ class gaussianprocess(ProcessABC):
         ).T
         multi_signal = {
             name: pd.DataFrame(
-                np.vstack(results[name]), index=signal.index, columns=signal.columns
+                np.vstack(results[name]).T, index=signal.index, columns=signal.columns
             )
             for name in results.columns
         }
