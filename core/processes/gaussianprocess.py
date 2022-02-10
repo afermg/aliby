@@ -99,7 +99,7 @@ class gaussianprocess(ProcessABC):
     def run(self, signal: pd.DataFrame):
         results = signal.apply(
             lambda x: estimate_gr(x, **self.parameters.to_dict()), result_type="expand"
-        ).T
+        )
         multi_signal = {
             name: pd.DataFrame(
                 np.vstack(results[name]), index=signal.index, columns=signal.columns
