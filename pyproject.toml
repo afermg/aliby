@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.18"
+version = "0.1.19"
 description = ""
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -25,9 +25,9 @@ h5py = "2.10"
 imageio = "2.8.0"
 omero-py = ">=5.6.2"
 zeroc-ice = "3.6.5"
-aliby-agora = "^0.2.17"
+aliby-agora = "^0.2.18"
 aliby-baby = "^0.1.7"
-aliby-post = "^0.1.15"
+aliby-post = "^0.1.18"
 
 
 [tool.poetry.dev-dependencies]
