@@ -38,14 +38,7 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets):
 
-        # if isinstance(dsets, str) and dsets.endswith("imBackground"):
-        # df = self.get_raw(dsets)
-        if (
-            isinstance(dsets, str)
-            and dsets.endswith("imBackground")
-            # or dsets.startswith("postprocessing")
-            # or dsets.startswith("/postprocessing")
-        ):
+        if isinstance(dsets, str) and dsets.endswith("imBackground"):
             df = self.get_raw(dsets)
 
         elif isinstance(dsets, str):
