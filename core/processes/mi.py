@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.stats.morestats import circmean
 from sklearn.pipeline import Pipeline
 from sklearn import svm
 from sklearn.model_selection import train_test_split
@@ -68,6 +67,7 @@ class miParameters(ParametersABC):
         ci,
         Crange,
         gammarange,
+        train_test_split_seeding,
     ):
         # super().__init__()
         self.overtime = overtime
@@ -75,6 +75,7 @@ class miParameters(ParametersABC):
         self.ci = ci
         self.Crange = Crange
         self.gammarange = gammarange
+        self.train_test_split_seeding = train_test_split_seeding
 
     @classmethod
     def default(cls):
@@ -85,6 +86,7 @@ class miParameters(ParametersABC):
                 "ci": [0.25, 0.75],
                 "Crange": None,
                 "gammarange": None,
+                "train_test_split_seeding": False,
             }
         )
 
@@ -194,8 +196,15 @@ class mi(ProcessABC):
             # find mutual information for each bootstrapped dataset
             mi = np.empty(self.n_bootstraps)
             for i in range(self.n_bootstraps):
+                if self.train_test_split_seeding:
+                    random_state = i
+                else:
+                    random_state = None
                 X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=0.25
+                    X,
+                    y,
+                    test_size=0.25,
+                    random_state=random_state,
                 )
                 # run classifier use optimal params
                 pipe.fit(X_train, y_train)
