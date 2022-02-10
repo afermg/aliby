@@ -38,10 +38,13 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets):
 
-        if isinstance(dsets, str) and (
-            dsets.startswith("postprocessing")
-            or dsets.startswith("/postprocessing")
-            or dsets.endswith("imBackground")
+        # if isinstance(dsets, str) and dsets.endswith("imBackground"):
+        # df = self.get_raw(dsets)
+        if (
+            isinstance(dsets, str)
+            and dsets.endswith("imBackground")
+            # or dsets.startswith("postprocessing")
+            # or dsets.startswith("/postprocessing")
         ):
             df = self.get_raw(dsets)
 
@@ -59,6 +62,9 @@ class Signal(BridgeH5):
         return self.add_name(df, dsets)
 
     def apply_prepost(self, dataset: str):
+        """
+        Apply modifier operations (picker, merger) to a given dataframe.
+        """
         merges = self.get_merges()
         with h5py.File(self.filename, "r") as f:
             df = self.dset_to_df(f, dataset)
@@ -66,27 +72,25 @@ class Signal(BridgeH5):
             merged = df
             if merges.any():
                 # Split in two dfs, one with rows relevant for merging and one without them
-                mergable_ids = pd.MultiIndex.from_arrays(
-                    np.unique(merges.reshape(-1, 2), axis=0).T,
-                    names=df.index.names,
-                )
-                merged = self.apply_merge(df.loc[mergable_ids], merges)
+                valid_merges = merges[
+                    (merges[:, :, :, None] == np.array(list(df.index)).T[:, None, :])
+                    .all(axis=(1, 2))
+                    .any(axis=1)
+                ]  # Casting allows fast multiindexing
 
-                nonmergable_ids = df.index.difference(mergable_ids)
+                merged = self.apply_merge(
+                    df.loc[map(tuple, valid_merges.reshape(-1, 2))], valid_merges
+                )
+
+                nonmergeable_ids = df.index.difference(valid_merges.reshape(-1, 2))
 
                 merged = pd.concat(
-                    (merged, df.loc[nonmergable_ids]), names=df.index.names
+                    (merged, df.loc[nonmergeable_ids]), names=df.index.names
                 )
 
-            search = lambda a, b: np.where(
-                np.in1d(
-                    np.ravel_multi_index(a.T, a.max(0) + 1),
-                    np.ravel_multi_index(b.T, a.max(0) + 1),
-                )
-            )
             if "modifiers/picks" in f:
                 picks = self.get_picks(names=merged.index.names)
-                missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
+                # missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
 
                 if picks:
                     # return merged.loc[
