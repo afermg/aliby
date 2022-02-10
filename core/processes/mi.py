@@ -144,9 +144,9 @@ class mi(ProcessABC):
         """
 
         # default values
-        if not self.Crange:
+        if not np.any(self.Crange):
             self.Crange = np.logspace(-3, 3, 10)
-        if not self.gammarange:
+        if not np.any(self.gammarange):
             self.gammarange = np.logspace(-3, 3, 10)
 
         # data is a list with one array of time series for different class
