@@ -258,7 +258,9 @@ class PostProcessor:
                     indices[search(indices, source)] = target
 
             self.lineage_merged = pd.MultiIndex.from_arrays(
-                (np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T),
+                np.unique(
+                    np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1), axis=0
+                ).T,
                 names=["trap", "mother_label", "daughter_label"],
             )
         self._writer.write(
@@ -270,7 +272,8 @@ class PostProcessor:
         self._writer.write(
             "modifiers/picks",
             data=pd.MultiIndex.from_arrays(
-                indices.T if indices.any() else [[], []],
+                # FIXME there seem to be repeated indices, it should not be the case
+                np.unique(indices, axis=0).T if indices.any() else [[], []],
                 names=["trap", "cell_label"],
             ),
             overwrite="overwrite",
@@ -360,7 +363,7 @@ class PostProcessor:
                     outpath = "/postprocessing/" + process + "/" + outpath
 
                 if isinstance(result, dict):  # Multiple Signals as output
-                    for k, v in result:
+                    for k, v in result.items():
                         self.write_result(
                             outpath + f"/{k}",
                             v,
