@@ -86,9 +86,9 @@ class Signal(BridgeH5):
                 # missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
 
                 if picks:
-                    # return merged.loc[
-                    #     set(picks).intersection([tuple(x) for x in merged.index])
-                    # ]
+                    return merged.loc[
+                        set(picks).intersection([tuple(x) for x in merged.index])
+                    ]
                     return merged.loc[picks]
                 else:
                     if isinstance(merged.index, pd.MultiIndex):
