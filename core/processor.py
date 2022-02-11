@@ -168,23 +168,24 @@ class PostProcessor:
         }
         self.targets = parameters["targets"]
 
-    @staticmethod
-    def get_process(process):
-        """
-        Dynamically import a process class from the 'processes' folder.
-        Assumes process filename and class name are the same
-        """
-        return locate("postprocessor.core.processes." + process + "." + process)
-
-    @staticmethod
-    def get_parameters(process):
+    def get_parameters(self, process):
         """
         Dynamically import parameters from the 'processes' folder.
         Assumes parameter is the same name as the file with 'Parameters' added at the end.
         """
-        return locate(
-            "postprocessor.core.processes." + process + "." + process + "Parameters"
-        )
+        return self.get_process(process, suffix="Parameters")
+
+    @staticmethod
+    def get_process(process, suffix=""):
+        """
+        Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        """
+        location = f"postprocessor.core.processes.{process}.{process}{suffix}"
+        found = locate(location)
+        if found == None:
+            raise Exception(f"{location} not found")
+        return found
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
