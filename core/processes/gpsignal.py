@@ -62,7 +62,7 @@ def estimate_gr(volume, dt, noruns, bounds, verbose):
 # output of a process that returns multiple signals like this one does.
 
 
-class gaussianprocessParameters(ParametersABC):
+class gpsignalParameters(ParametersABC):
     default_dict = dict(
         dt=5, noruns=5, bounds={0: (-2, 3), 1: (-2, 1), 2: (-4, -1)}, verbose=False
     )
@@ -90,19 +90,23 @@ class gaussianprocessParameters(ParametersABC):
         return cls.from_dict(cls.default_dict)
 
 
-class gaussianprocess(ProcessABC):
+class gpsignal(ProcessABC):
     """Gaussian process fit of a Signal."""
 
-    def __init__(self, parameters: gaussianprocessParameters):
+    def __init__(self, parameters: gpsignalParameters):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
         results = signal.apply(
-            lambda x: estimate_gr(x, **self.parameters.to_dict()), result_type="expand"
+            lambda x: estimate_gr(x, **self.parameters.to_dict()),
+            result_type="expand",
+            axis=1,
         )
         multi_signal = {
             name: pd.DataFrame(
-                np.vstack(results[name]), index=signal.index, columns=signal.columns
+                np.vstack(results[name]),
+                index=signal.index,
+                columns=signal.columns,
             )
             for name in results.columns
         }
