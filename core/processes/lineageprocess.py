@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 from agora.abc import ParametersABC, ProcessABC
-from agora.utils.lineage import mb_array_to_indices
 
 
 class LineageProcessParameters(ParametersABC):
@@ -34,8 +33,9 @@ class LineageProcess(ProcessABC):
         pass
 
     def filter_signal_cells(self, signal: pd.DataFrame):
-        # av_indices = np.signal.index.intersection(mb_array_to_indices(self.lineage))]
-        # av_indices = np.array(list(signal.index))
+        """
+        Use casting to filter cell ids in signal and lineage
+        """
 
         sig_ind = np.array(list(signal.index)).T[:, None, :]
         mo_av = (self.lineage[:, :2].T[:, :, None] == sig_ind).all(axis=0).any(axis=1)
