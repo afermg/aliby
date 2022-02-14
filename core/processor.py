@@ -168,23 +168,24 @@ class PostProcessor:
         }
         self.targets = parameters["targets"]
 
-    @staticmethod
-    def get_process(process):
-        """
-        Dynamically import a process class from the 'processes' folder.
-        Assumes process filename and class name are the same
-        """
-        return locate("postprocessor.core.processes." + process + "." + process)
-
-    @staticmethod
-    def get_parameters(process):
+    def get_parameters(self, process):
         """
         Dynamically import parameters from the 'processes' folder.
         Assumes parameter is the same name as the file with 'Parameters' added at the end.
         """
-        return locate(
-            "postprocessor.core.processes." + process + "." + process + "Parameters"
-        )
+        return self.get_process(process, suffix="Parameters")
+
+    @staticmethod
+    def get_process(process, suffix=""):
+        """
+        Dynamically import a process class from the 'processes' folder.
+        Assumes process filename and class name are the same
+        """
+        location = f"postprocessor.core.processes.{process}.{process}{suffix}"
+        found = locate(location)
+        if found == None:
+            raise Exception(f"{location} not found")
+        return found
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
@@ -257,7 +258,9 @@ class PostProcessor:
                     indices[search(indices, source)] = target
 
             self.lineage_merged = pd.MultiIndex.from_arrays(
-                (np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T),
+                np.unique(
+                    np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1), axis=0
+                ).T,
                 names=["trap", "mother_label", "daughter_label"],
             )
         self._writer.write(
@@ -269,7 +272,8 @@ class PostProcessor:
         self._writer.write(
             "modifiers/picks",
             data=pd.MultiIndex.from_arrays(
-                indices.T if indices.any() else [[], []],
+                # FIXME there seem to be repeated indices, it should not be the case
+                np.unique(indices, axis=0).T if indices.any() else [[], []],
                 names=["trap", "cell_label"],
             ),
             overwrite="overwrite",
@@ -359,7 +363,7 @@ class PostProcessor:
                     outpath = "/postprocessing/" + process + "/" + outpath
 
                 if isinstance(result, dict):  # Multiple Signals as output
-                    for k, v in result:
+                    for k, v in result.items():
                         self.write_result(
                             outpath + f"/{k}",
                             v,
