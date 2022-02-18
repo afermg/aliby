@@ -19,7 +19,10 @@ class Grouper(ABC):
     files = []
 
     def __init__(self, dir):
-        self.files = list(Path(dir).glob("*.h5"))
+        path = Path(dir)
+        assert path.exists(), "Dir does not exist"
+        self.files = list(path.glob("*.h5"))
+        assert len(self.files), "No valid h5 files in dir"
         self.load_signals()
 
     def load_signals(self):

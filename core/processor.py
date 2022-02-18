@@ -70,7 +70,6 @@ class PostProcessorParameters(ParametersABC):
                     [
                         "/extraction/general/None/volume",
                         "/postprocessing/savgol/extraction_general_None_volume",
-                        # "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
                 [
@@ -78,7 +77,15 @@ class PostProcessorParameters(ParametersABC):
                     [
                         "/extraction/general/None/volume",
                         "/postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+                        "/postprocessing/savgol/extraction_general_None_volume",
+                        # "/postprocessing/gpsignal/postprocessing_savgol_extraction_general_None_volume/growthrate",
                         "/postprocessing/dsignal/extraction_general_None_volume",
+                    ],
+                ],
+                [
+                    "dsignal",
+                    [
+                        "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
                 [

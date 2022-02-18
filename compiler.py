@@ -8,11 +8,27 @@ Main dataframe structure
 # dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
 # dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
 dirs = [
-    "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00"
+    # "2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/",
+    # "2020_10_01_exp_00/",
+    # "2020_10_02_downUpshift_twice_2_0_2_glu_ura8_phluorinMsn2_phluorinMig1_01/",
+    # "/home/alan/Documents/dev/skeletons/data/2021_05_27_PDR5Fluc_00/2021_05_27_PDR5Fluc_00/",
+    # "2020_10_22_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00/",
+    # "2021_06_15_pypipeline_unit_test_00/",
+    # "2021_06_27_ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01/",
+    # "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00",
+    # "/home/alan/Documents/dev/skeletons/data/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06/"
     # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_08_24_2Raf_00/2021_08_24_2Raf_00",
     # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06",
     # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_17_0_1_Raf_00/2021_09_17_0_1_Raf_00",
+    # "/home/alan/Documents/dev/skeletons/data/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06/",
+    # "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/",
+    # "/home/alan/Documents/dev/skeletons/data/2021_11_01_01_Raf_00/2021_11_01_01_Raf_00/",
+    "/home/alan/Documents/dev/skeletons/data/2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04/2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04"
+    # "/home/alan/Documents/dev/skeletons/data/2021_11_05_wt_bs2_bs3_00/2021_11_05_wt_bs2_bs3_00/"
 ]
+# outdir = "/home/alan/Documents/dev/skeletons/data"
+# dirs = Path(outdir).glob("*ph*")
+
 import h5py
 
 from abc import abstractclassmethod, abstractmethod
@@ -361,23 +377,34 @@ class PageOrganiser(object):
         if yloc is None:
             yloc = slice(0, self.gs.nrows)
 
-        return func(
-            *args,
-            ax=self.fig.add_subplot(self.gs[xloc, yloc]),
-            **kwargs,
-        )
+        if not isinstance(func, list):
+            func = [func]
+
+        for f in func:
+            f(
+                *args,
+                ax=self.fig.add_subplot(self.gs[xloc, yloc]),
+                **kwargs,
+            )
 
     def plot(self):
         instructions: Iterable[Dict[str, Union[str, Iterable]]] = (
+            # [
             {
                 "data": "slice",
-                "func": "stripplot",
-                "args": ("count", "group"),
-                "kwargs": {
-                    "hue": None,
-                },
+                "func": "barplot",
+                "args": ("ntraps", "position"),
+                "kwargs": {"hue": "group", "palette": "muted"},
                 "loc": (0, 0),
             },
+            # {
+            #     "data": "slice",
+            #     "func": "barplot",
+            #     "args": ("ntraps", "position"),
+            #     "kwargs": {"hue": "group", "palette": "muted"},
+            #     "loc": (0, 0),
+            # },
+            # ],
             {
                 "data": "delta_traps",
                 "func": "barplot",
@@ -440,12 +467,15 @@ class PageOrganiser(object):
 
 # for dir in dirs:
 #     print(f"Compiling {dir}")
-#     fullpath = Path("/home/alan/Documents/dev/skeletons/data/") / dir / dir
-#     compiler = ExperimentCompiler(None, fullpath)
-#     tmp = compiler.run()
-#     po = PageOrganiser(tmp, grid_spec=(3, 2))
-#     po.plot()
-#     po.save(fullpath / f"{dir.rstrip('/')}_report.pdf")
+#     try:
+#         fullpath = Path("/home/alan/Documents/dev/skeletons/data/") / dir / dir
+#         compiler = ExperimentCompiler(None, fullpath)
+#         tmp = compiler.run()
+#         po = PageOrganiser(tmp, grid_spec=(3, 2))
+#         po.plot()
+#         po.save(fullpath / f"{dir.rstrip('/')}_report.pdf")
+#     except Exception as e:
+#         print(e)
 
 #### Live editing
 
@@ -484,3 +514,18 @@ import numpy as np
 # # for i in range(2):
 # #     axes[i].plot(signal[:, i])
 # # plt.show()
+
+# f, ax = plt.subplots(figsize=(6, 15))
+# df = df.sort_values("group")
+# sns.barplot(data=df, x="ntraps", y="position", hue="group", palette="pastel")
+# sns.set_color_codes("muted")
+# sns.barplot(data=df, x="count", y="position", hue="group", palette="muted")
+# plt.show()
+
+# fpath = "/home/alan/Documents/dev/skeletons/data/2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/URA7_young001.h5"
+# with h5py.File(fpath, "r") as f:
+#     x, y = zip(*f["trap_info/trap_locations"][()])
+
+# plt.scatter(x, y)
+# plt.show()
+# sns.heatmap()
