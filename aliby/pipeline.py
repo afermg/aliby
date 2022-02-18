@@ -206,13 +206,15 @@ class Pipeline(ProcessABC):
         name, image_id = image_id
         general_config = config["general"]
         session = None
-        earlystop = general_config["earlystop"]
+        earlystop = general_config.get("earlystop", None)
+
         try:
             directory = general_config["directory"]
 
             with Image(image_id, **self.general["server_info"]) as image:
                 filename = f"{directory}/{image.name}.h5"
                 meta = MetaData(directory, filename)
+
                 from_start = True
                 trackers_state = None
                 if (
@@ -311,7 +313,10 @@ class Pipeline(ProcessABC):
                 frac_clogged_traps = 0
                 # print(f"Processing from {process_from}")
                 for i in tqdm(
-                    range(process_from, tps), desc=image.name, initial=process_from
+                    range(process_from, tps),
+                    desc=image.name,
+                    initial=process_from,
+                    total=tps,
                 ):
 
                     if (
