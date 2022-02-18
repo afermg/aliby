@@ -23,7 +23,7 @@ dirs = [
     # "/home/alan/Documents/dev/skeletons/data/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06/",
     # "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/",
     # "/home/alan/Documents/dev/skeletons/data/2021_11_01_01_Raf_00/2021_11_01_01_Raf_00/",
-    "/home/alan/Documents/dev/skeletons/data/2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04/2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04"
+    "/home/alan/Documents/dev/skeletons/data/2021_02_23_gluStarv_2_0_2_dual_phl__mig1_msn2_ura7_ura8__wt_00/2021_02_23_gluStarv_2_0_2_dual_phl__mig1_msn2_ura7_ura8__wt_00"
     # "/home/alan/Documents/dev/skeletons/data/2021_11_05_wt_bs2_bs3_00/2021_11_05_wt_bs2_bs3_00/"
 ]
 # outdir = "/home/alan/Documents/dev/skeletons/data"
@@ -96,7 +96,14 @@ class ExperimentCompiler(Compiler):
 
         return {
             method: getattr(self, "compile_" + method)()
-            for method in ("slice", "slices", "delta_traps", "pertrap_metric")
+            for method in (
+                "slice",
+                "slices",
+                "delta_traps",
+                "pertrap_metric",
+                "ncells",
+                "last_valid_tp",
+            )
         }
 
     def load_data(self, path: PosixPath):
@@ -146,6 +153,29 @@ class ExperimentCompiler(Compiler):
             mode = True
 
         return self.concat_signal(sigloc=sigloc, mode=mode, *args, **kwargs).iloc[:, tp]
+
+    def count_cells(
+        self, signal="extraction/general/None/volume", mode="raw", *args, **kwargs
+    ):
+        df = self.grouper.concat_signal(signal, mode=mode, *args, **kwargs)
+        df = df.groupby(["group", "position", "trap"]).count()
+        df[df == 0] = np.nan
+        return df
+
+    def compile_ncells(self):
+        df = self.count_cells()
+        df = df.melt(ignore_index=False)
+        df.columns = ["timepoint", "ncells_pertrap"]
+
+        return df
+
+    def compile_last_valid_tp(self):
+        """Last valid timepoint per position"""
+        df = self.count_cells()
+        df = df.apply(lambda x: x.last_valid_index(), axis=1)
+        df = df.groupby(["group", "position"]).max()
+
+        return df
 
     def compile_slices(self, nslices=2, *args, **kwargs):
         tps = [
@@ -207,7 +237,7 @@ class ExperimentCompiler(Compiler):
             warnings.warn("ExpCompiler: Replacing existing column in compilation")
         df[name] = [new_values_d[pos] for pos in df.index.get_level_values("position")]
 
-        return df.reset_index()
+        return df
 
     @staticmethod
     def traploc_diffs(traplocs: ndarray) -> list:
@@ -267,14 +297,14 @@ class ExperimentCompiler(Compiler):
             for j, edge in enumerate(rngs):
                 if edge < 0:
                     ranges[i][j] = sig.shape[1] - i + 1
-
-        return pd.concat(
+        df = pd.concat(
             [
                 self.get_filled_trapcounts(sig.loc(axis=1)[slice(*rng)], metric=metric)
                 for rng in ranges
             ],
             axis=1,
         )
+        return df.astype(str)
 
     def get_filled_trapcounts(self, signal: pd.DataFrame, metric: str) -> pd.Series:
         present = signal.apply(
@@ -422,20 +452,37 @@ class PageOrganiser(object):
                 "kwargs": {
                     "hue": "timepoint",
                 },
-                "loc": (1, 0),
+                "loc": (2, 1),
             },
             {
                 "data": "pertrap_metric",
                 "func": "histplot",
                 "args": (0, None),
+                "kwargs": {"hue": "group", "multiple": "dodge", "discrete": True},
+                "loc": (2, 0),
+            },
+            {
+                "data": "ncells",
+                "func": "lineplot",
+                "args": ("timepoint", "ncells_pertrap"),
                 "kwargs": {
                     "hue": "group",
-                    # "hue": "group",
                 },
                 "loc": (1, 1),
             },
+            {
+                "data": "last_valid_tp",
+                "func": "stripplot",
+                "args": (0, "position"),
+                "kwargs": {
+                    "hue": "group",
+                },
+                "loc": (1, 0),
+            },
         )
 
+        sns.set_style("darkgrid")
+        # sns.set_context("talk")
         self.plots = [
             self.place_plot(
                 self.gen_sns_wrapper(how),
