@@ -298,6 +298,26 @@ class BabyWriter(DynamicWriter):
         return
 
 
+class LinearBabyWriter(DynamicWriter):
+    # TODO make this YAML
+    compression = "gzip"
+    datatypes = {
+        "centres": ((None, 2), np.uint16),
+        "position": ((None,), np.uint16),
+        "angles": ((None,), h5py.vlen_dtype(np.float32)),
+        "radii": ((None,), h5py.vlen_dtype(np.float32)),
+        "edgemasks": ((None, tile_size, tile_size), np.bool),
+        "ellipse_dims": ((None, 2), np.float32),
+        "cell_label": ((None,), np.uint16),
+        "trap": ((None,), np.uint16),
+        "timepoint": ((None,), np.uint16),
+        "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
+        "mother_assign_dynamic": ((None,), np.uint16),
+        "volumes": ((None,), np.float32),
+    }
+    group = "cell_info"
+
+
 class StateWriter(DynamicWriter):
     datatypes = {
         "max_lbl": ((None, 1), np.uint16),
@@ -473,9 +493,11 @@ class Writer(BridgeH5):
             self.write_pd(f, path, data, compression=self.compression)
         elif isinstance(data, pd.MultiIndex):
             self.write_index(f, path, data)  # , compression=self.compression)
-        elif isinstance(data, Dict) and np.all([isinstance(x, pd.DataFrame) for x in data.values]):
-            for k,df in data.items():
-                self.write_dset(f, path + f'/{k}', df)
+        elif isinstance(data, Dict) and np.all(
+            [isinstance(x, pd.DataFrame) for x in data.values]
+        ):
+            for k, df in data.items():
+                self.write_dset(f, path + f"/{k}", df)
         elif isinstance(data, Iterable):
             self.write_arraylike(f, path, data)
         else:

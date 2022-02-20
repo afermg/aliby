@@ -146,11 +146,15 @@ class Signal(BridgeH5):
         return df
 
     def get_raw(self, dataset):
-        if isinstance(dataset, str):
-            with h5py.File(self.filename, "r") as f:
-                return self.dset_to_df(f, dataset)
-        elif isinstance(dataset, list):
-            return [self.get_raw(dset) for dset in dataset]
+        try:
+            if isinstance(dataset, str):
+                with h5py.File(self.filename, "r") as f:
+                    return self.dset_to_df(f, dataset)
+            elif isinstance(dataset, list):
+                return [self.get_raw(dset) for dset in dataset]
+        except Exception as e:
+            print(f"Could not fetch dataset {dataset}")
+            print(e)
 
     def get_merges(self):
         # fetch merge events going up to the first level
