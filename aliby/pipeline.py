@@ -26,7 +26,7 @@ from aliby.baby_client import BabyRunner, BabyParameters
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.io.omero import Dataset, Image
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import TilerWriter, BabyWriter, StateWriter
+from agora.io.writer import TilerWriter, BabyWriter, StateWriter, LinearBabyWriter
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
@@ -275,7 +275,8 @@ class Pipeline(ProcessABC):
                 if trackers_state:
                     runner.crawler.tracker_states = trackers_state
 
-                bwriter = BabyWriter(filename)
+                # bwriter = BabyWriter(filename)
+                bwriter = LinearBabyWriter(filename)
                 swriter = StateWriter(filename)
 
                 # Limit extraction parameters during run using the available channels in tiler
@@ -340,7 +341,8 @@ class Pipeline(ProcessABC):
                         logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
 
                         t = perf_counter()
-                        bwriter.write(seg, overwrite=["mother_assign"], tp=i)
+                        # bwriter.write(seg, overwrite=["mother_assign"], tp=i)
+                        bwriter.write(seg, overwrite=["mother_assign"])
                         # print(
                         #     f"Writing state in tp {i} with control values {runner.crawler.tracker_states[20]['prev_feats']}"
                         # )
