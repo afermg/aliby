@@ -328,7 +328,7 @@ class Pipeline(ProcessABC):
                         t = perf_counter()
                         trap_info = tiler.run_tp(i)
                         if i == 0:
-                            print(f"Number of traps found: {tiler.n_traps}")
+                            print(f"{tiler.n_traps} traps found in {image.name}")
 
                         logging.debug(f"Timing:Trap:{perf_counter() - t}s")
                         t = perf_counter()
@@ -366,9 +366,11 @@ class Pipeline(ProcessABC):
                             filename, earlystop, tiler.tile_size
                         )
                         logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
-                        pbar.set_postfix_str(
-                            f"{int(np.round(frac_clogged_traps*100))}% Clogged"
-                        )
+
+                        frac = np.round(frac_clogged_traps * 100)
+                        if np.isnan(frac):
+                            frac = 0
+                        pbar.set_postfix_str(f"{int(frac)}% Clogged")
                     else:  # Stop if more than X% traps are clogged
                         logging.debug(
                             f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
