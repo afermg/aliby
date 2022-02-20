@@ -12,6 +12,7 @@ from skimage.segmentation import clear_border
 from skimage.measure import label, regionprops
 from skimage.morphology import disk, closing, square
 from skimage.registration import phase_cross_correlation
+from skimage.util import img_as_ubyte
 
 
 def stretch_image(image):
@@ -33,7 +34,8 @@ def segment_traps(image, tile_size, downscale=0.4):
     min_area = 0.2 * (tile_size ** 2)
     if downscale != 1:
         img = transform.rescale(image, downscale)
-    entropy_image = entropy(img, disk(disk_radius))
+    # entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
+    entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
     if downscale != 1:
         entropy_image = transform.rescale(entropy_image, 1 / downscale)
 
