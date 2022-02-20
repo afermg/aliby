@@ -312,12 +312,13 @@ class Pipeline(ProcessABC):
                 tps = min(general_config["tps"], image.data.shape[0])
                 frac_clogged_traps = 0
                 # print(f"Processing from {process_from}")
-                for i in tqdm(
+                pbar = tqdm(
                     range(process_from, tps),
                     desc=image.name,
                     initial=process_from,
                     total=tps,
-                ):
+                )
+                for i in pbar:
 
                     if (
                         frac_clogged_traps < earlystop["thresh_pos_clogged"]
@@ -361,6 +362,13 @@ class Pipeline(ProcessABC):
                         )
                         tmp = ext.run(tps=[i], masks=masks, labels=labels)
                         logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
+                        frac_clogged_traps = self.check_earlystop(
+                            filename, earlystop, tiler.tile_size
+                        )
+                        logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
+                        pbar.set_postfix_str(
+                            f"{int(np.round(frac_clogged_traps*100))}% Clogged"
+                        )
                     else:  # Stop if more than X% traps are clogged
                         logging.debug(
                             f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
@@ -371,14 +379,10 @@ class Pipeline(ProcessABC):
                         meta.add_fields({"end_status": "Clogged"})
                         break
 
-                    if (
-                        i > earlystop["min_tp"]
-                    ):  # Calculate the fraction of clogged traps
-                        frac_clogged_traps = self.check_earlystop(
-                            filename, earlystop, tiler.tile_size
-                        )
-                        logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
-                        print("Frac clogged traps: ", frac_clogged_traps)
+                    # if (
+                    #     i > earlystop["min_tp"]
+                    # ):  # Calculate the fraction of clogged traps
+                    # print("Frac clogged traps: ", frac_clogged_traps)
 
                     # State Writer to recover interrupted experiments
 
