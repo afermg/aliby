@@ -161,7 +161,7 @@ class Pipeline(ProcessABC):
             conn.cache_logs(directory)
 
         # Modify to the configuration
-        self.parameters.general["directory"] = directory
+        self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
 
         # Filter TODO integrate filter onto class and add regex
