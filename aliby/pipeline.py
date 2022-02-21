@@ -256,8 +256,12 @@ class Pipeline(ProcessABC):
 
                     process_from = 0
                     meta.run()
-                    meta.add_fields(
-                        {"omero_id,": config["general"]["id"], "image_id": image_id}
+                    meta.add_fields(  # Add non-logfile metadata
+                        {
+                            "omero_id,": config["general"]["id"],
+                            "image_id": image_id,
+                            "parameters": self.parameters.to_yaml(),
+                        }
                     )
                     try:
                         tiler = Tiler.from_image(
