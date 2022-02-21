@@ -27,7 +27,7 @@ from extraction.core.functions.utils import depth
 
 from agora.abc import ProcessABC, ParametersABC
 from agora.io.writer import Writer, load_attributes
-from agora.io.cells import Cells
+from agora.io.cells import CellsLinear
 from aliby.tile.tiler import Tiler
 
 import matplotlib.pyplot as plt
@@ -126,10 +126,6 @@ class Extractor(ProcessABC):
     @classmethod
     def from_img(cls, parameters: ExtractorParameters, store: str, img_meta: tuple):
         return cls(parameters, store=store, tiler=Tiler(*img_meta))
-
-    # @classmethod
-    # def from_store(cls, parameters: ExtractorParameters, store: str, img_meta: tuple):
-    #     return cls(parameters, store=store, tiler=Tiler(*img_meta))
 
     @property
     def channels(self):
@@ -324,7 +320,7 @@ class Extractor(ProcessABC):
         ch_tree = {ch: v for ch, v in tree.items() if ch != "general"}
         tree_chs = (*ch_tree,)
 
-        cells = Cells.hdf(self.local)
+        cells = CellsLinear(self.local)
 
         # labels
         if labels is None:
@@ -420,7 +416,6 @@ class Extractor(ProcessABC):
     def get_imgs(self, channel, traps, channels=None):
         """
         Returns the image from a correct source, either raw or bgsub
-
 
         :channel: str name of channel to get
         :img: ndarray (trap_id, channel, tp, tile_size, tile_size, n_zstacks) of standard channels
