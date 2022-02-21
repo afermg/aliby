@@ -51,7 +51,7 @@ class Cells:
         # Convert sparse arrays if needed and if kind is 'mask' it fills the outline
         array = Cells._asdense(array)
         if kind == "mask":
-            array = ndimage.binary_fill_holes(array).astype(int)
+            array = ndimage.binary_fill_holes(array).astype(bool)
         return array
 
     @classmethod
@@ -190,6 +190,53 @@ class CellsHDF(Cells):
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
+
+
+class CellsLinear(CellsHDF):
+    """
+    Reimplement functions from CellsHDF to save edgemasks in a (N,tile_size, tile_size) array
+    """
+
+    def __init__(self, filename, path="cell_info"):
+        super().__init__(filename, path=path)
+
+    def __getitem__(self, item):
+        assert item != "edgemasks", "Edgemasks must not be loaded as a whole"
+
+        _item = "_" + item
+        if not hasattr(self, _item):
+            setattr(self, _item, self._fetch(item))
+        return getattr(self, _item)
+
+    def _fetch(self, path):
+        with h5py.File(self.filename, mode="r") as f:
+            return f[self.cinfo_path][path][()]
+
+    def _edgem_from_masking(self, mask):
+        with h5py.File(self.filename, mode="r") as f:
+            edgem = f[self.cinfo_path + "/edgemasks"][mask, ...]
+        return edgem
+
+    def _edgem_where(self, cell_id, trap_id):
+        id_mask = self._get_idx(cell_id, trap_id)
+        edgem = self._edgem_from_masking(id_mask)
+
+        return edgem
+
+    def outline(self, cell_id, trap_id):
+        id_mask = self._get_idx(cell_id, trap_id)
+        times = self["timepoint"][id_mask]
+
+        return times, self.edgem_from_masking(id_mask)
+
+    def at_time(self, timepoint, kind="mask"):
+        ix = self["timepoint"] == timepoint
+        traps = self["trap"][ix]
+        edgemasks = self._edgem_from_masking(ix)
+        masks = [
+            self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()
+        ]
+        return self.group_by_traps(traps, masks)
 
 
 class CellsMat(Cells):
