@@ -4,6 +4,7 @@ from itertools import groupby, chain, product
 
 import numpy as np
 import h5py
+import yaml
 
 
 class BridgeH5:
@@ -140,3 +141,23 @@ def flatten(d, parent_key="", sep="_"):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+def attrs_from_h5(fpath: str):
+    """Return attributes as dict from h5 file"""
+    with h5py.File(fpath, "r") as f:
+        return dict(f.attrs)
+
+
+def parameters_from_h5(fpath: str):
+    attrs = attrs_from_h5(fpath)
+    return yaml.safe_load(attrs["parameters"])
+
+
+def image_creds_from_h5(fpath: str):
+    """Return image id and server credentials from h5"""
+    attrs = attrs_from_h5(fpath)
+    return (
+        attrs["image_id"],
+        yaml.safe_load(attrs["parameters"])["general"]["server_info"],
+    )
