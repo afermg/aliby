@@ -78,7 +78,7 @@ python-versions = "*"
 
 [[package]]
 name = "aliby-agora"
-version = "0.2.18"
+version = "0.2.22"
 description = "A gathering of shared utilities for the Swain Lab image processing pipeline."
 category = "main"
 optional = false
@@ -116,22 +116,22 @@ xgboost = "1.4.2"
 
 [[package]]
 name = "aliby-post"
-version = "0.1.18"
+version = "0.1.21"
 description = "Post-processing tools for aliby pipeline."
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<3.11"
 
 [package.dependencies]
-aliby-agora = ">=0.2.18,<0.3.0"
+aliby-agora = ">=0.2.22,<0.3.0"
 catch22 = ">=0.2.0,<0.3.0"
 leidenalg = ">=0.8.8,<0.9.0"
 more-itertools = ">=8.12.0,<9.0.0"
 numpy = ">=1.17.3"
-omni-gaussian = ">=0.1.3,<0.2.0"
 pandas = ">=1.1.4,<2.0.0"
 pathos = ">=0.2.8,<0.3.0"
 PyYAML = ">=6.0,<7.0"
+scikit-learn = ">=0.22"
 scipy = ">=1.4.1"
 seaborn = ">=0.11.2,<0.12.0"
 
@@ -942,19 +942,6 @@ pywin32 = {version = "*", markers = "platform_system == \"Windows\""}
 PyYAML = "*"
 requests = "*"
 zeroc-ice = ">=3.6.4,<3.7"
-
-[[package]]
-name = "omni-gaussian"
-version = "0.1.3"
-description = "For using Gaussian processes to smooth data nad estimate first and second derivatives"
-category = "main"
-optional = false
-python-versions = ">=3.7.1,<3.11"
-
-[package.dependencies]
-matplotlib = ">=3.5.1,<4.0.0"
-numpy = ">=1.16.0,<2.0.0"
-scipy = ">=1.4.1"
 
 [[package]]
 name = "opencensus"
@@ -1946,7 +1933,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "bc36d1ff32be7b9e10f4c3053bdbfd303bb1bd7712c2e7f0780513af7f943f42"
+content-hash = "9243e6acc7477341296d163934bc99e0af5fae3f12adda96c5daa057a1cd33a5"
 
 [metadata.files]
 absl-py = [
@@ -2044,16 +2031,16 @@ alabaster = [
     {file = "alabaster-0.7.12.tar.gz", hash = "sha256:a661d72d58e6ea8a57f7a86e37d86716863ee5e92788398526d58b26a4e4dc02"},
 ]
 aliby-agora = [
-    {file = "aliby-agora-0.2.18.tar.gz", hash = "sha256:ab8b33e4cb085464a590228f7f7c38bed7355d2f4680791c0335ac2712fa2447"},
-    {file = "aliby_agora-0.2.18-py3-none-any.whl", hash = "sha256:c01019606110bc8eaae15959c4d7f36fd051427530760983e1e89c378f3ebb7e"},
+    {file = "aliby-agora-0.2.22.tar.gz", hash = "sha256:b08474842d9afef67feb0c51d5b2b62f58ca517468ca7fa1c564a09bc77bae7d"},
+    {file = "aliby_agora-0.2.22-py3-none-any.whl", hash = "sha256:0601d992f38a9274158a070851661948653744bebf16d832c32cfe6f6ed2c1b5"},
 ]
 aliby-baby = [
     {file = "aliby-baby-0.1.7.tar.gz", hash = "sha256:eb9a572be4d86b7f3dd1cbc80e48a7f06288edcdbfb1e9028c4f1aaa56b4e621"},
     {file = "aliby_baby-0.1.7-py3-none-any.whl", hash = "sha256:46d76eb3e08b7b47c566aded86882803b8fb426b16340b9da1ff32745e1465dd"},
 ]
 aliby-post = [
-    {file = "aliby-post-0.1.18.tar.gz", hash = "sha256:e528b0a3f036dec6653539fef26d5382dc84f5c1ee6b8d1de4de9fef09f9709f"},
-    {file = "aliby_post-0.1.18-py3-none-any.whl", hash = "sha256:c464151cf3781ee28f218a0cf5d96b4e3c760e11145fb1ad7b8d9b8925179508"},
+    {file = "aliby-post-0.1.21.tar.gz", hash = "sha256:4d680c8ded501b507ccc53cb509ab8c9f83aa10e316dbae89e7b27a9ba51ef63"},
+    {file = "aliby_post-0.1.21-py3-none-any.whl", hash = "sha256:384befda8f508294e8599b82fbf85f8647637819d0b144dc901cc25fe4d7a894"},
 ]
 appdirs = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
@@ -2778,10 +2765,6 @@ oauthlib = [
 omero-py = [
     {file = "omero-py-5.11.0.tar.gz", hash = "sha256:f9fbd780e35786cd11aac9f5f9ba543eae400a39c0273d7d6fc4d59fa1b25bf4"},
     {file = "omero_py-5.11.0-py3-none-any.whl", hash = "sha256:f4cb913c5da8dbeb6c515ba4158470021b8fb3f251a59f9cb8b6cf50b3ea480a"},
-]
-omni-gaussian = [
-    {file = "omni-gaussian-0.1.3.tar.gz", hash = "sha256:48e2f5ec027da3d36fc467ad8721aed7cadd501d95b53bfb84eb327c6979eb2a"},
-    {file = "omni_gaussian-0.1.3-py3-none-any.whl", hash = "sha256:c48b7bc53ea53c751581569064975a9d5c2c5d7524b9c9ad192cc89e452bb36c"},
 ]
 opencensus = [
     {file = "opencensus-0.8.0-py2.py3-none-any.whl", hash = "sha256:7a60bdbceb370a379bccad9ea9d1d56fcce650cf12a6d2b129e6880d2632eeab"},
