@@ -13,7 +13,7 @@ the reverse engineering at https://nbviewer.jupyter.org/gist/mbauman/9121961
 import re
 import struct
 import sys
-from collections import Iterable
+from collections.abc import Iterable
 from io import BytesIO
 
 import h5py
