@@ -346,7 +346,7 @@ class Pipeline(ProcessABC):
 
                         t = perf_counter()
                         # bwriter.write(seg, overwrite=["mother_assign"], tp=i)
-                        bwriter.write(seg, overwrite=["mother_assign"])
+                        bwriter.write(seg, overwrite=["mother_assign"], tp=i)
                         # print(
                         #     f"Writing state in tp {i} with control values {runner.crawler.tracker_states[20]['prev_feats']}"
                         # )
