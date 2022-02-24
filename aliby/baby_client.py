@@ -59,13 +59,13 @@ def format_segmentation(segmentation, tp):
     # merged["mother_assign_dynamic"] = [merged["mother_assign"]]
     if "mother_assign" in merged:
         del merged["mother_assign"]
-        mother_assign = [x["mother_assign"] for x in segmentation]
+    #     mother_assign = [x["mother_assign"] for x in segmentation]
     # Check that the lists are all of the same length (in case of errors in
     # BABY)
     n_cells = min([len(v) for v in merged.values()])
     merged = {k: v[:n_cells] for k, v in merged.items()}
     merged["timepoint"] = [tp] * n_cells
-    merged["mother_assign"] = mother_assign
+    # merged["mother_assign"] = mother_assign
     return merged
 
 
