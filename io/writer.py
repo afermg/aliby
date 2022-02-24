@@ -165,7 +165,7 @@ class BabyWriter(DynamicWriter):
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
         "timepoint": ((None,), np.uint16),
-        "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
+        # "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
         "mother_assign_dynamic": ((None,), np.uint16),
         "volumes": ((None,), np.float32),
     }
@@ -311,11 +311,23 @@ class LinearBabyWriter(DynamicWriter):
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
         "timepoint": ((None,), np.uint16),
-        "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
+        # "mother_assign": ((None,), h5py.vlen_dtype(np.uint16)),
         "mother_assign_dynamic": ((None,), np.uint16),
         "volumes": ((None,), np.float32),
     }
     group = "cell_info"
+
+    def write(self, data, overwrite: list, tp=None):
+        # Data is a dictionary, if not, make it one
+        # Overwrite data is a list
+
+        with h5py.File(self.file, "a") as store:
+            hgroup = store.require_group(self.group)
+            available_tps = hgroup.get("timepoint", None)
+            if not available_tps or tp not in np.unique(available_tps[()]):
+                super().write(data, overwrite)
+            else:
+                print(f"BabyWriter: Skipping tp {tp}")
 
 
 class StateWriter(DynamicWriter):
