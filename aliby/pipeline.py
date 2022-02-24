@@ -74,9 +74,9 @@ class PipelineParameters(ParametersABC):
         expt_id = general.get("expt_id", 19993)
         directory = Path(general.get("directory", "../data"))
         with Dataset(int(expt_id), **general.get("server_info")) as conn:
-            directory = directory / conn.unique_name
-            if not directory.exists():
-                directory.mkdir(parents=True)
+            tmp_directory = directory / conn.unique_name
+            if not tmp_directory.exists():
+                tmp_directory.mkdir(parents=True)
                 # Download logs to use for metadata
             conn.cache_logs(directory)
         meta = MetaData(directory, None).load_logs()
@@ -86,7 +86,7 @@ class PipelineParameters(ParametersABC):
                 id=expt_id,
                 distributed=0,
                 tps=tps,
-                directory=str(directory),
+                directory=str(directory.parent),
                 filter="",
                 earlystop=dict(
                     min_tp=100,
@@ -154,7 +154,7 @@ class Pipeline(ProcessABC):
         # Do all initialis
         with Dataset(int(expt_id), **self.general["server_info"]) as conn:
             image_ids = conn.get_images()
-            directory = root_dir  # / conn.unique_name
+            directory = root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
                 # Download logs to use for metadata
