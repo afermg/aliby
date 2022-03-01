@@ -7,6 +7,7 @@ from pathos.multiprocessing import Pool
 import h5py
 import numpy as np
 import pandas as pd
+from p_tqdm import p_map
 
 from agora.io.signal import Signal
 
@@ -40,24 +41,30 @@ class Grouper(ABC):
     def group_names():
         pass
 
-    def concat_signal(self, path, reduce_cols=None, axis=0, pool=8, *args, **kwargs):
+    def concat_signal(self, path, reduce_cols=None, axis=0, pool=None, *args, **kwargs):
+
         group_names = self.group_names
         sitems = self.signals.items()
-        if pool:
-            with Pool(pool) as p:
-                signals = p.map(
-                    lambda x: concat_signal_ind(
-                        path, group_names, x[0], x[1], *args, **kwargs
-                    ),
-                    sitems,
-                )
+        if pool or pool is None:
+            signals = p_map(
+                lambda x: concat_signal_ind(
+                    path, group_names, x[0], x[1], *args, **kwargs
+                ),
+                sitems,
+                num_cpus=pool,
+                desc="Group " + path,
+            )
         else:
             signals = [
                 concat_signal_ind(path, group_names, name, signal, **kwargs)
-                for name, signal in sitems
+                for name, signal in tqdm(sitems)
             ]
 
+        errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
         signals = [s for s in signals if s is not None]
+        if len(errors):
+            print("Warning: Positions contain errors {errors}")
+            assert len(signals), f"All datasets contain errors"
         sorted = pd.concat(signals, axis=axis).sort_index()
         if reduce_cols:
             sorted = sorted.apply(np.nanmean, axis=1)
@@ -167,8 +174,6 @@ class phGrouper(NameGrouper):
 
 
 def concat_signal_ind(path, group_names, group, signal, mode="mothers"):
-    print("Looking at ", group)
-    # try:
     if mode == "mothers":
         combined = signal.mothers(path)
     elif mode == "raw":
