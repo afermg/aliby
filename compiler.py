@@ -46,6 +46,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
 
+sns.set_style("darkgrid")
+
 from agora.abc import ProcessABC, ParametersABC
 from postprocessor.grouper import NameGrouper
 
@@ -103,6 +105,7 @@ class ExperimentCompiler(Compiler):
                 "pertrap_metric",
                 "ncells",
                 "last_valid_tp",
+                "stages_dmetric",
             )
         }
 
@@ -161,6 +164,143 @@ class ExperimentCompiler(Compiler):
         df = df.groupby(["group", "position", "trap"]).count()
         df[df == 0] = np.nan
         return df
+
+    def compile_dmetrics(self, metrics=["max_dVol", "max_bud_dVol"], stages=None):
+        """
+        Generate dataframe with dVol metrics without major cell picking
+        """
+        names_signals = {
+            "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+            "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
+        }
+        names_signals = {
+            "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+            "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
+            "births": "postprocessing/births/extraction_general_None_volume",
+        }
+        operations = {
+            "dvol": ("dvol", "max"),
+            "bud_dvol": ("bud_dvol", "max"),
+            "births": ("births", "sum"),
+            "births_mean": ("births", "mean"),
+        }
+
+        input_signals = {
+            k: self.grouper.concat_signal(v) for k, v in names_signals.items()
+        }
+
+        ids = input_signals["births"].index
+        for v in input_signals.values():
+            ids = ids.intersection(v.index)
+
+        if stages:
+
+            def process_dfs(dfs, rng):
+                return pd.DataFrame(
+                    {
+                        k: getattr(dfs[sig].loc(axis=1)[rng].loc[ids], op)(axis=1)
+                        if isinstance(op, str)
+                        else dfs[sig].loc[ids].apply(op, axis=1)
+                        for k, (sig, op) in operations.items()
+                    }
+                )
+
+            stages_dfs = {
+                "Full": process_dfs(input_signals, range(compiler.meta.ntimepoints))
+            }
+            for k, rng in stages:
+                stage_df = process_dfs(input_signals, rng)
+                stages_dfs[k] = stage_df
+
+        concat = pd.concat([x.reset_index() for x in stages_dfs.values()])
+        concat["stage"] = np.array(
+            [np.repeat(x, len(concat) // len(stages_dfs)) for x in stages_dfs.keys()]
+        ).flatten()
+
+        return (
+            concat.set_index(["group", "position", "trap", "cell_label"])
+            .melt("stage", ignore_index=False, var_name="growth_metric")
+            .reset_index()
+        )
+
+    def compile_stages_dmetric(self):
+        stages = self.get_stages()
+        return self.compile_dmetrics(stages=stages)
+
+    def get_stages(self):
+        """
+        Use the metadata to give a prediction of the media being pumped at each time point. Works
+        for traditional metadata (pre-fluigent).
+
+        Returns:
+        ------
+        A list of tuples where in each the first value is the active
+            pump's contents and the second its associated range of time points
+        """
+        fpath = list(self.grouper.signals.values())[0].filename
+        with h5py.File(fpath, "r") as f:
+            tinterval = f.attrs.get("time_settings/timeinterval", None)[0]
+            tnorm = tinterval / 60
+            switch_times = f.attrs.get("switchtimes", None) / tnorm
+            last_tp = f.attrs.get("time_settings/totaltime", None)[0] / tinterval
+            pump_contents = f.attrs.get("pumpinit/contents", None)
+            init_frate = f.attrs.get("pumpinit/flowrate", None)
+            prate = f.attrs.get("pumprate", None)
+            main_pump = np.array((init_frate.argmax(), *prate.argmax(axis=0)))
+
+            intervals = np.array((0, *switch_times, last_tp), dtype=int)
+
+            stages = [
+                (
+                    ": ".join((str(i + 1), pump_contents[p_id])),
+                    range(intervals[i], intervals[i + 1]),
+                )
+                for i, p_id in enumerate(main_pump)
+            ]
+            return stages
+
+    def compile_growth_metrics(
+        self,
+        metrics=["max_dVol", "max_bud_dVol", "nbirths", "cycle_length"],
+        min_nbirths=2,
+    ):
+        """
+        Filter mothers with n number of births and get their metrics
+
+        Select cells with at least two recorded births
+        """
+        names_signals = {
+            "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+            "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
+            "births": "postprocessing/births/extraction_general_None_volume",
+        }
+        operations = {
+            "dvol": ("dvol", "max"),
+            "bud_dvol": ("bud_dvol", "max"),
+            "births": ("births", "sum"),
+            "cycle_length_mean": ("births", lambda x: np.diff(np.where(x)[0]).mean()),
+            "cycle_length_min": ("births", lambda x: np.diff(np.where(x)[0]).min()),
+            "cycle_length_median": (
+                "births",
+                lambda x: np.median(np.diff(np.where(x)[0])),
+            ),
+        }
+        input_signals = {
+            k: self.grouper.concat_signal(v) for k, v in names_signals.items()
+        }
+        ids = input_signals["births"].loc[input_signals["births"].sum(axis=1) > 1].index
+        for v in input_signals.values():
+            ids = ids.intersection(v.index)
+
+        compiled_df = pd.DataFrame(
+            {
+                k: getattr(input_signals[sig].loc[ids], op)(axis=1)
+                if isinstance(op, str)
+                else input_signals[sig].loc[ids].apply(op, axis=1)
+                for k, (sig, op) in operations.items()
+            }
+        )
+        return compiled_df
 
     def compile_ncells(self):
         df = self.count_cells()
@@ -384,42 +524,50 @@ class ExperimentCompiler(Compiler):
 # g = NameGrouper(dir)
 
 
-class PageOrganiser(object):
-    def __init__(self, data: Dict[str, pd.DataFrame], grid_spec: tuple = None):
-        if grid_spec is None:
-            grid_spec = (1, 1)
-        title_fontsize = "x-small"
-        # self.fig = plt.figure(dpi=300, tight_layout=True)
-        self.fig = plt.figure(dpi=300)
-        self.fig.set_size_inches(8.27, 11.69, forward=True)
-        plt.figtext(0.02, 0.99, "", fontsize="small")
-        self.gs = plt.GridSpec(*grid_spec, wspace=0.3, hspace=0.3)
-        self.data = {
-            k: df.reset_index().sort_values("group")
-            if hasattr(df, "reset_index")
-            else df.sort_values("group")
-            for k, df in data.items()
-        }
+class Reporter(object):
+    """
+    Manages Multiple pages to generate a report
+    """
 
-    def place_plot(self, func, xloc=None, yloc=None, *args, **kwargs):
-        if xloc is None:
-            xloc = slice(0, self.gs.ncols)
-        if yloc is None:
-            yloc = slice(0, self.gs.nrows)
+    def __init__(
+        self, data: Dict[str, pd.DataFrame], pages: dict = None, path: str = None
+    ):
+        self.data = data
 
-        if not isinstance(func, list):
-            func = [func]
+        if pages is None:
+            pages = {
+                "growth": self.gen_page_growth(),
+                "qa": self.gen_page_qa(),
+            }
+        self.pages = pages
 
-        for f in func:
-            f(
-                *args,
-                ax=self.fig.add_subplot(self.gs[xloc, yloc]),
-                **kwargs,
-            )
+        if path is not None:
+            self.path = path
 
-    def plot(self):
-        instructions: Iterable[Dict[str, Union[str, Iterable]]] = (
-            # [
+        self.porgs = {k: PageOrganiser(data, v) for k, v in pages.items()}
+
+    @property
+    def pdf(self):
+        return self._pdf
+
+    @pdf.setter
+    def pdf(self, path: str):
+        self._pdf = PdfPages(path)
+
+    def plot_report(self, path: str = None):
+        if path is None:
+            path = self.path
+
+        with PdfPages(path) as pdf:
+            for page_org in list(self.porgs.values())[::-1]:
+                page_org.plot_page()
+                pdf.savefig(page_org.fig)
+                # pdf.savefig()
+                plt.close()
+
+    @staticmethod
+    def gen_page_qa():
+        page_qc = (
             {
                 "data": "slice",
                 "func": "barplot",
@@ -427,21 +575,12 @@ class PageOrganiser(object):
                 "kwargs": {"hue": "group", "palette": "muted"},
                 "loc": (0, 0),
             },
-            # {
-            #     "data": "slice",
-            #     "func": "barplot",
-            #     "args": ("ntraps", "position"),
-            #     "kwargs": {"hue": "group", "palette": "muted"},
-            #     "loc": (0, 0),
-            # },
-            # ],
             {
                 "data": "delta_traps",
                 "func": "barplot",
                 "args": ("axis", "value"),
                 "kwargs": {
                     "hue": "group",
-                    # "hue": "group",
                 },
                 "loc": (0, 1),
             },
@@ -480,99 +619,144 @@ class PageOrganiser(object):
                 "loc": (1, 0),
             },
         )
+        return page_qc
 
-        sns.set_style("darkgrid")
-        # sns.set_context("talk")
-        self.plots = [
+    @staticmethod
+    def gen_page_growth():
+        return (
+            {
+                "data": "stages_dmetric",
+                "func": "catplot",
+                "args": ("stage", "value"),
+                "kwargs": {
+                    "hue": "group",
+                    "col": "growth_metric",
+                    "col_wrap": 2,
+                    "kind": "box",
+                    "sharey": False,
+                },
+            },
+        )
+
+    def gen_all_instructions(self):
+        qa = self.gen_page_qa()
+        growth = self.gen_page_growth()
+
+        return (qa, growth)
+
+
+class PageOrganiser(object):
+    """
+    Add multiple plots to a single page, wither using seaborn multiplots or manual GridSpec.
+    """
+
+    def __init__(
+        self,
+        data: Dict[str, pd.DataFrame],
+        instruction_set: Iterable = None,
+        grid_spec: tuple = None,
+        fig_kws: dict = None,
+    ):
+        self.instruction_set = instruction_set
+
+        self.single_fig = True
+        if len(instruction_set) > 1:
+            self.single_fig = False
+
+        if (
+            grid_spec is None and not self.single_fig
+        ):  # Select grid_spec with location info
+            locs = np.array([x.get("loc", (0, 0)) for x in instruction_set])
+            grid_spec = locs.max(axis=0) + 1
+
+            if fig_kws is None:
+                self.fig = plt.figure(dpi=300)
+                self.fig.set_size_inches(8.27, 11.69, forward=True)
+                plt.figtext(0.02, 0.99, "", fontsize="small")
+            self.gs = plt.GridSpec(*grid_spec, wspace=0.3, hspace=0.3)
+        self.axes = {}
+
+        reset_index = (
+            lambda df: df.reset_index().sort_values("group")
+            if hasattr(df, "reset_index")
+            else df.sort_values("group")
+        )
+        self.data = {k: reset_index(df) for k, df in data.items()}
+
+    def place_plot(self, func, xloc=None, yloc=None, *args, **kwargs):
+        if xloc is None:
+            # xloc = slice(0, self.gs.ncols)
+            xloc = 0
+        if yloc is None:
+            # yloc = slice(0, self.gs.nrows)
+            yloc = 0
+
+        # if "row" not in kwargs and "col" not in kwargs:  # ax-less function
+        # if isinstance(func, Iterable):
+        # for f in func:
+        if not self.single_fig:
+            self.axes[(xloc, yloc)] = self.fig.add_subplot(self.gs[xloc, yloc])
+            func(
+                *args,
+                ax=self.axes[(xloc, yloc)],
+                **kwargs,
+            )
+        else:
+            self.g = func(*args, **kwargs)
+            self.fig = self.g.fig
+            # self.axes[(0, 0)] = g.axes[0]
+
+        # Eye candy
+        # if np.any(  # If there is a long label, rotate them all
+        #     [
+        #         len(lbl.get_text()) > 8
+        #         for ax in self.axes.values()
+        #         for lbl in ax.get_xticklabels()
+        #     ]
+        # ):
+        #     for axes in g.axes.flat:
+        #         _ = axes.set_xticklabels(
+        #             axes.get_xticklabels(), rotation=15, horizontalalignment="right"
+        # )
+
+    def plot_multirow(self, instructions):
+        pass
+
+    def plot_page(self, instructions: Iterable[Dict[str, Union[str, Iterable]]] = None):
+        if instructions is None:
+            instructions = self.instruction_set
+        if isinstance(instructions, dict):
+            how = (instructions,)
+
+        for how in instructions:
             self.place_plot(
                 self.gen_sns_wrapper(how),
-                *how["loc"],
+                *how.get("loc", (None, None)),
             )
-            for how in instructions
-        ]
-
-    def show(self):
-        plt.show()
-
-    def save(self, path: PosixPath):
-        pp = PdfPages(path)
-        pp.savefig(self.fig)
-        pp.close()
 
     def gen_sns_wrapper(self, how):
-        def sns_wrapper(ax):
-            getattr(sns, how["func"])(
-                data=self.data[how["data"]],
-                x=how["args"][0],
-                y=how["args"][1],
-                **how["kwargs"],
-                ax=ax,
-            )
+        def sns_wrapper(ax=None):
+            if ax:
+                return getattr(sns, how["func"])(
+                    data=self.data[how["data"]],
+                    x=how["args"][0],
+                    y=how["args"][1],
+                    **how["kwargs"],
+                    ax=ax,
+                )
+            else:
+                return getattr(sns, how["func"])(
+                    data=self.data[how["data"]],
+                    x=how["args"][0],
+                    y=how["args"][1],
+                    **how["kwargs"],
+                )
 
         return sns_wrapper
 
 
 # for dir in dirs:
-#     print(f"Compiling {dir}")
-#     try:
-#         fullpath = Path("/home/alan/Documents/dev/skeletons/data/") / dir / dir
-#         compiler = ExperimentCompiler(None, fullpath)
-#         tmp = compiler.run()
-#         po = PageOrganiser(tmp, grid_spec=(3, 2))
-#         po.plot()
-#         po.save(fullpath / f"{dir.rstrip('/')}_report.pdf")
-#     except Exception as e:
-#         print(e)
-
-#### Live editing
-
-# plot.set_title("Trap identification robustness")
-# plot.set_xlabel("Axis")
-# plot.set_ylabel("Distance (pixels)")
-# plt.show()
-
-
-# fig.align_labels()  # same as fig.align_xlabels(); fig.align_ylabels()
-
-
-import numpy as np
-
-
-# plt1 = dummyplot()
-# plt2 = dummyplot()
-# # df = (
-# #     pd.DataFrame({ax: signal[:, i] for i, ax in enumerate(("x", "y"))})
-# #     .reset_index()
-# #     .melt("index")
-# # )
-# # sns.lineplot(data=df, x="index", y="value", hue="variable")
-
-# # inverted_errors = {
-# #     k: {pos: v[k] for pos, v in errors.items()} for k in list(errors.values())[0].keys()
-# # }
-# # for_addition = {
-# #     k: [v[pos] for pos in merged.index.get_level_values("position")]
-# #     for k, v in inverted_errors.items()
-# # }
-# # for k, v in for_addition.items():
-# #     merged[k] = v
-
-# # fig, axes = plt.subplots(2, 1, sharex=True)
-# # for i in range(2):
-# #     axes[i].plot(signal[:, i])
-# # plt.show()
-
-# f, ax = plt.subplots(figsize=(6, 15))
-# df = df.sort_values("group")
-# sns.barplot(data=df, x="ntraps", y="position", hue="group", palette="pastel")
-# sns.set_color_codes("muted")
-# sns.barplot(data=df, x="count", y="position", hue="group", palette="muted")
-# plt.show()
-
-# fpath = "/home/alan/Documents/dev/skeletons/data/2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/URA7_young001.h5"
-# with h5py.File(fpath, "r") as f:
-#     x, y = zip(*f["trap_info/trap_locations"][()])
-
-# plt.scatter(x, y)
-# plt.show()
-# sns.heatmap()
+#     compiler = ExperimentCompiler(None, dir)
+#     dfs = compiler.run()
+#     rep = Reporter(data=dfs, path="tmp.pdf")
+#     rep.plot_report("tmp.pdf")
