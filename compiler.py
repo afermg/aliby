@@ -658,69 +658,63 @@ class PageOrganiser(object):
         fig_kws: dict = None,
     ):
         self.instruction_set = instruction_set
+        self.data = {k: df for k, df in data.items()}
 
         self.single_fig = True
         if len(instruction_set) > 1:
             self.single_fig = False
 
-        if (
-            grid_spec is None and not self.single_fig
-        ):  # Select grid_spec with location info
-            locs = np.array([x.get("loc", (0, 0)) for x in instruction_set])
-            grid_spec = locs.max(axis=0) + 1
+        if not self.single_fig:  # Select grid_spec with location info
+            if grid_spec is None:
+                locs = np.array([x.get("loc", (0, 0)) for x in instruction_set])
+                grid_spec = locs.max(axis=0) + 1
 
             if fig_kws is None:
                 self.fig = plt.figure(dpi=300)
                 self.fig.set_size_inches(8.27, 11.69, forward=True)
                 plt.figtext(0.02, 0.99, "", fontsize="small")
             self.gs = plt.GridSpec(*grid_spec, wspace=0.3, hspace=0.3)
-        self.axes = {}
 
-        reset_index = (
-            lambda df: df.reset_index().sort_values("group")
-            if hasattr(df, "reset_index")
-            else df.sort_values("group")
-        )
-        self.data = {k: reset_index(df) for k, df in data.items()}
+            self.axes = {}
+            reset_index = (
+                lambda df: df.reset_index().sort_values("position")
+                if isinstance(df.index, pd.core.indexes.multi.MultiIndex)
+                else df.sort_values("position")
+            )
+            self.data = {k: reset_index(df) for k, df in self.data.items()}
 
     def place_plot(self, func, xloc=None, yloc=None, *args, **kwargs):
         if xloc is None:
-            # xloc = slice(0, self.gs.ncols)
             xloc = 0
         if yloc is None:
-            # yloc = slice(0, self.gs.nrows)
             yloc = 0
 
-        # if "row" not in kwargs and "col" not in kwargs:  # ax-less function
-        # if isinstance(func, Iterable):
-        # for f in func:
-        if not self.single_fig:
+        if self.single_fig:  # If plotting a single figure using seaborn cols/rows
+            self.g = func(*args, **kwargs)
+            self.axes = {
+                ax.title.get_text().split("=")[-1][1:]: ax for ax in self.g.axes.flat
+            }
+            self.fig = self.g.fig
+        else:
             self.axes[(xloc, yloc)] = self.fig.add_subplot(self.gs[xloc, yloc])
             func(
                 *args,
                 ax=self.axes[(xloc, yloc)],
                 **kwargs,
             )
-        else:
-            self.g = func(*args, **kwargs)
-            self.fig = self.g.fig
-            # self.axes[(0, 0)] = g.axes[0]
 
         # Eye candy
-        # if np.any(  # If there is a long label, rotate them all
-        #     [
-        #         len(lbl.get_text()) > 8
-        #         for ax in self.axes.values()
-        #         for lbl in ax.get_xticklabels()
-        #     ]
-        # ):
-        #     for axes in g.axes.flat:
-        #         _ = axes.set_xticklabels(
-        #             axes.get_xticklabels(), rotation=15, horizontalalignment="right"
-        # )
-
-    def plot_multirow(self, instructions):
-        pass
+        if np.any(  # If there is a long label, rotate them all
+            [
+                len(lbl.get_text()) > 8
+                for ax in self.axes.values()
+                for lbl in ax.get_xticklabels()
+            ]
+        ):
+            for axes in self.g.axes.flat:
+                _ = axes.set_xticklabels(
+                    axes.get_xticklabels(), rotation=15, horizontalalignment="right"
+                )
 
     def plot_page(self, instructions: Iterable[Dict[str, Union[str, Iterable]]] = None):
         if instructions is None:
