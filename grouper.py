@@ -35,6 +35,22 @@ class Grouper(ABC):
 
     @property
     def siglist(self):
+        return self.fsignal.siglist
+
+    @property
+    def siglist_grouped(self):
+        from collections import Counter
+
+        if not hasattr(self, "_siglist_grouped"):
+            self._siglist_grouped = siglists = Counter(
+                [x for s in self.signals.values() for x in s.siglist]
+            )
+
+        for s, n in self._siglist_grouped.items():
+            print(f"{s} - {n}")
+
+    @property
+    def datasets(self):
         return self.fsignal.datasets
 
     @abstractproperty
