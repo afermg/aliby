@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 from pathlib import Path
 from pathos.multiprocessing import Pool
+from collections import Counter
 
 import h5py
 import numpy as np
@@ -39,7 +40,6 @@ class Grouper(ABC):
 
     @property
     def siglist_grouped(self):
-        from collections import Counter
 
         if not hasattr(self, "_siglist_grouped"):
             self._siglist_grouped = siglists = Counter(
