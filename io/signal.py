@@ -105,9 +105,24 @@ class Signal(BridgeH5):
 
     @property
     def datasets(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_ext_or_post)
-        return dsets
+        if not hasattr(self, "_siglist"):
+            self._siglist = []
+
+            with h5py.File(self.filename, "r") as f:
+                f.visititems(self.get_siglist)
+
+        for sig in self.siglist:
+            print(sig)
+
+    @property
+    def p_siglist(self):
+        self.datasets
+
+    @property
+    def siglist(self):
+        if not hasattr(self, "_siglist"):
+            self._siglist = []
+        return self._siglist
 
     def get_merged(self, dataset):
         return self.apply_prepost(dataset, skip_pick=True)
@@ -206,16 +221,17 @@ class Signal(BridgeH5):
                 columns=f[path + "/timepoint"][()],
             )
 
-    @staticmethod
-    def _if_ext_or_post(name, *args):
-        flag = False
-        if name.startswith("extraction") and len(name.split("/")) == 4:
-            flag = True
-        elif name.startswith("postprocessing") and len(name.split("/")) == 3:
-            flag = True
+    def get_siglist(self, name, node):
+        fullname = node.name
+        if isinstance(node, h5py.Group) and np.all(
+            [isinstance(x, h5py.Dataset) for x in node.values()]
+        ):
+            self._if_ext_or_post(fullname, self._siglist)
 
-        if flag:
-            print(name)
+    @staticmethod
+    def _if_ext_or_post(name: str, siglist: list):
+        if name.startswith("/extraction") or name.startswith("/postprocessing"):
+            siglist.append(name)
 
     @staticmethod
     def _if_merges(name: str, obj):
