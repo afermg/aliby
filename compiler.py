@@ -1,42 +1,13 @@
 #!/usr/bin/env python3
-
-"""
-Main dataframe structure
-
-| position | group | ntraps |robustness index | initial_ncells | final_ncells
-"""
-# dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
-# dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
-dirs = [
-    # "2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/",
-    # "2020_10_01_exp_00/",
-    # "2020_10_02_downUpshift_twice_2_0_2_glu_ura8_phluorinMsn2_phluorinMig1_01/",
-    # "/home/alan/Documents/dev/skeletons/data/2021_05_27_PDR5Fluc_00/2021_05_27_PDR5Fluc_00/",
-    # "2020_10_22_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00/",
-    # "2021_06_15_pypipeline_unit_test_00/",
-    # "2021_06_27_ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01/",
-    # "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00",
-    # "/home/alan/Documents/dev/skeletons/data/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06/"
-    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_08_24_2Raf_00/2021_08_24_2Raf_00",
-    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06",
-    # "/home/alan/Documents/dev/libs/aliby/data/sofia/2021_09_17_0_1_Raf_00/2021_09_17_0_1_Raf_00",
-    # "/home/alan/Documents/dev/skeletons/data/2021_09_15_1_Raf_06/2021_09_15_1_Raf_06/",
-    # "/home/alan/Documents/dev/skeletons/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/",
-    # "/home/alan/Documents/dev/skeletons/data/2021_11_01_01_Raf_00/2021_11_01_01_Raf_00/",
-    "/home/alan/Documents/dev/skeletons/data/2021_02_23_gluStarv_2_0_2_dual_phl__mig1_msn2_ura7_ura8__wt_00/2021_02_23_gluStarv_2_0_2_dual_phl__mig1_msn2_ura7_ura8__wt_00"
-    # "/home/alan/Documents/dev/skeletons/data/2021_11_05_wt_bs2_bs3_00/2021_11_05_wt_bs2_bs3_00/"
-]
-# outdir = "/home/alan/Documents/dev/skeletons/data"
-# dirs = Path(outdir).glob("*ph*")
-
-import h5py
-
-from abc import abstractclassmethod, abstractmethod
 from typing import Iterable, Union, Dict, Tuple
+from abc import abstractclassmethod, abstractmethod
 from pathlib import PosixPath, Path
 import warnings
 from collections import Counter
+import re
 
+
+import h5py
 import numpy as np
 from numpy import ndarray
 import pandas as pd
@@ -46,10 +17,50 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
 
-sns.set_style("darkgrid")
-
 from agora.abc import ProcessABC, ParametersABC
 from postprocessor.grouper import NameGrouper
+
+sns.set_style("darkgrid")
+
+
+"""
+Main dataframe structure
+
+| position | group | ntraps |robustness index | initial_ncells | final_ncells
+"""
+# dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
+# dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
+dirs = [
+    "16543_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01",
+    "16545_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_secondRun_01",
+    "18069_2019_12_05_aggregates_updownshift_2_0_2_URA8_URA7H360A_URA7H360R_00",
+    "18616_2020_02_20_protAgg_downUpShift_2_0_2_Ura8_Ura8HA_Ura8HR_01",
+    "18617_2020_02_21_protAgg_downUpShift_2_0_2_pHluorin_Ura7HA_Ura7HR_00",
+    "19129_2020_09_06_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_00",
+    "19144_2020_09_07_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_secondRound_00",
+    "19169_2020_09_09_downUpshift_2_0_2_glu_ura8_phl_mig1_phl_msn2_03",
+    "19199_2020_09_29_downUpshift_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
+    "19203_2020_09_30_downUpshift_twice_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
+    "19207_2020_10_01_exp_00",
+    "19232_2020_10_02_downUpshift_twice_2_0_2_glu_ura8_phluorinMsn2_phluorinMig1_01",
+    "19307_2020_10_22_downUpshift_2_01_2_glucose_dual_pH__dot6_nrg1_tod6__00",
+    "19310_2020_10_22_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00",
+    "19311_2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04",
+    "19328_2020_10_31_downUpshift_four_2_0_2_glu_dual_phl__glt1_ura8_ura8__00",
+    "19329_2020_11_01_exp_00",
+    "19333_2020_11_02_downUpshift_2_0_2_glu_ura7_ura7ha_ura7hr_00",
+    "19334_2020_11_02_downUpshift_2_0_2_glu_ura8_ura8ha_ura8hr_00",
+    "19447_2020_11_18_downUpshift_2_0_2_glu_gcd2_gcd6_gcd7__02",
+    "19810_2021_02_21_ToxicityTest_00",
+    "19993_2021_06_15_pypipeline_unit_test_00",
+    "19996_2021_06_27_ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01",
+    "20419_2021_11_02_dose_response_raf_05_075_2_glu_005_2_constantMedia_00",
+]
+# outdir = "/home/alan/Documents/dev/skeletons/data"
+# dirs = Path(outdir).glob("*ph*")
+
+
+# from abc import abstractclassmethod, abstractmethod
 
 
 # group_pos_trap_ncells = (
@@ -106,6 +117,7 @@ class ExperimentCompiler(Compiler):
                 "ncells",
                 "last_valid_tp",
                 "stages_dmetric",
+                "fluorescence",
             )
         }
 
@@ -262,7 +274,7 @@ class ExperimentCompiler(Compiler):
     def compile_growth_metrics(
         self,
         metrics=["max_dVol", "max_bud_dVol", "nbirths", "cycle_length"],
-        min_nbirths=2,
+        min_nbirths: int = 2,
     ):
         """
         Filter mothers with n number of births and get their metrics
@@ -285,12 +297,11 @@ class ExperimentCompiler(Compiler):
                 lambda x: np.median(np.diff(np.where(x)[0])),
             ),
         }
+
         input_signals = {
             k: self.grouper.concat_signal(v) for k, v in names_signals.items()
         }
-        ids = input_signals["births"].loc[input_signals["births"].sum(axis=1) > 1].index
-        for v in input_signals.values():
-            ids = ids.intersection(v.index)
+        ids = self.get_shared_ids(input_signals, min_nbirths=min_nbirths)
 
         compiled_df = pd.DataFrame(
             {
@@ -301,6 +312,25 @@ class ExperimentCompiler(Compiler):
             }
         )
         return compiled_df
+
+    def get_shared_ids(
+        self, input_signals: Dict[str, pd.DataFrame], min_nbirths: int = None
+    ):
+        """
+        Get the intersection id of multiple signals.
+        "births" must be one the keys in input_signals to use the argument min_nbirths.
+        """
+        ids = list(input_signals.values())[0].index
+        if min_nbirths is not None:
+            ids = (
+                input_signals["births"]
+                .loc[input_signals["births"].sum(axis=1) >= min_nbirths]
+                .index
+            )
+        for v in input_signals.values():
+            ids = ids.intersection(v.index)
+
+        return ids
 
     def compile_ncells(self):
         df = self.count_cells()
@@ -333,6 +363,70 @@ class ExperimentCompiler(Compiler):
 
     def compile_slice_end(self, *args, **kwargs):
         return self.compile_slice(tp=-1, *args, **kwargs)
+
+    def guess_metrics(self, metrics: Dict[str, Tuple[str]] = None):
+        """
+        First approach at autoselecting certain signals for automated analysis
+        """
+
+        if metrics is None:
+            metrics = {
+                "GFP": ("median", "max5px_med", "max5"),
+                "mCherry": ("median", "max5px_med", "max5"),
+                # "general": ("eccentricity",),
+                "Flavin": ("median",),
+                "postprocessing/savgol": ("volume",),
+                "dsignal/postprocessing_savgol": ("volume",),
+                "bud_metric.*dsignal.*savgol": ("volume",),
+                "ph_ratio": ("median",),
+            }
+
+        sigs = self.grouper.siglist
+        selection = {
+            ".".join((ch, metric)): sig
+            for sig in sigs
+            for ch, metric_set in metrics.items()
+            for metric in metric_set
+            if re.search("(?!.*bgsub).*".join((ch, metric)) + "$", sig)
+        }
+        return selection
+
+    def compile_fluorescence(
+        self, metrics: Dict[str, Tuple[str]] = None, norm: tuple = None, *args, **kwargs
+    ):
+        """
+        Get a single signal per"""
+        if norm is None:
+            norm = ("GFP", "GFPFast", "ph_ratio", "Flavin", "Citrine", "mCherry")
+
+        selection = self.guess_metrics(metrics)
+
+        input_signals = {k: self.grouper.concat_signal(v) for k, v in selection.items()}
+
+        # ids = self.get_shared_ids(input_signals)
+
+        to_concat = []
+
+        def format_df(df):
+            return df.melt(ignore_index=False, var_name="timepoint").reset_index()
+
+        for k, v in input_signals.items():
+            tmp_formatted = format_df(v)
+            tmp_formatted["signal"] = k
+            to_concat.append(tmp_formatted)
+            if norm and k.split(".")[0] in norm:
+                norm_v = v.groupby(["position", "trap", "cell_label"]).transform(
+                    # lambda x: x - x.min() / (x.max() - x.min())
+                    lambda x: (x - x.min())
+                    / (x.max() - x.min())
+                )
+                formatted = format_df(norm_v)
+                formatted["signal"] = "norm_" + k
+                to_concat.append(formatted)
+
+        concated = pd.concat(to_concat, axis=0)
+
+        return concated
 
     def compile_slice(
         self, sigloc=None, tp=None, metrics=None, mode=None, *args, **kwargs
@@ -381,7 +475,8 @@ class ExperimentCompiler(Compiler):
 
     @staticmethod
     def traploc_diffs(traplocs: ndarray) -> list:
-        """Obtain metrics for trap localisation.
+        """
+        Obtain metrics for trap localisation.
 
         Parameters
         ----------
@@ -419,9 +514,6 @@ class ExperimentCompiler(Compiler):
         ]
 
         return pd.DataFrame(tups, columns=["group", "position", "axis", "value"])
-
-    def compile_pertrap_metrics(self):
-        pass
 
     def compile_pertrap_metric(
         self,
@@ -510,20 +602,6 @@ class ExperimentCompiler(Compiler):
         return pd.concat((srs, empty))
 
 
-# fig = plt.figure(tight_layout=True)
-# gs = Grid_plot = plt.GridSpec(3, 2, wspace=0.8, hspace=0.6)
-
-# sns.stripplot(
-#     data=merged.reset_index(),
-#     x="group",
-#     y="count",
-#     hue="ntraps",
-#     ax=fig.add_subplot(gs[0, 0]),
-# )
-
-# g = NameGrouper(dir)
-
-
 class Reporter(object):
     """
     Manages Multiple pages to generate a report
@@ -536,8 +614,9 @@ class Reporter(object):
 
         if pages is None:
             pages = {
-                "growth": self.gen_page_growth(),
                 "qa": self.gen_page_qa(),
+                "growth": self.gen_page_growth(),
+                "fluorescence": self.gen_page_fluorescence(),
             }
         self.pages = pages
 
@@ -622,6 +701,26 @@ class Reporter(object):
         return page_qc
 
     @staticmethod
+    def gen_page_fluorescence():
+        return (
+            {
+                "data": "fluorescence",
+                "func": "relplot",
+                "args": ("timepoint", "value"),
+                "kwargs": {
+                    "col": "signal",
+                    "col_wrap": 2,
+                    "hue": "group",
+                    "facet_kws": {"sharey": False, "sharex": True},
+                    "kind": "line",
+                },
+            },
+        )
+
+    def gen_page_cell_cell_corr():
+        pass
+
+    @staticmethod
     def gen_page_growth():
         return (
             {
@@ -689,7 +788,7 @@ class PageOrganiser(object):
         if yloc is None:
             yloc = 0
 
-        if self.single_fig:  # If plotting a single figure using seaborn cols/rows
+        if self.single_fig:  # If plotting using a figure method using seaborn cols/rows
             self.g = func(*args, **kwargs)
             self.axes = {
                 ax.title.get_text().split("=")[-1][1:]: ax for ax in self.g.axes.flat
@@ -710,7 +809,7 @@ class PageOrganiser(object):
                 for ax in self.axes.values()
                 for lbl in ax.get_xticklabels()
             ]
-        ):
+        ) and hasattr(self, "g"):
             for axes in self.g.axes.flat:
                 _ = axes.set_xticklabels(
                     axes.get_xticklabels(), rotation=15, horizontalalignment="right"
@@ -730,27 +829,32 @@ class PageOrganiser(object):
 
     def gen_sns_wrapper(self, how):
         def sns_wrapper(ax=None):
+            kwargs = how.get("kwargs", {})
             if ax:
-                return getattr(sns, how["func"])(
-                    data=self.data[how["data"]],
-                    x=how["args"][0],
-                    y=how["args"][1],
-                    **how["kwargs"],
-                    ax=ax,
-                )
-            else:
-                return getattr(sns, how["func"])(
-                    data=self.data[how["data"]],
-                    x=how["args"][0],
-                    y=how["args"][1],
-                    **how["kwargs"],
-                )
+                kwargs["ax"] = ax
+            elif "height" not in kwargs:
+                kwargs["height"] = 11.7
+                kwargs["aspect"] = 11.7 / 8.27
+            return getattr(sns, how["func"])(
+                data=self.data[how["data"]],
+                x=how["args"][0],
+                y=how["args"][1],
+                **kwargs,
+            )
 
         return sns_wrapper
 
 
+# base_dir = Path("/home/alan/Documents/dev/skeletons/scripts/data/")
 # for dir in dirs:
-#     compiler = ExperimentCompiler(None, dir)
-#     dfs = compiler.run()
-#     rep = Reporter(data=dfs, path="tmp.pdf")
-#     rep.plot_report("tmp.pdf")
+#     try:
+#         compiler = ExperimentCompiler(None, base_dir / dir)
+#         dfs = compiler.run()
+#         rep = Reporter(data=dfs, path=base_dir / (dir + "/report.pdf"))
+#         from time import time
+
+#         rep.plot_report(base_dir / (dir + "/report.pdf"))
+#     except Exception as e:
+#         print("LOG:ERROR:", e)
+# with open("errors.log", "a") as f:
+#     f.write(e)
