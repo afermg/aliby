@@ -5,7 +5,7 @@ from postprocessor.core.processes.base import ParametersABC, ProcessABC
 import numpy as np
 import pandas as pd
 
-import gaussianprocess as gp
+import gaussianprocessderivatives as gp
 
 
 def estimate_gr(volume, dt, noruns, bounds, verbose):
