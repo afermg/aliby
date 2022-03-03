@@ -836,8 +836,18 @@ class PageOrganiser(object):
             if ax:
                 kwargs["ax"] = ax
             elif "height" not in kwargs:
+                ncols = kwargs.get("col_wrap", 1)
+                if "col" in kwargs:
+                    nrows = np.ceil(
+                        len(np.unique(self.data[how["data"]][kwargs["col"]])) / ncols
+                    )
+                else:
+                    nrows = len(np.unique(self.data[how["data"]][kwargs["row"]]))
+
                 kwargs["height"] = 11.7
-                kwargs["aspect"] = 11.7 / 8.27
+                # kwargs["aspect"] = 8.27 / (11.7 / kwargs["col_wrap"])
+                kwargs["aspect"] = (8.27 / ncols) / (kwargs["height"] / nrows)
+                print(kwargs)
             return getattr(sns, how["func"])(
                 data=self.data[how["data"]],
                 x=how["args"][0],
