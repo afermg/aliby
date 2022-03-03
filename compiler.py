@@ -415,11 +415,14 @@ class ExperimentCompiler(Compiler):
             tmp_formatted["signal"] = k
             to_concat.append(tmp_formatted)
             if norm and k.split(".")[0] in norm:
-                norm_v = v.groupby(["position", "trap", "cell_label"]).transform(
-                    # lambda x: x - x.min() / (x.max() - x.min())
-                    lambda x: (x - x.min())
-                    / (x.max() - x.min())
+                norm_v = v.subtract(v.min(axis=1), axis=0).div(
+                    v.max(axis=1) - v.min(axis=1), axis=0
                 )
+                # norm_v = v.groupby(["position", "trap", "cell_label"]).transform(
+                #     # lambda x: x - x.min() / (x.max() - x.min())
+                #     lambda x: (x - x.min())
+                #     / (x.max() - x.min())
+                # )
                 formatted = format_df(norm_v)
                 formatted["signal"] = "norm_" + k
                 to_concat.append(formatted)
