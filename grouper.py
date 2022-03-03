@@ -62,18 +62,21 @@ class Grouper(ABC):
         group_names = self.group_names
         sitems = self.signals.items()
         if pool or pool is None:
-            signals = p_map(
-                lambda x: concat_signal_ind(
-                    path, group_names, x[0], x[1], *args, **kwargs
-                ),
-                sitems,
-                num_cpus=pool,
-                desc="Group " + path,
-            )
+            if pool is None:
+                pool = 8
+            with Pool(pool) as p:
+                signals = p.map(
+                    lambda x: concat_signal_ind(
+                        path, group_names, x[0], x[1], *args, **kwargs
+                    ),
+                    sitems,
+                    # num_cpus=pool,
+                    # desc="Group " + path,
+                )
         else:
             signals = [
                 concat_signal_ind(path, group_names, name, signal, **kwargs)
-                for name, signal in tqdm(sitems)
+                for name, signal in sitems
             ]
 
         errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
