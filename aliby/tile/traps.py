@@ -91,10 +91,28 @@ def segment_traps(image, tile_size, downscale=0.4):
         x - tile_size // 2 : x + tile_size // 2, y - tile_size // 2 : y + tile_size // 2
     ]
 
-    traps = identify_trap_locations(image, template)
+    # add template as mean of found traps
+    mean_template = (
+        np.dstack(
+            [
+                image[
+                    x - tile_size // 2 : x + tile_size // 2,
+                    y - tile_size // 2 : y + tile_size // 2,
+                ]
+                for x, y in traps
+            ]
+        )
+        .astype(int)
+        .mean(axis=-1)
+    )
 
-    if len(traps) < 10 and downscale != 1:
-        print("Trying again.")
+    traps = identify_trap_locations(image, template)
+    mean_traps = identify_trap_locations(image, mean_template)
+
+    traps = traps if len(traps) > len(mean_traps) else mean_traps
+
+    if len(traps) < 30 and downscale != 1:
+        print("Tiler:TrapIdentification: Trying again.")
         return segment_traps(image, tile_size, downscale=1)
 
     return traps
