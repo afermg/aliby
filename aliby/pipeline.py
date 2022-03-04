@@ -4,7 +4,7 @@ Pipeline and chaining elements.
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 from pathlib import Path
 import traceback
 
@@ -13,6 +13,7 @@ import re
 import h5py
 import yaml
 from tqdm import tqdm
+from p_tqdm import p_map
 from time import perf_counter
 from pathos.multiprocessing import Pool
 
@@ -74,9 +75,9 @@ class PipelineParameters(ParametersABC):
         expt_id = general.get("expt_id", 19993)
         directory = Path(general.get("directory", "../data"))
         with Dataset(int(expt_id), **general.get("server_info")) as conn:
-            tmp_directory = directory / conn.unique_name
-            if not tmp_directory.exists():
-                tmp_directory.mkdir(parents=True)
+            directory = directory / conn.unique_name
+            if not directory.exists():
+                directory.mkdir(parents=True)
                 # Download logs to use for metadata
             conn.cache_logs(directory)
         meta = MetaData(directory, None).load_logs()
@@ -118,6 +119,24 @@ class Pipeline(ProcessABC):
 
     """
 
+    iterative_steps = ["tiler", "baby", "extraction"]
+    step_sequence = [
+        "tiler",
+        "baby",
+        "extraction",
+        "postprocessing",
+    ]
+    writer_groups = {
+        "tiler": ["trap_info"],
+        "baby": ["cell_info"],
+        "extraction": ["extraction"],
+        "postprocessing": ["postprocessing", "modifiers"],
+    }
+    writers = {
+        "tiler": [("tiler", TilerWriter)],
+        "baby": [("baby", LinearBabyWriter), ("state", StateWriter)],
+    }
+
     def __init__(self, parameters: PipelineParameters, store=None):
         super().__init__(parameters)
 
@@ -151,7 +170,7 @@ class Pipeline(ProcessABC):
         root_dir = Path(root_dir)
 
         print("Searching OMERO")
-        # Do all initialis
+        # Do all all initialisations
         with Dataset(int(expt_id), **self.general["server_info"]) as conn:
             image_ids = conn.get_images()
             directory = root_dir / conn.unique_name
@@ -165,15 +184,13 @@ class Pipeline(ProcessABC):
         config["general"]["directory"] = directory
 
         # Filter TODO integrate filter onto class and add regex
-        filt_int = lambda d, filt: {
-            k: v for i, (k, v) in enumerate(d.items()) if i == filt
-        }
+        def filt_int(d: dict, filt: int):
+            return {k: v for i, (k, v) in enumerate(d.items()) if i == filt}
 
-        filt_str = lambda d, filt: {
-            k: v for k, v in image_ids.items() if re.search(filt, k)
-        }
+        def filt_str(d: dict, filt: str):
+            return {k: v for k, v in image_ids.items() if re.search(filt, k)}
 
-        def pick_filter(image_ids, filt):
+        def pick_filter(image_ids: dict, filt: Union[int, str]):
             if isinstance(filt, str):
                 image_ids = filt_str(image_ids, filt)
             elif isinstance(filt, int):
@@ -193,22 +210,48 @@ class Pipeline(ProcessABC):
 
         if distributed != 0:  # Gives the number of simultaneous processes
             with Pool(distributed) as p:
-                results = p.map(lambda x: self.create_pipeline(x), image_ids.items())
-            return results
+                results = p.map(
+                    lambda x: self.create_pipeline(*x),
+                    [(k, i) for i, k in enumerate(image_ids.items())],
+                    # num_cpus=distributed,
+                    # position=0,
+                )
+
+            # results = p_map(
+            #     lambda x: self.create_pipeline(*x),
+            #     [(k, i) for i, k in enumerate(image_ids.items())],
+            #     num_cpus=distributed,
+            #     position=0,
+            # )
+
         else:  # Sequential
             results = []
-            for k, v in image_ids.items():
-                r = self.create_pipeline((k, v))
+            for k, v in tqdm(image_ids.items()):
+                r = self.create_pipeline((k, v), 1)
                 results.append(r)
 
-    def create_pipeline(self, image_id):
+        return results
+
+    def create_pipeline(self, image_id, index=None):
         config = self.parameters.to_dict()
+        pparams = config
         name, image_id = image_id
         general_config = config["general"]
         session = None
         earlystop = general_config.get("earlystop", None)
+        steps = {}
+        process_from = {k: 0 for k in self.iterative_steps}
+        ow = {k: 0 for k in self.step_sequence}
 
+        # check overwriting
+        ow_id = config.get("overwrite", 0)
+        if ow_id:
+            ow = {
+                step: self.step_sequence.index(ow_id) < i
+                for i, step in enumerate(self.step_sequence, 1)
+            }
         try:
+            # Set up
             directory = general_config["directory"]
 
             with Image(image_id, **self.general["server_info"]) as image:
@@ -217,111 +260,155 @@ class Pipeline(ProcessABC):
 
                 from_start = True
                 trackers_state = None
-                if (
-                    not general_config.get("overwrite", False)
-                    and Path(filename).exists()
-                ):
-                    try:
-                        print(f"Existing file {filename} will be used.")
-                        with h5py.File(filename, "r") as f:
-                            tiler = Tiler.from_hdf5(image, filename)
-                            s = Signal(filename)
-                            process_from = (
-                                f.attrs["last_processed"]
-                                or s.get_raw("/general/None/extraction/volume").columns[
-                                    -1
-                                ]
-                                or 0
-                            )
-                            # get state array
-                            trackers_state = StateReader(
-                                filename
-                            ).get_formatted_states()
-                            # print(
-                            #     f"Loaded trackers_state with control values {trackers_state[20]['prev_feats']}"
-                            # )
-                            tiler.n_processed = process_from
-                            process_from += 1
-                        from_start = False
-                    except Exception as e:
-                        # print(e)
-                        pass
+                if Path(filename).exists():  # If no previous segmentation
+
+                    # Delete datasets to overwrite and update pipeline data
+                    with h5py.File(filename, "r") as f:
+                        pparams = PipelineParameters.from_yaml(
+                            f.attrs["parameters"]
+                        ).to_dict()
+
+                    for k, v in ow.items():
+                        if v:
+                            with h5py.File(filename, "a") as f:
+                                del f[self.writer_groups[k]]
+                            pparams[k] = config["k"]
+                    meta.add_fields(
+                        {"parameters": PipelineParameters.from_dict(pparams).to_yaml()},
+                        overwrite=True,
+                    )
+
+                    if not ow["tiler"]:  # Try to load config from file
+                        try:
+                            with h5py.File(filename, "r") as f:
+                                steps["tiler"] = Tiler.from_hdf5(image, filename)
+                                s = Signal(filename)
+
+                                for k, v in process_from.items():
+                                    if not ow[k]:
+
+                                        process_from[k] = (
+                                            f[self.writer_groups[k][-1]].attrs.get(
+                                                "last_processed",
+                                                max(
+                                                    v,
+                                                    min(
+                                                        s.get_raw(
+                                                            "extraction/general/None/volume"
+                                                        ).columns[-1],
+                                                        f.attrs.get(
+                                                            "last_processed", 0
+                                                        ),
+                                                    ),
+                                                ),
+                                            )
+                                            + 1
+                                        )
+                                # get state array
+                                if not ow["baby"]:
+                                    trackers_state = StateReader(
+                                        filename
+                                    ).get_formatted_states()
+                                steps["tiler"].n_processed = max(
+                                    0, process_from["tiler"] - 1
+                                )
+                                # process_from += 1
+
+                            config["tiler"] = steps["tiler"].parameters.to_dict()
+                            if not np.any(ow.values()):
+                                from_start = False
+                                print(f"Existing file {filename} will be used.")
+                        except Exception as e:
+                            print(e)
 
                 if from_start:  # New experiment or overwriting
-                    # print("Starting from scratch")
-                    try:
-                        os.remove(filename)
-                    except:
-                        pass
-
-                    process_from = 0
+                    if config.get("overwrite", False) is True or np.all(
+                        list(ow.values())
+                    ):
+                        if Path(filename).exists():
+                            os.remove(filename)
                     meta.run()
                     meta.add_fields(  # Add non-logfile metadata
                         {
                             "omero_id,": config["general"]["id"],
                             "image_id": image_id,
-                            "parameters": self.parameters.to_yaml(),
+                            "parameters": PipelineParameters.from_dict(
+                                pparams
+                            ).to_yaml(),
                         }
                     )
-                    try:
-                        tiler = Tiler.from_image(
-                            image, TilerParameters.from_dict(config["tiler"])
-                        )
-                    except:
-                        # Remove and try to run again?
-                        meta.add_fields({"end_status": "Untiled"})
 
-                writer = TilerWriter(filename)
-                session = initialise_tf(2)
-                runner = BabyRunner.from_tiler(
-                    BabyParameters.from_dict(config["baby"]), tiler
-                )
-                if trackers_state:
-                    runner.crawler.tracker_states = trackers_state
+                tps = min(general_config["tps"], image.data.shape[0])
 
-                # bwriter = BabyWriter(filename)
-                bwriter = LinearBabyWriter(filename)
-                swriter = StateWriter(filename)
+                run_kwargs = {"extraction": {"labels": None, "masks": None}}
+                loaded_writers = {
+                    name: writer(filename)
+                    for k in self.step_sequence
+                    if k in self.writers
+                    for name, writer in self.writers[k]
+                }
+                writer_ow_kwargs = {
+                    "state": loaded_writers["state"].datatypes.keys(),
+                    "baby": ["mother_assign"],
+                }
+
+                # Initialise Steps
+                if "tiler" not in steps:
+                    steps["tiler"] = Tiler.from_image(
+                        image, TilerParameters.from_dict(config["tiler"])
+                    )
+
+                if process_from["baby"] < tps:
+                    session = initialise_tf(2)
+                    steps["baby"] = BabyRunner.from_tiler(
+                        BabyParameters.from_dict(config["baby"]), steps["tiler"]
+                    )
+                    if trackers_state:
+                        steps["baby"].crawler.tracker_states = trackers_state
 
                 # Limit extraction parameters during run using the available channels in tiler
-                av_channels = set((*tiler.channels, "general"))
-                config["extraction"]["tree"] = {
-                    k: v
-                    for k, v in config["extraction"]["tree"].items()
-                    if k in av_channels
-                }
-                config["extraction"]["sub_bg"] = av_channels.intersection(
-                    config["extraction"]["sub_bg"]
-                )
+                if process_from["extraction"] < tps:
+                    av_channels = set((*steps["tiler"].channels, "general"))
+                    config["extraction"]["tree"] = {
+                        k: v
+                        for k, v in config["extraction"]["tree"].items()
+                        if k in av_channels
+                    }
+                    config["extraction"]["sub_bg"] = av_channels.intersection(
+                        config["extraction"]["sub_bg"]
+                    )
 
-                av_channels_wsub = av_channels.union(
-                    [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
-                )
-                for op in config["extraction"]["multichannel_ops"]:
-                    config["extraction"]["multichannel_ops"][op] = [
-                        x
-                        for x in config["extraction"]["multichannel_ops"]
-                        if len(x[0]) == len(av_channels_wsub.intersection(x[0]))
-                    ]
-                config["extraction"]["multichannel_ops"] = {
-                    k: v
-                    for k, v in config["extraction"]["multichannel_ops"].items()
-                    if len(v)
-                }
+                    av_channels_wsub = av_channels.union(
+                        [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
+                    )
+                    for op in config["extraction"]["multichannel_ops"]:
+                        config["extraction"]["multichannel_ops"][op] = [
+                            x
+                            for x in config["extraction"]["multichannel_ops"]
+                            if len(x[0]) == len(av_channels_wsub.intersection(x[0]))
+                        ]
+                    config["extraction"]["multichannel_ops"] = {
+                        k: v
+                        for k, v in config["extraction"]["multichannel_ops"].items()
+                        if len(v)
+                    }
 
-                exparams = ExtractorParameters.from_dict(config["extraction"])
-                ext = Extractor.from_tiler(exparams, store=filename, tiler=tiler)
+                    exparams = ExtractorParameters.from_dict(config["extraction"])
+                    steps["extraction"] = Extractor.from_tiler(
+                        exparams, store=filename, tiler=steps["tiler"]
+                    )
 
                 # RUN
                 # Adjust tps based on how many tps are available on the server
-                tps = min(general_config["tps"], image.data.shape[0])
                 frac_clogged_traps = 0
                 # print(f"Processing from {process_from}")
+                min_process_from = min(process_from.values())
                 pbar = tqdm(
-                    range(process_from, tps),
+                    range(min_process_from, tps),
                     desc=image.name,
-                    initial=process_from,
+                    initial=min_process_from,
                     total=tps,
+                    # position=index + 1,
                 )
                 for i in pbar:
 
@@ -330,53 +417,59 @@ class Pipeline(ProcessABC):
                         or i < earlystop["min_tp"]
                     ):
 
-                        t = perf_counter()
-                        trap_info = tiler.run_tp(i)
-                        if i == 0:
-                            print(f"{tiler.n_traps} traps found in {image.name}")
+                        for step in self.iterative_steps:
+                            if i >= process_from[step]:
+                                t = perf_counter()
+                                result = steps[step].run_tp(
+                                    i, **run_kwargs.get(step, {})
+                                )
+                                logging.debug(f"Timing:{step}:{perf_counter() - t}s")
+                                if step in loaded_writers:
+                                    t = perf_counter()
+                                    loaded_writers[step].write(
+                                        data=result,
+                                        overwrite=writer_ow_kwargs.get(step, []),
+                                        tp=i,
+                                        meta={"last_processed": i},
+                                    )
+                                    logging.debug(
+                                        f"Timing:Writing-{step}:{perf_counter() - t}s"
+                                    )
 
-                        logging.debug(f"Timing:Trap:{perf_counter() - t}s")
-                        t = perf_counter()
-                        writer.write(trap_info, overwrite=[], tp=i)
-                        logging.debug(f"Timing:Writing-trap:{perf_counter() - t}s")
-                        t = perf_counter()
+                                # Step-specific actions
+                                if step == "baby":  # Write state and pass info to ext
+                                    loaded_writers["state"].write(
+                                        data=steps[step].crawler.tracker_states,
+                                        overwrite=loaded_writers[
+                                            "state"
+                                        ].datatypes.keys(),
+                                        tp=i,
+                                    )
+                                    labels, masks = groupby_traps(
+                                        result["trap"],
+                                        result["cell_label"],
+                                        result["edgemasks"],
+                                        steps["tiler"].n_traps,
+                                    )
 
-                        seg = runner.run_tp(i)
-                        logging.debug(f"Timing:Segmentation:{perf_counter() - t}s")
+                                elif (
+                                    step == "extraction"
+                                ):  # Remove mask/label after ext
+                                    for k in ["masks", "labels"]:
+                                        run_kwargs[step][k] = None
 
-                        t = perf_counter()
-                        # bwriter.write(seg, overwrite=["mother_assign"], tp=i)
-                        bwriter.write(seg, overwrite=["mother_assign"], tp=i)
-                        # print(
-                        #     f"Writing state in tp {i} with control values {runner.crawler.tracker_states[20]['prev_feats']}"
-                        # )
-                        swriter.write(
-                            data=runner.crawler.tracker_states,
-                            overwrite=swriter.datatypes.keys(),
-                            tp=i,
-                        )
-                        logging.debug(f"Timing:Writing-baby:{perf_counter() - t}s")
+                            if i == min_process_from:
+                                print(
+                                    f"Found {steps['tiler'].n_traps} traps in {image.name}"
+                                )
 
-                        # TODO add time-skipping for cases when the
-                        # an interruption happens after writing segmentation but before extraction
-                        t = perf_counter()
-                        labels, masks = groupby_traps(
-                            seg["trap"],
-                            seg["cell_label"],
-                            seg["edgemasks"],
-                            tiler.n_traps,
-                        )
-                        tmp = ext.run(tps=[i], masks=masks, labels=labels)
-                        logging.debug(f"Timing:Extraction:{perf_counter() - t}s")
                         frac_clogged_traps = self.check_earlystop(
-                            filename, earlystop, tiler.tile_size
+                            filename, earlystop, steps["tiler"].tile_size
                         )
                         logging.debug(f"Quality:Clogged_traps:{frac_clogged_traps}")
 
                         frac = np.round(frac_clogged_traps * 100)
-                        if np.isnan(frac):
-                            frac = 0
-                        pbar.set_postfix_str(f"{int(frac)}% Clogged")
+                        pbar.set_postfix_str(f"{frac} Clogged")
                     else:  # Stop if more than X% traps are clogged
                         logging.debug(
                             f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
@@ -387,30 +480,12 @@ class Pipeline(ProcessABC):
                         meta.add_fields({"end_status": "Clogged"})
                         break
 
-                    # if (
-                    #     i > earlystop["min_tp"]
-                    # ):  # Calculate the fraction of clogged traps
-                    # print("Frac clogged traps: ", frac_clogged_traps)
-
-                    # State Writer to recover interrupted experiments
-
                     meta.add_fields({"last_processed": i})
-
-                    # import pickle as pkl
-
-                    # with open(
-                    #     Path(bwriter.file).parent / f"{i}_live_state.pkl", "wb"
-                    # ) as f:
-                    #     pkl.dump(runner.crawler.tracker_states, f)
-                    # with open(
-                    #     Path(bwriter.file).parent / f"{i}_read_state.pkl", "wb"
-                    # ) as f:
-                    #     pkl.dump(StateReader(bwriter.file).get_formatted_states(), f)
                 # Run post processing
 
                 meta.add_fields({"end_status": "Success"})
                 post_proc_params = PostProcessorParameters.from_dict(
-                    self.parameters.postprocessing
+                    config["postprocessing"]
                 ).to_dict()
                 PostProcessor(filename, post_proc_params).run()
 
@@ -468,6 +543,7 @@ def groupby_traps(traps, labels, edgemasks, ntraps):
         key: np.dstack([ndimage.morphology.binary_fill_holes(x[1]) for x in group])
         for key, group in iterators[1]
     }
+
     labels = {i: label_d.get(i, []) for i in range(ntraps)}
     masks = {i: mask_d.get(i, []) for i in range(ntraps)}
 
