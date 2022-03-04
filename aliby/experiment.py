@@ -110,7 +110,7 @@ class MetaData:
         parsed_flattened = parse_logfiles(self.log_dir)
         return parsed_flattened
 
-    def run(self, ovewrite=False):
+    def run(self, overwrite=False):
         metadata_dict = self.load_logs()
         self.metadata_writer.write(path="/", meta=metadata_dict, overwrite=overwrite)
 
