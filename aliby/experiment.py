@@ -110,16 +110,18 @@ class MetaData:
         parsed_flattened = parse_logfiles(self.log_dir)
         return parsed_flattened
 
-    def run(self):
+    def run(self, ovewrite=False):
         metadata_dict = self.load_logs()
-        self.metadata_writer.write(path="/", meta=metadata_dict, overwrite=False)
+        self.metadata_writer.write(path="/", meta=metadata_dict, overwrite=overwrite)
 
-    def add_field(self, field_name, field_value):
+    def add_field(self, field_name, field_value, **kwargs):
         self.metadata_writer.write(
-            path="/", meta={field_name: field_value}, overwrite=False
+            path="/",
+            meta={field_name: field_value},
+            **kwargs,
         )
 
-    def add_fields(self, fields_values: dict):
+    def add_fields(self, fields_values: dict, **kwargs):
         for field, value in fields_values.items():
             self.add_field(field, value)
 
