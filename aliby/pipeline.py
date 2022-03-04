@@ -244,7 +244,7 @@ class Pipeline(ProcessABC):
         ow = {k: 0 for k in self.step_sequence}
 
         # check overwriting
-        ow_id = config.get("overwrite", 0)
+        ow_id = general_config.get("overwrite", 0)
         if ow_id:
             ow = {
                 step: self.step_sequence.index(ow_id) < i
@@ -261,22 +261,6 @@ class Pipeline(ProcessABC):
                 from_start = True
                 trackers_state = None
                 if Path(filename).exists():  # If no previous segmentation
-
-                    # Delete datasets to overwrite and update pipeline data
-                    with h5py.File(filename, "r") as f:
-                        pparams = PipelineParameters.from_yaml(
-                            f.attrs["parameters"]
-                        ).to_dict()
-
-                    for k, v in ow.items():
-                        if v:
-                            with h5py.File(filename, "a") as f:
-                                del f[self.writer_groups[k]]
-                            pparams[k] = config["k"]
-                    meta.add_fields(
-                        {"parameters": PipelineParameters.from_dict(pparams).to_yaml()},
-                        overwrite=True,
-                    )
 
                     if not ow["tiler"]:  # Try to load config from file
                         try:
@@ -320,6 +304,23 @@ class Pipeline(ProcessABC):
                                 print(f"Existing file {filename} will be used.")
                         except Exception as e:
                             print(e)
+
+                    # Delete datasets to overwrite and update pipeline data
+                    with h5py.File(filename, "r") as f:
+                        pparams = PipelineParameters.from_yaml(
+                            f.attrs["parameters"]
+                        ).to_dict()
+
+                    with h5py.File(filename, "a") as f:
+                        for k, v in ow.items():
+                            if v:
+                                for gname in self.writer_groups[k]:
+                                    del f[gname]
+                            pparams[k] = config[k]
+                    meta.add_fields(
+                        {"parameters": PipelineParameters.from_dict(pparams).to_yaml()},
+                        overwrite=True,
+                    )
 
                 if from_start:  # New experiment or overwriting
                     if config.get("overwrite", False) is True or np.all(
