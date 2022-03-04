@@ -430,6 +430,12 @@ class Extractor(ProcessABC):
         elif channel in self.img_bgsub:
             return self.img_bgsub[channel]
 
+    def run_tp(self, tp, **kwargs):
+        """
+        Wrapper to add compatiblibility with other pipeline steps
+        """
+        return self.run(tps=[tp], **kwargs)
+
     def run(self, tree=None, tps: List[int] = None, save=True, **kwargs) -> dict:
 
         if tree is None:
