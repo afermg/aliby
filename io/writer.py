@@ -80,7 +80,7 @@ class DynamicWriter:
         if key not in self.datatypes:
             raise KeyError(f"No defined data type for key {key}")
 
-    def write(self, data, overwrite: list):
+    def write(self, data, overwrite: list, meta={}):
         # Data is a dictionary, if not, make it one
         # Overwrite data is a list
         with h5py.File(self.file, "a") as store:
@@ -100,6 +100,9 @@ class DynamicWriter:
                 except Exception as e:
                     print(key, value)
                     raise (e)
+            for key, value in meta.items():
+                hgroup.attrs[key] = value
+
         return
 
 
@@ -113,7 +116,7 @@ class TilerWriter(DynamicWriter):
     }
     group = "trap_info"
 
-    def write(self, data, overwrite: list, tp: int):
+    def write(self, data, overwrite: list, tp: int, meta={}):
         """
         Skips writing data if it were to overwrite it,using drift as a marker
         """
@@ -126,8 +129,9 @@ class TilerWriter(DynamicWriter):
             if nprev and tp < nprev.shape[0]:
                 print(f"Tiler: Skipping timepoint {tp}")
                 skip = True
+
         if not skip:
-            super().write(data=data, overwrite=overwrite)
+            super().write(data=data, overwrite=overwrite, meta=meta)
 
 
 tile_size = 117
@@ -322,7 +326,7 @@ class LinearBabyWriter(DynamicWriter):
     }
     group = "cell_info"
 
-    def write(self, data, overwrite: list, tp=None):
+    def write(self, data, overwrite: list, tp=None, meta={}):
         # Data is a dictionary, if not, make it one
         # Overwrite data is a list
 
@@ -333,6 +337,9 @@ class LinearBabyWriter(DynamicWriter):
                 super().write(data, overwrite)
             else:
                 print(f"BabyWriter: Skipping tp {tp}")
+
+            for key, value in meta.items():
+                hgroup.attrs[key] = value
 
 
 class StateWriter(DynamicWriter):
