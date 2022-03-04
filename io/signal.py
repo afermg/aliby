@@ -122,6 +122,8 @@ class Signal(BridgeH5):
     def siglist(self):
         if not hasattr(self, "_siglist"):
             self._siglist = []
+            with h5py.File(self.filename, "r") as f:
+                f.visititems(self.get_siglist)
         return self._siglist
 
     def get_merged(self, dataset):
