@@ -263,7 +263,7 @@ class BabyWriter(DynamicWriter):
         else:
             self.__append_edgemasks(hgroup, edgemasks, current_indices)
 
-    def write(self, data, overwrite: list, tp: int = None):
+    def write(self, data, overwrite: list, tp: int = None, meta={}):
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
 
@@ -295,6 +295,11 @@ class BabyWriter(DynamicWriter):
                 except Exception as e:
                     print(key, value)
                     raise (e)
+
+        # Meta
+        for key, value in meta.items():
+            hgroup.attrs[key] = value
+
         return
 
 
