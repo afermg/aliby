@@ -46,8 +46,8 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
 
     base["sub_bg"] = av_flch
 
-    # Additional extraction
-    if "ph" in extras and {"pHluorin405", "GFPFast"}.issubset(av_flch):
+    # Additional extraction defaults when channels available
+    if {"pHluorin405", "GFPFast"}.issubset(av_flch):
 
         sets = {
             b + a: (x, y)
