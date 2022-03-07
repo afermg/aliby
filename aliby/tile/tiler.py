@@ -115,6 +115,10 @@ class TrapLocations:
         return res
 
     @classmethod
+    def from_tiler_init(cls, initial_location, tile_size, max_size=1200):
+        return cls(initial_location, tile_size, max_size, drifts=[])
+
+    @classmethod
     def read_hdf5(cls, file):
         with h5py.File(file, "r") as hfile:
             trap_info = hfile["trap_info"]
@@ -124,6 +128,7 @@ class TrapLocations:
             tile_size = trap_info.attrs["tile_size"]
         trap_locs = cls(initial_locations, tile_size, max_size=max_size)
         trap_locs.drifts = drifts
+        # trap_locs.n_processed = len(drifts)
         return trap_locs
 
 
@@ -176,12 +181,15 @@ class Tiler(ProcessABC):
         if parameters is None:
             parameters = TilerParameters.default()
 
-        return cls(
+        tiler = cls(
             image.data,
             metadata,
             parameters,
             trap_locs=trap_locs,
         )
+        if hasattr(trap_locs, "drifts"):
+            tiler.n_processed = len(trap_locs.drifts)
+        return tiler
 
     @lru_cache(maxsize=2)
     def get_tc(self, t, c):
@@ -229,7 +237,8 @@ class Tiler(ProcessABC):
             if half_tile < x < max_size - half_tile
             and half_tile < y < max_size - half_tile
         ]
-        self.trap_locs = TrapLocations(trap_locs, tile_size)
+        self.trap_locs = TrapLocations.from_tiler_init(trap_locs, tile_size)
+        # self.trap_locs = TrapLocations(trap_locs, tile_size)
 
     def find_drift(self, tp):
         # TODO check that the drift doesn't move any tiles out of the image, remove them from list if so
@@ -297,8 +306,16 @@ class Tiler(ProcessABC):
     def run_tp(self, tp):
         # assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
-        if self.n_processed == 0:
+        if self.n_processed == 0 or not hasattr(self.trap_locs, "drifts"):
             self._initialise_traps(self.tile_size)
+
+        if hasattr(self.trap_locs, "drifts"):
+            drift_len = len(self.trap_locs.drifts)
+
+            if self.n_processed != drift_len:
+                raise (Exception("Tiler:N_processed and ndrifts don't match"))
+                self.n_processed = drift_len
+
         self.find_drift(tp)  # Get drift
         # update n_processed
         self.n_processed = tp + 1
