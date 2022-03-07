@@ -268,12 +268,27 @@ class Pipeline(ProcessABC):
                                 steps["tiler"] = Tiler.from_hdf5(image, filename)
                                 s = Signal(filename)
 
+                                legacy_get_last_tp = (
+                                    {  # Function to support seg in ver < 0.24
+                                        "tiler": lambda f: f["trap_info/drifts"].shape[
+                                            0
+                                        ]
+                                        - 1,
+                                        "baby": lambda f: f["cell_info/timepoint"][-1],
+                                        "extraction": lambda f: f[
+                                            "extraction/general/None/area/timepoint"
+                                        ][-1],
+                                    }
+                                )
                                 for k, v in process_from.items():
                                     if not ow[k]:
 
                                         process_from[k] = f[
                                             self.writer_groups[k][-1]
-                                        ].attrs.get("last_processed", -1)
+                                        ].attrs.get(
+                                            "last_processed",
+                                            legacy_get_last_tp[k](f),
+                                        )
                                         process_from[k] += 1
                                 # get state array
                                 if not ow["baby"]:
