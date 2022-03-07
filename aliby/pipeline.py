@@ -239,8 +239,8 @@ class Pipeline(ProcessABC):
         general_config = config["general"]
         session = None
         earlystop = general_config.get("earlystop", None)
-        steps = {}
         process_from = {k: 0 for k in self.iterative_steps}
+        steps = {}
         ow = {k: 0 for k in self.step_sequence}
 
         # check overwriting
@@ -271,32 +271,15 @@ class Pipeline(ProcessABC):
                                 for k, v in process_from.items():
                                     if not ow[k]:
 
-                                        process_from[k] = (
-                                            f[self.writer_groups[k][-1]].attrs.get(
-                                                "last_processed",
-                                                max(
-                                                    v,
-                                                    min(
-                                                        s.get_raw(
-                                                            "extraction/general/None/volume"
-                                                        ).columns[-1],
-                                                        f.attrs.get(
-                                                            "last_processed", 0
-                                                        ),
-                                                    ),
-                                                ),
-                                            )
-                                            + 1
-                                        )
+                                        process_from[k] = f[
+                                            self.writer_groups[k][-1]
+                                        ].attrs.get("last_processed", -1)
+                                        process_from[k] += 1
                                 # get state array
                                 if not ow["baby"]:
                                     trackers_state = StateReader(
                                         filename
                                     ).get_formatted_states()
-                                steps["tiler"].n_processed = max(
-                                    0, process_from["tiler"] - 1
-                                )
-                                # process_from += 1
 
                             config["tiler"] = steps["tiler"].parameters.to_dict()
                             if not np.any(ow.values()):
@@ -315,7 +298,9 @@ class Pipeline(ProcessABC):
                         for k, v in ow.items():
                             if v:
                                 for gname in self.writer_groups[k]:
-                                    del f[gname]
+                                    if gname in f:
+                                        del f[gname]
+
                             pparams[k] = config[k]
                     meta.add_fields(
                         {"parameters": PipelineParameters.from_dict(pparams).to_yaml()},
