@@ -30,6 +30,7 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
         "mean",
         "median",
         "imBackground",
+        "background_max5",
         "max2p5pc",
         "max2p5pc_med",
         "max5px",
