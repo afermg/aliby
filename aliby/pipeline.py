@@ -282,13 +282,13 @@ class Pipeline(ProcessABC):
                                 )
                                 for k, v in process_from.items():
                                     if not ow[k]:
-
-                                        process_from[k] = f[
-                                            self.writer_groups[k][-1]
-                                        ].attrs.get(
-                                            "last_processed",
-                                            legacy_get_last_tp[k](f),
-                                        )
+                                        process_from[k] = legacy_get_last_tp[k](f)
+                                        # process_from[k] = f[
+                                        #     self.writer_groups[k][-1]
+                                        # ].attrs.get(
+                                        #     "last_processed",
+                                        #     legacy_get_last_tp[k](f),
+                                        # )
                                         process_from[k] += 1
                                 # get state array
                                 if not ow["baby"]:
