@@ -94,7 +94,7 @@ class PipelineParameters(ParametersABC):
                     thresh_pos_clogged=0.4,
                     thresh_trap_ncells=8,
                     thresh_trap_area=0.9,
-                    ntps_to_eval=5,
+                    window_size=5,
                 ),
             )
         }
@@ -519,7 +519,7 @@ class Pipeline(ProcessABC):
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
-        cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
+        cells_used = df[df.columns[-1 - es_parameters["window_size"] : -1]].dropna(
             how="all"
         )
         traps_above_nthresh = (
