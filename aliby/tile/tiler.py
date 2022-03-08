@@ -73,7 +73,9 @@ class Trap:
 
 
 class TrapLocations:
-    def __init__(self, initial_location, tile_size, max_size=1200, drifts=[]):
+    def __init__(self, initial_location, tile_size, max_size=1200, drifts=None):
+        if drifts is None:
+            drifts = []
         self.tile_size = tile_size
         self.max_size = max_size
         self.initial_location = initial_location
