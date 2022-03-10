@@ -28,6 +28,11 @@ class Signal(BridgeH5):
         df.name = name
         return df
 
+    @property
+    def ntimepoints(self):
+        with h5py.File(self.filename, "r") as f:
+            return f["extraction/general/None/area/timepoint"][-1] + 1
+
     def mothers(self, signal, cutoff=0.8):
         df = self[signal]
         get_mothers = lambda df: df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
