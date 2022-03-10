@@ -35,6 +35,10 @@ class Grouper(ABC):
         return list(self.signals.values())[0]
 
     @property
+    def ntimepoints(self):
+        return max([s.ntimepoints for s in self.signals.values()])
+
+    @property
     def siglist(self):
         return self.fsignal.siglist
 
