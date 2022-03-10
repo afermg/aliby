@@ -218,7 +218,7 @@ class ExperimentCompiler(Compiler):
                 )
 
             stages_dfs = {
-                "Full": process_dfs(input_signals, range(compiler.meta.ntimepoints))
+                "Full": process_dfs(input_signals, range(compiler.grouper.ntimepoints))
             }
             for k, rng in stages:
                 stage_df = process_dfs(input_signals, rng)
@@ -262,12 +262,14 @@ class ExperimentCompiler(Compiler):
 
             intervals = np.array((0, *switch_times, last_tp), dtype=int)
 
-            stages = [
+            extracted_tps = self.grouper.ntimepoints
+            stages = [  # Only add intervals with length larger than zero
                 (
                     ": ".join((str(i + 1), pump_contents[p_id])),
-                    range(intervals[i], intervals[i + 1]),
+                    range(intervals[i], min(intervals[i + 1], extracted_tps)),
                 )
                 for i, p_id in enumerate(main_pump)
+                if (intervals[i + 1] > intervals[i])
             ]
             return stages
 
@@ -349,7 +351,7 @@ class ExperimentCompiler(Compiler):
 
     def compile_slices(self, nslices=2, *args, **kwargs):
         tps = [
-            min(i * (self.meta.ntimepoints // nslices), self.meta.ntimepoints - 1)
+            min(i * (self.grouper.ntimepoints // nslices), self.grouper.ntimepoints - 1)
             for i in range(nslices + 1)
         ]
         slices = [self.compile_slice(tp=tp) for tp in tps]
