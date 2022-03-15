@@ -24,14 +24,28 @@ def stretch_image(image):
     return image
 
 
-def segment_traps(image, tile_size, downscale=0.4):
+def segment_traps(
+    image,
+    tile_size,
+    downscale=0.4,
+    disk_radius_frac=None,
+    square_size=None,
+    min_frac_tilesize=None,
+):
+    if disk_radius_frac is None:
+        disk_radius_frac = 0.01
+    if square_size is None:
+        square_size = 3
+    if min_frac_tilesize is None:
+        min_frac_tilesize = 0.8
+
     # Make image go between 0 and 255
     img = image  # Keep a memory of image in case need to re-run
-    # stretched = stretch_image(image)
-    # img = stretch_image(image)
     # TODO Optimise the hyperparameters
-    disk_radius = int(min([0.01 * x for x in img.shape]))
-    min_area = 0.2 * (tile_size ** 2)
+
+    disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
+    min_area = min_frac_tilesize * (tile_size ** 2)
+
     if downscale != 1:
         img = transform.rescale(image, downscale)
     # entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
@@ -41,7 +55,7 @@ def segment_traps(image, tile_size, downscale=0.4):
 
     # apply threshold
     thresh = threshold_otsu(entropy_image)
-    bw = closing(entropy_image > thresh, square(3))
+    bw = closing(entropy_image > thresh, square(square_size))
 
     # remove artifacts connected to image border
     cleared = clear_border(bw)
