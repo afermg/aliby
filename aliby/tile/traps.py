@@ -31,13 +31,16 @@ def segment_traps(
     disk_radius_frac=None,
     square_size=None,
     min_frac_tilesize=None,
+    max_frac_tilesize=None,
 ):
     if disk_radius_frac is None:
         disk_radius_frac = 0.01
     if square_size is None:
         square_size = 3
     if min_frac_tilesize is None:
-        min_frac_tilesize = 0.8
+        min_frac_tilesize = 0.2
+    if max_frac_tilesize is None:
+        max_frac_tilesize = 0.8
 
     # Make image go between 0 and 255
     img = image  # Keep a memory of image in case need to re-run
@@ -45,6 +48,7 @@ def segment_traps(
 
     disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
     min_area = min_frac_tilesize * (tile_size ** 2)
+    max_area = max_frac_tilesize * (tile_size ** 2)
 
     if downscale != 1:
         img = transform.rescale(image, downscale)
@@ -65,14 +69,14 @@ def segment_traps(
     areas = [
         region.area
         for region in regionprops(label_image)
-        if region.area > min_area and region.area < tile_size ** 2 * 0.8
+        if region.area > min_area and region.area < max_area
     ]
     traps = (
         np.array(
             [
                 region.centroid
                 for region in regionprops(label_image)
-                if region.area > min_area and region.area < tile_size ** 2 * 0.8
+                if region.area > min_area and region.area < max_area
             ]
         )
         .round()
@@ -83,7 +87,7 @@ def segment_traps(
             [
                 region.minor_axis_length
                 for region in regionprops(label_image)
-                if region.area > min_area and region.area < tile_size ** 2 * 0.8
+                if region.area > min_area and region.area < max_area
             ]
         )
         .round()
