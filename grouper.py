@@ -197,8 +197,10 @@ class phGrouper(NameGrouper):
 
 
 def concat_signal_ind(path, group_names, group, signal, mode="mothers"):
+    if mode == "retained":
+        combined = signal.retained(path)
     if mode == "mothers":
-        combined = signal.mothers(path)
+        raise (NotImplementedError)
     elif mode == "raw":
         combined = signal.get_raw(path)
     elif mode == "families":
