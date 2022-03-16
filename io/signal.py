@@ -33,13 +33,13 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             return f["extraction/general/None/area/timepoint"][-1] + 1
 
-    def mothers(self, signal, cutoff=0.8):
+    def retained(self, signal, cutoff=0.8):
         df = self[signal]
-        get_mothers = lambda df: df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
+        get_retained = lambda df: df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
         if isinstance(df, pd.DataFrame):
-            return get_mothers(df)
+            return get_retained(df)
         elif isinstance(df, list):
-            return [get_mothers(d) for d in df]
+            return [get_retained(d) for d in df]
 
     def __getitem__(self, dsets):
 
