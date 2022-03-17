@@ -32,6 +32,7 @@ def segment_traps(
     square_size=None,
     min_frac_tilesize=None,
     max_frac_tilesize=None,
+    identify_traps_kwargs=None,
 ):
     if disk_radius_frac is None:
         disk_radius_frac = 0.01
@@ -41,8 +42,9 @@ def segment_traps(
         min_frac_tilesize = 0.2
     if max_frac_tilesize is None:
         max_frac_tilesize = 0.8
+    if identify_traps_kwargs is None:
+        identify_traps_kwargs = {}
 
-    # Make image go between 0 and 255
     img = image  # Keep a memory of image in case need to re-run
     # TODO Optimise the hyperparameters
 
@@ -52,8 +54,9 @@ def segment_traps(
 
     if downscale != 1:
         img = transform.rescale(image, downscale)
-    # entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
+
     entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
+
     if downscale != 1:
         entropy_image = transform.rescale(entropy_image, 1 / downscale)
 
@@ -66,11 +69,11 @@ def segment_traps(
 
     # label image regions
     label_image = label(cleared)
-    areas = [
-        region.area
-        for region in regionprops(label_image)
-        if region.area > min_area and region.area < max_area
-    ]
+    # areas = [
+    #     region.area
+    #     for region in regionprops(label_image)
+    #     if region.area > min_area and region.area < max_area
+    # ]
     traps = (
         np.array(
             [
@@ -93,6 +96,7 @@ def segment_traps(
         .round()
         .astype(int)
     )
+
     maskx = (tile_size // 2 < traps[:, 0]) & (
         traps[:, 0] < image.shape[0] - tile_size // 2
     )
@@ -124,16 +128,17 @@ def segment_traps(
         .mean(axis=-1)
     )
 
-    traps = identify_trap_locations(image, template)
-    mean_traps = identify_trap_locations(image, mean_template)
+    traps = identify_trap_locations(image, template, **identify_traps_kwargs)
+    mean_traps = identify_trap_locations(image, mean_template, **identify_traps_kwargs)
 
     traps = traps if len(traps) > len(mean_traps) else mean_traps
 
+    traps_retry = []
     if len(traps) < 30 and downscale != 1:
         print("Tiler:TrapIdentification: Trying again.")
-        return segment_traps(image, tile_size, downscale=1)
+        traps_retry = segment_traps(image, tile_size, downscale=1)
 
-    return traps
+    return traps if len(traps_retry) < len(traps) else traps_retry
 
 
 # def segment_traps(image, tile_size, downscale=0.4):
@@ -186,6 +191,13 @@ def identify_trap_locations(
     :param trap_rotation:
     :return:
     """
+    if optimize_scale is None:
+        optimize_scale = True
+    if downscale is None:
+        downscale = 0.35
+    if trap_size is None:
+        trap_size = None
+
     trap_size = trap_size if trap_size is not None else trap_template.shape[0]
     # Careful, the image is float16!
     img = transform.rescale(image.astype(float), downscale)
@@ -203,6 +215,7 @@ def identify_trap_locations(
         ** 2
         for rotation in [0, 90, 180, 270]
     }
+
     best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
     temp = transform.rotate(temp, best_rotation, cval=np.median(img))
 
@@ -222,7 +235,7 @@ def identify_trap_locations(
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
-        min_distance=int(trap_template.shape[0] * 0.70),
+        min_distance=int(trap_size * 0.70),
         exclude_border=(trap_size // 3),
     )
     return coordinates
