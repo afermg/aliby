@@ -6,7 +6,7 @@ Especially lines 342 to  399.
 This part only replicates the method to get the nuc_est_conv values
 """
 import numpy as np
-import scipy
+from scipy import signal, stats
 import skimage
 
 
@@ -59,11 +59,11 @@ def small_peaks_conv(cell_mask, trap_image):
     # expect the size of the nucleus to be.
     # TODO directly get a disk of that size?
     # new_shape = tuple(x * ratio_overlap / 5 for x in conv_matrix.shape)
-    # conv_matrix = scipy.misc.imresize(conv_matrix, new_shape)
+    # conv_matrix = misc.imresize(conv_matrix, new_shape)
     conv_matrix = skimage.morphology.disk(3 * ratio_overlap / 5)
     # Apply convolution to the image
     # TODO maybe rename 'conv_matrix' to 'kernel'
-    fluo_peaks = scipy.signal.convolve(trap_image, conv_matrix, "same")
+    fluo_peaks = signal.convolve(trap_image, conv_matrix, "same")
     fluo_peaks = fluo_peaks[cell_mask]
     small_peak_conv = np.max(fluo_peaks)
     return small_peak_conv
@@ -82,7 +82,7 @@ def nuc_est_conv(cell_mask, trap_image):
     # Nuc Est Conv
     alpha = 0.95
     approx_nuc_radius = np.sqrt(0.085 * num_cell_fluo / np.pi)
-    chi2inv = scipy.stats.distributions.chi2.ppf(alpha, df=2)
+    chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
     sd_est = approx_nuc_radius / np.sqrt(chi2inv)
 
     nuc_filt_hw = np.ceil(2 * approx_nuc_radius)
@@ -91,7 +91,7 @@ def nuc_est_conv(cell_mask, trap_image):
     cell_image = trap_image - np.median(cell_fluo)
     cell_image[~cell_loc] = 0
 
-    nuc_conv = scipy.signal.convolve(cell_image, nuc_filter, "same")
+    nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
     nuc_est_conv /= np.sum(nuc_filter ** 2) * alpha * np.pi * chi2inv * sd_est ** 2
     return nuc_est_conv
@@ -105,13 +105,13 @@ def nuc_conv_3d(cell_mask, trap_image, pixel_size=0.23, spacing=0.6):
     # Nuc Est Conv
     alpha = 0.95
     approx_nuc_radius = np.sqrt(0.085 * num_cell_fluo / np.pi)
-    chi2inv = scipy.stats.distributions.chi2.ppf(alpha, df=2)
+    chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
     sd_est = approx_nuc_radius / np.sqrt(chi2inv)
     nuc_filt_hw = np.ceil(2 * approx_nuc_radius)
     nuc_filter = gauss3D((2 * nuc_filt_hw + 1,) * 3, (sd_est, sd_est, sd_est * ratio))
     cell_image = trap_image - np.median(cell_fluo)
     cell_image[~cell_mask] = 0
-    nuc_conv = scipy.signal.convolve(cell_image, nuc_filter, "same")
+    nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
     nuc_est_conv /= np.sum(nuc_filter ** 2) * alpha * np.pi * chi2inv * sd_est ** 2
     return nuc_est_conv
