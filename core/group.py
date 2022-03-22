@@ -11,7 +11,7 @@ import pandas as pd
 from agora.io.bridge import groupsort
 from postprocessor.core.io.signal import Signal
 
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from postprocessor.core.abc import ParametersABC, ProcessABC
 
 
 class GroupParameters(ParametersABC):

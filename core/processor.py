@@ -12,7 +12,7 @@ from agora.io.writer import Writer
 from agora.io.signal import Signal
 from agora.io.cells import Cells
 
-from postprocessor.core.base import get_process, get_parameters
+from postprocessor.core.abc import get_process, get_parameters
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
 from postprocessor.core.processes.lineageprocess import LineageProcessParameters
@@ -60,6 +60,10 @@ class PostProcessorParameters(ParametersABC):
                         "/extraction/general/None/volume",
                     ],
                 ],
+                # [
+                #     "gpsignal",
+                #     ["/extraction/general/None/volume"],
+                # ],
                 [
                     "savgol",
                     [
@@ -150,7 +154,7 @@ class PostProcessorParameters(ParametersABC):
         return cls(targets=targets, parameters=parameters, outpaths=outpaths)
 
 
-class PostProcessor:
+class PostProcessor(ProcessABC):
     def __init__(self, filename, parameters):
         self.parameters = parameters
         self._filename = filename
@@ -292,11 +296,15 @@ class PostProcessor:
         return x
 
     def run(self):
+        # import cProfile
+        # import pstats
+
+        # profile = cProfile.Profile()
+        # profile.enable()
+
         self.run_prepost()
 
         for process, datasets in tqdm(self.targets["processes"]):
-            if process == "births":
-                print("stop")
             if process in self.parameters["parameters"].get(
                 "processes", {}
             ):  # If we assigned parameters
