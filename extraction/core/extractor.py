@@ -15,11 +15,10 @@ from extraction.core.functions.loaders import (
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.functions.distributors import trap_apply, reduce_z
 from extraction.core.functions.utils import depth
-
+from aliby.tile.tiler import Tiler
 from agora.abc import ProcessABC, ParametersABC
 from agora.io.writer import Writer, load_attributes
 from agora.io.cells import CellsLinear
-from aliby.tile.tiler import Tiler
 
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
