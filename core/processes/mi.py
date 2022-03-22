@@ -8,7 +8,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import GridSearchCV
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class miParameters(ParametersABC):
@@ -99,7 +100,7 @@ class miParameters(ParametersABC):
         )
 
 
-class mi(ProcessABC):
+class mi(PostProcessABC):
     """
     Process to estimate power spectral density (autoregressive model).
 

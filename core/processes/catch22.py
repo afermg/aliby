@@ -6,7 +6,8 @@ import pandas as pd
 from sklearn import decomposition
 from catch22 import catch22_all
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class catch22Parameters(ParametersABC):
@@ -29,7 +30,7 @@ class catch22Parameters(ParametersABC):
         )
 
 
-class catch22(ProcessABC):
+class catch22(PostProcessABC):
     """
     catch22 class. It produces 22 normalised features for each time lapse in the signal (using the catch22 library.)
     """

@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class TemplateParameters(ParametersABC):
@@ -19,7 +20,7 @@ class TemplateParameters(ParametersABC):
         return cls.from_dict({})
 
 
-class Template(ProcessABC):
+class Template(PostProcessABC):
     """
     Template for process class.
     """

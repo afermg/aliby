@@ -7,11 +7,12 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from agora.abc import ParametersABC
+from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import Writer
 from agora.io.signal import Signal
 from agora.io.cells import Cells
 
+from postprocessor.core.base import get_process, get_parameters
 from postprocessor.core.processes.merger import mergerParameters, merger
 from postprocessor.core.processes.picker import pickerParameters, picker
 from postprocessor.core.processes.lineageprocess import LineageProcessParameters
@@ -166,21 +167,14 @@ class PostProcessor:
             cells=Cells.from_source(filename),
         )
         self.classfun = {
-            process: self.get_process(process)
+            process: get_process(process)
             for process, _ in parameters["targets"]["processes"]
         }
         self.parameters_classfun = {
-            process: self.get_parameters(process)
+            process: get_parameters(process)
             for process, _ in parameters["targets"]["processes"]
         }
         self.targets = parameters["targets"]
-
-    def get_parameters(self, process):
-        """
-        Dynamically import parameters from the 'processes' folder.
-        Assumes parameter is the same name as the file with 'Parameters' added at the end.
-        """
-        return self.get_process(process, suffix="Parameters")
 
     @staticmethod
     def get_process(process, suffix=""):

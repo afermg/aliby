@@ -3,7 +3,8 @@ from itertools import cycle
 import numpy as np
 import pandas as pd
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class aggregateParameters(ParametersABC):
@@ -25,7 +26,7 @@ class aggregateParameters(ParametersABC):
         )
 
 
-class aggregate(ProcessABC):
+class aggregate(PostProcessABC):
     """
     Aggregate multiple datasets for cell-to-cell feature comparison.
     """

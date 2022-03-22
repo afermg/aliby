@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class findpeaksParameters(ParametersABC):
@@ -61,7 +62,7 @@ class findpeaksParameters(ParametersABC):
         )
 
 
-class findpeaks(ProcessABC):
+class findpeaks(PostProcessABC):
     """
     Process to find peaks inside a signal.
 

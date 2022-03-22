@@ -1,6 +1,7 @@
 import pandas as pd
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class dsignalParameters(ParametersABC):
@@ -16,7 +17,7 @@ class dsignalParameters(ParametersABC):
         return cls.from_dict({"window": 3})
 
 
-class dsignal(ProcessABC):
+class dsignal(PostProcessABC):
     """
     Calculate the change in a signal depending on a window
     """

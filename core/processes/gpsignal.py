@@ -1,7 +1,9 @@
 """Gaussian process fit of a Signal."""
 import logging
 
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.processes.base import PostProcessABC
+
 import numpy as np
 import pandas as pd
 
@@ -90,7 +92,7 @@ class gpsignalParameters(ParametersABC):
         return cls.from_dict(cls.default_dict)
 
 
-class gpsignal(ProcessABC):
+class gpsignal(PostProcessABC):
     """Gaussian process fit of a Signal."""
 
     def __init__(self, parameters: gpsignalParameters):

@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 import igraph as ig
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 from agora.io.cells import CellsHDF
 
 from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
@@ -38,7 +39,7 @@ class pickerParameters(ParametersABC):
         )
 
 
-class picker(ProcessABC):
+class picker(PostProcessABC):
     """
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be

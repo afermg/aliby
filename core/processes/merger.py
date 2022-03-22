@@ -1,4 +1,5 @@
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 from postprocessor.core.functions.tracks import get_joinable
 
 
@@ -43,7 +44,7 @@ class mergerParameters(ParametersABC):
         )
 
 
-class merger(ProcessABC):
+class merger(PostProcessABC):
     """
     TODO check why it needs to be run a few times to complete the merging
     """

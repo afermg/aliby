@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class LineageProcessParameters(ParametersABC):
@@ -19,7 +20,7 @@ class LineageProcessParameters(ParametersABC):
         return cls.from_dict({})
 
 
-class LineageProcess(ProcessABC):
+class LineageProcess(PostProcessABC):
     """
     Lineage process that must be passed a (N,3) lineage matrix (where the coliumns are trap, mother, daughter respectively)
     """

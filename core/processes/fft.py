@@ -3,7 +3,8 @@ import pandas as pd
 from collections import namedtuple
 from scipy.signal import periodogram
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class fftParameters(ParametersABC):
@@ -44,7 +45,7 @@ class fftParameters(ParametersABC):
         )
 
 
-class fft(ProcessABC):
+class fft(PostProcessABC):
     """
     Process to estimate power spectral density (classical/Fourier).
 

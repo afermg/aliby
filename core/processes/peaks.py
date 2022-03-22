@@ -1,5 +1,7 @@
 from scipy.signal import argrelmax, argrelmin
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+
+from agora.abc import ParametersABC
+from postprocessor.core.processes.base import PostProcessABC
 
 
 class PeaksParameters(ParametersABC):
@@ -18,7 +20,7 @@ class PeaksParameters(ParametersABC):
         return cls.from_dict({"type": "minima", "order": 3})
 
 
-class Peaks(ProcessABC):
+class Peaks(PostProcessABC):
     """
     Identifies a signal sharply dropping.
     """

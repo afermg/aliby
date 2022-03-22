@@ -3,7 +3,8 @@ import pandas as pd
 from collections import namedtuple
 import scipy.linalg as linalg
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 # TODO: Provide the option of whether to optimise AR order -- see issue #1
 # TODO: Provide the functionality of 'smoothing' a time series with AR -- see
@@ -49,7 +50,7 @@ class autoregParameters(ParametersABC):
         )
 
 
-class autoreg(ProcessABC):
+class autoreg(PostProcessABC):
     """
     Process to estimate power spectral density (autoregressive model).
 

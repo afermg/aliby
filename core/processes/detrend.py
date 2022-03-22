@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 def moving_average(input_timeseries, window):
@@ -42,7 +43,7 @@ class detrendParameters(ParametersABC):
         return cls.from_dict({"window": 45})
 
 
-class detrend(ProcessABC):
+class detrend(PostProcessABC):
     """Process to detrend using sliding window
 
     Methods

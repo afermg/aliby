@@ -6,7 +6,8 @@ from itertools import product
 import igraph as ig
 import leidenalg
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.abc import PostProcessABC
 
 
 class leidenParameters(ParametersABC):
@@ -24,7 +25,7 @@ class leidenParameters(ParametersABC):
         return cls.from_dict({})
 
 
-class leiden(ProcessABC):
+class leiden(PostProcessABC):
     """
     leiden algorithm applied to a dataframe with features.
     """

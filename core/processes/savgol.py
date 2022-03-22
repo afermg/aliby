@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 
-from postprocessor.core.processes.base import ParametersABC, ProcessABC
+from agora.abc import ParametersABC
+from postprocessor.core.processes.base import PostProcessABC
 
 
 class savgolParameters(ParametersABC):
@@ -24,7 +25,7 @@ class savgolParameters(ParametersABC):
         return cls.from_dict({"window": 7, "polynom": 3})
 
 
-class savgol(ProcessABC):
+class savgol(PostProcessABC):
     """
     Apply Savitzky-Golay filter (works with NaNs, but it might return
     NaN regions).
