@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from agora.abc import ParametersABC
-from postprocessor.core.processes.base import PostProcessABC
+from postprocessor.core.base import PostProcessABC
 import gaussianprocessderivatives as gp
 
 

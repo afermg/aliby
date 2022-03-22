@@ -3,7 +3,7 @@ import pandas as pd
 from scipy.signal import savgol_filter
 
 from agora.abc import ParametersABC
-from postprocessor.core.processes.base import PostProcessABC
+from postprocessor.core.base import PostProcessABC
 
 
 class savgolParameters(ParametersABC):

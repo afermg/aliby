@@ -1,7 +1,7 @@
 from scipy.signal import argrelmax, argrelmin
 
 from agora.abc import ParametersABC
-from postprocessor.core.processes.base import PostProcessABC
+from postprocessor.core.base import PostProcessABC
 
 
 class PeaksParameters(ParametersABC):
