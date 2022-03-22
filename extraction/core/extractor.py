@@ -1,19 +1,10 @@
-import os
-from pathlib import Path, PosixPath
-
-from collections.abc import Iterable
 import logging
 from time import perf_counter
 
-# from copy import copy
 from typing import Union, List, Dict, Callable
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from scipy.sparse import dok_matrix, vstack, issparse
-from tqdm import tqdm
-
 
 from extraction.core.functions.loaders import (
     load_funs,
@@ -30,15 +21,13 @@ from agora.io.writer import Writer, load_attributes
 from agora.io.cells import CellsLinear
 from aliby.tile.tiler import Tiler
 
-import matplotlib.pyplot as plt
-
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
 RED_FUNS = load_redfuns()
 MERGE_FUNS = load_mergefuns()
 
 # Assign datatype depending on the metric used
-m2type = {"mean": np.float32, "median": np.ubyte, "imBackground": np.ubyte}
+# m2type = {"mean": np.float32, "median": np.ubyte, "imBackground": np.ubyte}
 
 
 class ExtractorParameters(ParametersABC):
