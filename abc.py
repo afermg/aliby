@@ -12,6 +12,10 @@ class ParametersABC(ABC):
 
     """
 
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def to_dict(self, iterable="null"):
         """
         Recursive function that converts class to nested dictionary.
@@ -74,9 +78,8 @@ class ParametersABC(ABC):
         return cls(**params)
 
     @classmethod
-    @abstractmethod
     def default(cls):
-        pass
+        return cls.from_dict(cls._defaults)
 
 
 class ProcessABC(ABC):
