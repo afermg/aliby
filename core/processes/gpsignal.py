@@ -1,12 +1,12 @@
 """Gaussian process fit of a Signal."""
 import logging
 
-from agora.abc import ParametersABC
-from postprocessor.core.processes.base import PostProcessABC
 
 import numpy as np
 import pandas as pd
 
+from agora.abc import ParametersABC
+from postprocessor.core.processes.base import PostProcessABC
 import gaussianprocessderivatives as gp
 
 
