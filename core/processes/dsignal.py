@@ -9,12 +9,7 @@ class dsignalParameters(ParametersABC):
     :window: Number of timepoints to consider for signal.
     """
 
-    def __init__(self, window: int):
-        self.window = window
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"window": 3})
+    _defaults = {"window": 3}
 
 
 class dsignal(PostProcessABC):

@@ -25,12 +25,7 @@ class birthsParameters(LineageProcessParameters):
 
     """
 
-    def __init__(self, lineage_location: str):
-        self.lineage_location = lineage_location
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"lineage_location": "postprocessing/lineage_merged"})
+    _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
 
 class births(LineageProcess):

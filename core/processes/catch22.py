@@ -16,18 +16,10 @@ class catch22Parameters(ParametersABC):
         :min_len: Prefilter to account only for long-signal cells
     """
 
-    def __init__(self, min_len, n_components):
-        self.min_len = min_len
-        self.n_components = n_components
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {
-                "min_len": 0.8,
-                "n_components": None,
-            }
-        )
+    _defaults = {
+        "min_len": 0.8,
+        "n_components": None,
+    }
 
 
 class catch22(PostProcessABC):

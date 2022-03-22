@@ -16,13 +16,7 @@ class savgolParameters(ParametersABC):
             The order of polynom used. Must be smaller than the window size
     """
 
-    def __init__(self, window, polynom):
-        self.window = window
-        self.polynom = polynom
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"window": 7, "polynom": 3})
+    _defaults = {"window": 7, "polynom": 3}
 
 
 class savgol(PostProcessABC):

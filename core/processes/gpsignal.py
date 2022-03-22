@@ -65,31 +65,22 @@ def estimate_gr(volume, dt, noruns, bounds, verbose):
 
 
 class gpsignalParameters(ParametersABC):
-    default_dict = dict(
+    """
+    Parameters
+    ----------
+        dt : float
+            The time step between time points, in minutes
+        noruns : int
+            The number of times the optimisation is tried
+        bounds : dict
+            Hyperparameter bounds for the Matern Kernel
+        verbose : bool
+            Determines whether to print hyperparameter results
+    """
+
+    _defaults = dict(
         dt=5, noruns=5, bounds={0: (-2, 3), 1: (-2, 1), 2: (-4, -1)}, verbose=False
     )
-
-    def __init__(self, dt, noruns, bounds, verbose):
-        """
-        Parameters
-        ----------
-            dt : float
-                The time step between time points, in minutes
-            noruns : int
-                The number of times the optimisation is tried
-            bounds : dict
-                Hyperparameter bounds for the Matern Kernel
-            verbose : bool
-                Determines whether to print hyperparameter results
-        """
-        self.dt = dt
-        self.noruns = noruns
-        self.bounds = bounds
-        self.verbose = verbose
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(cls.default_dict)
 
 
 class gpsignal(PostProcessABC):

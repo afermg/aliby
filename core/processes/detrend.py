@@ -35,12 +35,7 @@ class detrendParameters(ParametersABC):
         Size of sliding window.
     """
 
-    def __init__(self, window: int):
-        self.window = window
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"window": 45})
+    _defaults = {"window": 45}
 
 
 class detrend(PostProcessABC):

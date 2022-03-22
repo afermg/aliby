@@ -22,27 +22,10 @@ class fftParameters(ParametersABC):
         factor is 2, the signal is sampled at 2 times the Nyquist rate.
     """
 
-    def __init__(
-        self,
-        sampling_period,
-        oversampling_factor,
-    ):
-        # super().__init__()
-        self.sampling_period = sampling_period
-        self.oversampling_factor = oversampling_factor
-
-    @classmethod
-    def default(cls):
-        # Sampling period should be listed in the HDF5 metadata (i.e. the
-        # 'time_settings/timeinterval' attribute, unit seconds).  When using
-        # this processor in a typical routine, use the sampling period from
-        # there rather than relying on this default value of 5 minutes.
-        return cls.from_dict(
-            {
-                "sampling_period": 5,
-                "oversampling_factor": 1,
-            }
-        )
+    _defaults = {
+        "sampling_period": 5,
+        "oversampling_factor": 1,
+    }
 
 
 class fft(PostProcessABC):

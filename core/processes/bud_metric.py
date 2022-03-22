@@ -14,13 +14,7 @@ class bud_metricParameters(LineageProcessParameters):
     Parameters
     """
 
-    def __init__(self, lineage_location: str):
-        super().__init__()
-        self.lineage_location = lineage_location
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"lineage_location": "postprocessing/lineage_merged"})
+    _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
 
 class bud_metric(LineageProcess):

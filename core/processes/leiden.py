@@ -15,14 +15,7 @@ class leidenParameters(ParametersABC):
     Parameters
     """
 
-    def __init__(
-        self,
-    ):
-        super().__init__()
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({})
+    _defaults = {}
 
 
 class leiden(PostProcessABC):

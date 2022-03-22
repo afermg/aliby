@@ -26,40 +26,16 @@ class findpeaksParameters(ParametersABC):
         required prominence.
     """
 
-    def __init__(
-        self,
-        height,
-        threshold,
-        distance,
-        prominence,
-        width,
-        wlen,
-        rel_height,
-        plateau_size,
-    ):
-        self.height = height
-        self.threshold = threshold
-        self.distance = distance
-        self.prominence = prominence
-        self.width = width
-        self.wlen = wlen
-        self.rel_height = rel_height
-        self.plateau_size = plateau_size
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {
-                "height": None,
-                "threshold": None,
-                "distance": 10,
-                "prominence": 0.035,
-                "width": None,
-                "wlen": None,
-                "rel_height": 0.5,
-                "plateau_size": None,
-            }
-        )
+    _defaults = {
+        "height": None,
+        "threshold": None,
+        "distance": 10,
+        "prominence": 0.035,
+        "width": None,
+        "wlen": None,
+        "rel_height": 0.5,
+        "plateau_size": None,
+    }
 
 
 class findpeaks(PostProcessABC):

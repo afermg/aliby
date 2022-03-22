@@ -25,29 +25,17 @@ class autoregParameters(ParametersABC):
         Number of points for the frequency axis of the closed-form solution of
         the estimated periodogram.  Defines the resolution for use in, for
         example, plots.
-    """
 
-    def __init__(
-        self,
-        sampling_period,
-        freq_npoints,
-    ):
-        # super().__init__()
-        self.sampling_period = sampling_period
-        self.freq_npoints = freq_npoints
-
-    @classmethod
-    def default(cls):
         # Sampling period should be listed in the HDF5 metadata (i.e. the
         # 'time_settings/timeinterval' attribute, unit seconds).  When using
         # this processor in a typical routine, use the sampling period from
         # there rather than relying on this default value of 5 minutes.
-        return cls.from_dict(
-            {
-                "sampling_period": 5,
-                "freq_npoints": 100,
-            }
-        )
+    """
+
+    _defaults = {
+        "sampling_period": 5,
+        "freq_npoints": 100,
+    }
 
 
 class autoreg(PostProcessABC):

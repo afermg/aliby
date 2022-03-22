@@ -12,12 +12,7 @@ class PeaksParameters(ParametersABC):
             how many points to use for comparison.
     """
 
-    def __init__(self, type):
-        self.type = type
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict({"type": "minima", "order": 3})
+    _defaults = {"type": "minima", "order": 3}
 
 
 class Peaks(PostProcessABC):

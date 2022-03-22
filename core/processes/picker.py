@@ -17,26 +17,16 @@ from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
 
 
 class pickerParameters(ParametersABC):
-    def __init__(
-        self,
-        sequence: List[str] = ["lineage", "condition"],
-    ):
-        self.sequence = sequence
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {
-                "sequence": [
-                    ["lineage", "intersection", "families"],
-                    # ["condition", "intersection", "any_present", 0.7],
-                    # ["condition", "intersection", "growing", 80],
-                    ["condition", "intersection", "present", 7],
-                    # ["condition", "intersection", "mb_guess", 3, 0.7],
-                    # ("lineage", "intersection", "full_families"),
-                ],
-            }
-        )
+    _defaults = {
+        "sequence": [
+            ["lineage", "intersection", "families"],
+            # ["condition", "intersection", "any_present", 0.7],
+            # ["condition", "intersection", "growing", 80],
+            ["condition", "intersection", "present", 7],
+            # ["condition", "intersection", "mb_guess", 3, 0.7],
+            # ("lineage", "intersection", "full_families"),
+        ],
+    }
 
 
 class picker(PostProcessABC):

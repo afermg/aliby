@@ -69,35 +69,14 @@ class miParameters(ParametersABC):
         See https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
     """
 
-    def __init__(
-        self,
-        overtime,
-        n_bootstraps,
-        ci,
-        Crange,
-        gammarange,
-        train_test_split_seeding,
-    ):
-        # super().__init__()
-        self.overtime = overtime
-        self.n_bootstraps = n_bootstraps
-        self.ci = ci
-        self.Crange = Crange
-        self.gammarange = gammarange
-        self.train_test_split_seeding = train_test_split_seeding
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {
-                "overtime": True,
-                "n_bootstraps": 100,
-                "ci": [0.25, 0.75],
-                "Crange": None,
-                "gammarange": None,
-                "train_test_split_seeding": False,
-            }
-        )
+    _defaults = {
+        "overtime": True,
+        "n_bootstraps": 100,
+        "ci": [0.25, 0.75],
+        "Crange": None,
+        "gammarange": None,
+        "train_test_split_seeding": False,
+    }
 
 
 class mi(PostProcessABC):

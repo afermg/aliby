@@ -13,17 +13,7 @@ class aggregateParameters(ParametersABC):
     reduction: str to be passed to a dataframe for collapsing across columns
     """
 
-    def __init__(self, reductions, axis, ranges):
-        super().__init__()
-        self.reductions = reductions
-        self.axis = axis
-        self.ranges = ranges
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {"reductions": ["mean", "median", "max"], "axis": 1, "ranges": None}
-        )
+    _defaults = {"reductions": ["mean", "median", "max"], "axis": 1, "ranges": None}
 
 
 class aggregate(PostProcessABC):

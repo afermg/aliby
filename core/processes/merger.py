@@ -12,36 +12,13 @@ class mergerParameters(ParametersABC):
     :param degree: int value of polynomial degree passed to savgol_filter
     """
 
-    def __init__(
-        self,
-        tolerance: float,
-        smooth: bool = False,
-        window: int = 5,
-        degree: int = 3,
-        min_avg_delta: float = 0.9,
-    ):
-
-        self.tolerance = tolerance
-
-        self.smooth = smooth
-
-        self.window = window
-
-        self.degree = degree
-
-        self.min_avg_delta = min_avg_delta
-
-    @classmethod
-    def default(cls):
-        return cls.from_dict(
-            {
-                "smooth": False,
-                "tolerance": 0.2,
-                "window": 5,
-                "degree": 3,
-                "min_avg_delta": 0.5,
-            }
-        )
+    _defaults = {
+        "smooth": False,
+        "tolerance": 0.2,
+        "window": 5,
+        "degree": 3,
+        "min_avg_delta": 0.5,
+    }
 
 
 class merger(PostProcessABC):
