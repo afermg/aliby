@@ -78,8 +78,13 @@ class ParametersABC(ABC):
         return cls(**params)
 
     @classmethod
-    def default(cls):
-        return cls.from_dict(cls._defaults)
+    def default(cls, **kwargs):
+        overriden_defaults = cls._defaults
+
+        for k, v in kwargs.items():
+            overriden_defaults[k] = v
+
+        return cls.from_dict(overriden_defaults)
 
 
 class ProcessABC(ABC):
