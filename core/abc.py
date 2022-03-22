@@ -12,7 +12,7 @@ class PostProcessABC(ProcessABC):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__()
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def as_function(cls, data, *args, **kwargs):
