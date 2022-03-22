@@ -33,7 +33,7 @@ def get_process(process, suffix=""):
     return found
 
 
-def get_parameters(self, process):
+def get_parameters(process):
     """
     Dynamically import parameters from the 'processes' folder.
     Assumes parameter is the same name as the file with 'Parameters' added at the end.
