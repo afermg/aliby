@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from pathlib import Path, PosixPath
 from typing import Union
+from copy import copy
 
 from yaml import dump, safe_load
 
@@ -79,7 +80,7 @@ class ParametersABC(ABC):
 
     @classmethod
     def default(cls, **kwargs):
-        overriden_defaults = cls._defaults
+        overriden_defaults = copy(cls._defaults)
 
         for k, v in kwargs.items():
             overriden_defaults[k] = v
