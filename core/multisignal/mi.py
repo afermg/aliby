@@ -95,6 +95,13 @@ class mi(PostProcessABC):
     ):
         super().__init__(parameters)
 
+    # TODO: Make signal a list of DataFrames.
+    # Technically speaking, the mi process should operate on a list of
+    # DataFrames -- it's only that the input is currently one DataFrame and
+    # then the process automatically splits it into a list of arrays for each
+    # strain.  To make it more generalised, it shouldn't be split by /strain/;
+    # users should be able to use the mi process with different media
+    # conditions, for example.
     def run(self, signal: pd.DataFrame):
         """
         Estimates the mutual information between classes of time series.
