@@ -185,6 +185,12 @@ class PostProcessor(ProcessABC):
         """
         Dynamically import a process class from the available process locations.
         Assumes process filename and class name are the same
+        Parameters
+        ----------
+        process : str
+            Name of process to fetch.
+        suffix : str
+            Name of suffix, generally "" (empty) or "Parameters".
         """
         base_location = "postprocessor.core"
         possible_locations = ("processes", "multisignal")
