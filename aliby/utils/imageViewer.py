@@ -89,7 +89,7 @@ class remoteImageViewer:
 
         with OImage(self.image_id, **server_info) as image:
             self.tiler.image = image.data
-            return self.tiler.get_tc(tp, riv.tiler.ref_channel)
+            return self.tiler.get_tc(tp, self.tiler.ref_channel)
 
     def get_trap_timepoints(self, trap_id, tps, server_info=None):
         server_info = server_info or self.server_info
@@ -110,9 +110,9 @@ class remoteImageViewer:
         imgs = self.get_trap_timepoints(trap_id, tps)
         imgs_list = [x[trap_id] for x in imgs.values()]
         outlines = [
-            riv.cells.at_time(tp, kind="edgemask").get(trap_id, []) for tp in tps
+            self.cells.at_time(tp, kind="edgemask").get(trap_id, []) for tp in tps
         ]
-        lbls = [riv.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
+        lbls = [self.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
         lbld_outlines = [
             np.dstack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(axis=2)
             if len(lblset)
@@ -133,7 +133,7 @@ class remoteImageViewer:
         :trange: list list of time points to fetch
         """
         nrows = len(trange) // ncols
-        width = riv.tiler.tile_size * ncols
+        width = self.tiler.tile_size * ncols
         out, img = self.get_labeled_trap(trap_id, trange)
 
         # dilation makes outlines easier to see
