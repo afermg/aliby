@@ -95,14 +95,7 @@ class mi(PostProcessABC):
     ):
         super().__init__(parameters)
 
-    # TODO: Make signal a list of DataFrames.
-    # Technically speaking, the mi process should operate on a list of
-    # DataFrames -- it's only that the input is currently one DataFrame and
-    # then the process automatically splits it into a list of arrays for each
-    # strain.  To make it more generalised, it shouldn't be split by /strain/;
-    # users should be able to use the mi process with different media
-    # conditions, for example.
-    def run(self, signal: pd.DataFrame):
+    def run(self, signals):
         """
         Estimates the mutual information between classes of time series.
 
@@ -113,10 +106,11 @@ class mi(PostProcessABC):
 
         Errors are found using bootstrapped datasets.
 
-        Parameters:  data: pandas.DataFrame
+        Parameters:  signals: list of pandas.DataFrames
 
-                        Time series, with rows indicating individiual time series (e.g. from each
-                        cell), and columns indicating time points. Row indices should indicate strain.
+                        A list of DataFrames.  Each DataFrame stores a set of time series, with rows
+                        indicating individual time series (e.g. from each cell), and columns
+                        indicating time points.
 
         Returns:    res: array
 
@@ -126,8 +120,6 @@ class mi(PostProcessABC):
                         If overtime is True, each row corresponds to a different duration of the time
                         series with the shortest duration, just the first time point, in the first row
                         and the longest duration, the entire time series, in the last row.
-
-
         """
 
         # default values
@@ -137,10 +129,7 @@ class mi(PostProcessABC):
             self.gammarange = np.logspace(-3, 3, 10)
 
         # data is a list with one array of time series for different class
-        data = [
-            signal.loc[(strain, slice(None)), :].to_numpy()
-            for strain in signal.index.get_level_values("strain").unique()
-        ]
+        data = [signal.to_numpy() for signal in signals]
         n_classes = len(data)
         Xo = np.vstack([timeseries for timeseries in data])
         y = np.hstack(
