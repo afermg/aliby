@@ -54,7 +54,7 @@ with open("/home/alan/Documents/dev/skeletons/server_info.json", "r") as f:
 import h5py
 from aliby.io.omero import Image
 
-from agora.io.cells import Cells
+from agora.io.cells import CellsLinear as Cells
 
 
 class remoteImageViewer:
