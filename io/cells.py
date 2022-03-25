@@ -32,13 +32,13 @@ class Cells:
     def __init__(self):
         pass
 
-    @staticmethod
-    def from_source(source: Union[PosixPath, str], kind: str = None):
+    @classmethod
+    def from_source(cls, source: Union[PosixPath, str]):
         if isinstance(source, str):
             source = Path(source)
-        if kind is None:  # Infer kind from filename
-            kind = "matlab" if source.suffix == ".mat" else "hdf5"
-        return cell_factory(source, kind)
+        if source.suffix == ".mat":  # Infer kind from filename
+            raise ("Matlab files no longer supported")
+        return cls(source)
 
     @staticmethod
     def _asdense(array):
@@ -195,6 +195,8 @@ class CellsHDF(Cells):
 class CellsLinear(CellsHDF):
     """
     Reimplement functions from CellsHDF to save edgemasks in a (N,tile_size, tile_size) array
+
+    This overrides the previous implementation of at_time.
     """
 
     def __init__(self, filename, path="cell_info"):
