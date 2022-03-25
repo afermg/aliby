@@ -183,14 +183,24 @@ class PostProcessor(ProcessABC):
     @staticmethod
     def get_process(process, suffix=""):
         """
-        Dynamically import a process class from the 'processes' folder.
+        Dynamically import a process class from the available process locations.
         Assumes process filename and class name are the same
         """
-        location = f"postprocessor.core.processes.{process}.{process}{suffix}"
-        found = locate(location)
-        if found == None:
-            raise Exception(f"{location} not found")
-        return found
+        base_location = "postprocessor.core"
+        possible_locations = ("processes", "multisignal")
+
+        found = None
+        for possible_location in possible_locations:
+            location = (
+                f"{base_location}.{possible_location}.{process}.{process}{suffix}"
+            )
+            found = locate(location)
+            if found is not None:
+                return found
+
+        raise Exception(
+            f"{process} not found in locations {possible_locations} at {base_location}"
+        )
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
