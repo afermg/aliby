@@ -256,9 +256,18 @@ class Extractor(ProcessABC):
         self, traps: Union[np.array, None], masks: list, red_metrics: dict, **kwargs
     ) -> dict:
         """
+        Wrapper to apply reduction and then extraction.
+
+        Parameters
+        ----------
         :param red_metrics: dict in which keys are reduction funcions and
         values are strings indicating the metric function
         :**kwargs: All other arguments, must include masks and traps.
+
+        Returns
+        ------
+        Dictionary of dataframes with the corresponding reductions and metrics nested.
+
         """
 
         reduced_traps = {}
@@ -280,8 +289,9 @@ class Extractor(ProcessABC):
         return d
 
     def reduce_dims(self, img: np.array, method=None) -> np.array:
-        # assert len(img.shape) == 3, "Incorrect number of dimensions"
-
+        """
+        Collapse a z-stack into a single file. It may perform a null operation.
+        """
         if method is None:
             return img
 
@@ -297,6 +307,8 @@ class Extractor(ProcessABC):
         **kwargs,
     ) -> dict:
         """
+        Extract individual time-point from images and masks
+
         :param tp: int timepoint from which to extract results
         :param tree: dict of dict {channel : {reduction_function : metrics}}
         :**kwargs: Must include masks and preferably labels.
@@ -398,7 +410,6 @@ class Extractor(ProcessABC):
                     **kwargs,
                 )
 
-        # del traps, masks
         return d
 
     def get_imgs(self, channel, traps, channels=None):
