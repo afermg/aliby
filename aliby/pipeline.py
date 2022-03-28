@@ -310,7 +310,6 @@ class Pipeline(ProcessABC):
                         try:
                             with h5py.File(filename, "r") as f:
                                 steps["tiler"] = Tiler.from_hdf5(image, filename)
-                                # s = Signal(filename)
 
                                 legacy_get_last_tp = (
                                     {  # Function to support seg in ver < 0.24
@@ -428,9 +427,8 @@ class Pipeline(ProcessABC):
                     av_channels_wsub = av_channels.union(
                         [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
                     )
-                    for op, (input_ch, op_id, red_ext) in copy(
-                        config["extraction"]["multichannel_ops"]
-                    ).items():
+                    tmp = copy(config["extraction"]["multichannel_ops"])
+                    for op, (input_ch, op_id, red_ext) in tmp.items():
                         if set(input_ch).difference(av_channels_wsub):
                             del config["extraction"]["multichannel_ops"][op]
 
