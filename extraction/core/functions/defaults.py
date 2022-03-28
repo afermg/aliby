@@ -35,8 +35,11 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
         "max2p5pc_med",
         "max5px",
         "max5px_med",
+        # "nuc_est_conv",
     }
+
     default_rm = {r: default_metrics for r in default_reductions}
+    # default_rm["None"] = ["nuc_conv_3d"]
 
     av_flch = av_channels.intersection(meta["channels/channel"]).difference(
         {"Brightfield", "DIC", "BrightfieldGFP"}
