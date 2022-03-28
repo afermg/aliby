@@ -94,17 +94,19 @@ class PipelineParameters(ParametersABC):
                     thresh_pos_clogged=0.4,
                     thresh_trap_ncells=8,
                     thresh_trap_area=0.9,
-                    window_size=5,
+                    ntps_to_eval=5,
                 ),
             )
         }
-        defaults["tiler"] = TilerParameters.default().to_dict()
-        defaults["baby"] = BabyParameters.default().to_dict()
+        defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
+        defaults["baby"] = BabyParameters.default(**extraction).to_dict()
         defaults["extraction"] = exparams_from_meta(meta)
-        defaults["postprocessing"] = PostProcessorParameters.default().to_dict()
-        for k in defaults.keys():
-            exec("defaults[k].update(" + k + ")")
-        return cls(**{k: v for k, v in defaults.items()})
+        defaults["postprocessing"] = PostProcessorParameters.default(
+            **postprocessing
+        ).to_dict()
+        # for k in defaults.keys():
+        #     exec("defaults[k].update(" + k + ")")
+        # return cls(**{k: v for k, v in defaults.items()})
 
     def load_logs(self):
         parsed_flattened = parse_logfiles(self.log_dir)
