@@ -398,7 +398,7 @@ class Extractor(ProcessABC):
                     **kwargs,
                 )
 
-        del traps, masks
+        # del traps, masks
         return d
 
     def get_imgs(self, channel, traps, channels=None):
