@@ -2,6 +2,8 @@
 A set of utilities for dealing with ALCATRAS traps
 """
 
+from copy import copy
+
 import numpy as np
 from tqdm import tqdm
 
