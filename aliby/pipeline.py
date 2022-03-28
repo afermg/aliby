@@ -151,9 +151,39 @@ class Pipeline(ProcessABC):
         return cls(parameters=PipelineParameters.from_yaml(fpath))
 
     @classmethod
+    def from_folder(cls, dir_path):
+        """
+        Constructor to re-process all files in a given folder.
+
+        Assumes all files share the same parameters (even if they don't share
+        the same channel set).
+
+        Parameters
+        ---------
+        fpath : str or Pathlib indicating the folder containing the files to process
+        """
+        files = Path(dir_path).rglob("*.h5")
+        fpath = list(files)[0]
+
+        with h5py.File(l, "r") as f:
+            pipeline_parameters = PipelineParameters.from_yaml(f.attrs["parameters"])
+        pipeline_parameters.general["directory"] = Path(fpath).parent.parent
+        pipeline_parameters.general["filter"] = [fpath.stem for fpath in files]
+
+        return cls(pipeline_parameters)
+
+    @classmethod
     def from_existing_h5(cls, fpath):
+        """
+        Constructor to process an existing hdf5 file.
+        Notice that it forces a single file, not suitable for multiprocessing of certain positions.
+
+        It i s also used as a base for a folder-wide reprocessing.
+        """
         with h5py.File(fpath, "r") as f:
             pipeline_parameters = PipelineParameters.from_yaml(f.attrs["parameters"])
+            pipeline_parameters.general["directory"] = Path(fpath).parent.parent
+            pipeline_parameters.general["filter"] = Path(fpath).stem
 
         return cls(pipeline_parameters)
 
@@ -245,7 +275,8 @@ class Pipeline(ProcessABC):
 
         # check overwriting
         ow_id = general_config.get("overwrite", 0)
-        if ow_id:
+        ow = {step: True for step in self.step_sequence}
+        if ow_id and ow_id != True:
             ow = {
                 step: self.step_sequence.index(ow_id) < i
                 for i, step in enumerate(self.step_sequence, 1)
@@ -266,7 +297,7 @@ class Pipeline(ProcessABC):
                         try:
                             with h5py.File(filename, "r") as f:
                                 steps["tiler"] = Tiler.from_hdf5(image, filename)
-                                s = Signal(filename)
+                                # s = Signal(filename)
 
                                 legacy_get_last_tp = (
                                     {  # Function to support seg in ver < 0.24
@@ -323,7 +354,7 @@ class Pipeline(ProcessABC):
                     )
 
                 if from_start:  # New experiment or overwriting
-                    if config.get("overwrite", False) is True or np.all(
+                    if config.get("overwrite", False) == True or np.all(
                         list(ow.values())
                     ):
                         if Path(filename).exists():
@@ -519,7 +550,7 @@ class Pipeline(ProcessABC):
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
-        cells_used = df[df.columns[-1 - es_parameters["window_size"] : -1]].dropna(
+        cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
             how="all"
         )
         traps_above_nthresh = (
