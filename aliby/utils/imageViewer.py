@@ -105,15 +105,16 @@ class remoteImageViewer:
         server_info = server_info or self.server_info
         channels = self.find_channels(channels)
 
+        ch_tps = set([(channels[0], tp) for tp in tps])
         with OImage(self.image_id, **server_info) as image:
             self.tiler.image = image.data
-            if set(tps).difference(self.full.keys()):
+            if ch_tps.difference(self.full.keys()):
                 tps = set(tps).difference(self.full.keys())
-                for tp in tps:
-                    self.full[tp] = self.tiler.get_traps_timepoint(
-                        tp, channels=channels, z=[0]
+                for ch, tp in ch_tps:
+                    self.full[(ch, tp)] = self.tiler.get_traps_timepoint(
+                        tp, channels=[ch], z=[0]
                     )[:, 0, 0, ..., 0]
-            requested_trap = {tp: self.full[tp] for tp in tps}
+            requested_trap = {tp: self.full[(ch, tp)] for ch, tp in ch_tps}
 
             return requested_trap
 
@@ -146,7 +147,7 @@ class remoteImageViewer:
         out[out == 0] = np.nan
 
         img_set = np.concatenate([v for v in imgs.values()], axis=0)
-        tiled_out = np.tile(out, len(imgs), axis=0)
+        tiled_out = np.tile(out, (len(imgs), 1))
         plt.imshow(
             img_set,
             interpolation=None,
@@ -158,7 +159,7 @@ class remoteImageViewer:
             interpolation=None,
         )
         plt.yticks(
-            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(nrows)],
+            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(len(channels))],
             labels=[
                 self.tiler.channels[ch] if isinstance(ch, int) else ch
                 for ch in channels
