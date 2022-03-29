@@ -525,7 +525,7 @@ class Pipeline(ProcessABC):
                 meta.add_fields({"end_status": "Success"})
                 post_proc_params = PostProcessorParameters.from_dict(
                     config["postprocessing"]
-                ).to_dict()
+                )
                 PostProcessor(filename, post_proc_params).run()
 
                 return 1
