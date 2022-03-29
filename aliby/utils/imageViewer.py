@@ -148,35 +148,23 @@ class remoteImageViewer:
         img_set = np.concatenate([v for v in imgs.values()], axis=0)
         tiled_out = np.tile(out, len(imgs), axis=0)
         plt.imshow(
-            self.concat_pad(img, width, nrows),
+            img_set,
             interpolation=None,
             cmap="Greys_r",
         )
         plt.imshow(
-            self.concat_pad(out, width, nrows),
-            # concat_pad(mask),
+            tiled_out,
             cmap="Set1",
             interpolation=None,
         )
         plt.yticks(
             ticks=[self.tiler.tile_size * (i + 0.5) for i in range(nrows)],
-            labels=[trange[0] + ncols * i for i in range(nrows)],
+            labels=[
+                self.tiler.channels[ch] if isinstance(ch, int) else ch
+                for ch in channels
+            ],
         )
         plt.show()
-
-    @staticmethod
-    def concat_pad(array, width, nrows):
-        return np.concatenate(
-            np.array_split(
-                np.pad(
-                    array,
-                    ((0, 0), (0, array.shape[1] % width)),
-                    constant_values=np.nan,
-                ),
-                nrows,
-                axis=1,
-            )
-        )
 
     def plot_labeled_traps(self, trap_id, trange, ncols, **kwargs):
         """
@@ -195,13 +183,26 @@ class remoteImageViewer:
         out = dilation(out).astype(float)
         out[out == 0] = np.nan
 
+        def concat_pad(array):
+            return np.concatenate(
+                np.array_split(
+                    np.pad(
+                        array,
+                        ((0, 0), (0, array.shape[1] % width)),
+                        constant_values=np.nan,
+                    ),
+                    nrows,
+                    axis=1,
+                )
+            )
+
         plt.imshow(
-            self.concat_pad(img, width, nrows),
+            self.concat_pad(img),
             interpolation=None,
             cmap="Greys_r",
         )
         plt.imshow(
-            self.concat_pad(out, width, nrows),
+            self.concat_pad(out),
             # concat_pad(mask),
             cmap="Set1",
             interpolation=None,
