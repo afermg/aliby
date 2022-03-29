@@ -84,15 +84,26 @@ class remoteImageViewer:
             self._full = {}
         return self._full
 
-    def get_tc(self, tp, server_info=None):
+    def get_tc(self, tp, channel=None, server_info=None):
         server_info = server_info or self.server_info
+        channel = channel or self.tiler.ref_channel
 
         with OImage(self.image_id, **server_info) as image:
             self.tiler.image = image.data
-            return self.tiler.get_tc(tp, self.tiler.ref_channel)
+            return self.tiler.get_tc(tp, channel)
 
-    def get_trap_timepoints(self, trap_id, tps, server_info=None):
+    def find_channels(self, channels):
+        channels = channels or self.tiler.ref_channel
+        if isinstance(channels, int):
+            channels = [channels]
+        elif isinstance(channels, list) and isinstance(channels[0], str):
+            channels = [self.tiler.channels.index(ch) for ch in channels]
+
+        return channels
+
+    def get_trap_timepoints(self, trap_id, tps, channels=None, server_info=None):
         server_info = server_info or self.server_info
+        channels = self.find_channels(channels)
 
         with OImage(self.image_id, **server_info) as image:
             self.tiler.image = image.data
@@ -100,14 +111,14 @@ class remoteImageViewer:
                 tps = set(tps).difference(self.full.keys())
                 for tp in tps:
                     self.full[tp] = self.tiler.get_traps_timepoint(
-                        tp, channels=[self.tiler.ref_channel], z=[0]
+                        tp, channels=channels, z=[0]
                     )[:, 0, 0, ..., 0]
             requested_trap = {tp: self.full[tp] for tp in tps}
 
             return requested_trap
 
-    def get_labeled_trap(self, trap_id, tps):
-        imgs = self.get_trap_timepoints(trap_id, tps)
+    def get_labeled_trap(self, trap_id, tps, **kwargs):
+        imgs = self.get_trap_timepoints(trap_id, tps, **kwargs)
         imgs_list = [x[trap_id] for x in imgs.values()]
         outlines = [
             self.cells.at_time(tp, kind="edgemask").get(trap_id, []) for tp in tps
@@ -123,6 +134,50 @@ class remoteImageViewer:
         img_concat = np.concatenate(imgs_list, axis=1)
         return outline_concat, img_concat
 
+    def plot_labeled_channelrows(self, trap_id, channels, trange, **kwargs):
+        imgs = {}
+        for ch in self.find_channels(channels):
+            out, imgs[ch] = self.get_labeled_trap(
+                trap_id, trange, channels=[ch], **kwargs
+            )
+
+        # dilation makes outlines easier to see
+        out = dilation(out).astype(float)
+        out[out == 0] = np.nan
+
+        img_set = np.concatenate([v for v in imgs.values()], axis=0)
+        tiled_out = np.tile(out, len(imgs), axis=0)
+        plt.imshow(
+            self.concat_pad(img, width, nrows),
+            interpolation=None,
+            cmap="Greys_r",
+        )
+        plt.imshow(
+            self.concat_pad(out, width, nrows),
+            # concat_pad(mask),
+            cmap="Set1",
+            interpolation=None,
+        )
+        plt.yticks(
+            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(nrows)],
+            labels=[trange[0] + ncols * i for i in range(nrows)],
+        )
+        plt.show()
+
+    @staticmethod
+    def concat_pad(array, width, nrows):
+        return np.concatenate(
+            np.array_split(
+                np.pad(
+                    array,
+                    ((0, 0), (0, array.shape[1] % width)),
+                    constant_values=np.nan,
+                ),
+                nrows,
+                axis=1,
+            )
+        )
+
     def plot_labeled_traps(self, trap_id, trange, ncols, **kwargs):
         """
         Wrapper to plot a single trap over time
@@ -134,34 +189,25 @@ class remoteImageViewer:
         """
         nrows = len(trange) // ncols
         width = self.tiler.tile_size * ncols
-        out, img = self.get_labeled_trap(trap_id, trange)
+        out, img = self.get_labeled_trap(trap_id, trange, **kwargs)
 
         # dilation makes outlines easier to see
         out = dilation(out).astype(float)
         out[out == 0] = np.nan
 
-        def concat_pad(array):
-            return np.concatenate(
-                np.array_split(
-                    np.pad(
-                        array,
-                        ((0, 0), (0, array.shape[1] % width)),
-                        constant_values=np.nan,
-                    ),
-                    nrows,
-                    axis=1,
-                )
-            )
-
         plt.imshow(
-            concat_pad(img),
+            self.concat_pad(img, width, nrows),
             interpolation=None,
             cmap="Greys_r",
         )
         plt.imshow(
-            concat_pad(out),
+            self.concat_pad(out, width, nrows),
             # concat_pad(mask),
             cmap="Set1",
             interpolation=None,
+        )
+        plt.yticks(
+            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(nrows)],
+            labels=[trange[0] + ncols * i for i in range(nrows)],
         )
         plt.show()
