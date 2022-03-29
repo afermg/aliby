@@ -10,7 +10,7 @@ from tqdm import tqdm
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import Writer
 from agora.io.signal import Signal
-from agora.io.cells import Cells
+from agora.io.cells import CellsLinear as Cells
 
 from postprocessor.core.abc import get_process, get_parameters
 from postprocessor.core.processes.merger import mergerParameters, merger
@@ -32,11 +32,11 @@ class PostProcessorParameters(ParametersABC):
     def __init__(
         self,
         targets={},
-        parameters={},
+        param_sets={},
         outpaths={},
     ):
         self.targets: Dict = targets
-        self.parameters: Dict = parameters
+        self.param_sets: Dict = param_sets
         self.outpaths: Dict = outpaths
 
     def __getitem__(self, item):
@@ -106,7 +106,7 @@ class PostProcessorParameters(ParametersABC):
                 ],
             ],
         }
-        parameters = {
+        param_sets = {
             "prepost": {
                 "merger": mergerParameters.default(),
                 "picker": pickerParameters.default(),
@@ -151,23 +151,23 @@ class PostProcessorParameters(ParametersABC):
                 ],
             )
 
-        return cls(targets=targets, parameters=parameters, outpaths=outpaths)
+        return cls(targets=targets, param_sets=param_sets, outpaths=outpaths)
 
 
 class PostProcessor(ProcessABC):
     def __init__(self, filename, parameters):
-        self.parameters = parameters
+        super().__init__(parameters)
         self._filename = filename
         self._signal = Signal(filename)
         self._writer = Writer(filename)
 
         # self.outpaths = parameters["outpaths"]
         self.merger = merger(
-            mergerParameters.from_dict(parameters["parameters"]["prepost"]["merger"])
+            mergerParameters.from_dict(parameters["param_sets"]["prepost"]["merger"])
         )
 
         self.picker = picker(
-            pickerParameters.from_dict(parameters["parameters"]["prepost"]["picker"]),
+            pickerParameters.from_dict(parameters["param_sets"]["prepost"]["picker"]),
             cells=Cells.from_source(filename),
         )
         self.classfun = {
@@ -179,34 +179,6 @@ class PostProcessor(ProcessABC):
             for process, _ in parameters["targets"]["processes"]
         }
         self.targets = parameters["targets"]
-
-    @staticmethod
-    def get_process(process, suffix=""):
-        """
-        Dynamically import a process class from the available process locations.
-        Assumes process filename and class name are the same
-        Parameters
-        ----------
-        process : str
-            Name of process to fetch.
-        suffix : str
-            Name of suffix, generally "" (empty) or "Parameters".
-        """
-        base_location = "postprocessor.core"
-        possible_locations = ("processes", "multisignal")
-
-        found = None
-        for possible_location in possible_locations:
-            location = (
-                f"{base_location}.{possible_location}.{process}.{process}{suffix}"
-            )
-            found = locate(location)
-            if found is not None:
-                return found
-
-        raise Exception(
-            f"{process} not found in locations {possible_locations} at {base_location}"
-        )
 
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
@@ -321,7 +293,7 @@ class PostProcessor(ProcessABC):
         self.run_prepost()
 
         for process, datasets in tqdm(self.targets["processes"]):
-            if process in self.parameters["parameters"].get(
+            if process in self.parameters["param_sets"].get(
                 "processes", {}
             ):  # If we assigned parameters
                 parameters = self.parameters_classfun[process](self.parameters[process])

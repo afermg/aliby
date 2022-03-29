@@ -62,9 +62,19 @@ class Grouper(ABC):
         pass
 
     def concat_signal(self, path, reduce_cols=None, axis=0, pool=None, *args, **kwargs):
+        if not path.startswith("/"):
+            path = "/" + path
 
         group_names = self.group_names
-        sitems = self.signals.items()
+
+        # Check the path is in a given signal
+        sitems = {k: v for k, v in self.signals.items() if path in v.siglist}
+        nsignals_dif = len(self.signals) - len(sitems)
+        if nsignals_dif:
+            print(
+                f"Grouper:Warning: {nsignals_dif} signals do not contain channel {path}"
+            )
+
         if pool or pool is None:
             if pool is None:
                 pool = 8
@@ -73,15 +83,15 @@ class Grouper(ABC):
                     lambda x: concat_signal_ind(
                         path, group_names, x[0], x[1], *args, **kwargs
                     ),
-                    sitems,
-                    # num_cpus=pool,
-                    # desc="Group " + path,
+                    sitems.items(),
                 )
         else:
-            signals = [
-                concat_signal_ind(path, group_names, name, signal, **kwargs)
-                for name, signal in sitems
-            ]
+            signals = []
+            for name, signal in sitems.items():
+                print(name)
+                signals.append(
+                    concat_signal_ind(path, group_names, name, signal, **kwargs)
+                )
 
         errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
         signals = [s for s in signals if s is not None]
@@ -196,13 +206,13 @@ class phGrouper(NameGrouper):
         return aggregated
 
 
-def concat_signal_ind(path, group_names, group, signal, mode="mothers"):
+def concat_signal_ind(path, group_names, group, signal, mode="retained", **kwargs):
     if mode == "retained":
-        combined = signal.retained(path)
+        combined = signal.retained(path, **kwargs)
     if mode == "mothers":
         raise (NotImplementedError)
     elif mode == "raw":
-        combined = signal.get_raw(path)
+        combined = signal.get_raw(path, **kwargs)
     elif mode == "families":
         combined = signal[path]
     combined["position"] = group
