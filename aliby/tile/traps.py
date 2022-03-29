@@ -81,8 +81,8 @@ def segment_traps(
         (i, region)
         for i, region in enumerate(regionprops(label_image))
         if min_mal < region.major_axis_length < max_mal
-        and tile_size // 2 < region.centroid[0] < half_floor(image.shape[0])
-        and tile_size // 2 < region.centroid[1] < half_floor(image.shape[1])
+        and tile_size // 2 < region.centroid[0] < half_floor(image.shape[0]) - 1
+        and tile_size // 2 < region.centroid[1] < half_floor(image.shape[1]) - 1
     ]
     idx, valid_region = zip(*idx_valid_region)
 
