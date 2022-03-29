@@ -165,6 +165,10 @@ class remoteImageViewer:
                 for ch in channels
             ],
         )
+        plt.xticks(
+            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(len(trange))],
+            labels=[t for t in trange],
+        )
         plt.show()
 
     def plot_labeled_traps(self, trap_id, trange, ncols, **kwargs):
