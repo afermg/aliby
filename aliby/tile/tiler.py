@@ -135,21 +135,8 @@ class TrapLocations:
 
 
 class TilerParameters(ParametersABC):
-    def __init__(
-        self, tile_size: int, ref_channel: str, ref_z: int, template_name: str = None
-    ):
-        self.tile_size = tile_size
-        self.ref_channel = ref_channel
-        self.ref_z = ref_z
-        self.template_name = template_name
 
-    @classmethod
-    def from_template(cls, template_name: str, ref_channel: str, ref_z: int):
-        return cls(template.shape[0], ref_channel, ref_z, template_path=template_name)
-
-    @classmethod
-    def default(cls):
-        return cls(117, "Brightfield", 0)
+    _defaults = {"tile_size": 117, "ref_channel": "Brightfield", "ref_z": 0}
 
 
 class Tiler(ProcessABC):
