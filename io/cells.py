@@ -14,13 +14,13 @@ from scipy.sparse.base import isdense
 from agora.io.writer import load_complex
 
 
-def cell_factory(store, type="hdf5"):
-    if type == "hdf5":
-        return CellsHDF(store)
-    else:
-        raise TypeError(
-            "Could not get cells for type {}:" "valid types are matlab and hdf5"
-        )
+# def cell_factory(store, type="hdf5"):
+#     if type == "hdf5":
+#         return CellsHDF(store)
+#     else:
+#         raise TypeError(
+#             "Could not get cells for type {}:" "valid types are matlab and hdf5"
+#         )
 
 
 class Cells:
