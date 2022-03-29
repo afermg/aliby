@@ -103,6 +103,16 @@ class PipelineParameters(ParametersABC):
                 ),
             )
         }
+
+        for k, v in general.items():  # Overwrite general parameters
+            if k not in defaults["general"]:
+                defaults["general"][k] = v
+            elif isinstance(v, dict):
+                for k2, v2 in v.items():
+                    defaults["general"][k][k2] = v2
+            else:
+                defaults["general"][k] = v
+
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         defaults["baby"] = BabyParameters.default(**extraction).to_dict()
         defaults["extraction"] = exparams_from_meta(meta)
@@ -111,7 +121,7 @@ class PipelineParameters(ParametersABC):
         ).to_dict()
         # for k in defaults.keys():
         #     exec("defaults[k].update(" + k + ")")
-        # return cls(**{k: v for k, v in defaults.items()})
+        return cls(**{k: v for k, v in defaults.items()})
 
     def load_logs(self):
         parsed_flattened = parse_logfiles(self.log_dir)
@@ -180,6 +190,12 @@ class Pipeline(ProcessABC):
         pipeline_parameters.general["directory"] = dir_path.parent
         pipeline_parameters.general["filter"] = [fpath.stem for fpath in files]
 
+        # Fix legacy postprocessing parameters
+        post_process_params = pipeline_parameters.postprocessing.get("parameters", None)
+        if post_process_params:
+            pipeline_parameters.postprocessing["param_sets"] = copy(post_process_params)
+            del pipeline_parameters.postprocessing["parameters"]
+
         return cls(pipeline_parameters)
 
     @classmethod
@@ -195,6 +211,12 @@ class Pipeline(ProcessABC):
         directory = Path(fpath).parent
         pipeline_parameters.general["directory"] = directory
         pipeline_parameters.general["filter"] = Path(fpath).stem
+
+        # Fix legacy postprocessing parameters
+        post_process_params = pipeline_parameters.postprocessing.get("parameters", None)
+        if post_process_params:
+            pipeline_parameters.postprocessing["param_sets"] = copy(post_process_params)
+            del pipeline_parameters.postprocessing["parameters"]
 
         return cls(pipeline_parameters, store=directory)
 
@@ -429,7 +451,7 @@ class Pipeline(ProcessABC):
                     )
                     tmp = copy(config["extraction"]["multichannel_ops"])
                     for op, (input_ch, op_id, red_ext) in tmp.items():
-                        if set(input_ch).difference(av_channels_wsub):
+                        if not set(input_ch).issubset(av_channels_wsub):
                             del config["extraction"]["multichannel_ops"][op]
 
                     exparams = ExtractorParameters.from_dict(config["extraction"])
