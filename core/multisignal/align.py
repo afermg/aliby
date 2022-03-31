@@ -6,7 +6,31 @@ import pandas as pd
 from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 
-from utils import df_extend_nan, df_shift
+
+def df_extend_nan(df, width):
+    """Extend a DataFrame to the left by a number of columns and fill with NaNs
+
+    Assumes column names are sequential integers from 0
+    """
+    num_rows, _ = df.shape
+    nan_df = pd.DataFrame(
+        np.full([num_rows, width], np.nan),
+        index=df.index,
+    )
+    out_df = pd.concat([nan_df, df], axis=1)
+    _, out_num_cols = out_df.shape
+    out_df.columns = list(range(out_num_cols))
+    return out_df
+
+
+def df_shift(df, list_index, shift_list):
+    """Shifts each row of each DataFrame by a list of shift intervals
+
+    Assumes all DataFrames have the same indices (and therefore the same number of rows)
+    """
+    for index, shift in zip(list_index, shift_list):
+        df.loc[index, :] = df.loc[index, :].shift(periods=shift)
+    return df
 
 
 class alignParameters(ParametersABC):
