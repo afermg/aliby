@@ -3,8 +3,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from postprocessor.core.processes.standardscaler import standardscaler
-
 
 class _MeanPlotter:
     """Draw mean time series plus standard error."""
@@ -18,7 +16,6 @@ class _MeanPlotter:
         mean_color,
         error_color,
         mean_linestyle,
-        scale,
         xlabel,
         plot_title,
     ):
@@ -30,23 +27,16 @@ class _MeanPlotter:
         self.mean_color = mean_color
         self.error_color = error_color
         self.mean_linestyle = mean_linestyle
-        self.scale = scale
         self.xlabel = xlabel
         self.plot_title = plot_title
 
         # Define some labels
         self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
 
-        # Scale
-        if self.scale:
-            self.trace_scaled = standardscaler.as_function(trace_df)
-        else:
-            self.trace_scaled = trace_df
-
         # Mean and standard error
         self.trace_time = np.array(self.trace_df.columns) * self.sampling_period
-        self.mean_ts = self.trace_scaled.mean(axis=0)
-        self.stderr = self.trace_scaled.std(axis=0) / np.sqrt(len(self.trace_scaled))
+        self.mean_ts = self.trace_df.mean(axis=0)
+        self.stderr = self.trace_df.std(axis=0) / np.sqrt(len(self.trace_df))
 
     def plot(self, ax):
         """Draw lines and shading on provided Axes."""
@@ -81,7 +71,6 @@ def mean_plot(
     mean_color="b",
     error_color="lightblue",
     mean_linestyle="-",
-    scale=True,
     xlabel="Time (min)",
     plot_title="",
     ax=None,
@@ -104,8 +93,6 @@ def mean_plot(
         matplotlib colour string for the standard error shading.
     mean_linestyle : string
         matplotlib linestyle argument for the mean trace.
-    scale : bool
-        Whether to use standard scaler to scale the trace time series.
     xlabel : string
         x axis label.
     plot_title : string
@@ -126,7 +113,6 @@ def mean_plot(
         mean_color,
         error_color,
         mean_linestyle,
-        scale,
         xlabel,
         plot_title,
     )
