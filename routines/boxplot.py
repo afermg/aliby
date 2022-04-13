@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
 
-from plottingabc import BasePlotter
+from postprocessor.routines.plottingabc import BasePlotter
 
 
 class _BoxplotPlotter(BasePlotter):

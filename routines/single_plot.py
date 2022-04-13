@@ -2,7 +2,7 @@
 
 import matplotlib.pyplot as plt
 
-from plottingabc import BasePlotter
+from postprocessor.routines.plottingabc import BasePlotter
 
 
 class _SinglePlotter(BasePlotter):

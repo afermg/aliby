@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
 from postprocessor.core.processes.standardscaler import standardscaler
-from plottingabc import BasePlotter
+from postprocessor.routines.plottingabc import BasePlotter
 
 
 class _HeatmapPlotter(BasePlotter):
