@@ -2,8 +2,10 @@
 
 import matplotlib.pyplot as plt
 
+from plottingabc import BasePlotter
 
-class _SinglePlotter:
+
+class _SinglePlotter(BasePlotter):
     """Draw a line plot of a single time series."""
 
     def __init__(
@@ -17,24 +19,19 @@ class _SinglePlotter:
         xlabel,
         plot_title,
     ):
+        super().__init__(trace_name, sampling_period, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_timepoints = trace_timepoints
         self.trace_values = trace_values
-        self.trace_name = trace_name
-        self.sampling_period = sampling_period
         self.trace_color = trace_color
         self.trace_linestyle = trace_linestyle
-        self.xlabel = xlabel
-        self.plot_title = plot_title
 
         # Define some labels
         self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
 
     def plot(self, ax):
         """Draw the line plot on the provided Axes."""
-        ax.set_ylabel(self.ylabel)
-        ax.set_xlabel(self.xlabel)
-        ax.set_title(self.plot_title)
+        super().plot(ax)
         ax.plot(
             self.trace_timepoints * self.sampling_period,
             self.trace_values,

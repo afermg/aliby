@@ -3,8 +3,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from plottingabc import BasePlotter
 
-class _MeanPlotter:
+
+class _MeanPlotter(BasePlotter):
     """Draw mean time series plus standard error."""
 
     def __init__(
@@ -19,16 +21,13 @@ class _MeanPlotter:
         xlabel,
         plot_title,
     ):
+        super().__init__(trace_name, sampling_period, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
-        self.trace_name = trace_name
-        self.sampling_period = sampling_period
         self.label = label
         self.mean_color = mean_color
         self.error_color = error_color
         self.mean_linestyle = mean_linestyle
-        self.xlabel = xlabel
-        self.plot_title = plot_title
 
         # Define some labels
         self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
@@ -40,10 +39,7 @@ class _MeanPlotter:
 
     def plot(self, ax):
         """Draw lines and shading on provided Axes."""
-        ax.set_xlabel(self.xlabel)
-        ax.set_ylabel(self.ylabel)
-        ax.set_title(self.plot_title)
-
+        super().plot(ax)
         ax.plot(
             self.trace_time,
             self.mean_ts,

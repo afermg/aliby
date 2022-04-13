@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
 from postprocessor.core.processes.standardscaler import standardscaler
+from plottingabc import BasePlotter
 
 
-class _HeatmapPlotter:
+class _HeatmapPlotter(BasePlotter):
     """Draw heatmap"""
 
     def __init__(
@@ -23,17 +24,14 @@ class _HeatmapPlotter:
         xlabel,
         plot_title,
     ):
+        super().__init__(trace_name, sampling_period, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
-        self.trace_name = trace_name
         self.births_df = births_df
         self.cmap = cmap
-        self.sampling_period = sampling_period
         self.xtick_step = xtick_step
         self.scale = scale
         self.robust = robust
-        self.xlabel = xlabel
-        self.plot_title = plot_title
 
         # Define some labels
         self.colorbarlabel = "Normalised " + self.trace_name + " fluorescence (AU)"
@@ -71,11 +69,9 @@ class _HeatmapPlotter:
 
     def plot(self, ax, cax):
         """Draw the heatmap on the provided Axes."""
+        super().plot(ax)
         ax.set_xticks(self.xticks)
         ax.set_xticklabels(self.xticklabels)
-        ax.set_xlabel(self.xlabel)
-        ax.set_ylabel(self.ylabel)
-        ax.set_title(self.plot_title)
 
         # Draw trace heatmap
         trace_heatmap = ax.imshow(
