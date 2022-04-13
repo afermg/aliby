@@ -29,6 +29,9 @@ class _BoxplotPlotter(BasePlotter):
         # Define some labels
         self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
 
+        # Define horizontal axis ticks and labels
+        # hacky! -- redefine column names
+        trace_df.columns = trace_df.columns * self.sampling_period
         self.fmt = ticker.FuncFormatter(
             lambda x, pos: "{0:g}".format(x / (self.xtick_step / self.sampling_period))
         )
@@ -36,15 +39,15 @@ class _BoxplotPlotter(BasePlotter):
     def plot(self, ax):
         """Draw the heatmap on the provided Axes."""
         super().plot(ax)
-        ax.xaxis.set_major_locator(
-            ticker.MultipleLocator(self.xtick_step / self.sampling_period)
-        )
         ax.xaxis.set_major_formatter(self.fmt)
         sns.boxplot(
             data=self.trace_df,
             color=self.box_color,
             linewidth=1,
             ax=ax,
+        )
+        ax.xaxis.set_major_locator(
+            ticker.MultipleLocator(self.xtick_step / self.sampling_period)
         )
 
 
