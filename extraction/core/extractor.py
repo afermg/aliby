@@ -441,7 +441,7 @@ class Extractor(ProcessABC):
             tree = self.params.tree
 
         if tps is None:
-            tps = list(range(self.meta["time_settings/ntimepoints"]))
+            tps = list(range(self.meta["time_settings/ntimepoints"][0]))
 
         d = {}
         for tp in tps:
