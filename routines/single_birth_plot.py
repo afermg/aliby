@@ -2,7 +2,7 @@
 
 import matplotlib.pyplot as plt
 
-from single_plot import _SinglePlotter
+from postprocessor.routines.single_plot import _SinglePlotter
 
 
 class _SingleBirthPlotter(_SinglePlotter):
