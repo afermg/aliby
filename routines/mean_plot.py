@@ -19,6 +19,7 @@ class _MeanPlotter(BasePlotter):
         error_color,
         mean_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     ):
         super().__init__(trace_name, sampling_period, xlabel, plot_title)
@@ -30,7 +31,8 @@ class _MeanPlotter(BasePlotter):
         self.mean_linestyle = mean_linestyle
 
         # Define some labels
-        self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
+        # self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
+        self.ylabel = ylabel
 
         # Mean and standard error
         self.trace_time = np.array(self.trace_df.columns) * self.sampling_period
@@ -68,6 +70,7 @@ def mean_plot(
     error_color="lightblue",
     mean_linestyle="-",
     xlabel="Time (min)",
+    ylabel=f"Normalised flavin fluorescence (AU)",
     plot_title="",
     ax=None,
 ):
@@ -91,6 +94,8 @@ def mean_plot(
         matplotlib linestyle argument for the mean trace.
     xlabel : string
         x axis label.
+    ylabel : string
+        y axis label.
     plot_title : string
         Plot title.
     ax : matplotlib Axes
@@ -110,6 +115,7 @@ def mean_plot(
         error_color,
         mean_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     )
     if ax is None:
