@@ -28,20 +28,19 @@ class crosscorr(PostProcessABC):
     def __init__(self, parameters: alignParameters):
         super().__init__(parameters)
 
-    # TODO: adapt for expected dataFrame inputs and remove toarray() and todf()
     # TODO: make variable names more informative
-    def run(self, yA, yB=None):
+    def run(self, yA: pd.DataFrame, yB: pd.DataFrame = None):
         exampledf = yA.copy() if type(yA) == pd.core.frame.DataFrame else None
         # convert from aliby dataframe to arrays
-        yA = toarray(yA)
+        yA = yA.to_numpy()
         # number of time points
         n = yA.shape[1]
         # deviation from mean at each time point
         dyA = yA - np.nanmean(yA, axis=0).reshape((1, n))
         # standard deviation at each time point
         stdA = np.sqrt(np.nanmean(dyA ** 2, axis=0).reshape((1, n)))
-        if np.any(yB):
-            yB = toarray(yB)
+        if yB is not None:
+            yB = yB.to_numpy()
             # cross correlation
             dyB = yB - np.nanmean(yB, axis=0).reshape((1, n))
             stdB = np.sqrt(np.nanmean(dyB ** 2, axis=0).reshape((1, n)))
@@ -57,18 +56,4 @@ class crosscorr(PostProcessABC):
             corr[:, r] = np.nansum(prods, axis=0) / (n - r)
         norm_corr = np.array(corr) / stdA / stdB
         # return as a df if yA is a df else as an array
-        return todf(norm_corr, exampledf)
-
-
-def toarray(y):
-    if type(y) == pd.core.frame.DataFrame:
-        return y.to_numpy()
-    else:
-        return y
-
-
-def todf(y, exampledf):
-    if type(y) == pd.core.frame.DataFrame or exampledf is None:
-        return y
-    else:
-        return pd.DataFrame(y, index=exampledf.index, columns=exampledf.columns)
+        return pd.DataFrame(norm_corr, index=exampledf.index, columns=exampledf.columns)
