@@ -76,7 +76,7 @@ class crosscorr(PostProcessABC):
         corr = np.nan * np.ones(yA.shape)
         # lag r runs over time points
         for r in np.arange(0, n):
-            prods = [dyA[:, self.t] * dyB[:, self.t + r] for t in range(n - r)]
+            prods = [dyA[:, self.t] * dyB[:, self.t + r] for self.t in range(n - r)]
             corr[:, r] = np.nansum(prods, axis=0) / (n - r)
         norm_corr = np.array(corr) / stdA / stdB
         # return as a df if yA is a df else as an array
