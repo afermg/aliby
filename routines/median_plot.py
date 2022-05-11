@@ -57,7 +57,7 @@ class _MedianPlotter(BasePlotter):
             self.quartile3_ts,
             color=self.error_color,
             alpha=0.5,
-            label="Interquartile range" + self.label,
+            label="Interquartile range, " + self.label,
         )
         ax.legend(loc="upper right")
 
