@@ -70,7 +70,7 @@ class _HistogramPlotter:
             alpha=0.75,
             label="median " + self.label,
         )
-        ax.legend(loc="upper left")
+        ax.legend(loc="upper right")
 
 
 def histogram(
