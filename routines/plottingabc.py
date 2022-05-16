@@ -3,7 +3,7 @@
 from abc import ABC
 
 
-class BasePlotter:
+class BasePlotter(ABC):
     """Base class for plotting handler classes"""
 
     def __init__(self, trace_name, sampling_period, xlabel, plot_title):
@@ -21,3 +21,7 @@ class BasePlotter:
         ax.set_xlabel(self.xlabel)
         ax.set_title(self.plot_title)
         # Derived classes extends this with plotting functions
+
+
+# TODO: something about the plotting functions at the end of the modules.
+# Decorator?
