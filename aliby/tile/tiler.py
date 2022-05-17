@@ -139,10 +139,54 @@ class TilerParameters(ParametersABC):
     _defaults = {"tile_size": 117, "ref_channel": "Brightfield", "ref_z": 0}
 
 
-class Tiler(ProcessABC):
-    """A dummy TimelapseTiler object fora Dask Demo.
+class TilerABC(ProcessABC):
+    """
+    Base class for different types of Tilers.
+    """
 
-    Does trap finding and image registration."""
+    def __init__(parameters):
+        super().__init__(parameters)
+
+    @staticmethod
+    def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
+        """
+        Returns the slices padded if it is out of bounds
+
+        Parameters:
+        ----------
+        full: (zstacks, max_size, max_size) ndarray
+        Entire position with zstacks as first axis
+        slices: tuple of two slices
+        Each slice indicates an axis to index
+
+
+        Returns
+        Trap for given slices, padded with median if needed, or np.nan if the padding is too much
+        """
+        max_size = full.shape[-1]
+
+        y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+        trap = full[:, y, x]
+
+        padding = np.array(
+            [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
+        )
+        if padding.any():
+            tile_size = slices[0].stop - slices[0].start
+            if (padding > tile_size / 4).any():
+                trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
+            else:
+
+                trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
+
+        return trap
+
+
+class Tiler(ProcessABC):
+    """Remote Timelapse Tiler.
+
+    Does trap finding and image registration. Fetches images from as erver
+    """
 
     def __init__(
         self,
@@ -157,6 +201,14 @@ class Tiler(ProcessABC):
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         self.trap_locs = trap_locs
 
+        try:
+            self.z_perchannel = {
+                ch: metadata["zsectioning/nsections"] if zsect else 1
+                for zsect, ch in zip(metadata["channels"], metadata["channels/zsect"])
+            }
+        except Exception as e:
+            print(f"Warning:Tiler: No z_perchannel data: {e}")
+
     @classmethod
     def from_image(cls, image, parameters: TilerParameters):
         return cls(image.data, image.metadata, parameters)
@@ -166,6 +218,8 @@ class Tiler(ProcessABC):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = image.metadata["channels"]
+        # metadata["zsectioning/nsections"] = image.metadata["zsectioning/nsections"]
+        # metadata["channels/zsect"] = image.metadata["channels/zsect"]
 
         if parameters is None:
             parameters = TilerParameters.default()
@@ -259,7 +313,7 @@ class Tiler(ProcessABC):
         return ndtrap
 
     @staticmethod
-    def ifoob_pad(full, slices):
+    def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
         """
         Returns the slices padded if it is out of bounds
 
