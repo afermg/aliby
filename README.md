@@ -39,6 +39,7 @@ docker-compose stop
 
  ```python
 from aliby.io.omero import Dataset, Image
+from aliby.io.image import Image
 
 server_info= {
             "host": "host_address",
