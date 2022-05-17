@@ -30,7 +30,8 @@ from aliby.experiment import MetaData
 from aliby.haystack import initialise_tf
 from aliby.baby_client import BabyRunner, BabyParameters
 from aliby.tile.tiler import Tiler, TilerParameters
-from aliby.io.omero import Dataset, Image
+from aliby.io.omero import Dataset
+from aliby.io.image import Image
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import TilerWriter, BabyWriter, StateWriter, LinearBabyWriter
 from agora.io.reader import StateReader
@@ -587,7 +588,7 @@ class Pipeline(ProcessABC):
             > es_parameters["thresh_trap_ncells"]
         )
         traps_above_athresh = (
-            cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size ** 2
+            cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
             > es_parameters["thresh_trap_area"]
         )
 
