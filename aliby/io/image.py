@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
-from aliby.experiment import get_data_lazy_local
 from pathlib import Path
-from tifffile import TiffFile
-from pathlib import Path
+from datetime import datetime
+
 import xmltodict
+from tifffile import TiffFile
+import dask.array as da
+from dask.array.image import imread
+
 from aliby.experiment import get_data_lazy
 from aliby.io.omero import Argo
 
@@ -14,10 +17,11 @@ class ImageLocal:
         self.path = path
         self.image_id = str(path)
 
+        with TiffFile(path) as f:
+            self.meta = xmltodict.parse(f.ome_metadata)["OME"]
+
+        meta = dict()
         try:
-            with TiffFile(fpath) as f:
-                self.meta = xmltodict.parse(f.ome_metadata)["OME"]
-            meta = dict()
             for dim in self.dimorder:
                 meta["size_" + dim.lower()] = int(
                     self.meta["Image"]["Pixels"]["@Size" + dim]
@@ -27,12 +31,10 @@ class ImageLocal:
             ]
             meta["name"] = self.meta["Image"]["@Name"]
             meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
-
-            self._meta = meta
-
         except Exception as e:
-            # TODO implement default meta when no image metadata
-            print("Could not fetch metadata: {}".format(e))
+            raise e
+
+        self._meta = meta
 
     def __enter__(self):
         return self
@@ -49,6 +51,15 @@ class ImageLocal:
         return self.get_data_lazy_local()
 
     @property
+    def date(self):
+        date_str = [
+            x
+            for x in self.meta["StructuredAnnotations"]["TagAnnotation"]
+            if x["Description"] == "Date"
+        ][0]["Value"]
+        return datetime.strptime(date_str, "%d-%b-%Y")
+
+    @property
     def dimorder(self):
         """Order of dimensions in image"""
         return self.meta["Image"]["Pixels"]["@DimensionOrder"]
@@ -62,7 +73,6 @@ class ImageLocal:
         return da.rechunk(
             imread(str(self.path))[0],
             chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
-            # chunks="auto",
         )
 
 
@@ -76,7 +86,7 @@ class Image(Argo):
 
     @property
     def image_wrap(self):
-        # TODO check that it is alive/ connected
+
         if self._image_wrap is None:
             self._image_wrap = self.conn.getObject("Image", self.image_id)
         return self._image_wrap

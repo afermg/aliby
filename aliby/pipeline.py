@@ -6,7 +6,7 @@ import os
 
 # from abc import ABC, abstractmethod
 from typing import List, Union
-from pathlib import Path
+from pathlib import Path, PosixPath
 import traceback
 from copy import copy
 
@@ -30,8 +30,8 @@ from aliby.experiment import MetaData
 from aliby.haystack import initialise_tf
 from aliby.baby_client import BabyRunner, BabyParameters
 from aliby.tile.tiler import Tiler, TilerParameters
-from aliby.io.omero import Dataset
-from aliby.io.image import Image
+from aliby.io.dataset import Dataset, DatasetLocal
+from aliby.io.image import Image, ImageLocal
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import TilerWriter, BabyWriter, StateWriter, LinearBabyWriter
 from agora.io.reader import StateReader
@@ -79,8 +79,17 @@ class PipelineParameters(ParametersABC):
         timepoints and extraction parameters from there.
         """
         expt_id = general.get("expt_id", 19993)
+        if isinstance(expt_id, PosixPath):
+            expt_id = str(expt_id)
+            general["expt_id"] = expt_id
+
         directory = Path(general.get("directory", "../data"))
-        with Dataset(int(expt_id), **general.get("server_info")) as conn:
+        dataset_wrapper = (
+            lambda x: DatasetLocal(x)
+            if isinstance(expt_id, str)
+            else Dataset(int(x), **general.get("server_info"))
+        )
+        with dataset_wrapper(expt_id) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -234,7 +243,13 @@ class Pipeline(ProcessABC):
 
         print("Searching OMERO")
         # Do all all initialisations
-        with Dataset(int(expt_id), **self.general["server_info"]) as conn:
+
+        dataset_wrapper = (
+            lambda x: DatasetLocal(x)
+            if isinstance(expt_id, str)
+            else lambda x: Dataset(int(x), **self.general["server_info"])
+        )
+        with dataset_wrapper(expt_id) as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
@@ -317,11 +332,16 @@ class Pipeline(ProcessABC):
                 step: self.step_sequence.index(ow_id) < i
                 for i, step in enumerate(self.step_sequence, 1)
             }
+
         try:
             # Set up
             directory = general_config["directory"]
 
-            with Image(image_id, **self.general["server_info"]) as image:
+            image_wrapper = ImageLocal if isinstance(image_id, str) else Image
+
+            with image_wrapper(
+                image_id, **self.general.get("server_info", {})
+            ) as image:
                 filename = f"{directory}/{image.name}.h5"
                 meta = MetaData(directory, filename)
 
