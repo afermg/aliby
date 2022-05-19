@@ -22,7 +22,7 @@ from skimage.morphology import dilation
 
 from agora.io.cells import CellsLinear as Cells
 from agora.io.writer import load_attributes
-from aliby.io.omero import Image as OImage
+from aliby.io.image import Image as OImage
 from aliby.tile.tiler import Tiler
 
 import matplotlib.pyplot as plt
