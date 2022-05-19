@@ -38,7 +38,7 @@ docker-compose stop
 ### Raw data access
 
  ```python
-from aliby.io.omero import Dataset, Image
+from aliby.io.dataset import Dataset
 from aliby.io.image import Image
 
 server_info= {
