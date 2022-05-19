@@ -83,13 +83,13 @@ class Extractor(ProcessABC):
 
     Parameters
     ----------
-    parameters: core.extractor Parameters
-        Parameters that include with channels, reduction and
+        parameters: core.extractor Parameters
+            Parameters that include with channels, reduction and
             extraction functions to use.
-    store: str
-        Path to hdf5 storage file. Must contain cell outlines.
-    tiler: pipeline-core.core.segmentation tiler
-        Class that contains or fetches the image to be used for segmentation.
+        store: str
+            Path to hdf5 storage file. Must contain cell outlines.
+        tiler: pipeline-core.core.segmentation tiler
+            Class that contains or fetches the image to be used for segmentation.
     """
 
     default_meta = {"pixel_size": 0.236, "z_size": 0.6, "spacing": 0.6}
