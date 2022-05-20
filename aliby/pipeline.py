@@ -95,7 +95,16 @@ class PipelineParameters(ParametersABC):
                 directory.mkdir(parents=True)
                 # Download logs to use for metadata
             conn.cache_logs(directory)
-        meta = MetaData(directory, None).load_logs()
+        try:
+            meta = MetaData(directory, None).load_logs()
+        except Exception as e:
+            print("WARNING: Metadata could not be loaded: {}".format(e))
+            # Set minimal metadata
+            meta = {
+                "channels/channel": "Brightfield",
+                "time_settings/ntimepoints": [200],
+            }
+
         tps = meta["time_settings/ntimepoints"][0]
         defaults = {
             "general": dict(
