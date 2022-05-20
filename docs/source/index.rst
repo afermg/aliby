@@ -13,4 +13,3 @@ Welcome to aliby's documentation!
 
    aliby
    extraction
-   argo
