@@ -1,5 +1,5 @@
 """
-Class to group multiple positions into one using one of several criteria.
+Class to group multiple positions into one using one different available criteria.
 """
 
 from pathlib import Path
@@ -9,7 +9,7 @@ import h5py
 import pandas as pd
 
 from agora.io.bridge import groupsort
-from postprocessor.core.io.signal import Signal
+from agora.io.signal import Signal
 
 from postprocessor.core.abc import ParametersABC, ProcessABC
 
