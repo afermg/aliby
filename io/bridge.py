@@ -1,3 +1,6 @@
+"""
+Tools to interact with hdf5 files and handle data consistently.
+"""
 from typing import Union
 import collections
 from itertools import groupby, chain, product
