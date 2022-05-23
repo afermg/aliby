@@ -58,15 +58,17 @@ class crosscorr(PostProcessABC):
         trace_A = trace_dfA.to_numpy()
         # number of time points
         n_tps = trace_A.shape[1]
+        # number of replicates
+        n_replicates = trace_A.shape[0]
         # deviation from mean at each time point
         dmean_A = trace_A - np.nanmean(trace_A, axis=0).reshape((1, n_tps))
-        # standard deviation at each time point
-        stdA = np.sqrt(np.nanmean(dmean_A ** 2, axis=0).reshape((1, n_tps)))
+        # standard deviation over time for each replicate
+        stdA = np.sqrt(np.nanmean(dmean_A ** 2, axis=1).reshape((n_replicates, 1)))
         if trace_dfB is not None:
             trace_B = trace_dfB.to_numpy()
             # cross correlation
             dmean_B = trace_B - np.nanmean(trace_B, axis=0).reshape((1, n_tps))
-            stdB = np.sqrt(np.nanmean(dmean_B ** 2, axis=0).reshape((1, n_tps)))
+            stdB = np.sqrt(np.nanmean(dmean_B ** 2, axis=1).reshape((n_replicates, 1)))
         else:
             # auto correlation
             dmean_B = dmean_A
