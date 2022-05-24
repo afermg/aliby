@@ -6,10 +6,15 @@
 Welcome to aliby's documentation!
 =================================
 
+Summary
+=======
+
 .. autosummary::
    :toctree: _autosummary
    :template: custom-module-template.rst
    :recursive:
 
+   source/README.md
+   source/CONTRIBUTING.md
    aliby
    extraction
