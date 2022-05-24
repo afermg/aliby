@@ -50,9 +50,7 @@ logging.basicConfig(
 
 
 class PipelineParameters(ParametersABC):
-    def __init__(
-        self, general, tiler, baby, extraction, postprocessing, reporting=None
-    ):
+    def __init__(self, general, tiler, baby, extraction, postprocessing, reporting):
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -599,7 +597,7 @@ class Pipeline(ProcessABC):
             po.plot()
             po.save(fullpath / f"{directory}report.pdf")
         except Exception as e:
-            print(e)
+            print("Report failed: {}".format(e))
 
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
