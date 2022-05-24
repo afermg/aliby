@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-System that produce a report summarising the results of an experiment.
+Automatic summarissed report to condense results of an experiment.
 It should NOT contain text beyond labels and titles.
 The most efficient way to communicate information is (inteligently) colour-coded figures and tables.
 
