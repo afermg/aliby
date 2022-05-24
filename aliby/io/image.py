@@ -13,7 +13,7 @@ from aliby.io.omero import Argo
 
 
 class ImageLocal:
-    def __init__(self, path: str):
+    def __init__(self, path: str, *args, **kwargs):
         self.path = path
         self.image_id = str(path)
 

@@ -16,7 +16,7 @@ class DatasetLocal:
 
     """
 
-    def __init__(self, dpath: Union[str, PosixPath]):
+    def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
         self.fpath = Path(dpath)
         assert len(self.get_images()), "No tif files found"
 
@@ -94,8 +94,8 @@ class Dataset(Argo):
     def files(self):
         if self._files is None:
             self._files = {
-                x.GetFilename(): x
-                for x in self.dataset.ListAnnotations()
+                x.getFileName(): x
+                for x in self.dataset.listAnnotations()
                 if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
         if not len(self._files):
@@ -107,17 +107,17 @@ class Dataset(Argo):
         if self._tags is None:
             self._tags = {
                 x.getname(): x
-                for x in self.dataset.ListAnnotations()
+                for x in self.dataset.listAnnotations()
                 if isinstance(x, omero.gateway.TagAnnotationWrapper)
             }
         return self._tags
 
     def cache_logs(self, root_dir):
         for name, annotation in self.files.items():
-            filepath = root_dir / annotation.GetFilename().replace("/", "_")
+            filepath = root_dir / annotation.getFileName().replace("/", "_")
             if str(filepath).endswith("txt") and not filepath.exists():
                 # save only the text files
                 with open(str(filepath), "wb") as fd:
-                    for chunk in annotation.GetFileInChunks():
+                    for chunk in annotation.getFileInChunks():
                         fd.write(chunk)
         return True

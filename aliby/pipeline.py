@@ -253,12 +253,8 @@ class Pipeline(ProcessABC):
         print("Searching OMERO")
         # Do all all initialisations
 
-        dataset_wrapper = (
-            lambda x: DatasetLocal(x)
-            if isinstance(expt_id, str)
-            else lambda x: Dataset(int(x), **self.general["server_info"])
-        )
-        with dataset_wrapper(expt_id) as conn:
+        dataset_wrapper = DatasetLocal if isinstance(expt_id, str) else Dataset
+        with dataset_wrapper(expt_id, **self.general.get("server_info", {})) as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
