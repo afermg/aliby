@@ -14,7 +14,7 @@ variables:
 stages:
   - test
   - check
-  - release
+  # - release
 
 before_script:
   - test -e $HOME/.poetry/bin/ || curl -sSL https://install.python-poetry.org | python3 -
@@ -47,22 +47,22 @@ Static Type:
     - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
-Bump_release:
-  stage: release
-  script:
-    - git config --global user.email ${GITLAB_USER_EMAIL}
-    - git config --global user.name ${GITLAB_USER_NAME}
-    # - git pull origin HEAD:MASTER && poetry version ${BUMP_RULE} && git add poetry.lock add pyproject.toml poetry.lock && git commit -m "Bump version" && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
-    - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
-    - echo "Exporting TRIGGER_PYPI_NAME as ${TRIGGER_PYPI_NAME}"
-  only:
-    - master
-  except:
-    changes:
-      - tests/
-      - .*
+# Bump_release:
+#   stage: release
+#   script:
+#     - git config --global user.email ${GITLAB_USER_EMAIL}
+#     - git config --global user.name ${GITLAB_USER_NAME}
+#     # - git pull origin HEAD:MASTER && poetry version ${BUMP_RULE} && git add poetry.lock add pyproject.toml poetry.lock && git commit -m "Bump version" && git push -o ci.skip origin HEAD:master && poetry publish --build --username ${PYPI_USER} --password ${PYPI_PASSWORD}
+#     - echo "TRIGGER_PYPI_NAME=$(cat pyproject.toml | grep '^name =' | head -n 1 | cut -f3 -d' ' | tr -d \")" >> build.env
+#     - echo "Exporting TRIGGER_PYPI_NAME as ${TRIGGER_PYPI_NAME}"
+#   only:
+#     - master
+#   except:
+#     changes:
+#       - tests/
+#       - .*
 
-  needs:
-    job: Unit test
+#   needs:
+#     job: Unit test
 
 ## Custom stages ##
