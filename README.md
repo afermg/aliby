@@ -14,4 +14,5 @@ Documentation is hosted on [readthedocs](https://aliby.readthedocs.io/en/latest)
 
 See [INSTALL.md](./docs/INSTALL.md)
 
-<!-- ## Contributing -->
+## Contributing
+See [CONTRIBUTING.md](./docs/CONTRIBUTING.md)
