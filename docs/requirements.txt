@@ -1,3 +1,2 @@
 numpydoc>=1.3.1
 aliby>=0.1.26
-myst-parser
