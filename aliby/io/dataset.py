@@ -94,9 +94,9 @@ class Dataset(Argo):
     def files(self):
         if self._files is None:
             self._files = {
-                x.getfilename(): x
-                for x in self.dataset.listannotations()
-                if isinstance(x, omero.gateway.fileannotationwrapper)
+                x.GetFilename(): x
+                for x in self.dataset.ListAnnotations()
+                if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
         if not len(self._files):
             raise Exception("exception:metadata: experiment has no annotation files.")
@@ -107,17 +107,17 @@ class Dataset(Argo):
         if self._tags is None:
             self._tags = {
                 x.getname(): x
-                for x in self.dataset.listannotations()
-                if isinstance(x, omero.gateway.tagannotationwrapper)
+                for x in self.dataset.ListAnnotations()
+                if isinstance(x, omero.gateway.TagAnnotationWrapper)
             }
         return self._tags
 
     def cache_logs(self, root_dir):
         for name, annotation in self.files.items():
-            filepath = root_dir / annotation.getfilename().replace("/", "_")
+            filepath = root_dir / annotation.GetFilename().replace("/", "_")
             if str(filepath).endswith("txt") and not filepath.exists():
                 # save only the text files
                 with open(str(filepath), "wb") as fd:
-                    for chunk in annotation.getfileinchunks():
+                    for chunk in annotation.GetFileInChunks():
                         fd.write(chunk)
         return True
