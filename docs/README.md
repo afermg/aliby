@@ -1,11 +1,9 @@
-# Pipeline core
+# ALIBY (Analyser of Live-cell Imaging for Budding Yeast)
 
-The core classes and methods for the python microfluidics, microscopy, and 
-analysis pipeline.
+The core classes and methods for the python microfluidics, microscopy, data analysis and reporting.
 
 ### Installation
 See [INSTALL.md](./INSTALL.md) for installation instructions.
-
 
 ## Quickstart Documentation
 ### Setting up a server
