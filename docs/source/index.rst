@@ -14,7 +14,11 @@ Summary
    :template: custom-module-template.rst
    :recursive:
 
-   source/README.md
-   source/CONTRIBUTING.md
    aliby
    extraction
+
+-----------
+Readme File
+-----------
+
+.. mdinclude:: ../../README.md
