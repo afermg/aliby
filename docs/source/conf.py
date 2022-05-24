@@ -36,6 +36,7 @@ extensions = [
     "sphinx.ext.autodoc",  # Core library for html generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables
     "numpydoc",  # Play along with numpydoc format
+    "myst-parser",  # Include markdown in rst files.
 ]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
 

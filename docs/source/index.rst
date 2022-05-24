@@ -20,5 +20,7 @@ Summary
 -----------
 Readme File
 -----------
-
-.. mdinclude:: ../../README.md
+Source:
+```{literalinclude} ../../README.md
+:language: md
+```
