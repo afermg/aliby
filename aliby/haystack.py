@@ -1,3 +1,6 @@
+"""
+Neural network initialisation.
+"""
 import numpy as np
 from time import perf_counter
 from pathlib import Path

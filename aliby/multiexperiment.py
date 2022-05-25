@@ -1,3 +1,4 @@
+"""Experimental methods to deal with multiple experiments and data aggregation."""
 from pathos.multiprocessing import Pool
 
 from aliby.pipeline import PipelineParameters, Pipeline

@@ -1,3 +1,6 @@
+"""
+Classes to handle multidimensional images, both remotely and local.
+"""
 import itertools
 import logging
 

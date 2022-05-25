@@ -1,3 +1,6 @@
+"""
+Underlying methods for different neural network deployments.
+"""
 import collections
 import itertools
 import json

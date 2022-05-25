@@ -5,22 +5,28 @@
 
 ALIBY's guides and documentation
 =================================
+.. toctree::
+   :maxdepth: 3
 
-Summary
-=======
+.. include:: ../../README.md
+   :parser: myst_parser.sphinx_
 
+
+Contributing
+============
+.. toctree::
+   :maxdepth: 2
+
+.. include:: ../../CONTRIBUTING.md
+   :parser: myst_parser.sphinx_
+
+
+API Reference
+============
+.. toctree::
 .. autosummary::
-   :toctree: _autosummary
    :template: custom-module-template.rst
    :recursive:
 
    aliby
    extraction
-
-================
-Readme File
-================
-
-```{literalinclude} ../../README.md
-:language: md
-```
