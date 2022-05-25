@@ -136,6 +136,7 @@ class PipelineParameters(ParametersABC):
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
         ).to_dict()
+        defaults["reporting"] = {}
         # for k in defaults.keys():
         #     exec("defaults[k].update(" + k + ")")
         return cls(**{k: v for k, v in defaults.items()})
