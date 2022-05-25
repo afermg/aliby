@@ -7,8 +7,8 @@
    :hidden:
 
    Home page <self>
-   ALIBY reference <aliby>
-   extraction reference <extraction>
+   ALIBY reference <_autosummary/_aliby>
+   extraction reference <_autosummary/extraction>
 
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_
