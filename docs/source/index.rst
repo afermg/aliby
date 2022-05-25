@@ -3,30 +3,15 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-ALIBY's guides and documentation
-=================================
 .. toctree::
-   :maxdepth: 3
+   :hidden:
+
+   Home page <self>
+   ALIBY reference <aliby>
+   extraction reference <extraction>
 
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_
 
-
-Contributing
-============
-.. toctree::
-   :maxdepth: 2
-
 .. include:: ../../CONTRIBUTING.md
    :parser: myst_parser.sphinx_
-
-
-API Reference
-============
-.. toctree::
-.. autosummary::
-   :template: custom-module-template.rst
-   :recursive:
-
-   aliby
-   extraction
