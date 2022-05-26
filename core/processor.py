@@ -161,14 +161,18 @@ class PostProcessor(ProcessABC):
         self._signal = Signal(filename)
         self._writer = Writer(filename)
 
-        # self.outpaths = parameters["outpaths"]
-        self.merger = merger(
-            mergerParameters.from_dict(parameters["param_sets"]["prepost"]["merger"])
-        )
+        dicted_params = {
+            i: parameters["param_sets"]["prepost"][i] for i in ["merger", "picker"]
+        }
 
-        self.picker = picker(
-            pickerParameters.from_dict(parameters["param_sets"]["prepost"]["picker"]),
-            cells=Cells.from_source(filename),
+        for k in dicted_params.keys():
+            if not isinstance(dicted_params[k], dict):
+                dicted_params["k"] = dicted_params["k"].to_dict()
+
+        self.merger = merger.from_dict(dicted_params["merger"])
+
+        self.picker = picker.from_dict(
+            dicted_params["picker"],
         )
         self.classfun = {
             process: get_process(process)
