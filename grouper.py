@@ -2,7 +2,7 @@
 
 from typing import Union, List, Dict
 from abc import ABC, abstractmethod, abstractproperty
-from pathlib import Path
+from pathlib import Path, PosixPath
 from pathos.multiprocessing import Pool
 from collections import Counter
 
@@ -25,7 +25,7 @@ class Grouper(ABC):
 
     files = []
 
-    def __init__(self, dir):
+    def __init__(self, dir: Union[str, PosixPath]):
         path = Path(dir)
         self.name = path.name
         assert path.exists(), "Dir does not exist"
@@ -37,22 +37,22 @@ class Grouper(ABC):
         self.signals = {f.name[:-3]: Signal(f) for f in self.files}
 
     @property
-    def fsignal(self):
+    def fsignal(self) -> list:
         return list(self.signals.values())[0]
 
     @property
-    def ntimepoints(self):
+    def ntimepoints(self) -> int:
         return max([s.ntimepoints for s in self.signals.values()])
 
     @property
-    def siglist(self):
+    def siglist(self) -> None:
         return self.fsignal.siglist
 
     @property
-    def siglist_grouped(self):
+    def siglist_grouped(self) -> None:
 
         if not hasattr(self, "_siglist_grouped"):
-            self._siglist_grouped = siglists = Counter(
+            self._siglist_grouped = Counter(
                 [x for s in self.signals.values() for x in s.siglist]
             )
 
@@ -60,14 +60,44 @@ class Grouper(ABC):
             print(f"{s} - {n}")
 
     @property
-    def datasets(self):
+    def datasets(self) -> None:
+        """Print available datasets in first Signal instance."""
         return self.fsignal.datasets
 
     @abstractproperty
     def group_names():
         pass
 
-    def concat_signal(self, path, reduce_cols=None, axis=0, pool=None, *args, **kwargs):
+    def concat_signal(
+        self,
+        path: str,
+        reduce_cols: bool = None,
+        axis: int = 0,
+        pool: int = None,
+        mode="retained",
+        **kwargs,
+    ):
+        """Concatenate a single signal.
+
+        Parameters
+        ----------
+        path : str
+            signal address within h5py file.
+        reduce_cols : bool
+            Whether or not to collapse columns into a single one.
+        axis : int
+            Concatenation axis.
+        pool : int
+            Number of threads used. If 0 or None only one core is used.
+        **kwargs : key, value pairings
+            Named arguments to pass to concat_ind_function.
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+
+        """
         if not path.startswith("/"):
             path = "/" + path
 
@@ -87,7 +117,7 @@ class Grouper(ABC):
             with Pool(pool) as p:
                 signals = p.map(
                     lambda x: concat_signal_ind(
-                        path, group_names, x[0], x[1], *args, **kwargs
+                        path, group_names, x[0], x[1], mode=mode, **kwargs
                     ),
                     sitems.items(),
                 )
@@ -184,17 +214,20 @@ class phGrouper(NameGrouper):
     def __init__(self, dir, by=(3, 7)):
         super().__init__(dir=dir, by=by)
 
-    def get_ph(self):
+    def get_ph(self) -> None:
         self.ph = {gn: self.ph_from_group(gn) for gn in self.group_names}
 
     @staticmethod
-    def ph_from_group(group_name):
+    def ph_from_group(group_name: int) -> float:
         if group_name.startswith("ph_"):
             group_name = group_name[3:]
 
         return float(group_name.replace("_", "."))
 
-    def aggregate_multisignals(self, paths):
+    def aggregate_multisignals(self, paths: list) -> pd.DataFrame:
+        """
+        Accumulate multiple signals
+        """
 
         aggregated = pd.concat(
             [self.concat_signal(path, reduce_cols=np.nanmean) for path in paths], axis=1
@@ -212,7 +245,17 @@ class phGrouper(NameGrouper):
         return aggregated
 
 
-def concat_signal_ind(path, group_names, group, signal, mode="retained", **kwargs):
+def concat_signal_ind(
+    path: str,
+    group_names: List[str],
+    group: str,
+    signal: str,
+    mode: str = "retained",
+    **kwargs,
+) -> pd.DataFrame:
+    """
+    Core function that handles retrieval of an individual signal, applies filtering if requested and adjusts indices.
+    """
     if mode == "retained":
         combined = signal.retained(path, **kwargs)
     if mode == "mothers":
@@ -232,6 +275,10 @@ def concat_signal_ind(path, group_names, group, signal, mode="retained", **kwarg
 
 
 class MultiGrouper:
+    """
+    Wrap results from multiple experiments stored as folders inside a folder.
+    """
+
     def __init__(self, source: Union[str, list]):
         if isinstance(source, str):
             source = Path(source)
@@ -243,14 +290,14 @@ class MultiGrouper:
             group.load_signals()
 
     @property
-    def siglist(self):
+    def siglist(self) -> None:
         for gpr in self.groupers:
             print(gpr.siglist_grouped)
 
     @property
-    def sigtable(self):
+    def sigtable(self) -> pd.DataFrame:
         """
-        Generate a table containing the number of datasets for each signal and experiment
+        Generate a matrix containing the number of datasets for each signal and experiment
         """
 
         def regex_cleanup(x):
@@ -284,7 +331,14 @@ class MultiGrouper:
             )
         return self._sigtable
 
-    def sigtable_plot(self):
+    def sigtable_plot(self) -> None:
+        """Plot number of signals for all available experiments.
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
         ax = sns.heatmap(self.sigtable, cmap="viridis")
         ax.set_xticklabels(
             ax.get_xticklabels(), rotation=10, ha="right", rotation_mode="anchor"
@@ -296,6 +350,25 @@ class MultiGrouper:
         signals: Union[str, list],
         **kwargs,
     ) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Aggregate signals from multiple Groupers (and thus experiments)
+
+        Parameters
+        ----------
+        signals : Union[str, list]
+            string or list of strings indicating the signal(s) to fetch.
+        **kwargs : keyword arguments to pass to Grouper.concat_signal
+            Customise the filters and format to fetch signals.
+
+        Returns
+        -------
+        Union[pd.DataFrame, Dict[str, pd.DataFrame]]
+            DataFrame or list of DataFrames
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
         if isinstance(signals, str):
             signals = [signals]
 
