@@ -141,20 +141,18 @@ class ExperimentCompiler(Compiler):
         """
         return {pos: coords.shape[0] for pos, coords in self.grouper.traplocs().items()}
 
-    def concat_signal(
-        self, sigloc=None, mode="mothers", *args, **kwargs
-    ) -> pd.DataFrame:
+    def concat_signal(self, sigloc=None, mode=None, *args, **kwargs) -> pd.DataFrame:
 
         if sigloc == None:
             sigloc = "extraction/general/None/volume"
         self.sigloc = sigloc
 
         if mode == None:
-            mode = "mothers"
+            mode = "retained"
 
         if not hasattr(self, "_concat") or self.sigloc != sigloc:
             self._concat = self.grouper.concat_signal(
-                self.sigloc, pool=7, mode="mothers"
+                self.sigloc, pool=7, mode="retained"
             )
 
         return self._concat
@@ -217,11 +215,11 @@ class ExperimentCompiler(Compiler):
                     }
                 )
 
-            stages_dfs = {
-                "Full": process_dfs(input_signals, range(compiler.grouper.ntimepoints))
-            }
+            # Note that all input_signals columns must be the same
+            col_vals = list(input_signals.values())[0].columns
+            stages_dfs = {"Full": process_dfs(input_signals, col_vals)}
             for k, rng in stages:
-                stage_df = process_dfs(input_signals, rng)
+                stage_df = process_dfs(input_signals, col_vals[rng])
                 stages_dfs[k] = stage_df
 
         concat = pd.concat([x.reset_index() for x in stages_dfs.values()])
