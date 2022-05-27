@@ -609,7 +609,7 @@ class Writer(BridgeH5):
                     maxshape=(max_tps,),
                     dtype="uint16",
                 )
-                tps = df.columns.tolist()
+                tps = list(range(df.shape[1]))
                 f[tp_path][tps] = tps
             else:
                 f[path].attrs["columns"] = df.columns.tolist()
