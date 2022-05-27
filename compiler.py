@@ -847,7 +847,6 @@ class PageOrganiser(object):
                 kwargs["height"] = 11.7
                 # kwargs["aspect"] = 8.27 / (11.7 / kwargs["col_wrap"])
                 kwargs["aspect"] = (8.27 / ncols) / (kwargs["height"] / nrows)
-                print(kwargs)
             return getattr(sns, how["func"])(
                 data=self.data[how["data"]],
                 x=how["args"][0],
