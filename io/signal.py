@@ -23,24 +23,6 @@ class Signal(BridgeH5):
 
         self.names = ["experiment", "position", "trap"]
 
-    @staticmethod
-    def add_name(df, name):
-        df.name = name
-        return df
-
-    @property
-    def ntimepoints(self):
-        with h5py.File(self.filename, "r") as f:
-            return f["extraction/general/None/area/timepoint"][-1] + 1
-
-    def retained(self, signal, cutoff=0.8):
-        df = self[signal]
-        get_retained = lambda df: df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
-        if isinstance(df, pd.DataFrame):
-            return get_retained(df)
-        elif isinstance(df, list):
-            return [get_retained(d) for d in df]
-
     def __getitem__(self, dsets):
 
         if isinstance(dsets, str) and dsets.endswith("imBackground"):
@@ -57,7 +39,47 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 return [self.add_name(self.apply_prepost(dset), dset) for dset in dsets]
 
-        return self.add_name(df, dsets)
+        return self.cols_in_mins(self.add_name(df, dsets))
+
+    @staticmethod
+    def add_name(df, name):
+        df.name = name
+        return df
+
+    def cols_in_mins(self, df: pd.DataFrame):
+        # Convert numerical columns in a dataframe to minutes
+        try:
+            df.columns = (df.columns * self.tinterval // 60).astype(int)
+        except Exception as e:
+            print(
+                "Warning: columns not convertable to minutes for signal {}. {}".format(
+                    df.name, e
+                )
+            )
+        return df
+
+    @property
+    def ntimepoints(self):
+        with h5py.File(self.filename, "r") as f:
+            return f["extraction/general/None/area/timepoint"][-1] + 1
+
+    @property
+    def tinterval(self):
+        with h5py.File(self.filename, "r") as f:
+            return f.attrs["time_settings/timeinterval"]
+
+    @staticmethod
+    def get_retained(df, cutoff):
+        return df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
+
+    def retained(self, signal, cutoff=0.8):
+
+        df = self[signal]
+        if isinstance(df, pd.DataFrame):
+            return self.get_retained(df, cutoff)
+
+        elif isinstance(df, list):
+            return [self.get_retained(d) for d in df]
 
     def apply_prepost(self, dataset: str):
         """
@@ -125,10 +147,15 @@ class Signal(BridgeH5):
 
     @property
     def siglist(self):
-        if not hasattr(self, "_siglist"):
+        try:
+            if not hasattr(self, "_siglist"):
+                self._siglist = []
+                with h5py.File(self.filename, "r") as f:
+                    f.visititems(self.get_siglist)
+        except Exception as e:
+            print("Error visiting h5: {}".format(e))
             self._siglist = []
-            with h5py.File(self.filename, "r") as f:
-                f.visititems(self.get_siglist)
+
         return self._siglist
 
     def get_merged(self, dataset):
@@ -215,18 +242,17 @@ class Signal(BridgeH5):
         return df
 
     @staticmethod
-    def dataset_to_df(f: h5py.File, path: str, mode: str = "h5py"):
+    def dataset_to_df(f: h5py.File, path: str):
 
-        if mode is "h5py":
-            all_indices = ["experiment", "position", "trap", "cell_label"]
-            indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
-            return pd.DataFrame(
-                f[path + "/values"][()],
-                index=pd.MultiIndex.from_arrays(
-                    list(indices.values()), names=indices.keys()
-                ),
-                columns=f[path + "/timepoint"][()],
-            )
+        all_indices = ["experiment", "position", "trap", "cell_label"]
+        indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
+        return pd.DataFrame(
+            f[path + "/values"][()],
+            index=pd.MultiIndex.from_arrays(
+                list(indices.values()), names=indices.keys()
+            ),
+            columns=f[path + "/timepoint"][()],
+        )
 
     def get_siglist(self, name, node):
         fullname = node.name
