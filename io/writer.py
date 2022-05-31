@@ -365,14 +365,17 @@ class StateWriter(DynamicWriter):
 
     @staticmethod
     def format_values_tpback(states: list, val_name: str):
-        tp_back, trap, value = zip(
-            *[
-                (tp_back, trap, cell_label)
-                for trap, state in enumerate(states)
-                for tp_back, value in enumerate(state[val_name])
-                for cell_label in value
-            ]
-        )
+        tp_back, trap, value = [[[] for _ in states[0][val_name]] for _ in range(3)]
+
+        lbl_tuples = [
+            (tp_back, trap, cell_label)
+            for trap, state in enumerate(states)
+            for tp_back, value in enumerate(state[val_name])
+            for cell_label in value
+        ]
+        if len(lbl_tuples):
+            tp_back, trap, value = zip(*lbl_tuples)
+
         return tp_back, trap, value
 
     @staticmethod
