@@ -5,6 +5,10 @@ from datetime import datetime
 
 import xmltodict
 from tifffile import TiffFile
+
+# dask extends numpy to multi-core machines and distributed clusters
+# and allows data to be stored that is larger than the RAM by
+# sharing between RAM and a hard disk
 import dask.array as da
 from dask.array.image import imread
 
@@ -77,23 +81,50 @@ class ImageLocal:
 
 
 class Image(Argo):
-    """"""
+    """
+    Loads images from OMERO and gives access to the data and metadata.
+    """
 
     def __init__(self, image_id, **server_info):
+        '''
+        Establishes the connection to the OMERO server via the Argo
+        base class.
+
+        Parameters
+        ----------
+        image_id: integer
+        server_info: dictionary
+            Specifies the host, username, and password as strings
+        '''
         super().__init__(**server_info)
         self.image_id = image_id
+        # images from OMERO
         self._image_wrap = None
 
     @property
     def image_wrap(self):
-
+        '''
+        Get images from OMERO
+        '''
         if self._image_wrap is None:
+            # get images using OMERO
             self._image_wrap = self.conn.getObject("Image", self.image_id)
         return self._image_wrap
 
-    # Version with local file processing
+    # version with local file processing
     def get_data_lazy_local(path: str) -> da.Array:
-        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+        """
+        For lazy-loading - loading on demand only -- local,
+        multidimensional tiff files.
+
+        Parameters
+        ----------
+        path: string
+
+        Returns
+        -------
+            5D dask array
+        """
         return da.from_delayed(imread(str(path))[0], shape=())
 
     @property
@@ -106,6 +137,10 @@ class Image(Argo):
 
     @property
     def metadata(self):
+        """
+        Store metadata saved in OMERO: image size, number of time points,
+        labels of channels, and image name.
+        """
         meta = dict()
         meta["size_x"] = self.image_wrap.getSizeX()
         meta["size_y"] = self.image_wrap.getSizeY()

@@ -76,10 +76,13 @@ from dask import delayed
 
 
 def get_data_lazy(image) -> da.Array:
-    """Get 5D dask array, with delayed reading from OMERO image."""
+    """
+    Get 5D dask array, with delayed reading from OMERO image.
+    """
     nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
     pixels = image.getPrimaryPixels()
     dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
+    # using dask
     get_plane = delayed(lambda idx: pixels.getPlane(*idx))
 
     def get_lazy_plane(zct):
