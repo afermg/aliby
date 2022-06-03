@@ -5,6 +5,8 @@ from datetime import datetime
 
 import xmltodict
 from tifffile import TiffFile
+
+import numpy as np
 import dask.array as da
 from dask.array.image import imread
 
@@ -13,26 +15,35 @@ from aliby.io.omero import Argo
 
 
 class ImageLocal:
-    def __init__(self, path: str, *args, **kwargs):
+    def __init__(self, path: str, dimorder=None, *args, **kwargs):
         self.path = path
         self.image_id = str(path)
 
-        with TiffFile(path) as f:
-            self.meta = xmltodict.parse(f.ome_metadata)["OME"]
-
         meta = dict()
         try:
+            with TiffFile(path) as f:
+                self.meta = xmltodict.parse(f.ome_metadata)["OME"]
+
             for dim in self.dimorder:
                 meta["size_" + dim.lower()] = int(
                     self.meta["Image"]["Pixels"]["@Size" + dim]
                 )
-            meta["channels"] = [
-                x["@Name"] for x in self.meta["Image"]["Pixels"]["Channel"]
-            ]
-            meta["name"] = self.meta["Image"]["@Name"]
-            meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
+                meta["channels"] = [
+                    x["@Name"] for x in self.meta["Image"]["Pixels"]["Channel"]
+                ]
+                meta["name"] = self.meta["Image"]["@Name"]
+                meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
+
         except Exception as e:
-            raise e
+            print("Metadata not found: {}".format(e))
+            assert "dims" is not None, "No dimensional info provided."
+
+            # Mark non-existent dimensions for padding
+            base = "TCZXY"
+            self.base = base
+            self.ids = {base.index(i) for i in dimorder}
+
+            self._dimorder = dimorder
 
         self._meta = meta
 
@@ -62,7 +73,14 @@ class ImageLocal:
     @property
     def dimorder(self):
         """Order of dimensions in image"""
-        return self.meta["Image"]["Pixels"]["@DimensionOrder"]
+        if not hasattr(self, "_dimorder"):
+            self._dimorder = self.meta["Image"]["Pixels"]["@DimensionOrder"]
+        return self._dimorder
+
+    @dimorder.setter
+    def dimorder(self, order: str):
+        self._dimorder = order
+        return self._dimorder
 
     @property
     def metadata(self):
@@ -70,10 +88,28 @@ class ImageLocal:
 
     def get_data_lazy_local(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
-        return da.rechunk(
-            imread(str(self.path))[0],
-            chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
-        )
+        if not hasattr(self, "formatted_img"):
+            if not hasattr(self, "ids"):  # Standard dimension order
+                img = (imread(str(self.path))[0],)
+            else:  # Custom dimension order, we rearrange the axes for compatibility
+                img = imread(str(self.path))[0]
+                for i, d in enumerate(self._dimorder):
+                    self._meta["size_" + d.lower()] = img.shape[i]
+
+                target_order = (
+                    *self.ids,
+                    *[i for i, d in enumerate(self.base) if d not in self.dimorder],
+                )
+                reshaped = da.reshape(
+                    img, shape=(*img.shape, *[1 for _ in range(5 - len(self.dimorder))])
+                )
+                img = da.moveaxis(reshaped, range(len(reshaped.shape)), target_order)
+
+            self._formatted_img = da.rechunk(
+                img,
+                chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
+            )
+        return self._formatted_img
 
 
 class Image(Argo):
