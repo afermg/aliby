@@ -6,7 +6,7 @@ import json
 import time
 import numpy as np
 
-from aliby.experiment import ExperimentLocal
+# from aliby.experiment import ExperimentLocal
 from aliby.baby_client import BabyClient
 from aliby.tile.tiler import Tiler
 

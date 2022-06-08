@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 import unittest
 from pathlib import Path
 
-from aliby.experiment import Experiment
+# from aliby.experiment import Experiment
 
 ## LOGGING
 logger = logging.getLogger("core")

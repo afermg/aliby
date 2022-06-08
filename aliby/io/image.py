@@ -12,8 +12,7 @@ from tifffile import TiffFile
 import dask.array as da
 from dask.array.image import imread
 
-from aliby.experiment import get_data_lazy
-from aliby.io.omero import Argo
+from aliby.io.omero import Argo, get_data_lazy
 
 
 class ImageLocal:
@@ -86,7 +85,7 @@ class Image(Argo):
     """
 
     def __init__(self, image_id, **server_info):
-        '''
+        """
         Establishes the connection to the OMERO server via the Argo
         base class.
 
@@ -95,7 +94,7 @@ class Image(Argo):
         image_id: integer
         server_info: dictionary
             Specifies the host, username, and password as strings
-        '''
+        """
         super().__init__(**server_info)
         self.image_id = image_id
         # images from OMERO
@@ -103,9 +102,9 @@ class Image(Argo):
 
     @property
     def image_wrap(self):
-        '''
+        """
         Get images from OMERO
-        '''
+        """
         if self._image_wrap is None:
             # get images using OMERO
             self._image_wrap = self.conn.getObject("Image", self.image_id)

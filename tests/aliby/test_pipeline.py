@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 from aliby.baby_client import BabyRunner
-from aliby.experiment import ExperimentOMERO, ExperimentLocal
+
+# from aliby.experiment import ExperimentOMERO, ExperimentLocal
 from aliby.tile.tiler import Tiler
 
 

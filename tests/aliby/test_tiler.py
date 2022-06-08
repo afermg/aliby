@@ -1,6 +1,6 @@
 import argparse
 
-from aliby.experiment import ExperimentLocal
+# from aliby.experiment import ExperimentLocal
 from aliby.tile.tiler import Tiler
 
 
