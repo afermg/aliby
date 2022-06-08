@@ -10,12 +10,15 @@ class ParametersABC(ABC):
     """
     Defines parameters as attributes and allows parameters to
     be converted to either a dictionary or to yaml.
+
+    No attribute should be called "parameters"!
     """
 
     def __init__(self, **kwargs):
         '''
         Defines parameters as attributes
         '''
+        assert "parameters" not in kwargs, "No attribute should be named parameters"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -23,10 +26,8 @@ class ParametersABC(ABC):
 
     def to_dict(self, iterable="null"):
         """
-        Recursive function that converts class to nested dictionary
-
-        Recursive function to return a dictionary version of the attributes
-        of the class instance.
+        Recursive function to return a nested dictionary of the
+        attributes of the class instance.
         """
         if isinstance(iterable, dict):
             if any(
@@ -40,20 +41,18 @@ class ParametersABC(ABC):
                     k: v.to_dict() if hasattr(v, "to_dict") else self.to_dict(v)
                     for k, v in iterable.items()
                 }
-            return iterable
+            else:
+                return iterable
         elif iterable == "null":
             # use instance's built-in __dict__ dictionary of attributes
             return self.to_dict(self.__dict__)
         else:
             return iterable
 
-
     def to_yaml(self, path: Union[PosixPath, str] = None):
         """
-        Return instance as a yaml stream and optionally exports to file.
-
-        Returns the yaml version of the attributes of the class instance.
-        If path is provided, the yaml version is saved there.
+        Returns a yaml stream of the attributes of the class instance.
+        If path is provided, the yaml stream is saved there.
 
         Parameters
         ----------
@@ -74,7 +73,7 @@ class ParametersABC(ABC):
     @classmethod
     def from_yaml(cls, source: Union[PosixPath, str]):
         """
-        Returns class from a yaml filename or stdin
+        Returns instance from a yaml filename or stdin
         """
         is_buffer = True
         try:
@@ -98,11 +97,13 @@ class ParametersABC(ABC):
 
 ###
 
+
 class ProcessABC(ABC):
     """
     Base class for processes.
-    Defines parameters as instances and requires run method to be defined.
+    Defines parameters as attributes and requires run method to be defined.
     """
+
     def __init__(self, parameters):
         """
         Arguments
