@@ -62,12 +62,13 @@ with Image(list(image_ids.values())[0], **server_info) as image:
  
 ### Tiling the raw data
 
-A `Tiler` object performs trap registration. It is built in different ways, the easiest one is using an image and a the default parameters set.
+A `Tiler` object performs trap registration. It may be built in different ways but the simplest one is using an image and a the default parameters set.
 
 ```python
 from aliby.tile.tiler import Tiler, TilerParameters
 with Image(list(image_ids.values())[0], **server_info) as image:
     tiler = Tiler.from_image(image, TilerParameters.default())
+    tiler.run_tp(0)
 ```
 
 The initialisation should take a few seconds, as it needs to align the images
@@ -76,19 +77,15 @@ in time.
 It fetches the metadata from the Image object, and uses the TilerParameters values (all Processes in aliby depend on an associated Parameters class, which is in essence a dictionary turned into a class.)
 
 #### Get a timelapse for a given trap
-TODO: Update this
 ```python
-channels = [0] #Get only the first channel, this is also the default
-z = [0, 1, 2, 3, 4] #Get all z-positions
-trap_id = 0
-tile_size = 117
+fpath = "h5/location"
 
-# Get a timelapse of the trap
-# The default trap size is 96 by 96
-# The trap is in the center of the image, except for edge cases
-# The output has shape (C, T, X, Y, Z), so in this example: (1, T, 96, 96, 5)
-timelapse = seg_expt.get_trap_timelapse(trap_id, tile_size=tile_size, 
-                                        channels=channels, z=z)
+trap_id = 9
+trange = list(range(0, 30))
+ncols = 8
+
+riv = remoteImageViewer(fpath)
+trap_tps = riv.get_trap_timepoints(trap_id, trange, ncols)
 ```
 
 This can take several seconds at the moment.
@@ -114,4 +111,4 @@ seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None,
 
 
 ### Contributing
-See [CONTRIBUTING.md](./INSTALL.md) for installation instructions.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for installation instructions.
