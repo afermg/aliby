@@ -1,12 +1,10 @@
-import numpy as np
+from typing import Union
+
 from copy import copy
-from itertools import accumulate
-
-from numpy import ndarray
-
-# from more_itertools import first_true
+from pathlib import PosixPath
 
 import h5py
+import numpy as np
 import pandas as pd
 from utils_find_1st import find_1st, cmp_larger
 
@@ -18,7 +16,7 @@ class Signal(BridgeH5):
     Class that fetches data from the hdf5 storage for post-processing
     """
 
-    def __init__(self, file):
+    def __init__(self, file: Union[str, PosixPath]):
         super().__init__(file, flag=None)
 
         self.names = ["experiment", "position", "trap"]
@@ -37,7 +35,10 @@ class Signal(BridgeH5):
                 dsets
             ), "Trap data and cell data can't be mixed"
             with h5py.File(self.filename, "r") as f:
-                return [self.add_name(self.apply_prepost(dset), dset) for dset in dsets]
+                return [
+                    self.add_name(self.apply_prepost(dset), dset)
+                    for dset in dsets
+                ]
 
         return self.cols_in_mins(self.add_name(df, dsets))
 
@@ -52,7 +53,8 @@ class Signal(BridgeH5):
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
             print(
-                "Warning: columns not convertable to minutes for signal {}. {}".format(
+                """
+                Warning:Can't convert columns to minutes. Signal {}.{}""".format(
                     df.name, e
                 )
             )
@@ -91,18 +93,25 @@ class Signal(BridgeH5):
 
             merged = df
             if merges.any():
-                # Split in two dfs, one with rows relevant for merging and one without them
+                # Split in two dfs, one with rows relevant for merging and one
+                # without them
                 valid_merges = merges[
-                    (merges[:, :, :, None] == np.array(list(df.index)).T[:, None, :])
+                    (
+                        merges[:, :, :, None]
+                        == np.array(list(df.index)).T[:, None, :]
+                    )
                     .all(axis=(1, 2))
                     .any(axis=1)
                 ]  # Casting allows fast multiindexing
 
                 merged = self.apply_merge(
-                    df.loc[map(tuple, valid_merges.reshape(-1, 2))], valid_merges
+                    df.loc[map(tuple, valid_merges.reshape(-1, 2))],
+                    valid_merges,
                 )
 
-                nonmergeable_ids = df.index.difference(valid_merges.reshape(-1, 2))
+                nonmergeable_ids = df.index.difference(
+                    valid_merges.reshape(-1, 2)
+                )
 
                 merged = pd.concat(
                     (merged, df.loc[nonmergeable_ids]), names=df.index.names
@@ -110,11 +119,14 @@ class Signal(BridgeH5):
 
             if "modifiers/picks" in f:
                 picks = self.get_picks(names=merged.index.names)
-                # missing_cells = [i for i in picks if tuple(i) not in set(merged.index)]
+                # missing_cells = [i for i in picks if tuple(i) not in
+                # set(merged.index)]
 
                 if picks:
                     return merged.loc[
-                        set(picks).intersection([tuple(x) for x in merged.index])
+                        set(picks).intersection(
+                            [tuple(x) for x in merged.index]
+                        )
                     ]
                     return merged.loc[picks]
                 else:
@@ -234,7 +246,9 @@ class Signal(BridgeH5):
         )
 
         columns = (
-            dset["timepoint"][()] if "timepoint" in dset else dset.attrs["columns"]
+            dset["timepoint"][()]
+            if "timepoint" in dset
+            else dset.attrs["columns"]
         )
 
         df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
@@ -245,7 +259,9 @@ class Signal(BridgeH5):
     def dataset_to_df(f: h5py.File, path: str):
 
         all_indices = ["experiment", "position", "trap", "cell_label"]
-        indices = {k: f[path][k][()] for k in all_indices if k in f[path].keys()}
+        indices = {
+            k: f[path][k][()] for k in all_indices if k in f[path].keys()
+        }
         return pd.DataFrame(
             f[path + "/values"][()],
             index=pd.MultiIndex.from_arrays(
@@ -263,12 +279,16 @@ class Signal(BridgeH5):
 
     @staticmethod
     def _if_ext_or_post(name: str, siglist: list):
-        if name.startswith("/extraction") or name.startswith("/postprocessing"):
+        if name.startswith("/extraction") or name.startswith(
+            "/postprocessing"
+        ):
             siglist.append(name)
 
     @staticmethod
     def _if_merges(name: str, obj):
-        if isinstance(obj, h5py.Dataset) and name.startswith("modifiers/merges"):
+        if isinstance(obj, h5py.Dataset) and name.startswith(
+            "modifiers/merges"
+        ):
             return obj[()]
 
     @staticmethod
