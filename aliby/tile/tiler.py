@@ -5,29 +5,12 @@ import warnings
 from functools import lru_cache
 import h5py
 import numpy as np
-from pathlib import Path, PosixPath
 from skimage.registration import phase_cross_correlation
-from aliby.tile.traps import segment_traps
+
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import load_attributes
-
-
-# Alan: is this necessary?
-trap_template_directory = Path(__file__).parent / "trap_templates"
-# TODO do we need multiple templates, one for each setup?
-trap_template = np.array([])
-# np.load(trap_template_directory / "trap_prime.npy")
-
-#
-# def get_tile_shapes(x, tile_size, max_shape):
-#     half_size = tile_size // 2
-#     xmin = int(x[0] - half_size)
-#     ymin = max(0, int(x[1] - half_size))
-#     if xmin + tile_size > max_shape[0]:
-#         xmin = max_shape[0] - tile_size
-#     if ymin + tile_size > max_shape[1]:
-#         ymin = max_shape[1] - tile_size
-#     return xmin, xmin + tile_size, ymin, ymin + tile_size
+from aliby.io.image import Image
+from aliby.tile.traps import segment_traps
 
 
 class Trap:
@@ -36,6 +19,7 @@ class Trap:
     Allows checks to see if the trap should be padded.
     Can export the trap either in OMERO or numpy formats.
     '''
+
     def __init__(self, centre, parent, size, max_size):
         self.centre = centre
         self.parent = parent  # used to access drifts
@@ -90,11 +74,13 @@ class Trap:
 
 ###
 
+
 class TrapLocations:
     '''
     Stores each trap as an instance of Trap.
     Traps can be iterated.
     '''
+
     def __init__(
         self, initial_location, tile_size, max_size=1200, drifts=None
     ):
@@ -169,54 +155,11 @@ class TrapLocations:
 
 ###
 
+
 class TilerParameters(ParametersABC):
     _defaults = {"tile_size": 117,
                  "ref_channel": "Brightfield",
-                  "ref_z": 0}
-
-###
-# Alan: is this necessary?
-class TilerABC(ProcessABC):
-    """
-    Base class for different types of Tilers.
-    """
-
-    def __init__(parameters):
-        super().__init__(parameters)
-
-    @staticmethod
-    def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
-        """
-        Returns the slices padded if it is out of bounds
-
-        Parameters:
-        ----------
-        full: (zstacks, max_size, max_size) ndarray
-        Entire position with zstacks as first axis
-        slices: tuple of two slices
-        Each slice indicates an axis to index
-
-
-        Returns
-        Trap for given slices, padded with median if needed, or np.nan if the padding is too much
-        """
-        max_size = full.shape[-1]
-
-        y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
-        trap = full[:, y, x]
-
-        padding = np.array(
-            [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
-        )
-        if padding.any():
-            tile_size = slices[0].stop - slices[0].start
-            if (padding > tile_size / 4).any():
-                trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
-            else:
-
-                trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
-
-        return trap
+                 "ref_z": 0}
 
 
 ####
@@ -232,7 +175,7 @@ class Tiler(ProcessABC):
 
     def __init__(
         self,
-        image,
+        image: Image,
         metadata,
         parameters: TilerParameters,
         trap_locs=None,
@@ -256,11 +199,11 @@ class Tiler(ProcessABC):
     ###
 
     @classmethod
-    def from_image(cls, image, parameters: TilerParameters):
+    def from_image(cls, image: Image, parameters: TilerParameters):
         return cls(image.data, image.metadata, parameters)
 
     @classmethod
-    def from_hdf5(cls, image, filepath, parameters=None):
+    def from_hdf5(cls, image: Image, filepath, parameters=None):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = image.metadata["channels"]
@@ -352,7 +295,6 @@ class Tiler(ProcessABC):
         # store traps in an instance of TrapLocations
         self.trap_locs = TrapLocations.from_tiler_init(trap_locs, tile_size)
 
-
     ###
 
     def find_drift(self, tp):
@@ -418,16 +360,11 @@ class Tiler(ProcessABC):
         # return result for writer
         return self.trap_locs.to_dict(tp)
 
-    # Alan !!!! this function is the same as the previous one !!!!!
-    def run(self, tp):
-        if self.n_processed == 0:
-            self._initialise_traps(self.tile_size)
-        # determine drift
-        self.find_drift(tp)
-        # update n_processed
-        self.n_processed += 1
-        # return result for writer
-        return self.trap_locs.to_dict(tp)
+    def run(self):
+        '''
+        Tile all time points in an experiment at once.
+        '''
+        raise NotImplementedError()
 
     ###
 
@@ -458,7 +395,6 @@ class Tiler(ProcessABC):
     def get_position_annotation(self):
         # TODO required for matlab support
         return None
-
 
     ###
 
