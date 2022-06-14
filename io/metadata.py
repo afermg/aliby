@@ -1,6 +1,7 @@
 import glob
 import os
-from datetime import datetime, timezone
+from datetime import datetime
+from pytz import timezone
 
 import pandas as pd
 
@@ -23,7 +24,8 @@ class MetaData:
     def run(self, overwrite=False):
         metadata_dict = self.load_logs()
         self.metadata_writer.write(
-            path="/", meta=metadata_dict, overwrite=overwrite)
+            path="/", meta=metadata_dict, overwrite=overwrite
+        )
 
     def add_field(self, field_name, field_value, **kwargs):
         self.metadata_writer.write(
