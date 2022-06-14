@@ -1,15 +1,41 @@
-"""
-Parse microscopy log files according to specified JSON grammars.
-Produces dictionary to include in HDF5
-"""
 import glob
 import os
-import numpy as np
-import pandas as pd
 from datetime import datetime, timezone
-from pytz import timezone
+
+import pandas as pd
 
 from logfile_parser import Parser
+from agora.io.writer import Writer
+
+
+class MetaData:
+    """Small metadata Process that loads log."""
+
+    def __init__(self, log_dir, store):
+        self.log_dir = log_dir
+        self.store = store
+        self.metadata_writer = Writer(self.store)
+
+    def load_logs(self):
+        parsed_flattened = parse_logfiles(self.log_dir)
+        return parsed_flattened
+
+    def run(self, overwrite=False):
+        metadata_dict = self.load_logs()
+        self.metadata_writer.write(
+            path="/", meta=metadata_dict, overwrite=overwrite)
+
+    def add_field(self, field_name, field_value, **kwargs):
+        self.metadata_writer.write(
+            path="/",
+            meta={field_name: field_value},
+            **kwargs,
+        )
+
+    def add_fields(self, fields_values: dict, **kwargs):
+        for field, value in fields_values.items():
+            self.add_field(field, value)
+
 
 # Paradigm: able to do something with all datatypes present in log files,
 # then pare down on what specific information is really useful later.
@@ -58,7 +84,7 @@ def parse_logfiles(
     log_parser = Parser(log_grammar)
     try:
         log_file = find_file(root_dir, "*log.txt")
-    except:
+    except FileNotFoundError:
         raise ValueError("Experiment log file not found.")
     with open(log_file, "r") as f:
         log_parsed = log_parser.parse(f)
@@ -66,7 +92,7 @@ def parse_logfiles(
     acq_parser = Parser(acq_grammar)
     try:
         acq_file = find_file(root_dir, "*[Aa]cq.txt")
-    except:
+    except FileNotFoundError:
         raise ValueError("Experiment acq file not found.")
     with open(acq_file, "r") as f:
         acq_parsed = acq_parser.parse(f)
