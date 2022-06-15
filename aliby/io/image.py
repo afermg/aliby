@@ -34,7 +34,7 @@ class ImageLocal:
 
         except Exception as e:
             print("Metadata not found: {}".format(e))
-            assert "dims" is not None, "No dimensional info provided."
+            assert "dims" != None, "No dimensional info provided."
 
             # Mark non-existent dimensions for padding
             base = "TCZXY"
@@ -86,6 +86,7 @@ class ImageLocal:
 
     def get_data_lazy_local(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+
         if not hasattr(self, "formatted_img"):
             if not hasattr(self, "ids"):  # Standard dimension order
                 img = (imread(str(self.path))[0],)
@@ -96,12 +97,22 @@ class ImageLocal:
 
                 target_order = (
                     *self.ids,
-                    *[i for i, d in enumerate(self.base) if d not in self.dimorder],
+                    *[
+                        i
+                        for i, d in enumerate(self.base)
+                        if d not in self.dimorder
+                    ],
                 )
                 reshaped = da.reshape(
-                    img, shape=(*img.shape, *[1 for _ in range(5 - len(self.dimorder))])
+                    img,
+                    shape=(
+                        *img.shape,
+                        *[1 for _ in range(5 - len(self.dimorder))],
+                    ),
                 )
-                img = da.moveaxis(reshaped, range(len(reshaped.shape)), target_order)
+                img = da.moveaxis(
+                    reshaped, range(len(reshaped.shape)), target_order
+                )
 
             self._formatted_img = da.rechunk(
                 img,
@@ -140,22 +151,6 @@ class Image(Argo):
             # get images using OMERO
             self._image_wrap = self.conn.getObject("Image", self.image_id)
         return self._image_wrap
-
-    # version with local file processing
-    def get_data_lazy_local(path: str) -> da.Array:
-        """
-        For lazy-loading - loading on demand only -- local,
-        multidimensional tiff files.
-
-        Parameters
-        ----------
-        path: string
-
-        Returns
-        -------
-            5D dask array
-        """
-        return da.from_delayed(imread(str(path))[0], shape=())
 
     @property
     def name(self):

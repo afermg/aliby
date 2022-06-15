@@ -33,7 +33,12 @@ from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.io.dataset import Dataset, DatasetLocal
 from aliby.io.image import Image, ImageLocal
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import TilerWriter, BabyWriter, StateWriter, LinearBabyWriter
+from agora.io.writer import (
+    TilerWriter,
+    BabyWriter,
+    StateWriter,
+    LinearBabyWriter,
+)
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
 from extraction.core.extractor import Extractor, ExtractorParameters
@@ -50,7 +55,9 @@ logging.basicConfig(
 
 
 class PipelineParameters(ParametersABC):
-    def __init__(self, general, tiler, baby, extraction, postprocessing, reporting):
+    def __init__(
+        self, general, tiler, baby, extraction, postprocessing, reporting
+    ):
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -205,16 +212,19 @@ class Pipeline(ProcessABC):
         # TODO add support for non-standard unique folder names
         with h5py.File(fpath, "r") as f:
             pipeline_parameters = PipelineParameters.from_yaml(
-                f.attrs["parameters"])
+                f.attrs["parameters"]
+            )
         pipeline_parameters.general["directory"] = dir_path.parent
         pipeline_parameters.general["filter"] = [fpath.stem for fpath in files]
 
         # Fix legacy postprocessing parameters
         post_process_params = pipeline_parameters.postprocessing.get(
-            "parameters", None)
+            "parameters", None
+        )
         if post_process_params:
             pipeline_parameters.postprocessing["param_sets"] = copy(
-                post_process_params)
+                post_process_params
+            )
             del pipeline_parameters.postprocessing["parameters"]
 
         return cls(pipeline_parameters)
@@ -229,17 +239,20 @@ class Pipeline(ProcessABC):
         """
         with h5py.File(fpath, "r") as f:
             pipeline_parameters = PipelineParameters.from_yaml(
-                f.attrs["parameters"])
+                f.attrs["parameters"]
+            )
         directory = Path(fpath).parent
         pipeline_parameters.general["directory"] = directory
         pipeline_parameters.general["filter"] = Path(fpath).stem
 
         # Fix legacy postprocessing parameters
         post_process_params = pipeline_parameters.postprocessing.get(
-            "parameters", None)
+            "parameters", None
+        )
         if post_process_params:
             pipeline_parameters.postprocessing["param_sets"] = copy(
-                post_process_params)
+                post_process_params
+            )
             del pipeline_parameters.postprocessing["parameters"]
 
         return cls(pipeline_parameters, store=directory)
@@ -259,7 +272,9 @@ class Pipeline(ProcessABC):
         # Do all all initialisations
 
         dataset_wrapper = DatasetLocal if isinstance(expt_id, str) else Dataset
-        with dataset_wrapper(expt_id, **self.general.get("server_info", {})) as conn:
+        with dataset_wrapper(
+            expt_id, **self.general.get("server_info", {})
+        ) as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
@@ -363,24 +378,26 @@ class Pipeline(ProcessABC):
                         try:
                             with h5py.File(filename, "r") as f:
                                 steps["tiler"] = Tiler.from_hdf5(
-                                    image, filename)
-
-                                legacy_get_last_tp = (
-                                    {  # Function to support seg in ver < 0.24
-                                        "tiler": lambda f: f["trap_info/drifts"].shape[
-                                            0
-                                        ]
-                                        - 1,
-                                        "baby": lambda f: f["cell_info/timepoint"][-1],
-                                        "extraction": lambda f: f[
-                                            "extraction/general/None/area/timepoint"
-                                        ][-1],
-                                    }
+                                    image, filename
                                 )
+
+                                legacy_get_last_tp = {  # Function to support seg in ver < 0.24
+                                    "tiler": lambda f: f[
+                                        "trap_info/drifts"
+                                    ].shape[0]
+                                    - 1,
+                                    "baby": lambda f: f["cell_info/timepoint"][
+                                        -1
+                                    ],
+                                    "extraction": lambda f: f[
+                                        "extraction/general/None/area/timepoint"
+                                    ][-1],
+                                }
                                 for k, v in process_from.items():
                                     if not ow[k]:
-                                        process_from[k] = legacy_get_last_tp[k](
-                                            f)
+                                        process_from[k] = legacy_get_last_tp[
+                                            k
+                                        ](f)
                                         # process_from[k] = f[
                                         #     self.writer_groups[k][-1]
                                         # ].attrs.get(
@@ -394,11 +411,14 @@ class Pipeline(ProcessABC):
                                         filename
                                     ).get_formatted_states()
 
-                            config["tiler"] = steps["tiler"].parameters.to_dict()
+                            config["tiler"] = steps[
+                                "tiler"
+                            ].parameters.to_dict()
                             if not np.any(ow.values()):
                                 from_start = False
                                 print(
-                                    f"Existing file {filename} will be used.")
+                                    f"Existing file {filename} will be used."
+                                )
                         except Exception as e:
                             print(e)
 
@@ -417,8 +437,11 @@ class Pipeline(ProcessABC):
 
                             pparams[k] = config[k]
                     meta.add_fields(
-                        {"parameters": PipelineParameters.from_dict(
-                            pparams).to_yaml()},
+                        {
+                            "parameters": PipelineParameters.from_dict(
+                                pparams
+                            ).to_yaml()
+                        },
                         overwrite=True,
                     )
 
@@ -462,8 +485,8 @@ class Pipeline(ProcessABC):
                 if process_from["baby"] < tps:
                     session = initialise_tf(2)
                     steps["baby"] = BabyRunner.from_tiler(
-                        BabyParameters.from_dict(
-                            config["baby"]), steps["tiler"]
+                        BabyParameters.from_dict(config["baby"]),
+                        steps["tiler"],
                     )
                     if trackers_state:
                         steps["baby"].crawler.tracker_states = trackers_state
@@ -491,7 +514,8 @@ class Pipeline(ProcessABC):
                             del config["extraction"]["multichannel_ops"][op]
 
                     exparams = ExtractorParameters.from_dict(
-                        config["extraction"])
+                        config["extraction"]
+                    )
                     steps["extraction"] = Extractor.from_tiler(
                         exparams, store=filename, tiler=steps["tiler"]
                     )
@@ -522,13 +546,15 @@ class Pipeline(ProcessABC):
                                     i, **run_kwargs.get(step, {})
                                 )
                                 logging.debug(
-                                    f"Timing:{step}:{perf_counter() - t}s")
+                                    f"Timing:{step}:{perf_counter() - t}s"
+                                )
                                 if step in loaded_writers:
                                     t = perf_counter()
                                     loaded_writers[step].write(
                                         data=result,
                                         overwrite=writer_ow_kwargs.get(
-                                            step, []),
+                                            step, []
+                                        ),
                                         tp=i,
                                         meta={"last_processed": i},
                                     )
@@ -537,9 +563,13 @@ class Pipeline(ProcessABC):
                                     )
 
                                 # Step-specific actions
-                                if step == "baby":  # Write state and pass info to ext
+                                if (
+                                    step == "baby"
+                                ):  # Write state and pass info to ext
                                     loaded_writers["state"].write(
-                                        data=steps[step].crawler.tracker_states,
+                                        data=steps[
+                                            step
+                                        ].crawler.tracker_states,
                                         overwrite=loaded_writers[
                                             "state"
                                         ].datatypes.keys(),
@@ -567,7 +597,8 @@ class Pipeline(ProcessABC):
                             filename, earlystop, steps["tiler"].tile_size
                         )
                         logging.debug(
-                            f"Quality:Clogged_traps:{frac_clogged_traps}")
+                            f"Quality:Clogged_traps:{frac_clogged_traps}"
+                        )
 
                         frac = np.round(frac_clogged_traps * 100)
                         pbar.set_postfix_str(f"{frac} Clogged")
@@ -590,11 +621,12 @@ class Pipeline(ProcessABC):
                 )
                 PostProcessor(filename, post_proc_params).run()
 
-                return 1
+                # return 1
 
         except Exception as e:  # bug in the trap getting
             logging.exception(
-                f"Caught exception in worker thread (x = {name}):", exc_info=True
+                f"Caught exception in worker thread (x = {name}):",
+                exc_info=True,
             )
             print(f"Caught exception in worker thread (x = {name}):")
             # This prints the type, value, and stack trace of the
@@ -606,29 +638,29 @@ class Pipeline(ProcessABC):
             if session:
                 session.close()
 
-        try:
-            compiler = ExperimentCompiler(None, filepath)
-            tmp = compiler.run()
-            po = PageOrganiser(tmp, grid_spec=(3, 2))
-            po.plot()
-            po.save(fullpath / f"{directory}report.pdf")
-        except Exception as e:
-            print("Report failed: {}".format(e))
+        # try:
+        #     compiler = ExperimentCompiler(None, filepath)
+        #     tmp = compiler.run()
+        #     po = PageOrganiser(tmp, grid_spec=(3, 2))
+        #     po.plot()
+        #     po.save(fullpath / f"{directory}report.pdf")
+        # except Exception as e:
+        #     print("Report failed: {}".format(e))
 
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
-        cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"]: -1]].dropna(
-            how="all"
-        )
+        cells_used = df[
+            df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
+        ].dropna(how="all")
         traps_above_nthresh = (
             cells_used.groupby("trap").count().apply(np.mean, axis=1)
             > es_parameters["thresh_trap_ncells"]
         )
         traps_above_athresh = (
-            cells_used.groupby("trap").sum().apply(
-                np.mean, axis=1) / tile_size**2
+            cells_used.groupby("trap").sum().apply(np.mean, axis=1)
+            / tile_size**2
             > es_parameters["thresh_trap_area"]
         )
 
@@ -638,12 +670,14 @@ class Pipeline(ProcessABC):
 def groupby_traps(traps, labels, edgemasks, ntraps):
     # Group data by traps to pass onto extractor without re-reading hdf5
     iterators = [
-        groupby(zip(traps, dset), lambda x: x[0]) for dset in (labels, edgemasks)
+        groupby(zip(traps, dset), lambda x: x[0])
+        for dset in (labels, edgemasks)
     ]
     label_d = {key: [x[1] for x in group] for key, group in iterators[0]}
     mask_d = {
-        key: np.dstack([ndimage.morphology.binary_fill_holes(x[1])
-                       for x in group])
+        key: np.dstack(
+            [ndimage.morphology.binary_fill_holes(x[1]) for x in group]
+        )
         for key, group in iterators[1]
     }
 
