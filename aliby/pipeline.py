@@ -563,7 +563,13 @@ class Pipeline(ProcessABC):
                                     )
 
                                 # Step-specific actions
-                                if (
+
+                                if step=='tiler':
+                                    if i == min_process_from:
+                                        print(
+                                            f"Found {steps['tiler'].n_traps} traps in {image.name}"
+                                        )
+                                elif (
                                     step == "baby"
                                 ):  # Write state and pass info to ext
                                     loaded_writers["state"].write(
@@ -588,10 +594,6 @@ class Pipeline(ProcessABC):
                                     for k in ["masks", "labels"]:
                                         run_kwargs[step][k] = None
 
-                            if i == min_process_from:
-                                print(
-                                    f"Found {steps['tiler'].n_traps} traps in {image.name}"
-                                )
 
                         frac_clogged_traps = self.check_earlystop(
                             filename, earlystop, steps["tiler"].tile_size
