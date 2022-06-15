@@ -228,7 +228,7 @@ class Tiler(ProcessABC):
     @lru_cache(maxsize=2)
     def get_tc(self, t, c):
         # Get image by forcing loading it into cache. Assumes TCZYX dimensional order.
-        # WORKADOUND around error (which arose on 2022/06/14) when fetching 3-D data.
+        # WORKAROUND around error (which arose on 2022/06/14) when fetching 3-D data.
         full = np.stack(
             [
                 self.image[t, c, z].compute()
