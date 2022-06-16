@@ -229,14 +229,24 @@ class Tiler(ProcessABC):
     def get_tc(self, t, c):
         # Get image by forcing loading it into cache. Assumes TCZYX dimensional order.
         # WORKAROUND around error (which arose on 2022/06/14) when fetching 3-D data.
-        full = np.stack(
-            [
+        n_attempts = 0
+        while n_attempts < 5:
+
+            try:
+                full = np.stack(
+                    [
                 self.image[t, c, z].compute()
                 for z in range(self.image.shape[2])
-            ],
-            axis=0,
-        )
-        # full = self.image[t, c].compute()
+                    ],
+                    axis=0,
+                )
+                # full = self.image[t, c].compute()
+                n_attempts=5
+            except:
+                print("Warning: Error ocurred when fetching images. Attempt {}".format(n_attempts+1))
+                self.image.conn.connect()
+                n_attempts += 1
+
 
         return full
 
