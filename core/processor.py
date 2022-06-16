@@ -167,12 +167,13 @@ class PostProcessor(ProcessABC):
 
         for k in dicted_params.keys():
             if not isinstance(dicted_params[k], dict):
-                dicted_params["k"] = dicted_params["k"].to_dict()
+                dicted_params[k] = dicted_params[k].to_dict()
 
-        self.merger = merger.from_dict(dicted_params["merger"])
+        self.merger = merger(mergerParameters.from_dict(dicted_params["merger"]))
 
-        self.picker = picker.from_dict(
-            dicted_params["picker"],
+        self.picker = picker(
+            pickerParameters.from_dict(dicted_params["picker"]),
+            cells=Cells.from_source(filename),
         )
         self.classfun = {
             process: get_process(process)
