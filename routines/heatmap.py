@@ -34,7 +34,9 @@ class _HeatmapPlotter(BasePlotter):
         self.robust = robust
 
         # Define some labels
-        self.colorbarlabel = "Normalised " + self.trace_name + " fluorescence (AU)"
+        self.colorbarlabel = (
+            "Normalised " + self.trace_name + " fluorescence (AU)"
+        )
         self.ylabel = "Cell"
 
         # Scale
@@ -57,21 +59,11 @@ class _HeatmapPlotter(BasePlotter):
             self.vmin = None
             self.vmax = None
 
-        # Define horizontal axis ticks and labels
-        time_axis = self.sampling_period * self.trace_df.columns.to_numpy()
-        xtick_min = self.xtick_step * np.ceil(np.min(time_axis) / self.xtick_step)
-        xtick_max = self.xtick_step * np.ceil(np.max(time_axis) / self.xtick_step)
-        xticklabels = np.arange(xtick_min, xtick_max, self.xtick_step)
-        self.xticks = [
-            int(np.where(time_axis == label)[0].item()) for label in xticklabels
-        ]
-        self.xticklabels = list(map(str, xticklabels.tolist()))
-
     def plot(self, ax, cax):
         """Draw the heatmap on the provided Axes."""
         super().plot(ax)
-        ax.set_xticks(self.xticks)
-        ax.set_xticklabels(self.xticklabels)
+        # Horizontal axis labels as multiples of xtick_step
+        ax.xaxis.set_major_locator(plt.MultipleLocator(self.xtick_step))
 
         # Draw trace heatmap
         trace_heatmap = ax.imshow(
@@ -86,7 +78,9 @@ class _HeatmapPlotter(BasePlotter):
         if self.births_df is not None:
             # Must be masked array for transparency
             births_array = self.births_df.to_numpy()
-            births_heatmap_mask = np.ma.masked_where(births_array == 0, births_array)
+            births_heatmap_mask = np.ma.masked_where(
+                births_array == 0, births_array
+            )
             # Overlay
             births_heatmap = ax.imshow(
                 births_heatmap_mask,
