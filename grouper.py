@@ -45,6 +45,13 @@ class Grouper(ABC):
         return max([s.ntimepoints for s in self.signals.values()])
 
     @property
+    def ntimepoints(self) -> int:
+        tintervals = set([s.tinterval for s in self.signals.values()])
+        assert len(tintervals)==1, "Not all signals have the same time interval"
+
+        return max(tintervals)
+
+    @property
     def siglist(self) -> None:
         return self.fsignal.siglist
 
@@ -327,7 +334,7 @@ class MultiGrouper:
 
             sig_matrix[sig_matrix == 0] = np.nan
             self._sigtable = pd.DataFrame(
-                sig_matrix, index=sigs_idx, columns=[x.name for x in mg.exp_dirs]
+                sig_matrix, index=sigs_idx, columns=[x.name for x in self.exp_dirs]
             )
         return self._sigtable
 
