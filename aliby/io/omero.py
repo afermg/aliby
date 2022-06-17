@@ -50,6 +50,8 @@ class Argo:
             host=self.host, username=self.username, passwd=self.password
         )
         self.conn.connect()
+        self.conn.c.enableKeepAlive(60)
+
         return self
 
     # standard method required for Python's with statement
@@ -83,4 +85,5 @@ def get_data_lazy(image) -> da.Array:
                 z_stack.append(get_lazy_plane((z, c, t)))
             c_stacks.append(da.stack(z_stack))
         t_stacks.append(da.stack(c_stacks))
+
     return da.stack(t_stacks)
