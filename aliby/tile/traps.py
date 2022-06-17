@@ -77,14 +77,7 @@ def segment_traps(
         < half_floor(image.shape[1], tile_size) - 1
     ]
     idx, valid_region = zip(*idx_valid_region)
-    # find suitable templates
-    # no_regions = label_image.max()
-    # valid_templates_image = copy(label_image)
-    # # set invalid regions to have negative values
-    # for i in set(list(range(no_regions))).difference(idx):
-    #     valid_templates_image[np.where(valid_templates_image == i + 1)] = -2 * i
-    # combined = valid_templates_image + label_image
-
+    
     # find centroids and minor axes lengths of valid regions
     centroids = (
         np.array([x.centroid for x in valid_region]).round().astype(int)
