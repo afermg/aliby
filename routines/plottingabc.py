@@ -6,10 +6,10 @@ from abc import ABC
 class BasePlotter(ABC):
     """Base class for plotting handler classes"""
 
-    def __init__(self, trace_name, sampling_period, xlabel, plot_title):
+    def __init__(self, trace_name, unit_scaling, xlabel, plot_title):
         """Common attributes"""
         self.trace_name = trace_name
-        self.sampling_period = sampling_period
+        self.unit_scaling = unit_scaling
 
         self.xlabel = xlabel
         self.ylabel = None

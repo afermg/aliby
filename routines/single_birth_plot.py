@@ -14,7 +14,7 @@ class _SingleBirthPlotter(_SinglePlotter):
         trace_values,
         trace_name,
         birth_mask,
-        sampling_period,
+        unit_scaling,
         trace_color,
         birth_color,
         trace_linestyle,
@@ -27,7 +27,7 @@ class _SingleBirthPlotter(_SinglePlotter):
             trace_timepoints,
             trace_values,
             trace_name,
-            sampling_period,
+            unit_scaling,
             trace_color,
             trace_linestyle,
             xlabel,
@@ -40,7 +40,7 @@ class _SingleBirthPlotter(_SinglePlotter):
 
     def plot(self, ax):
         """Draw the line plots on the provided Axes."""
-        trace_time = self.trace_timepoints * self.sampling_period
+        trace_time = self.trace_timepoints * self.unit_scaling
         super().plot(ax)
         birth_mask_bool = self.birth_mask.astype(bool)
         for occurence, birth_time in enumerate(trace_time[birth_mask_bool]):
@@ -62,7 +62,7 @@ def single_birth_plot(
     trace_values,
     trace_name="flavin",
     birth_mask=None,
-    sampling_period=5,
+    unit_scaling=1,
     trace_color="b",
     birth_color="k",
     trace_linestyle="-",
@@ -84,8 +84,8 @@ def single_birth_plot(
     birth_mask : array_like
         Mask to indicate where births are. Expect values of '0' and '1' or
         'False' and 'True' in the elements.
-    sampling_period : int or float
-        Sampling period, in unit time.
+    unit_scaling : int or float
+        Unit scaling factor, e.g. 1/60 to convert minutes to hours.
     trace_color : string
         matplotlib colour string for the trace
     birth_color : string
@@ -116,7 +116,7 @@ def single_birth_plot(
         trace_values,
         trace_name,
         birth_mask,
-        sampling_period,
+        unit_scaling,
         trace_color,
         birth_color,
         trace_linestyle,
