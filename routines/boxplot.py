@@ -63,6 +63,41 @@ def boxplot(
     plot_title="",
     ax=None,
 ):
+    """Draw series of boxplots from an array of time series of traces
+
+    Draw series of boxplots from an array of time series of traces, showing the
+    distribution of values at each time point over time.
+
+    Parameters
+    ----------
+    trace_df : pandas.DataFrame
+        Time series of traces (rows = cells, columns = time points).
+    trace_name : string
+        Name of trace being plotted, e.g. 'flavin'.
+    unit_scaling : int or float
+        Unit scaling factor, e.g. 1/60 to convert minutes to hours.
+    box_color : string
+        matplolib colour string, specifies colour of boxes in boxplot
+    xtick_step : int or float
+        Interval length, in unit time, to draw x axis ticks.
+    xlabel : string
+        x axis label.
+    plot_title : string
+        Plot title.
+    ax : matplotlib Axes
+        Axes in which to draw the plot, otherwise use the currently active Axes.
+
+    Returns
+    -------
+    ax : matplotlib Axes
+        Axes object with the heatmap.
+
+    Examples
+    --------
+    FIXME: Add docs.
+
+    """
+
     plotter = _BoxplotPlotter(
         trace_df,
         trace_name,
