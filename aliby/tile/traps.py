@@ -37,7 +37,34 @@ def segment_traps(
     identify_traps_kwargs={},
 ):
     """
+    Uses an entropy filter and Otsu thresholding to find a trap template,
+    which is then passed to identify_trap_locations.
+
     The hyperparameters have not been optimised.
+
+    Parameters
+    ----------
+    image: 2D array
+    tile_size: integer
+        Size of the tile
+    downscale: float (optional)
+        Fraction by which to shrink image
+    disk_radius_frac: float (optional)
+        Radius of disk using in the entropy filter
+    square_size: integer (optional)
+        Parameter for a morphological closing applied to thresholded
+        image
+    min_frac_tilesize: float (optional)
+    max_frac_tilesize: float (optional)
+        Used to determine bounds on the major axis length of regions
+        suspected of containing traps.
+    identify_traps_kwargs: dictionary
+        Passed to identify_trap_locations function
+
+    Returns
+    -------
+    traps: an array of pairs of integers
+        The coordinates of the centroids of the traps
     """
     # keep a memory of image in case need to re-run
     img = image
@@ -77,7 +104,7 @@ def segment_traps(
         < half_floor(image.shape[1], tile_size) - 1
     ]
     idx, valid_region = zip(*idx_valid_region)
-    
+
     # find centroids and minor axes lengths of valid regions
     centroids = (
         np.array([x.centroid for x in valid_region]).round().astype(int)
@@ -128,6 +155,100 @@ def segment_traps(
 ###
 
 
+def identify_trap_locations(
+    image, trap_template, optimize_scale=True, downscale=0.35, trap_size=None
+):
+    """
+    Identify the traps in a single image based on a trap template,
+    which requires the trap template to be similar to the image
+    (same camera, same magification - ideally the same experiment).
+
+    Uses normalised correlation in scikit-image's match_template.
+
+    The search is speeded up by downscaling both the image and
+    the trap template before running the template matching.
+
+    The trap template is rotated and re-scaled to improve matching.
+    The parameters of the rotation and rescaling are optimised, although
+    over restricted ranges.
+
+    Parameters
+    ----------
+    image: 2D array
+    trap_template: 2D array
+    optimize_scale : boolean (optional)
+    downscale: float (optional)
+        Fraction by which to downscale to increase speed
+    trap_size: integer (optional)
+        If unspecified, the size is determined from the trap_template
+
+    Returns
+    -------
+    coordinates: an array of pairs of integers
+    """
+    if trap_size is None:
+         trap_size = trap_template.shape[0]
+    # careful: the image is float16!
+    img = transform.rescale(image.astype(float), downscale)
+    template = transform.rescale(trap_template, downscale)
+
+    # try multiple rotations of template to determine
+    # which best matches the image
+    # result is squared because the sign of the correlation is unimportant
+    matches = {
+        rotation: feature.match_template(
+            img,
+            transform.rotate(template, rotation, cval=np.median(img)),
+            pad_input=True,
+            mode="median",
+        )
+        ** 2
+        for rotation in [0, 90, 180, 270]
+    }
+    # find best rotation
+    best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
+    # rotate template by best rotation
+    template = transform.rotate(template, best_rotation, cval=np.median(img))
+
+    if optimize_scale:
+        # try multiple scales appled to template to determine which
+        # best matches the image
+        scales = np.linspace(0.5, 2, 10)
+        matches = {
+            scale: feature.match_template(
+                img,
+                transform.rescale(template, scale),
+                mode="median",
+                pad_input=True,
+            )
+            ** 2
+            for scale in scales
+        }
+        # find best scale
+        best_scale = max(
+            matches, key=lambda x: np.percentile(matches[x], 99.9)
+        )
+        # choose the best result - an image of normalised correlations
+        # with the template
+        matched = matches[best_scale]
+    else:
+        # find the image of normalised correlations with the template
+        matched = feature.match_template(
+            img, template, pad_input=True, mode="median"
+        )
+    # re-scale back the image of normalised correlations
+    # find the coordinates of local maxima
+    coordinates = feature.peak_local_max(
+        transform.rescale(matched, 1 / downscale),
+        min_distance=int(trap_size * 0.70),
+        exclude_border=(trap_size // 3),
+    )
+    return coordinates
+
+###############################################################
+# functions below here do not appear to be used any more
+###############################################################
+
 def stretch_image(image):
     image = ((image - image.min()) / (image.max() - image.min())) * 255
     minval = np.percentile(image, 2)
@@ -136,81 +257,6 @@ def stretch_image(image):
     image = (image - minval) / (maxval - minval)
     return image
 
-
-def identify_trap_locations(
-    image, trap_template, optimize_scale=True, downscale=0.35, trap_size=None
-):
-    """
-    Identify the traps in a single image based on a trap template.
-    This assumes a trap template that is similar to the image in question
-    (same camera, same magification; ideally same experiment).
-
-    This method speeds up the search by downscaling both the image and
-    the trap template before running the template match.
-    It also optimizes the scale and the rotation of the trap template.
-
-    :param image:
-    :param trap_template:
-    :param optimize_scale:
-    :param downscale:
-    :param trap_rotation:
-    :return:
-    """
-    if optimize_scale is None:
-        optimize_scale = True
-    if downscale is None:
-        downscale = 0.35
-    if trap_size is None:
-        trap_size = None
-
-    trap_size = trap_size if trap_size is not None else trap_template.shape[0]
-    # Careful, the image is float16!
-    img = transform.rescale(image.astype(float), downscale)
-    temp = transform.rescale(trap_template, downscale)
-
-    # TODO random search hyperparameter optimization
-    # optimize rotation
-    matches = {
-        rotation: feature.match_template(
-            img,
-            transform.rotate(temp, rotation, cval=np.median(img)),
-            pad_input=True,
-            mode="median",
-        )
-        ** 2
-        for rotation in [0, 90, 180, 270]
-    }
-
-    best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
-    temp = transform.rotate(temp, best_rotation, cval=np.median(img))
-
-    if optimize_scale:
-        scales = np.linspace(0.5, 2, 10)
-        matches = {
-            scale: feature.match_template(
-                img,
-                transform.rescale(temp, scale),
-                mode="median",
-                pad_input=True,
-            )
-            ** 2
-            for scale in scales
-        }
-        best_scale = max(
-            matches, key=lambda x: np.percentile(matches[x], 99.9)
-        )
-        matched = matches[best_scale]
-    else:
-        matched = feature.match_template(
-            img, temp, pad_input=True, mode="median"
-        )
-
-    coordinates = feature.peak_local_max(
-        transform.rescale(matched, 1 / downscale),
-        min_distance=int(trap_size * 0.70),
-        exclude_border=(trap_size // 3),
-    )
-    return coordinates
 
 
 def get_tile_shapes(x, tile_size, max_shape):
