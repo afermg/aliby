@@ -5,6 +5,7 @@ A set of utilities for dealing with ALCATRAS traps
 from copy import copy
 
 import numpy as np
+import matplotlib.colors as colors
 from tqdm import tqdm
 
 from skimage import transform, feature
@@ -17,6 +18,123 @@ from skimage.registration import phase_cross_correlation
 from skimage.util import img_as_ubyte
 
 
+def half_floor(x, tile_size):
+    return x - tile_size // 2
+
+
+def half_ceil(x, tile_size):
+    return x + -(tile_size // -2)
+
+
+def segment_traps(
+    image,
+    tile_size,
+    downscale=0.4,
+    disk_radius_frac=0.01,
+    square_size=3,
+    min_frac_tilesize=0.2,
+    max_frac_tilesize=0.8,
+    identify_traps_kwargs={},
+):
+    """
+    The hyperparameters have not been optimised.
+    """
+    # keep a memory of image in case need to re-run
+    img = image
+    # bounds on major axis length of traps
+    min_mal = min_frac_tilesize * np.sqrt(2) * tile_size
+    max_mal = max_frac_tilesize * np.sqrt(2) * tile_size
+
+    # shrink image
+    if downscale != 1:
+        img = transform.rescale(image, downscale)
+    # generate an entropy image using a disk footprint
+    disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
+    entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
+    if downscale != 1:
+        entropy_image = transform.rescale(entropy_image, 1 / downscale)
+    # find Otsu threshold for entropy image
+    thresh = threshold_otsu(entropy_image)
+    # apply morphological closing to thresholded, and so binary, image
+    bw = closing(entropy_image > thresh, square(square_size))
+    # remove artifacts connected to image border
+    cleared = clear_border(bw)
+
+    # label distinct regions of the image
+    label_image = label(cleared)
+    # find regions likely to contain traps:
+    # with a major axis length within a certain range
+    # and a centroid at least tile_size // 2 away from the image edge
+    idx_valid_region = [
+        (i, region)
+        for i, region in enumerate(regionprops(label_image))
+        if min_mal < region.major_axis_length < max_mal
+        and tile_size // 2
+        < region.centroid[0]
+        < half_floor(image.shape[0], tile_size) - 1
+        and tile_size // 2
+        < region.centroid[1]
+        < half_floor(image.shape[1], tile_size) - 1
+    ]
+    idx, valid_region = zip(*idx_valid_region)
+    # find suitable templates
+    # no_regions = label_image.max()
+    # valid_templates_image = copy(label_image)
+    # # set invalid regions to have negative values
+    # for i in set(list(range(no_regions))).difference(idx):
+    #     valid_templates_image[np.where(valid_templates_image == i + 1)] = -2 * i
+    # combined = valid_templates_image + label_image
+
+    # find centroids and minor axes lengths of valid regions
+    centroids = (
+        np.array([x.centroid for x in valid_region]).round().astype(int)
+    )
+    minals = [region.minor_axis_length for region in valid_region]
+    # coords for best trap
+    x, y = np.round(centroids[np.argmin(minals)]).astype(int)
+
+    # make a template using the best trap in the image
+    template = image[
+        half_floor(x, tile_size) : half_ceil(x, tile_size),
+        half_floor(y, tile_size) : half_ceil(y, tile_size),
+    ]
+    # make candidate templates from the other traps found
+    candidate_templates = [
+        image[
+            half_floor(x, tile_size) : half_ceil(x, tile_size),
+            half_floor(y, tile_size) : half_ceil(y, tile_size),
+        ]
+        for x, y in centroids
+    ]
+    # make a mean template from all the found traps
+    mean_template = np.dstack(candidate_templates).astype(int).mean(axis=-1)
+
+    # find traps using the best found trap
+    traps = identify_trap_locations(image, template, **identify_traps_kwargs)
+    # find traps using the mean trap template
+    mean_traps = identify_trap_locations(
+        image, mean_template, **identify_traps_kwargs
+    )
+    # choose the approach that identifies the most traps
+    if len(traps) < len(mean_traps):
+        traps = mean_traps
+
+    # if there are too few traps, try again
+    traps_retry = []
+    if len(traps) < 30 and downscale != 1:
+        print("Tiler:TrapIdentification: Trying again.")
+        traps_retry = segment_traps(image, tile_size, downscale=1)
+
+    # return results with the most number of traps
+    if len(traps_retry) < len(traps):
+        return traps
+    else:
+        return traps_retry
+
+
+###
+
+
 def stretch_image(image):
     image = ((image - image.min()) / (image.max() - image.min())) * 255
     minval = np.percentile(image, 2)
@@ -24,109 +142,6 @@ def stretch_image(image):
     image = np.clip(image, minval, maxval)
     image = (image - minval) / (maxval - minval)
     return image
-
-
-def segment_traps(
-    image,
-    tile_size,
-    downscale=0.4,
-    disk_radius_frac=None,
-    square_size=None,
-    min_frac_tilesize=None,
-    max_frac_tilesize=None,
-    identify_traps_kwargs=None,
-):
-    if disk_radius_frac is None:
-        disk_radius_frac = 0.01
-    if square_size is None:
-        square_size = 3
-    if min_frac_tilesize is None:
-        min_frac_tilesize = 0.2
-    if max_frac_tilesize is None:
-        max_frac_tilesize = 0.8
-    if identify_traps_kwargs is None:
-        identify_traps_kwargs = {}
-
-    img = image  # Keep a memory of image in case need to re-run
-    # TODO Optimise the hyperparameters
-
-    disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
-    min_mal = min_frac_tilesize * np.sqrt(2) * tile_size
-    max_mal = max_frac_tilesize * np.sqrt(2) * tile_size
-
-    def half_floor(x):
-        return x - tile_size // 2
-
-    def half_ceil(x):
-        return x + -(tile_size // -2)
-
-    if downscale != 1:
-        img = transform.rescale(image, downscale)
-
-    entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
-
-    if downscale != 1:
-        entropy_image = transform.rescale(entropy_image, 1 / downscale)
-
-    # apply threshold
-    thresh = threshold_otsu(entropy_image)
-    bw = closing(entropy_image > thresh, square(square_size))
-
-    # remove artifacts connected to image border
-    cleared = clear_border(bw)
-
-    # label image regions
-    label_image = label(cleared)
-    idx_valid_region = [
-        (i, region)
-        for i, region in enumerate(regionprops(label_image))
-        if min_mal < region.major_axis_length < max_mal
-        and tile_size // 2 < region.centroid[0] < half_floor(image.shape[0]) - 1
-        and tile_size // 2 < region.centroid[1] < half_floor(image.shape[1]) - 1
-    ]
-    idx, valid_region = zip(*idx_valid_region)
-
-    valid_templates = copy(label_image)
-    for i in set(list(range(label_image.max()))).difference(idx):
-        valid_templates[np.where(valid_templates == i + 1)] = -2 * i
-
-    import matplotlib.colors as colors
-
-    combined = valid_templates + label_image
-
-    centroids = np.array([x.centroid for x in valid_region]).round().astype(int)
-    minals = [region.minor_axis_length for region in valid_region]
-
-    chosen_trap_coords = np.round(centroids[np.argmin(minals)]).astype(int)
-    x, y = chosen_trap_coords
-
-    template = image[
-        half_floor(x) : half_ceil(x),
-        half_floor(y) : half_ceil(y),
-    ]
-
-    candidate_templates = [
-        image[
-            slice(half_floor(x), half_ceil(x)),
-            slice(half_floor(y), half_ceil(y)),
-        ]
-        for x, y in centroids
-    ]
-
-    # add template as mean of found traps
-    mean_template = np.dstack(candidate_templates).astype(int).mean(axis=-1)
-
-    traps = identify_trap_locations(image, template, **identify_traps_kwargs)
-    mean_traps = identify_trap_locations(image, mean_template, **identify_traps_kwargs)
-
-    traps = traps if len(traps) > len(mean_traps) else mean_traps
-
-    traps_retry = []
-    if len(traps) < 30 and downscale != 1:
-        print("Tiler:TrapIdentification: Trying again.")
-        traps_retry = segment_traps(image, tile_size, downscale=1)
-
-    return traps if len(traps_retry) < len(traps) else traps_retry
 
 
 def identify_trap_locations(
@@ -180,15 +195,22 @@ def identify_trap_locations(
         scales = np.linspace(0.5, 2, 10)
         matches = {
             scale: feature.match_template(
-                img, transform.rescale(temp, scale), mode="median", pad_input=True
+                img,
+                transform.rescale(temp, scale),
+                mode="median",
+                pad_input=True,
             )
             ** 2
             for scale in scales
         }
-        best_scale = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
+        best_scale = max(
+            matches, key=lambda x: np.percentile(matches[x], 99.9)
+        )
         matched = matches[best_scale]
     else:
-        matched = feature.match_template(img, temp, pad_input=True, mode="median")
+        matched = feature.match_template(
+            img, temp, pad_input=True, mode="median"
+        )
 
     coordinates = feature.peak_local_max(
         transform.rescale(matched, 1 / downscale),
@@ -257,16 +279,24 @@ def get_trap_timelapse(
     channels = channels if channels is not None else [0]
     z = z if z is not None else [0]
     # Get trap location for that id:
-    trap_centers = [trap_locations[i][trap_id] for i in range(len(trap_locations))]
+    trap_centers = [
+        trap_locations[i][trap_id] for i in range(len(trap_locations))
+    ]
 
     max_shape = (raw_expt.shape[2], raw_expt.shape[3])
     tiles_shapes = [
-        get_tile_shapes((x[0], x[1]), tile_size, max_shape) for x in trap_centers
+        get_tile_shapes((x[0], x[1]), tile_size, max_shape)
+        for x in trap_centers
     ]
 
     timelapse = [
         get_xy_tile(
-            raw_expt[channels, i, :, :, z], xmin, xmax, ymin, ymax, pad_val=None
+            raw_expt[channels, i, :, :, z],
+            xmin,
+            xmax,
+            ymin,
+            ymax,
+            pad_val=None,
         )
         for i, (xmin, xmax, ymin, ymax) in enumerate(tiles_shapes)
     ]
@@ -274,7 +304,13 @@ def get_trap_timelapse(
 
 
 def get_trap_timelapse_omero(
-    raw_expt, trap_locations, trap_id, tile_size=117, channels=None, z=None, t=None
+    raw_expt,
+    trap_locations,
+    trap_id,
+    tile_size=117,
+    channels=None,
+    z=None,
+    t=None,
 ):
     """
     Get a timelapse for a given trap by specifying the trap_id
@@ -298,7 +334,13 @@ def get_trap_timelapse_omero(
     shape = (len(channels), len(times), tile_size, tile_size, len(z_positions))
     # Get trap location for that id:
     zct_tiles, slices, trap_ids = all_tiles(
-        trap_locations, shape, raw_expt, z_positions, channels, times, [trap_id]
+        trap_locations,
+        shape,
+        raw_expt,
+        z_positions,
+        channels,
+        times,
+        [trap_id],
     )
 
     # TODO Make this an explicit function in TimelapseOMERO
@@ -318,7 +360,9 @@ def get_trap_timelapse_omero(
     return timelapse
 
 
-def all_tiles(trap_locations, shape, raw_expt, z_positions, channels, times, traps):
+def all_tiles(
+    trap_locations, shape, raw_expt, z_positions, channels, times, traps
+):
     _, _, x, y, _ = shape
     _, _, MAX_X, MAX_Y, _ = raw_expt.shape
 
@@ -330,11 +374,21 @@ def all_tiles(trap_locations, shape, raw_expt, z_positions, channels, times, tra
             for t in times:
                 for trap_id in traps:
                     centre = trap_locations[t][trap_id]
-                    xmin, ymin, xmax, ymax, r_xmin, r_ymin, r_xmax, r_ymax = tile_where(
-                        centre, x, y, MAX_X, MAX_Y
-                    )
+                    (
+                        xmin,
+                        ymin,
+                        xmax,
+                        ymax,
+                        r_xmin,
+                        r_ymin,
+                        r_xmax,
+                        r_ymax,
+                    ) = tile_where(centre, x, y, MAX_X, MAX_Y)
                     slices.append(
-                        ((r_ymin - ymin, r_ymax - ymin), (r_xmin - xmin, r_xmax - xmin))
+                        (
+                            (r_ymin - ymin, r_ymax - ymin),
+                            (r_xmin - xmin, r_xmax - xmin),
+                        )
                     )
                     tile = (r_ymin, r_xmin, r_ymax - r_ymin, r_xmax - r_xmin)
                     zct_tiles.append((z, ch, t, tile))
@@ -380,7 +434,11 @@ def get_tile(shape, center, raw_expt, ch, t, z):
 
     # Fill values
     tile[
-        :, :, (r_xmin - xmin) : (r_xmax - xmin), (r_ymin - ymin) : (r_ymax - ymin), :
+        :,
+        :,
+        (r_xmin - xmin) : (r_xmax - xmin),
+        (r_ymin - ymin) : (r_ymax - ymin),
+        :,
     ] = raw_expt[ch, t, r_xmin:r_xmax, r_ymin:r_ymax, z]
     # fill_val = np.nanmedian(tile)
     # np.nan_to_num(tile, nan=fill_val, copy=False)
@@ -476,7 +534,12 @@ def align_timelapse_images(
         # to be inaccurate and the correction from the previous time point
         # is used.
         # This might be common if there is a focus loss for example.
-        if any([abs(x - y) > reference_reset_drift for x, y in zip(shifts, drift[-1])]):
+        if any(
+            [
+                abs(x - y) > reference_reset_drift
+                for x, y in zip(shifts, drift[-1])
+            ]
+        ):
             shifts = drift[-1]
 
         drift.append(shifts)
