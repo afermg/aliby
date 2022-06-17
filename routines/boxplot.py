@@ -14,13 +14,13 @@ class _BoxplotPlotter(BasePlotter):
         self,
         trace_df,
         trace_name,
-        sampling_period,
+        unit_scaling,
         box_color,
         xtick_step,
         xlabel,
         plot_title,
     ):
-        super().__init__(trace_name, sampling_period, xlabel, plot_title)
+        super().__init__(trace_name, unit_scaling, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
         self.box_color = box_color
@@ -31,9 +31,11 @@ class _BoxplotPlotter(BasePlotter):
 
         # Define horizontal axis ticks and labels
         # hacky! -- redefine column names
-        trace_df.columns = trace_df.columns * self.sampling_period
+        trace_df.columns = trace_df.columns * self.unit_scaling
         self.fmt = ticker.FuncFormatter(
-            lambda x, pos: "{0:g}".format(x / (self.xtick_step / self.sampling_period))
+            lambda x, pos: "{0:g}".format(
+                x / (self.xtick_step / self.unit_scaling)
+            )
         )
 
     def plot(self, ax):
@@ -47,14 +49,14 @@ class _BoxplotPlotter(BasePlotter):
             ax=ax,
         )
         ax.xaxis.set_major_locator(
-            ticker.MultipleLocator(self.xtick_step / self.sampling_period)
+            ticker.MultipleLocator(self.xtick_step / self.unit_scaling)
         )
 
 
 def boxplot(
     trace_df,
     trace_name,
-    sampling_period=5,
+    unit_scaling=1,
     box_color="b",
     xtick_step=60,
     xlabel="Time (min)",
@@ -64,7 +66,7 @@ def boxplot(
     plotter = _BoxplotPlotter(
         trace_df,
         trace_name,
-        sampling_period,
+        unit_scaling,
         box_color,
         xtick_step,
         xlabel,
