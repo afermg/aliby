@@ -54,21 +54,38 @@ class Trap:
         ----------
         tp: integer
             Index for a time point
+
+        Returns
+        -------
+        trap_centre:
         """
         drifts = self.parent.drifts
-        return self.centre - np.sum(drifts[: tp + 1], axis=0)
+        trap_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
+        return trap_centre
 
     ###
 
     def as_tile(self, tp):
         """
         Return trap in the OMERO tile format of x, y, w, h
-        Also returns the padding necessary for this tile.
+        where x, y are at the bottom left corner of the tile
+        and w and h are the tile width and height.
 
         Parameters
         ----------
         tp: integer
             Index for a time point
+
+        Returns
+        -------
+        x: int
+            x-coordinate of bottom left corner of tile
+        y: int
+            y-coordinate of bottom left corner of tile
+        w: int
+            Width of tile
+        h: int
+            Height of tile
         """
         x, y = self.at_time(tp)
         # tile bottom corner
@@ -87,6 +104,11 @@ class Trap:
         ----------
         tp: integer
             Index for a time point
+
+        Returns
+        -------
+        A slice of x coordinates from left to right
+        A slice of y coordinates from top to bottom
         """
         x, y, w, h = self.as_tile(tp)
         return slice(x, x + w), slice(y, y + h)
@@ -427,6 +449,8 @@ class Tiler(ProcessABC):
 
     def get_tp_data(self, tp, c):
         """
+        Returns all traps corrected for drift.
+
         Parameters
         ----------
         tp: integer
@@ -435,8 +459,10 @@ class Tiler(ProcessABC):
             An index for a channel
         """
         traps = []
+        # get OMERO image
         full = self.get_tc(tp, c)
         for trap in self.trap_locs:
+            # pad trap if necessary
             ndtrap = self.ifoob_pad(full, trap.as_range(tp))
             traps.append(ndtrap)
         return np.stack(traps)
@@ -444,6 +470,23 @@ class Tiler(ProcessABC):
     ###
 
     def get_trap_data(self, trap_id, tp, c):
+        """
+        Returns a particular trap corrected for drift and padding
+
+        Parameters
+        ----------
+        trap_id: integer
+            Number of trap
+        tp: integer
+            Index of time points
+        c: integer
+            Index of channel
+
+        Returns
+        -------
+        ndtrap: array
+            An array of (x, y) arrays, one for each z stack
+        """
         full = self.get_tc(tp, c)
         trap = self.trap_locs.traps[trap_id]
         ndtrap = self.ifoob_pad(full, trap.as_range(tp))
@@ -504,6 +547,14 @@ class Tiler(ProcessABC):
     ###
 
     def get_channel_index(self, item):
+        """
+        Find index for channel
+
+        Parameters
+        ----------
+        item: string
+            The channel
+        """
         for i, ch in enumerate(self.channels):
             if item in ch:
                 return i
@@ -519,33 +570,40 @@ class Tiler(ProcessABC):
     @staticmethod
     def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
         """
-        Returns the slices padded if it is out of bounds
+        Returns the slices padded if it is out of bounds.
 
-        Parameters:
+        Parameters
         ----------
-        full: (zstacks, max_size, max_size) ndarray
-        Entire position with zstacks as first axis
+        full: array
+            Slice of OMERO image (zstacks, x, y) - the entire position
+            with zstacks as first axis
         slices: tuple of two slices
-        Each slice indicates an axis to index
-
+            Delineates indiceds for the x- and y- ranges of the tile.
 
         Returns
-        Trap for given slices, padded with median if needed, or np.nan if the padding is too much
+        -------
+        trap: array
+            A tile with all z stacks for the given slices.
+            If some padding is needed, the median of the image is used.
+            If much padding is needed, a tile of NaN is returned.
         """
+        # number of pixels in the y direction
         max_size = full.shape[-1]
-
+        # ignore parts of the tile outside of the image
         y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+        # get the tile including all z stacks
         trap = full[:, y, x]
-
+        # find extent of padding needed in x and y
         padding = np.array(
             [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
         )
         if padding.any():
             tile_size = slices[0].stop - slices[0].start
             if (padding > tile_size / 4).any():
+                # too much of the tile is outside of the image
+                # fill with NaN
                 trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
             else:
-
+                # pad tile with median value of trap image
                 trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
-
         return trap
