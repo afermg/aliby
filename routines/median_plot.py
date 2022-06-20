@@ -13,7 +13,7 @@ class _MedianPlotter(BasePlotter):
         self,
         trace_df,
         trace_name,
-        sampling_period,
+        unit_scaling,
         label,
         median_color,
         error_color,
@@ -22,7 +22,7 @@ class _MedianPlotter(BasePlotter):
         ylabel,
         plot_title,
     ):
-        super().__init__(trace_name, sampling_period, xlabel, plot_title)
+        super().__init__(trace_name, unit_scaling, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
         self.label = label
@@ -35,7 +35,7 @@ class _MedianPlotter(BasePlotter):
         self.ylabel = ylabel
 
         # Median and interquartile range
-        self.trace_time = np.array(self.trace_df.columns) * self.sampling_period
+        self.trace_time = np.array(self.trace_df.columns) * self.unit_scaling
         self.median_ts = self.trace_df.median(axis=0)
         self.quartile1_ts = self.trace_df.quantile(0.25)
         self.quartile3_ts = self.trace_df.quantile(0.75)
@@ -65,7 +65,7 @@ class _MedianPlotter(BasePlotter):
 def median_plot(
     trace_df,
     trace_name="flavin",
-    sampling_period=5,
+    unit_scaling=1,
     label="wild type",
     median_color="b",
     error_color="lightblue",
@@ -83,8 +83,8 @@ def median_plot(
         Time series of traces (rows = cells, columns = time points).
     trace_name : string
         Name of trace being plotted, e.g. 'flavin'.
-    sampling_period : int or float
-        Sampling period, in unit time.
+    unit_scaling : int or float
+        Unit scaling factor, e.g. 1/60 to convert minutes to hours.
     label : string
         Name of group being plotted, e.g. a strain name.
     median_color : string
@@ -110,7 +110,7 @@ def median_plot(
     plotter = _MedianPlotter(
         trace_df,
         trace_name,
-        sampling_period,
+        unit_scaling,
         label,
         median_color,
         error_color,

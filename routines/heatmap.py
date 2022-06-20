@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm, colors
+from matplotlib import cm, colors, ticker
 
 from postprocessor.core.processes.standardscaler import standardscaler
 from postprocessor.routines.plottingabc import BasePlotter
@@ -17,14 +17,14 @@ class _HeatmapPlotter(BasePlotter):
         trace_name,
         births_df,
         cmap,
-        sampling_period,
+        unit_scaling,
         xtick_step,
         scale,
         robust,
         xlabel,
         plot_title,
     ):
-        super().__init__(trace_name, sampling_period, xlabel, plot_title)
+        super().__init__(trace_name, unit_scaling, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
         self.births_df = births_df
@@ -59,12 +59,17 @@ class _HeatmapPlotter(BasePlotter):
             self.vmin = None
             self.vmax = None
 
+        # Define horizontal axis ticks and labels
+        # hacky! -- redefine column names
+        trace_df.columns = trace_df.columns * self.unit_scaling
+        self.fmt = ticker.FuncFormatter(
+            lambda x, pos: "{0:g}".format(x * self.unit_scaling)
+        )
+
     def plot(self, ax, cax):
         """Draw the heatmap on the provided Axes."""
         super().plot(ax)
-        # Horizontal axis labels as multiples of xtick_step
-        ax.xaxis.set_major_locator(plt.MultipleLocator(self.xtick_step))
-
+        ax.xaxis.set_major_formatter(self.fmt)
         # Draw trace heatmap
         trace_heatmap = ax.imshow(
             self.trace_scaled,
@@ -73,7 +78,11 @@ class _HeatmapPlotter(BasePlotter):
             vmin=self.vmin,
             vmax=self.vmax,
         )
-
+        # Horizontal axis labels as multiples of xtick_step, taking
+        # into account unit scaling
+        ax.xaxis.set_major_locator(
+            ticker.MultipleLocator(self.xtick_step / self.unit_scaling)
+        )
         # Overlay births, if present
         if self.births_df is not None:
             # Must be masked array for transparency
@@ -86,7 +95,6 @@ class _HeatmapPlotter(BasePlotter):
                 births_heatmap_mask,
                 interpolation="none",
             )
-
         # Draw colour bar
         colorbar = ax.figure.colorbar(
             mappable=trace_heatmap, cax=cax, ax=ax, label=self.colorbarlabel
@@ -98,7 +106,7 @@ def heatmap(
     trace_name,
     births_df=None,
     cmap=cm.RdBu,
-    sampling_period=5,
+    unit_scaling=1,
     xtick_step=60,
     scale=True,
     robust=True,
@@ -120,8 +128,8 @@ def heatmap(
         0 or 1.
     cmap : matplotlib ColorMap
         Colour map for heatmap.
-    sampling_period : int or float
-        Sampling period, in unit time.
+    unit_scaling : int or float
+        Unit scaling factor, e.g. 1/60 to convert minutes to hours.
     xtick_step : int or float
         Interval length, in unit time, to draw x axis ticks.
     scale : bool
@@ -154,7 +162,7 @@ def heatmap(
         trace_name,
         births_df,
         cmap,
-        sampling_period,
+        unit_scaling,
         xtick_step,
         scale,
         robust,

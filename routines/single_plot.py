@@ -13,13 +13,13 @@ class _SinglePlotter(BasePlotter):
         trace_timepoints,
         trace_values,
         trace_name,
-        sampling_period,
+        unit_scaling,
         trace_color,
         trace_linestyle,
         xlabel,
         plot_title,
     ):
-        super().__init__(trace_name, sampling_period, xlabel, plot_title)
+        super().__init__(trace_name, unit_scaling, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_timepoints = trace_timepoints
         self.trace_values = trace_values
@@ -33,7 +33,7 @@ class _SinglePlotter(BasePlotter):
         """Draw the line plot on the provided Axes."""
         super().plot(ax)
         ax.plot(
-            self.trace_timepoints * self.sampling_period,
+            self.trace_timepoints * self.unit_scaling,
             self.trace_values,
             color=self.trace_color,
             linestyle=self.trace_linestyle,
@@ -45,7 +45,7 @@ def single_plot(
     trace_timepoints,
     trace_values,
     trace_name="flavin",
-    sampling_period=5,
+    unit_scaling=1,
     trace_color="b",
     trace_linestyle="-",
     xlabel="Time (min)",
@@ -62,8 +62,8 @@ def single_plot(
         Trace to plot.
     trace_name : string
         Name of trace being plotted, e.g. 'flavin'.
-    sampling_period : int or float
-        Sampling period, in unit time.
+    unit_scaling : int or float
+        Unit scaling factor, e.g. 1/60 to convert minutes to hours.
     trace_color : string
         matplotlib colour string, specifies colour of line plot.
     trace_linestyle : string
@@ -89,7 +89,7 @@ def single_plot(
         trace_timepoints,
         trace_values,
         trace_name,
-        sampling_period,
+        unit_scaling,
         trace_color,
         trace_linestyle,
         xlabel,

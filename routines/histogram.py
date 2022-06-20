@@ -12,7 +12,6 @@ class _HistogramPlotter:
         values,
         label,
         color,
-        sampling_period,
         binsize,
         lognormal,
         lognormal_base,
@@ -24,7 +23,6 @@ class _HistogramPlotter:
         self.values = values
         self.label = label
         self.color = color
-        self.sampling_period = sampling_period
         self.binsize = binsize
         self.lognormal = lognormal
         self.lognormal_base = lognormal_base
@@ -39,7 +37,9 @@ class _HistogramPlotter:
         if self.lognormal:
             self.bins = np.logspace(
                 0,
-                np.ceil(np.log(np.nanmax(values)) / np.log(self.lognormal_base)),
+                np.ceil(
+                    np.log(np.nanmax(values)) / np.log(self.lognormal_base)
+                ),
                 base=self.lognormal_base,
             )  # number of bins will be 50 by default, as it's the default in np.logspace
         else:
@@ -77,7 +77,6 @@ def histogram(
     values,
     label,
     color="b",
-    sampling_period=5,
     binsize=5,
     lognormal=False,
     lognormal_base=10,
@@ -96,8 +95,6 @@ def histogram(
         Name of value being plotting, e.g. cell division cycle length.
     color : string
         Colour of bars.
-    sampling_period : float
-        Sampling period, in unit time.
     binsize : float
         Bin size.
     lognormal : bool
@@ -127,7 +124,6 @@ def histogram(
         values,
         label,
         color,
-        sampling_period,
         binsize,
         lognormal,
         lognormal_base,
