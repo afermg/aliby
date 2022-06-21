@@ -34,7 +34,7 @@ def segment_traps(
     square_size=3,
     min_frac_tilesize=0.2,
     max_frac_tilesize=0.8,
-    identify_traps_kwargs={},
+    **identify_traps_kwargs,
 ):
     """
     Uses an entropy filter and Otsu thresholding to find a trap template,
@@ -58,8 +58,8 @@ def segment_traps(
     max_frac_tilesize: float (optional)
         Used to determine bounds on the major axis length of regions
         suspected of containing traps.
-    identify_traps_kwargs: dictionary
-        Passed to identify_trap_locations function
+    identify_traps_kwargs:
+        Passed to identify_trap_locations
 
     Returns
     -------
@@ -115,14 +115,14 @@ def segment_traps(
 
     # make a template using the best trap in the image
     template = image[
-        half_floor(x, tile_size) : half_ceil(x, tile_size),
-        half_floor(y, tile_size) : half_ceil(y, tile_size),
+        half_floor(x, tile_size):half_ceil(x, tile_size),
+        half_floor(y, tile_size):half_ceil(y, tile_size),
     ]
     # make candidate templates from the other traps found
     candidate_templates = [
         image[
-            half_floor(x, tile_size) : half_ceil(x, tile_size),
-            half_floor(y, tile_size) : half_ceil(y, tile_size),
+            half_floor(x, tile_size):half_ceil(x, tile_size),
+            half_floor(y, tile_size):half_ceil(y, tile_size),
         ]
         for x, y in centroids
     ]
@@ -187,7 +187,7 @@ def identify_trap_locations(
     coordinates: an array of pairs of integers
     """
     if trap_size is None:
-         trap_size = trap_template.shape[0]
+        trap_size = trap_template.shape[0]
     # careful: the image is float16!
     img = transform.rescale(image.astype(float), downscale)
     template = transform.rescale(trap_template, downscale)
@@ -245,9 +245,11 @@ def identify_trap_locations(
     )
     return coordinates
 
+
 ###############################################################
 # functions below here do not appear to be used any more
 ###############################################################
+
 
 def stretch_image(image):
     image = ((image - image.min()) / (image.max() - image.min())) * 255
@@ -256,7 +258,6 @@ def stretch_image(image):
     image = np.clip(image, minval, maxval)
     image = (image - minval) / (maxval - minval)
     return image
-
 
 
 def get_tile_shapes(x, tile_size, max_shape):
@@ -392,7 +393,7 @@ def get_trap_timelapse_omero(
         ch = channels.index(c)
         tp = times.tolist().index(t)
         z_pos = z_positions.index(z)
-        timelapse[ch, tp, x[0] : x[1], y[0] : y[1], z_pos] = image
+        timelapse[ch, tp, x[0]: x[1], y[0]: y[1], z_pos] = image
 
     # for x in timelapse:  # By channel
     #    np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
@@ -475,8 +476,8 @@ def get_tile(shape, center, raw_expt, ch, t, z):
     tile[
         :,
         :,
-        (r_xmin - xmin) : (r_xmax - xmin),
-        (r_ymin - ymin) : (r_ymax - ymin),
+        (r_xmin - xmin): (r_xmax - xmin),
+        (r_ymin - ymin): (r_ymax - ymin),
         :,
     ] = raw_expt[ch, t, r_xmin:r_xmax, r_ymin:r_ymax, z]
     # fill_val = np.nanmedian(tile)
@@ -526,7 +527,7 @@ def get_traps_timepoint(
     ):
         ch = channels.index(c)
         z_pos = z_positions.index(z)
-        traps[trap_id, ch, 0, x[0] : x[1], y[0] : y[1], z_pos] = image
+        traps[trap_id, ch, 0, x[0]: x[1], y[0]: y[1], z_pos] = image
     for x in traps:  # By channel
         np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
     return traps
@@ -538,7 +539,7 @@ def centre(img, percentage=0.3):
     cropy = int(np.ceil(y * percentage))
     startx = int(x // 2 - (cropx // 2))
     starty = int(y // 2 - (cropy // 2))
-    return img[starty : starty + cropy, startx : startx + cropx]
+    return img[starty: starty + cropy, startx: startx + cropx]
 
 
 def align_timelapse_images(
