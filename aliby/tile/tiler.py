@@ -227,7 +227,7 @@ class Tiler(ProcessABC):
 
     @lru_cache(maxsize=2)
     def get_tc(self, t, c):
-        full = self.image[t, c].compute(scheduler='synchronous')
+        full = self.image[t, c].compute(scheduler="synchronous")
 
         return full
 
@@ -358,11 +358,16 @@ class Tiler(ProcessABC):
         # return result for writer
         return self.trap_locs.to_dict(tp)
 
-    def run(self):
+    def run(self, time_dim=None):
         """
         Tile all time points in an experiment at once.
         """
-        raise NotImplementedError()
+        if time_dim is None:
+            time_dim = 0
+        for t in range(self.image.shape[time_dim]):
+            self.run_tp(t)
+
+        return None
 
     ###
 
