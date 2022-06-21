@@ -122,6 +122,7 @@ class TrapLocations:
     Stores each trap as an instance of Trap.
     Traps can be iterated.
     """
+
     def __init__(
         self, initial_location, tile_size, max_size=1200, drifts=None
     ):
@@ -558,6 +559,7 @@ class Tiler(ProcessABC):
         for i, ch in enumerate(self.channels):
             if item in ch:
                 return i
+        raise Exception(item + " not found. Check parameters sent to Tiler.")
 
     ###
 
