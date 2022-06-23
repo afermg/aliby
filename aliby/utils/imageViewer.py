@@ -15,17 +15,15 @@ riv.plot_labeled_traps(trap_id, trange, ncols)
 
 """
 
-import yaml
+import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
-from skimage.morphology import dilation
-
+import yaml
 from agora.io.cells import CellsLinear as Cells
 from agora.io.writer import load_attributes
 from aliby.io.image import Image as OImage
 from aliby.tile.tiler import Tiler
-
-import matplotlib.pyplot as plt
+from PIL import Image
+from skimage.morphology import dilation
 
 
 class localImageViewer:
