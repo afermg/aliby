@@ -127,7 +127,7 @@ class remoteImageViewer:
             self.tiler.image = image.data
             return self.tiler.get_tc(tp, channel)
 
-    def find_channels(self, channels):
+    def _find_channels(self, channels):
         channels = channels or self.tiler.ref_channel
         if isinstance(channels, int):
             channels = [channels]
@@ -140,7 +140,7 @@ class remoteImageViewer:
         self, trap_id, tps, channels=None, z=None, server_info=None
     ):
         server_info = server_info or self.server_info
-        channels = self.find_channels(channels)
+        channels = self._find_channels(channels)
         z = z or self.tiler.ref_z
 
         ch_tps = set([(channels[0], tp) for tp in tps])
