@@ -1,6 +1,11 @@
-"""Segment/segmented pipelines.
+"""
+Segment/segmented pipelines.
 Includes splitting the image into traps/parts,
-cell segmentation, nucleus segmentation."""
+cell segmentation, nucleus segmentation
+
+Standard order is (T, C, Z, Y, X)
+"""
+import warnings
 from functools import lru_cache
 from pathlib import PosixPath
 from typing import Union
@@ -33,6 +38,11 @@ class Trap:
     def padding_required(self, tp):
         """
         Check if we need to pad the trap image for this time point.
+
+        Parameters
+        ----------
+        tp: integer
+            Index for a time point
         """
         try:
             assert all(self.at_time(tp) - self.half_size >= 0)
@@ -45,15 +55,41 @@ class Trap:
     def at_time(self, tp):
         """
         Return trap centre at time tp by applying drifts
+
+        Parameters
+        ----------
+        tp: integer
+            Index for a time point
+
+        Returns
+        -------
+        trap_centre:
         """
         drifts = self.parent.drifts
-        return self.centre - np.sum(drifts[: tp + 1], axis=0)
+        trap_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
+        return trap_centre
 
     def as_tile(self, tp):
         """
         Return trap in the OMERO tile format of x, y, w, h
+        where x, y are at the bottom left corner of the tile
+        and w and h are the tile width and height.
 
-        Also returns the padding necessary for this tile.
+        Parameters
+        ----------
+        tp: integer
+            Index for a time point
+
+        Returns
+        -------
+        x: int
+            x-coordinate of bottom left corner of tile
+        y: int
+            y-coordinate of bottom left corner of tile
+        w: int
+            Width of tile
+        h: int
+            Height of tile
         """
         x, y = self.at_time(tp)
         # tile bottom corner
@@ -64,7 +100,17 @@ class Trap:
     def as_range(self, tp):
         """
         Return trap in a range format: two slice objects that can
-        be used in Arrays
+        be used in arrays
+
+        Parameters
+        ----------
+        tp: integer
+            Index for a time point
+
+        Returns
+        -------
+        A slice of x coordinates from left to right
+        A slice of y coordinates from top to bottom
         """
         x, y, w, h = self.as_tile(tp)
         return slice(x, x + w), slice(y, y + h)
@@ -106,6 +152,11 @@ class TrapLocations:
     def padding_required(self, tp):
         """
         Check if any traps need padding
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
         """
         return any([trap.padding_required(tp) for trap in self.traps])
 
@@ -113,6 +164,11 @@ class TrapLocations:
         """
         Export inital locations, tile_size, max_size, and drifts
         as a dictionary
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
         """
         res = dict()
         if tp == 0:
@@ -164,13 +220,25 @@ class Tiler(ProcessABC):
         parameters: TilerParameters,
         trap_locs=None,
     ):
+        """
+        Initialise Tiler
+
+        Parameters
+        ----------
+        image: an instance of Image
+        metadata: dictionary
+        parameters: an instance of TilerPameters
+        trap_locs: (optional)
+        """
         super().__init__(parameters)
         self.image = image
         self._metadata = metadata
         self.channels = metadata["channels"]
+        assert (
+            parameters.ref_channel in self.channels
+        ), "Reference channel not in the available channels"
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         self.trap_locs = trap_locs
-
         try:
             self.z_perchannel = {
                 ch: metadata["zsectioning/nsections"] if zsect else 1
@@ -183,6 +251,14 @@ class Tiler(ProcessABC):
 
     @classmethod
     def from_image(cls, image: Image, parameters: TilerParameters):
+        """
+        Instantiate Tiler from an Image instance
+
+        Parameters
+        ----------
+        image: an instance of Image
+        parameters: an instance of TilerPameters
+        """
         return cls(image.data, image.metadata, parameters)
 
     @classmethod
@@ -192,15 +268,23 @@ class Tiler(ProcessABC):
         filepath: Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
+        """
+        Instantiate Tiler from hdf5 files
+
+        Parameters
+        ----------
+        image: an instance of Image
+        filepath: Path instance
+            Path to a directory of h5 files
+        parameters: an instance of TileParameters (optional)
+        """
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = load_attributes(filepath)
         metadata["channels"] = image.metadata["channels"]
         # metadata["zsectioning/nsections"] = image.metadata["zsectioning/nsections"]
         # metadata["channels/zsect"] = image.metadata["channels/zsect"]
-
         if parameters is None:
             parameters = TilerParameters.default()
-
         tiler = cls(
             image.data,
             metadata,
@@ -213,6 +297,26 @@ class Tiler(ProcessABC):
 
     @lru_cache(maxsize=2)
     def get_tc(self, t, c):
+        """
+            Load image using dask.
+            Assumes the image is arranged as
+                no of time points
+                no of channels
+                no of z stacks
+                no of pixels in y direction
+                no of pixels in z direction
+
+            Parameters
+            ----------
+            t: integer
+                An index for a time point
+            c: integer
+                An index for a channel
+
+        def _initialise_traps(self, tile_size: int):
+            -------
+            full: an array of images
+        """
         full = self.image[t, c].compute(scheduler="synchronous")
 
         return full
@@ -225,13 +329,16 @@ class Tiler(ProcessABC):
             no of time points
             no of z stacks
             no of pixels in y direction
-            no of pixles in z direction
+            no of pixels in z direction
         """
         c, t, z, y, x = self.image.shape
         return (c, t, x, y, z)
 
     @property
     def n_processed(self):
+        """
+        Returns the number of images that have been processed
+        """
         if not hasattr(self, "_n_processed"):
             self._n_processed = 0
         return self._n_processed
@@ -242,19 +349,26 @@ class Tiler(ProcessABC):
 
     @property
     def n_traps(self):
+        """
+        Returns number of traps
+        """
         return len(self.trap_locs)
 
-    def _initialise_traps(self, tile_size: int):
+    def initialise_traps(self, tile_size):
         """
         Find initial trap positions.
-
         Removes all those that are too close to the edge so no padding
         is necessary.
+
+        Parameters
+        ----------
+        tile_size: integer
+            The size of a tile
         """
         half_tile = tile_size // 2
-        # max_size is the minimal no of x or y pixels
+        # max_size is the minimal number of x or y pixels
         max_size = min(self.image.shape[-2:])
-        # first time point, first channel, first z-position
+        # first time point, reference channel, reference z-position
         initial_image = self.image[0, self.ref_channel, self.ref_z]
         # find the traps
         trap_locs = segment_traps(initial_image, tile_size)
@@ -271,7 +385,12 @@ class Tiler(ProcessABC):
     def find_drift(self, tp):
         """
         Find any translational drifts between two images at consecutive
-        time points using cross correlation
+        time points using cross correlation.
+
+        Arguments
+        ---------
+        tp: integer
+            Index for a time point
         """
         prev_tp = max(0, tp - 1)
         # cross-correlate
@@ -286,16 +405,43 @@ class Tiler(ProcessABC):
             self.trap_locs.drifts.append(drift.tolist())
 
     def get_tp_data(self, tp, c):
-        traps = []
-        full = self.get_tc(tp, c)
-        # if self.trap_locs.padding_required(tp):
-        for trap in self.trap_locs:
-            ndtrap = self.ifoob_pad(full, trap.as_range(tp))
+        """
+        Returns all traps corrected for drift.
 
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+        """
+        traps = []
+        # get OMERO image
+        full = self.get_tc(tp, c)
+        for trap in self.trap_locs:
+            # pad trap if necessary
+            ndtrap = self.ifoob_pad(full, trap.as_range(tp))
             traps.append(ndtrap)
         return np.stack(traps)
 
     def get_trap_data(self, trap_id, tp, c):
+        """
+        Returns a particular trap corrected for drift and padding
+
+        Parameters
+        ----------
+        trap_id: integer
+            Number of trap
+        tp: integer
+            Index of time points
+        c: integer
+            Index of channel
+
+        Returns
+        -------
+        ndtrap: array
+            An array of (x, y) arrays, one for each z stack
+        """
         full = self.get_tc(tp, c)
         trap = self.trap_locs.traps[trap_id]
         ndtrap = self.ifoob_pad(full, trap.as_range(tp))
@@ -306,11 +452,16 @@ class Tiler(ProcessABC):
         Find traps if they have not yet been found.
         Determine any translational drift of the current image from the
         previous one.
+
+        Arguments
+        ---------
+        tp: integer
+            The time point to tile.
         """
         # assert tp >= self.n_processed, "Time point already processed"
         # TODO check contiguity?
         if self.n_processed == 0 or not hasattr(self.trap_locs, "drifts"):
-            self._initialise_traps(self.tile_size)
+            self.initialise_traps(self.tile_size)
         if hasattr(self.trap_locs, "drifts"):
             drift_len = len(self.trap_locs.drifts)
             if self.n_processed != drift_len:
@@ -350,6 +501,14 @@ class Tiler(ProcessABC):
         return np.stack(res, axis=1)
 
     def get_channel_index(self, item):
+        """
+        Find index for channel
+
+        Parameters
+        ----------
+        item: string
+            The channel
+        """
         for i, ch in enumerate(self.channels):
             if item in ch:
                 return i
@@ -361,33 +520,40 @@ class Tiler(ProcessABC):
     @staticmethod
     def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
         """
-        Returns the slices padded if it is out of bounds
+        Returns the slices padded if it is out of bounds.
 
-        Parameters:
+        Parameters
         ----------
-        full: (zstacks, max_size, max_size) ndarray
-        Entire position with zstacks as first axis
+        full: array
+            Slice of OMERO image (zstacks, x, y) - the entire position
+            with zstacks as first axis
         slices: tuple of two slices
-        Each slice indicates an axis to index
-
+            Delineates indiceds for the x- and y- ranges of the tile.
 
         Returns
-        Trap for given slices, padded with median if needed, or np.nan if the padding is too much
+        -------
+        trap: array
+            A tile with all z stacks for the given slices.
+            If some padding is needed, the median of the image is used.
+            If much padding is needed, a tile of NaN is returned.
         """
+        # number of pixels in the y direction
         max_size = full.shape[-1]
-
+        # ignore parts of the tile outside of the image
         y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+        # get the tile including all z stacks
         trap = full[:, y, x]
-
+        # find extent of padding needed in x and y
         padding = np.array(
             [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
         )
         if padding.any():
             tile_size = slices[0].stop - slices[0].start
             if (padding > tile_size / 4).any():
+                # too much of the tile is outside of the image
+                # fill with NaN
                 trap = np.full((full.shape[0], tile_size, tile_size), np.nan)
             else:
-
+                # pad tile with median value of trap image
                 trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
-
         return trap
