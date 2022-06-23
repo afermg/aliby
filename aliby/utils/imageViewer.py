@@ -55,14 +55,22 @@ class localImageViewer:
 
 
 class remoteImageViewer:
+    """
+    This ImageViewer combines fetching remote images with tiling and outline display.
+    """
+
     def __init__(self, fpath, server_info=None):
+        self._fpath = fpath
         attrs = load_attributes(fpath)
 
         self.image_id = attrs.get("image_id")
+
         assert self.image_id is not None, "No valid image_id found in metadata"
 
         if server_info is None:
-            server_info = yaml.safe_load(attrs["parameters"])["general"]["server_info"]
+            server_info = yaml.safe_load(attrs["parameters"])["general"][
+                "server_info"
+            ]
         self.server_info = server_info
 
         with OImage(self.image_id, **self.server_info) as image:
