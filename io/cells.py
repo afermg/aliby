@@ -7,6 +7,7 @@ from typing import Union
 import h5py
 import numpy as np
 from agora.io.writer import load_complex
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
 from scipy.sparse.base import isdense
 from utils_find_1st import cmp_equal, find_1st
@@ -250,6 +251,34 @@ class CellsLinear(CellsHDF):
             if edgemask.any()
         ]
         return self.group_by_traps(traps, masks)
+
+    @property
+    def ntimepoints(self)->int:
+        return self['timepoint'].max()+1
+
+    @property
+    def ncells_matrix(self):
+        ncells_mat = np.zeros((self.ntraps, self['cell_label'].max(), self.ntimepoints),dtype=bool)
+        ncells_mat[self['trap'],self['cell_label']-1,self['timepoint']] = True
+        return ncells_mat
+
+    def matrix_trap_tp_where(self,min_ncells:int=2, min_consecutive_tps:int=5):
+        """
+        Return a matrix of shape (ntraps x ntps - min_consecutive_tps to
+        indicate traps and time-points where min_ncells are available for at least min_consecutive_tps
+        """
+
+        window = sliding_window_view(self.ncells_matrix, min_consecutive_tps, axis=2)
+        tp_min = window.sum(axis=-1) == min_consecutive_tps
+        ncells_tp_min = tp_min.sum(axis=1) >= min_ncells
+        return ncells_tp_min
+
+    def random_valid_trap_tp(self,**kwargs):
+        # Return a randomly-selected pair of trap_id and timepoints
+        mat = self.matrix_trap_tp_where(**kwargs)
+        traps, tps = np.where(mat)
+        rand = np.random.randint(mat.sum())
+        return (traps[rand],tps[rand])
 
 
 # class CellsMat(Cells):
