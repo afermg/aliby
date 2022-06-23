@@ -1,15 +1,18 @@
 """Segment/segmented pipelines.
 Includes splitting the image into traps/parts,
 cell segmentation, nucleus segmentation."""
-import warnings
 from functools import lru_cache
+from pathlib import PosixPath
+from typing import Union
+
+import dask.array as da
 import h5py
 import numpy as np
-from skimage.registration import phase_cross_correlation
-
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import load_attributes
-from aliby.io.image import Image
+from skimage.registration import phase_cross_correlation
+
+from aliby.io.image import Image, ImageLocal
 from aliby.tile.traps import segment_traps
 
 
