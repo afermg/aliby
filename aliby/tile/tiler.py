@@ -1,6 +1,10 @@
-"""Segment/segmented pipelines.
+"""
+Segment/segmented pipelines.
 Includes splitting the image into traps/parts,
-cell segmentation, nucleus segmentation."""
+cell segmentation, nucleus segmentation
+
+Standard order is (T, C, Z, Y, X)
+"""
 import warnings
 from functools import lru_cache
 import h5py
@@ -244,6 +248,9 @@ class Tiler(ProcessABC):
         super().__init__(parameters)
         self.image = image
         self.channels = metadata["channels"]
+        assert (
+            parameters.ref_channel in self.channels
+        ), "Reference channel not in the available channels"
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         self.trap_locs = trap_locs
         try:
@@ -340,9 +347,7 @@ class Tiler(ProcessABC):
             except:
                 print(
                     "Warning: Error ocurred when fetching "
-                    "images. Attempt {}".format(
-                        n_attempts + 1
-                    )
+                    "images. Attempt {}".format(n_attempts + 1)
                 )
                 self.image.conn.connect()
                 n_attempts += 1
@@ -559,7 +564,6 @@ class Tiler(ProcessABC):
         for i, ch in enumerate(self.channels):
             if item in ch:
                 return i
-        raise Exception(item + " not found. Check parameters sent to Tiler.")
 
     ###
 
