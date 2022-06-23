@@ -337,7 +337,7 @@ class Pipeline(ProcessABC):
 
         return results
 
-    def create_pipeline(self, image_id, index=None):
+    def create_pipeline(self, image_id):
         config = self.parameters.to_dict()
         pparams = config
         name, image_id = image_id
@@ -563,7 +563,7 @@ class Pipeline(ProcessABC):
 
                                 # Step-specific actions
 
-                                if step=='tiler':
+                                if step == "tiler":
                                     if i == min_process_from:
                                         print(
                                             f"Found {steps['tiler'].n_traps} traps in {image.name}"
@@ -592,7 +592,6 @@ class Pipeline(ProcessABC):
                                 ):  # Remove mask/label after ext
                                     for k in ["masks", "labels"]:
                                         run_kwargs[step][k] = None
-
 
                         frac_clogged_traps = self.check_earlystop(
                             filename, earlystop, steps["tiler"].tile_size
