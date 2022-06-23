@@ -178,13 +178,14 @@ class Tiler(ProcessABC):
 
     def __init__(
         self,
-        image: Image,
-        metadata,
+        image: da.core.Array,
+        metadata: dict,
         parameters: TilerParameters,
         trap_locs=None,
     ):
         super().__init__(parameters)
         self.image = image
+        self._metadata = metadata
         self.channels = metadata["channels"]
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         self.trap_locs = trap_locs
