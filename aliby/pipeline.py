@@ -292,7 +292,7 @@ class Pipeline(ProcessABC):
         def filt_int(d: dict, filt: int):
             return {k: v for i, (k, v) in enumerate(d.items()) if i == filt}
 
-        def filt_str(d: dict, filt: str):
+        def filt_str(image_ids: dict, filt: str):
             return {k: v for k, v in image_ids.items() if re.search(filt, k)}
 
         def pick_filter(image_ids: dict, filt: Union[int, str]):
