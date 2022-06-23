@@ -3,48 +3,47 @@ Pipeline and chaining elements.
 """
 import logging
 import os
-
-# from abc import ABC, abstractmethod
-from typing import List, Union
-from pathlib import Path, PosixPath
+import re
 import traceback
 from copy import copy
-
 from itertools import groupby
-import re
-import h5py
-
-# import yaml
-from tqdm import tqdm
+from pathlib import Path, PosixPath
 
 # from p_tqdm import p_map
 from time import perf_counter
-from pathos.multiprocessing import Pool
 
+# from abc import ABC, abstractmethod
+from typing import Union
+
+import h5py
 import numpy as np
+from agora.abc import ParametersABC, ProcessABC
+from agora.io.metadata import MetaData, parse_logfiles
+from agora.io.reader import StateReader
+from agora.io.signal import Signal
+from agora.io.writer import (  # BabyWriter,
+    LinearBabyWriter,
+    StateWriter,
+    TilerWriter,
+)
+from pathos.multiprocessing import Pool
+from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # import pandas as pd
 from scipy import ndimage
 
-from agora.io.metadata import MetaData
+# import yaml
+from tqdm import tqdm
+
+from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
-from aliby.baby_client import BabyRunner, BabyParameters
-from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.io.dataset import Dataset, DatasetLocal
 from aliby.io.image import Image, ImageLocal
-from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import (
-    TilerWriter,
-    BabyWriter,
-    StateWriter,
-    LinearBabyWriter,
-)
-from agora.io.reader import StateReader
-from agora.io.signal import Signal
+from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
-from postprocessor.core.processor import PostProcessor, PostProcessorParameters
-from postprocessor.compiler import ExperimentCompiler, PageOrganiser
+
+# from postprocessor.compiler import ExperimentCompiler, PageOrganiser
 
 logging.basicConfig(
     filename="aliby.log",
