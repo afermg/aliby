@@ -157,11 +157,14 @@ class remoteImageViewer:
         imgs = self.get_trap_timepoints(trap_id, tps, **kwargs)
         imgs_list = [x[trap_id] for x in imgs.values()]
         outlines = [
-            self.cells.at_time(tp, kind="edgemask").get(trap_id, []) for tp in tps
+            self.cells.at_time(tp, kind="edgemask").get(trap_id, [])
+            for tp in tps
         ]
         lbls = [self.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
         lbld_outlines = [
-            np.dstack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(axis=2)
+            np.dstack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(
+                axis=2
+            )
             if len(lblset)
             else np.zeros_like(imgs_list[0]).astype(bool)
             for maskset, lblset in zip(outlines, lbls)
@@ -174,21 +177,24 @@ class remoteImageViewer:
         """
         Wrapper to fetch images
         """
+        out = None
         imgs = {}
 
-        for ch in self.find_channels(channels):
+        for ch in self._find_channels(channels):
             out, imgs[ch] = self.get_labeled_trap(
                 trap_id, trange, channels=[ch], **kwargs
             )
         return out, imgs
 
-    def plot_labeled_zstacks(self, trap_id, channels, trange, z=None, **kwargs):
+    def plot_labeled_zstacks(
+        self, trap_id, channels, trange, z=None, **kwargs
+    ):
         # if z is None:
         #     z =
-        out, images = self.get_imgs(trap_id, trange, channels, z=z, **kwargs)
+        out, images = self.get_images(trap_id, trange, channels, z=z, **kwargs)
 
     def plot_labeled_channelrows(self, trap_id, channels, trange, **kwargs):
-        out, images = self.get_imgs(trap_id, trange, channels, **kwargs)
+        out, images = self.get_images(trap_id, trange, channels, **kwargs)
 
         # dilation makes outlines easier to see
         out = dilation(out).astype(float)
@@ -207,14 +213,18 @@ class remoteImageViewer:
             interpolation=None,
         )
         plt.yticks(
-            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(len(channels))],
+            ticks=[
+                self.tiler.tile_size * (i + 0.5) for i in range(len(channels))
+            ],
             labels=[
                 self.tiler.channels[ch] if isinstance(ch, int) else ch
                 for ch in channels
             ],
         )
         plt.xticks(
-            ticks=[self.tiler.tile_size * (i + 0.5) for i in range(len(trange))],
+            ticks=[
+                self.tiler.tile_size * (i + 0.5) for i in range(len(trange))
+            ],
             labels=[t for t in trange],
         )
         plt.show()
@@ -227,7 +237,7 @@ class remoteImageViewer:
         remove_axis=False,
         savefile=False,
         skip_outlines=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Wrapper to plot a single trap over time
