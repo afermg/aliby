@@ -337,7 +337,7 @@ class Pipeline(ProcessABC):
 
         return results
 
-    def create_pipeline(self, image_id):
+    def create_pipeline(self, image_id, index=None):
         config = self.parameters.to_dict()
         pparams = config
         name, image_id = image_id
