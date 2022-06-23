@@ -70,6 +70,35 @@ class remoteImageViewer:
 
         self.cells = Cells.from_source(fpath)
 
+    @property
+    def shape(self):
+        return self.tiler.image.shape
+
+    @property
+    def ntraps(self):
+        return self.cells.ntraps
+
+    @property
+    def max_labels(self):
+        # Print max cell label in whole experiment
+        return [max(x) for x in self.cells.labels]
+
+    def labels_at_time(self, tp: int):
+        # Print  cell label at a given time-point
+        return self.cells.labels_at_time(tp)
+
+    def nonempty_traps_at_time(self, tp: int):
+        # Print cell label at a given time-point
+        return [
+            trap_id
+            for trap_id, labels in self.labels_at_time(tp).items()
+            if len(labels)
+        ]
+
+    def nonempty_tps_in_trap(self, trap_id: int):
+        # Print cell label at a given time-point
+        return self.cells.labels_at_time(trap_id)
+
     def get_position(self):
         raise (NotImplementedError)
 
