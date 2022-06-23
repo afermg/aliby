@@ -55,20 +55,22 @@ class Cells:
     def hdf(cls, fpath):
         return CellsHDF(fpath)
 
-    @classmethod
-    def mat(cls, path):
-        return CellsMat(matObject(store))
+    # @classmethod
+    # def mat(cls, path):
+    #     return CellsMat(matObject(store))
 
 
 class CellsHDF(Cells):
-    def __init__(self, filename, path="cell_info"):
+    def __init__(
+        self, filename: Union[str, PosixPath], path: str = "cell_info"
+    ):
         self.filename = filename
         self.cinfo_path = path
         self._edgem_indices = None
         self._edgemasks = None
         self._tile_size = None
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str):
         if item == "edgemasks":
             return self.edgemasks
         _item = "_" + item
@@ -76,35 +78,39 @@ class CellsHDF(Cells):
             setattr(self, _item, self._fetch(item))
         return getattr(self, _item)
 
-    def _get_idx(self, cell_id, trap_id):
+    def _get_idx(self, cell_id: int, trap_id: int):
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
-    def _fetch(self, path):
+    def _fetch(self, path: str):
         with h5py.File(self.filename, mode="r") as f:
             return f[self.cinfo_path][path][()]
 
     @property
-    def ntraps(self):
+    def ntraps(self) -> int:
         with h5py.File(self.filename, mode="r") as f:
             return len(f["/trap_info/trap_locations"][()])
 
     @property
-    def traps(self):
+    def traps(self) -> list:
         return list(set(self["trap"]))
 
     @property
-    def tile_size(self):  # TODO read from metadata
+    def tile_size(self) -> int:
         if self._tile_size is None:
             with h5py.File(self.filename, mode="r") as f:
                 self._tile_size == f["trap_info/tile_size"][0]
         return self._tile_size
 
     @property
-    def edgem_indices(self):
+    def edgem_indices(self) -> np.array:
         if self._edgem_indices is None:
             edgem_path = "edgemasks/indices"
             self._edgem_indices = load_complex(self._fetch(edgem_path))
         return self._edgem_indices
+
+    def nonempty_tp_in_trap(self, trap_id: int) -> set:
+        # Returns time-points in which cells are available
+        return set(self["timepoint"][self["trap"] == trap_id])
 
     @property
     def edgemasks(self):
@@ -168,7 +174,9 @@ class CellsHDF(Cells):
         choose = np.in1d(self.edgem_indices, indices)
         edgemasks = self["edgemasks"][choose, timepoint]
         masks = [
-            self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()
+            self._astype(edgemask, kind)
+            for edgemask in edgemasks
+            if edgemask.any()
         ]
         return self.group_by_traps(traps, masks)
 
@@ -233,132 +241,134 @@ class CellsLinear(CellsHDF):
         traps = self["trap"][ix]
         edgemasks = self._edgem_from_masking(ix)
         masks = [
-            self._astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()
+            self._astype(edgemask, kind)
+            for edgemask in edgemasks
+            if edgemask.any()
         ]
         return self.group_by_traps(traps, masks)
 
 
-class CellsMat(Cells):
-    def __init__(self, mat_object):
-        super(CellsMat, self).__init__()
-        # TODO add __contains__ to the matObject
-        timelapse_traps = mat_object.get(
-            "timelapseTrapsOmero", mat_object.get("timelapseTraps", None)
-        )
-        if timelapse_traps is None:
-            raise NotImplementedError(
-                "Could not find a timelapseTraps or "
-                "timelapseTrapsOmero object. Cells "
-                "from cellResults not implemented"
-            )
-        else:
-            self.trap_info = timelapse_traps["cTimepoint"]["trapInfo"]
+# class CellsMat(Cells):
+#     def __init__(self, mat_object):
+#         super(CellsMat, self).__init__()
+#         # TODO add __contains__ to the matObject
+#         timelapse_traps = mat_object.get(
+#             "timelapseTrapsOmero", mat_object.get("timelapseTraps", None)
+#         )
+#         if timelapse_traps is None:
+#             raise NotImplementedError(
+#                 "Could not find a timelapseTraps or "
+#                 "timelapseTrapsOmero object. Cells "
+#                 "from cellResults not implemented"
+#             )
+#         else:
+#             self.trap_info = timelapse_traps["cTimepoint"]["trapInfo"]
 
-            if isinstance(self.trap_info, list):
-                self.trap_info = {
-                    k: list([res.get(k, []) for res in self.trap_info])
-                    for k in self.trap_info[0].keys()
-                }
+#             if isinstance(self.trap_info, list):
+#                 self.trap_info = {
+#                     k: list([res.get(k, []) for res in self.trap_info])
+#                     for k in self.trap_info[0].keys()
+#                 }
 
-    def where(self, cell_id, trap_id):
-        times, indices = zip(
-            *[
-                (tp, np.where(cell_id == x)[0][0])
-                for tp, x in enumerate(self.trap_info["cellLabel"][:, trap_id].tolist())
-                if np.any(cell_id == x)
-            ]
-        )
-        return times, indices
+#     def where(self, cell_id, trap_id):
+#         times, indices = zip(
+#             *[
+#                 (tp, np.where(cell_id == x)[0][0])
+#                 for tp, x in enumerate(self.trap_info["cellLabel"][:, trap_id].tolist())
+#                 if np.any(cell_id == x)
+#             ]
+#         )
+#         return times, indices
 
-    def outline(self, cell_id, trap_id):
-        times, indices = self.where(cell_id, trap_id)
-        info = self.trap_info["cell"][times, trap_id]
+#     def outline(self, cell_id, trap_id):
+#         times, indices = self.where(cell_id, trap_id)
+#         info = self.trap_info["cell"][times, trap_id]
 
-        def get_segmented(cell, index):
-            if cell["segmented"].ndim == 0:
-                return cell["segmented"][()].todense()
-            else:
-                return cell["segmented"][index].todense()
+#         def get_segmented(cell, index):
+#             if cell["segmented"].ndim == 0:
+#                 return cell["segmented"][()].todense()
+#             else:
+#                 return cell["segmented"][index].todense()
 
-        segmentation_outline = [
-            get_segmented(cell, idx) for idx, cell in zip(indices, info)
-        ]
-        return times, np.array(segmentation_outline)
+#         segmentation_outline = [
+#             get_segmented(cell, idx) for idx, cell in zip(indices, info)
+#         ]
+#         return times, np.array(segmentation_outline)
 
-    def mask(self, cell_id, trap_id):
-        times, outlines = self.outline(cell_id, trap_id)
-        return times, np.array(
-            [ndimage.morphology.binary_fill_holes(o) for o in outlines]
-        )
+#     def mask(self, cell_id, trap_id):
+#         times, outlines = self.outline(cell_id, trap_id)
+#         return times, np.array(
+#             [ndimage.morphology.binary_fill_holes(o) for o in outlines]
+#         )
 
-    def at_time(self, timepoint, kind="outline"):
+#     def at_time(self, timepoint, kind="outline"):
 
-        """Returns the segmentations for all the cells at a given timepoint.
+#         """Returns the segmentations for all the cells at a given timepoint.
 
-        FIXME: this is extremely hacky and accounts for differently saved
-            results in the matlab object. Deprecate ASAP.
-        """
-        # Case 1: only one cell per trap: trap_info['cell'][timepoint] is a
-        # structured array
-        if isinstance(self.trap_info["cell"][timepoint], dict):
-            segmentations = [
-                self._astype(x, "outline")
-                for x in self.trap_info["cell"][timepoint]["segmented"]
-            ]
-        # Case 2: Multiple cells per trap: it becomes a list of arrays or
-        # dictionaries,  one for each trap
-        # Case 2.1 : it's a dictionary
-        elif isinstance(self.trap_info["cell"][timepoint][0], dict):
-            segmentations = []
-            for x in self.trap_info["cell"][timepoint]:
-                seg = x["segmented"]
-                if not isinstance(seg, np.ndarray):
-                    seg = [seg]
-                segmentations.append([self._astype(y, "outline") for y in seg])
-        # Case 2.2 : it's an array
-        else:
-            segmentations = [
-                [self._astype(y, type) for y in x["segmented"]] if x.ndim != 0 else []
-                for x in self.trap_info["cell"][timepoint]
-            ]
-            # Return dict for compatibility with hdf5 output
-        return {i: v for i, v in enumerate(segmentations)}
+#         FIXME: this is extremely hacky and accounts for differently saved
+#             results in the matlab object. Deprecate ASAP.
+#         """
+#         # Case 1: only one cell per trap: trap_info['cell'][timepoint] is a
+#         # structured array
+#         if isinstance(self.trap_info["cell"][timepoint], dict):
+#             segmentations = [
+#                 self._astype(x, "outline")
+#                 for x in self.trap_info["cell"][timepoint]["segmented"]
+#             ]
+#         # Case 2: Multiple cells per trap: it becomes a list of arrays or
+#         # dictionaries,  one for each trap
+#         # Case 2.1 : it's a dictionary
+#         elif isinstance(self.trap_info["cell"][timepoint][0], dict):
+#             segmentations = []
+#             for x in self.trap_info["cell"][timepoint]:
+#                 seg = x["segmented"]
+#                 if not isinstance(seg, np.ndarray):
+#                     seg = [seg]
+#                 segmentations.append([self._astype(y, "outline") for y in seg])
+#         # Case 2.2 : it's an array
+#         else:
+#             segmentations = [
+#                 [self._astype(y, type) for y in x["segmented"]] if x.ndim != 0 else []
+#                 for x in self.trap_info["cell"][timepoint]
+#             ]
+#             # Return dict for compatibility with hdf5 output
+#         return {i: v for i, v in enumerate(segmentations)}
 
-    def labels_at_time(self, tp):
-        labels = self.trap_info["cellLabel"]
-        labels = [_aslist(x) for x in labels[tp]]
-        labels = {i: [lbl for lbl in lblset] for i, lblset in enumerate(labels)}
-        return labels
+#     def labels_at_time(self, tp):
+#         labels = self.trap_info["cellLabel"]
+#         labels = [_aslist(x) for x in labels[tp]]
+#         labels = {i: [lbl for lbl in lblset] for i, lblset in enumerate(labels)}
+#         return labels
 
-    @property
-    def ntraps(self):
-        return len(self.trap_info["cellLabel"][0])
+#     @property
+#     def ntraps(self):
+#         return len(self.trap_info["cellLabel"][0])
 
-    @property
-    def tile_size(self):
-        pass
-
-
-class ExtractionRunner:
-    """An object to run extraction of fluorescence, and general data out of
-    segmented data.
-
-    Configure with what extraction we want to run.
-    Cell selection criteria.
-    Filtering criteria.
-    """
-
-    def __init__(self, tiler, cells):
-        pass
-
-    def run(self, keys, store, **kwargs):
-        pass
+#     @property
+#     def tile_size(self):
+#         pass
 
 
-def _aslist(x):
-    if isinstance(x, Iterable):
-        if hasattr(x, "tolist"):
-            x = x.tolist()
-    else:
-        x = [x]
-    return x
+# class ExtractionRunner:
+#     """An object to run extraction of fluorescence, and general data out of
+#     segmented data.
+
+#     Configure with what extraction we want to run.
+#     Cell selection criteria.
+#     Filtering criteria.
+#     """
+
+#     def __init__(self, tiler, cells):
+#         pass
+
+#     def run(self, keys, store, **kwargs):
+#         pass
+
+
+# def _aslist(x):
+#     if isinstance(x, Iterable):
+#         if hasattr(x, "tolist"):
+#             x = x.tolist()
+#     else:
+#         x = [x]
+#     return x
