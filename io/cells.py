@@ -1,18 +1,15 @@
 import logging
-from pathlib import Path, PosixPath
-from time import perf_counter
-from typing import Union
-from itertools import groupby
 from collections.abc import Iterable
+from itertools import groupby
+from pathlib import Path, PosixPath
+from typing import Union
 
-from utils_find_1st import find_1st, cmp_equal
 import h5py
 import numpy as np
+from agora.io.writer import load_complex
 from scipy import ndimage
 from scipy.sparse.base import isdense
-
-from agora.io.writer import load_complex
-
+from utils_find_1st import cmp_equal, find_1st
 
 # def cell_factory(store, type="hdf5"):
 #     if type == "hdf5":
