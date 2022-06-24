@@ -253,32 +253,60 @@ class CellsLinear(CellsHDF):
         return self.group_by_traps(traps, masks)
 
     @property
-    def ntimepoints(self)->int:
-        return self['timepoint'].max()+1
+    def ntimepoints(self) -> int:
+        return self["timepoint"].max() + 1
 
     @property
     def ncells_matrix(self):
-        ncells_mat = np.zeros((self.ntraps, self['cell_label'].max(), self.ntimepoints),dtype=bool)
-        ncells_mat[self['trap'],self['cell_label']-1,self['timepoint']] = True
+        ncells_mat = np.zeros(
+            (self.ntraps, self["cell_label"].max(), self.ntimepoints),
+            dtype=bool,
+        )
+        ncells_mat[
+            self["trap"], self["cell_label"] - 1, self["timepoint"]
+        ] = True
         return ncells_mat
 
-    def matrix_trap_tp_where(self,min_ncells:int=2, min_consecutive_tps:int=5):
+    def matrix_trap_tp_where(
+        self, min_ncells: int = None, min_consecutive_tps: int = None
+    ):
         """
         Return a matrix of shape (ntraps x ntps - min_consecutive_tps to
         indicate traps and time-points where min_ncells are available for at least min_consecutive_tps
-        """
 
-        window = sliding_window_view(self.ncells_matrix, min_consecutive_tps, axis=2)
+        Parameters
+        ---------
+            min_ncells: int Minimum number of cells
+            min_consecutive_tps: int
+                Minimum number of time-points a
+
+        Returns
+        ---------
+            (ntraps x ( ntps-min_consecutive_tps )) 2D boolean numpy array where rows are trap ids and columns are timepoint windows.
+            If the value in a cell is true its corresponding trap and timepoint contains more than min_ncells for at least min_consecutive time-points.
+        """
+        if min_ncells is None:
+            min_ncells = 2
+        if min_consecutive_tps is None:
+            min_consecutive_tps = 5
+
+        window = sliding_window_view(
+            self.ncells_matrix, min_consecutive_tps, axis=2
+        )
         tp_min = window.sum(axis=-1) == min_consecutive_tps
         ncells_tp_min = tp_min.sum(axis=1) >= min_ncells
         return ncells_tp_min
 
-    def random_valid_trap_tp(self,**kwargs):
+    def random_valid_trap_tp(
+        self, min_ncells: int = None, min_consecutive_tps: int = None
+    ):
         # Return a randomly-selected pair of trap_id and timepoints
-        mat = self.matrix_trap_tp_where(**kwargs)
+        mat = self.matrix_trap_tp_where(
+            min_ncells=min_ncells, min_consecutive_tps=min_consecutive_tps
+        )
         traps, tps = np.where(mat)
         rand = np.random.randint(mat.sum())
-        return (traps[rand],tps[rand])
+        return (traps[rand], tps[rand])
 
 
 # class CellsMat(Cells):
