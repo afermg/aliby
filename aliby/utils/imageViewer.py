@@ -20,10 +20,11 @@ import numpy as np
 import yaml
 from agora.io.cells import CellsLinear as Cells
 from agora.io.writer import load_attributes
-from aliby.io.image import Image as OImage
-from aliby.tile.tiler import Tiler
 from PIL import Image
 from skimage.morphology import dilation
+
+from aliby.io.image import Image as OImage
+from aliby.tile.tiler import Tiler
 
 
 class localImageViewer:
