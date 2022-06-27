@@ -489,6 +489,8 @@ class Tiler(ProcessABC):
     def get_traps_timepoint(self, tp, tile_size=None, channels=None, z=None):
         # FIXME we currently ignore the tile size
         # FIXME can we ignore z(always  give)
+        if isinstance(channels, str):
+            channels = [channels]
         res = []
         for c in channels:
             val = self.get_tp_data(tp, c)[:, z]  # Only return requested z
