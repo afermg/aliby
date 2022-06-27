@@ -312,8 +312,8 @@ class remoteImageViewer:
         )
         plt.yticks(
             ticks=[
-                self.tiler.tile_size * (i + 0.5)
-                + (i * self.tiler.tile_size * nrows)
+                (i * self.tiler.tile_size * nrows)
+                + self.tiler.tile_size * nrows / 2
                 for i in range(len(channels))
             ],
             labels=channel_labels,
