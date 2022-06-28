@@ -211,17 +211,20 @@ class remoteImageViewer:
         self,
         trap_id: int,
         tps: t.Union[range, t.Collection[int]],
+        channels=None,
+        concatenate=True,
         **kwargs,
     ) -> t.Tuple[np.array]:
-        imgs = self.get_pos_timepoints(tps, **kwargs)
+        """
+        Core method to fetch traps and labels together
+        """
+        imgs = self.get_pos_timepoints(tps, channels=channels, **kwargs)
         imgs_list = [x[trap_id] for x in imgs.values()]
         outlines = [
             self.cells.at_time(tp, kind="edgemask").get(trap_id, [])
             for tp in tps
         ]
-        lbls = [
-            self.cells.labels_at_time(tp - 1).get(trap_id, []) for tp in tps
-        ]
+        lbls = [self.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
         lbld_outlines = [
             np.dstack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(
                 axis=2
@@ -230,9 +233,10 @@ class remoteImageViewer:
             else np.zeros_like(imgs_list[0]).astype(bool)
             for maskset, lblset in zip(outlines, lbls)
         ]
-        outline_concat = np.concatenate(lbld_outlines, axis=1)
-        img_concat = np.concatenate(imgs_list, axis=1)
-        return outline_concat, img_concat
+        if concatenate:
+            lbld_outlines = np.concatenate(lbld_outlines, axis=1)
+            imgs_list = np.concatenate(imgs_list, axis=1)
+        return lbld_outlines, imgs_list
 
     def get_images(self, trap_id, trange, channels, **kwargs):
         """
