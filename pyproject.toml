@@ -29,7 +29,6 @@ aliby-baby = "^0.1.10"
 aliby-post = "^0.1.27"
 p-tqdm = "^1.3.3" # Parallel progress bars
 xmltodict = "^0.13.0" # read ome-tiff metadata
-protobuf = "<=3.20.1" # For pytest to work
 zeroc-ice = {version="3.6.5"} # networking interface, slow to build
 # zeroc-ice = {version="3.6.5", optional=true} # To be set as optional in the future
 
