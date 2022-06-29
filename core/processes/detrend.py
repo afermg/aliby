@@ -54,6 +54,6 @@ class detrend(PostProcessABC):
         signal_movavg = signal_norm.rolling(
             window=self.window, center=True, axis=1
         ).mean()
-        # Detrend: divide processed
+        # Detrend: divide normalised time series by moving average
         signal_detrend = signal_norm.div(signal_movavg)
         return signal_detrend.dropna(axis=1)  # Remove columns with NaNs
