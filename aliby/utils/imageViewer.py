@@ -20,6 +20,7 @@ import typing as t
 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import yaml
 from agora.io.cells import CellsLinear as Cells
 from agora.io.writer import load_attributes
@@ -34,7 +35,7 @@ default_colours = {
     "Brightfield": "Greys_r",
     "GFP": "Greens_r",
     "mCherry": "Reds_r",
-    "cell_label": "Set1",
+    "cell_label": sns.color_palette("Paired", as_cmap=True),
 }
 
 
