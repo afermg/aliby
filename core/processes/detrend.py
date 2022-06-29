@@ -5,25 +5,6 @@ from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 
 
-def moving_average(input_timeseries, window):
-    """Compute moving average of time series
-
-    Compute moving average of time series
-
-    Parameters
-    ----------
-    input_timeseries : array_like
-        Input time series.
-    window : int
-        Size of sliding window to compute the moving average over.
-    """
-    processed_timeseries = np.cumsum(input_timeseries, dtype=float)
-    processed_timeseries[window:] = (
-        processed_timeseries[window:] - processed_timeseries[:-window]
-    )
-    return processed_timeseries[window - 1 :] / window
-
-
 class detrendParameters(ParametersABC):
     """Parameters for the 'detrend' process.
 
@@ -67,12 +48,12 @@ class detrend(PostProcessABC):
             Detrended time series.
 
         """
-        signal = signal.div(signal.mean(axis=1), axis=0)
-        signal_movavg = signal.apply(
-            lambda x: pd.Series(moving_average(x.values, self.window)), axis=1
-        )
-        signal_norm = (
-            signal.iloc(axis=1)[self.window // 2 : -self.window // 2]
-            / signal_movavg.iloc[:, 0 : signal_movavg.shape[1] - 1].values
-        )
-        return signal_norm
+        # Normalise time series: divide by the mean time series
+        signal_norm = signal.div(signal.mean(axis=1), axis=0)
+        # Compute moving average
+        signal_movavg = signal_norm.rolling(
+            window=self.window, center=True, axis=1
+        ).mean()
+        # Detrend: divide normalised time series by moving average
+        signal_detrend = signal_norm.div(signal_movavg)
+        return signal_detrend.dropna(axis=1)  # Remove columns with NaNs
