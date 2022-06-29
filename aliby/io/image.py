@@ -1,15 +1,33 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
+import typing as t
 from datetime import datetime
-
-import xmltodict
-from tifffile import TiffFile
+from pathlib import Path, PosixPath
 
 import dask.array as da
+import xmltodict
 from dask.array.image import imread
+from tifffile import TiffFile
 
 from aliby.io.omero import Argo, get_data_lazy
+
+
+def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+    """
+    Wrapper to pick the appropiate Image class depending on the source of data.
+    """
+    if isinstance(source, int):
+        instatiator = Image
+    elif isinstance(source, dict) or (
+        isinstance(source, (str, PosixPath)) and Path(source).is_dir()
+    ):
+        instatiator = ImageDirectory
+    elif isinstance(source, str) and Path(source).is_file():
+        instatiator = ImageLocal
+    else:
+        raise ("Invalid data source at {}".format(source))
+
+    return instatiator
 
 
 class ImageLocal:
