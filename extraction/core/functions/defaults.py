@@ -1,7 +1,8 @@
 # File with defaults for ease of use
+from pathlib import PosixPath
 from typing import Union
-from pathlib import PosixPath, Path
-import json
+
+import h5py
 
 
 def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
