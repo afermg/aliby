@@ -39,7 +39,7 @@ class ImageLocal:
             # Mark non-existent dimensions for padding
             base = "TCZXY"
             self.base = base
-            self.ids = {base.index(i) for i in dimorder}
+            self.ids = [base.index(i) for i in dimorder]
 
             self._dimorder = dimorder
 
