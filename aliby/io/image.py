@@ -121,6 +121,50 @@ class ImageLocal:
         return self._formatted_img
 
 
+class ImageDirectory(ImageLocal):
+    """
+    Image class for case where all images are split in one or multiple folders with time-points and channels as independent files.
+    It inherits from Imagelocal so we only override methods that are critical.
+
+    Assumptions:
+    - Assumes individual folders for individual channels. If only one path provided it assumes it to be brightfield.
+    - Assumes that images are flat.
+    - Provides Dimorder as TCZYX
+    """
+
+    def __init__(self, path: t.Union[str, t.Dict[str, str]], *args, **kwargs):
+        if isinstance(path, str):
+            path = {"Brightfield": path}
+
+        self.path = path
+        self.image_id = str(path)
+        self._meta = dict(channels=path.keys(), name=list(path.values())[0])
+
+        # Parse name if necessary
+        # Build lazy-loading array using dask?
+
+    def get_data_lazy_local(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+
+        img = da.stack([imread(v) for v in self.path.values()])
+        if (
+            img.ndim < 5
+        ):  # Files do not include z-stack: Add and swap with time dimension.
+            img = da.stack((img,)).swapaxes(0, 2)
+
+            # TODO check whether x and y swap is necessary
+
+        # Use images to redefine axes
+        for i, dim in enumerate(("t", "c", "z", "y", "x")):
+            self._meta["size_" + dim] = img.shape[i]
+
+        self._formatted_img = da.rechunk(
+            img,
+            chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
+        )
+        return self._formatted_img
+
+
 class Image(Argo):
     """
     Loads images from OMERO and gives access to the data and metadata.
