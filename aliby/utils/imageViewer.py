@@ -190,8 +190,6 @@ class remoteImageViewer:
         if channels and not isinstance(channels, t.Collection):
             channels = [channels]
 
-        # if z and isinstance(z, t.Collection):
-        #     z = list(z)
         if z is None:
             z = 0
 
@@ -256,13 +254,6 @@ class remoteImageViewer:
                 trap_id, trange, channels=[ch], **kwargs
             )
         return out, imgs
-
-    # def plot_labelled_zstacks(
-    #     self, trap_id, channels, trange, z=None, **kwargs
-    # ):
-    #     # if z is None:
-    #     #     z =
-    #     out, images = self.get_images(trap_id, trange, channels, z=z, **kwargs)
 
     def plot_labelled_trap(
         self,
@@ -403,61 +394,6 @@ class remoteImageViewer:
             plt.close()
         else:
             plt.show()
-
-    # def plot_labelled_trap(
-    #     self,
-    #     trap_id: int,
-    #     trange: t.Union[range, t.Collection[int]],
-    #     ncols: int,
-    #     remove_axis: bool = False,
-    #     savefile: str = None,
-    #     skip_outlines: bool = False,
-    #     **kwargs,
-    # ):
-    #     """
-    #     Wrapper to plot a single trap over time
-
-    #     Parameters
-    #     ---------
-    #     :trap_id: int trap identification
-    #     :trange: Collection or Range list of time points to fetch
-    #     """
-    #     nrows = len(trange) // ncols
-    #     width = self.tiler.tile_size * ncols
-    #     out, img = self.get_labelled_trap(trap_id, trange, **kwargs)
-
-    #     # dilation makes outlines easier to see
-    #     out = dilation(out).astype(float)
-    #     out[out == 0] = np.nan
-
-    #     # interpolation_kwargs = {""}
-
-    #     custom_imshow(
-    #         concat_pad(img),
-    #         cmap="Greys_r",
-    #     )
-    #     if not skip_outlines:
-    #         custom_imshow(
-    #             concat_pad(out),
-    #             cmap="Set1",
-    #         )
-
-    #     bbox_inches = None
-    #     if remove_axis:
-    #         plt.axis("off")
-    #         bbox_inches = "tight"
-
-    #     else:
-    #         plt.yticks(
-    #             ticks=[self.tiler.tile_size * (i + 0.5) for i in range(nrows)],
-    #             labels=[trange[0] + ncols * i for i in range(nrows)],
-    #         )
-
-    #     if not savefile:
-    #         plt.show()
-    #     else:
-    #         if np.any(out):
-    #             plt.savefig(savefile, bbox_inches=bbox_inches)
 
 
 def concat_pad(a: np.array, width, nrows):
