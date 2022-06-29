@@ -274,10 +274,50 @@ class remoteImageViewer:
         skip_outlines: bool = False,
         norm: str = None,
         ncols: int = None,
+        local_colours: bool = True,
         img_plot_kwargs: dict = {},
-        lbl_plot_kwargs: dict = {},
+        lbl_plot_kwargs: dict = {"alpha": 0.8},
         **kwargs,
     ):
+        """Wrapper to plot time-lapses of individual traps
+
+        Use Cells and Tiler to generate images of cells with their resulting
+        outlines.
+
+        Parameters
+        ----------
+        trap_id : int
+            Identifier of trap
+        channels : Union[str, int]
+            Channels to use
+        trange : t.Union[range, t.Collection[int]]
+            Range or collection indicating the time-points to use.
+        remove_axis : bool
+            None, "off", or "x". Determines whether to remove the x-axis, both
+            axes or none.
+        savefile : str
+            Saves file to a location.
+        skip_outlines : bool
+            Do not add overlay with outlines
+        norm : str
+            Normalise signals
+        ncols : int
+            Number of columns to plot.
+        local_colours : bool
+            Bypass label indicators to guarantee that colours are not repeated
+            (TODO implement)
+        img_plot_kwargs : dict
+            Arguments to pass to plt.imshow used for images.
+        lbl_plot_kwargs : dict
+            Keyword arguments to pass to label plots.
+        **kwargs : dict
+            Additional keyword arguments passed to ImageViewer.get_images.
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
         if ncols is None:
             ncols = len(trange)
         nrows = int(np.ceil(len(trange) / ncols))
