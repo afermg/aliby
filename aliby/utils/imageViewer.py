@@ -343,8 +343,8 @@ class remoteImageViewer:
         if norm and norm in ("l1", "l2", "max"):
             images = {k: stretch_image(v) for k, v in images.items()}
 
-        # images = [concat_pad(img, width, nrows) for img in images.values()]
         images = [concat_pad(img, width, nrows) for img in images.values()]
+        # TODO convert to RGB to draw fluorescence with colour
         tiled_imgs = {}
         tiled_imgs["img"] = np.concatenate(images, axis=0)
         tiled_imgs["cell_labels"] = np.concatenate(
