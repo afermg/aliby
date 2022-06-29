@@ -135,7 +135,7 @@ class TrapLocations:
         self.max_size = max_size
         self.initial_location = initial_location
         self.traps = [
-            Trap(centre, self, tile_size, max_size)
+            Trap(centre, self, tile_size or max_size, max_size)
             for centre in initial_location
         ]
         self.drifts = drifts
