@@ -125,12 +125,17 @@ class remoteImageViewer:
         return self.cells.labels_at_time(tp)
 
     def random_valid_trap_tp(
-        self, min_ncells: int = None, min_consecutive_tps: int = None
+        self,
+        min_ncells: int = None,
+        min_consecutive_tps: int = None,
+        label_modulo: int = None,
     ):
         # Call Cells convenience function to pick a random trap and tp
         # containing cells for x cells for y
         return self.cells.random_valid_trap_tp(
-            min_ncells=min_ncells, min_consecutive_tps=min_consecutive_tps
+            min_ncells=min_ncells,
+            min_consecutive_tps=min_consecutive_tps,
+            label_modulo=label_modulo,
         )
 
     def get_entire_position(self):
