@@ -371,22 +371,31 @@ class Tiler(ProcessABC):
         tile_size: integer
             The size of a tile
         """
-        half_tile = tile_size // 2
-        # max_size is the minimal number of x or y pixels
-        max_size = min(self.image.shape[-2:])
-        # first time point, reference channel, reference z-position
         initial_image = self.image[0, self.ref_channel, self.ref_z]
-        # find the traps
-        trap_locs = segment_traps(initial_image, tile_size)
-        # keep only traps that are not near an edge
-        trap_locs = [
-            [x, y]
-            for x, y in trap_locs
-            if half_tile < x < max_size - half_tile
-            and half_tile < y < max_size - half_tile
-        ]
-        # store traps in an instance of TrapLocations
-        self.trap_locs = TrapLocations.from_tiler_init(trap_locs, tile_size)
+        if tile_size:
+            half_tile = tile_size // 2
+            # max_size is the minimal number of x or y pixels
+            max_size = min(self.image.shape[-2:])
+            # first time point, reference channel, reference z-position
+            # find the traps
+            trap_locs = segment_traps(initial_image, tile_size)
+            # keep only traps that are not near an edge
+            trap_locs = [
+                [x, y]
+                for x, y in trap_locs
+                if half_tile < x < max_size - half_tile
+                and half_tile < y < max_size - half_tile
+            ]
+            # store traps in an instance of TrapLocations
+            self.trap_locs = TrapLocations.from_tiler_init(
+                trap_locs, tile_size
+            )
+        else:
+            yx_shape = self.image.shape[-2:]
+            trap_locs = [[x // 2 for x in yx_shape]]
+            self.trap_locs = TrapLocations.from_tiler_init(
+                trap_locs, max_size=min(yx_shape)
+            )
 
     def find_drift(self, tp):
         """
