@@ -123,7 +123,11 @@ class TrapLocations:
     """
 
     def __init__(
-        self, initial_location, tile_size, max_size=1200, drifts=None
+        self,
+        initial_location: np.array,
+        tile_size: int = None,
+        max_size: int = 1200,
+        drifts: np.array = None,
     ):
         if drifts is None:
             drifts = []
@@ -179,7 +183,9 @@ class TrapLocations:
         return res
 
     @classmethod
-    def from_tiler_init(cls, initial_location, tile_size, max_size=1200):
+    def from_tiler_init(
+        cls, initial_location, tile_size: int = None, max_size: int = 1200
+    ):
         """
         Instantiate class from an instance of the Tiler class
         """
@@ -354,9 +360,9 @@ class Tiler(ProcessABC):
         """
         return len(self.trap_locs)
 
-    def initialise_traps(self, tile_size):
+    def initialise_traps(self, tile_size: int = None):
         """
-        Find initial trap positions.
+        Find initial trap positions if they have not been initialised.
         Removes all those that are too close to the edge so no padding
         is necessary.
 
