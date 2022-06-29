@@ -38,7 +38,7 @@ from tqdm import tqdm
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
 from aliby.io.dataset import Dataset, DatasetLocal
-from aliby.io.image import Image, ImageLocal
+from aliby.io.image import get_image_class
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
@@ -361,7 +361,7 @@ class Pipeline(ProcessABC):
             # Set up
             directory = general_config["directory"]
 
-            image_wrapper = ImageLocal if isinstance(image_id, str) else Image
+            image_wrapper = get_image_class(image_id)
 
             with image_wrapper(
                 image_id, **self.general.get("server_info", {})
