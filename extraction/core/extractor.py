@@ -1,7 +1,7 @@
 import logging
 from time import perf_counter
 
-from typing import Union, List, Dict, Callable
+from typing import List, Dict, Callable
 
 import numpy as np
 import pandas as pd
