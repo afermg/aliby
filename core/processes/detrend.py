@@ -16,7 +16,7 @@ class detrendParameters(ParametersABC):
         Size of sliding window.
     """
 
-    _defaults = {"window": 45}
+    _defaults = {"window": 16}
 
 
 class detrend(PostProcessABC):
