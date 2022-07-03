@@ -46,8 +46,10 @@ class Grouper(ABC):
 
     @property
     def tintervals(self) -> float:
-        tintervals = set([s.tinterval[0]/60 for s in self.signals.values()])
-        assert len(tintervals) == 1, "Not all signals have the same time interval"
+        tintervals = set([s.tinterval[0] / 60 for s in self.signals.values()])
+        assert (
+            len(tintervals) == 1
+        ), "Not all signals have the same time interval"
 
         return max(tintervals)
 
@@ -133,8 +135,9 @@ class Grouper(ABC):
             for name, signal in sitems.items():
                 print(name)
                 signals.append(
-                    concat_signal_ind(path, group_names,
-                                      name, signal, **kwargs)
+                    concat_signal_ind(
+                        path, group_names, name, signal, **kwargs
+                    )
                 )
 
         errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
@@ -187,7 +190,7 @@ class NameGrouper(Grouper):
         if not hasattr(self, "_group_names"):
             self._group_names = {}
             for name in self.signals.keys():
-                self._group_names[name] = name[self.by[0]: self.by[1]]
+                self._group_names[name] = name[self.by[0] : self.by[1]]
 
         return self._group_names
 
@@ -238,12 +241,17 @@ class phGrouper(NameGrouper):
         """
 
         aggregated = pd.concat(
-            [self.concat_signal(path, reduce_cols=np.nanmean) for path in paths], axis=1
+            [
+                self.concat_signal(path, reduce_cols=np.nanmean)
+                for path in paths
+            ],
+            axis=1,
         )
         ph = pd.Series(
             [
                 self.ph_from_group(
-                    x[list(aggregated.index.names).index("group")])
+                    x[list(aggregated.index.names).index("group")]
+                )
                 for x in aggregated.index
             ],
             index=aggregated.index,
@@ -318,14 +326,17 @@ class MultiGrouper:
 
         if not hasattr(self, "_sigtable"):
             raw_mat = [
-                [s.siglist for s in gpr.signals.values()] for gpr in self.groupers
+                [s.siglist for s in gpr.signals.values()]
+                for gpr in self.groupers
             ]
-            siglist_grouped = [Counter([x for y in grp for x in y])
-                               for grp in raw_mat]
+            siglist_grouped = [
+                Counter([x for y in grp for x in y]) for grp in raw_mat
+            ]
 
             nexps = len(siglist_grouped)
             sigs_idx = list(
-                set([y for x in siglist_grouped for y in x.keys()]))
+                set([y for x in siglist_grouped for y in x.keys()])
+            )
             sigs_idx = [regex_cleanup(x) for x in sigs_idx]
 
             nsigs = len(sigs_idx)
@@ -338,8 +349,9 @@ class MultiGrouper:
 
             sig_matrix[sig_matrix == 0] = np.nan
             self._sigtable = pd.DataFrame(
-                sig_matrix, index=sigs_idx, columns=[
-                    x.name for x in self.exp_dirs]
+                sig_matrix,
+                index=sigs_idx,
+                columns=[x.name for x in self.exp_dirs],
             )
         return self._sigtable
 
@@ -353,7 +365,10 @@ class MultiGrouper:
         """
         ax = sns.heatmap(self.sigtable, cmap="viridis")
         ax.set_xticklabels(
-            ax.get_xticklabels(), rotation=10, ha="right", rotation_mode="anchor"
+            ax.get_xticklabels(),
+            rotation=10,
+            ha="right",
+            rotation_mode="anchor",
         )
         plt.show()
 
@@ -401,7 +416,8 @@ class MultiGrouper:
                     # raise (e)
 
         concated = {
-            name: pd.concat(multiexp_sig) for name, multiexp_sig in sigs.items()
+            name: pd.concat(multiexp_sig)
+            for name, multiexp_sig in sigs.items()
         }
         if len(concated) == 1:
             concated = list(concated.values())[0]
