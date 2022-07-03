@@ -24,9 +24,9 @@ requests-toolbelt = "^0.9.1"
 h5py = "2.10" # I/O into files
 imageio = "2.8.0"
 omero-py = ">=5.6.2" # contact omero server
-aliby-agora = "^0.2.29"
-aliby-baby = "^0.1.10"
-aliby-post = "^0.1.27"
+aliby-agora = "^0.2.30"
+aliby-baby = "^0.1.11"
+aliby-post = "^0.1.30"
 p-tqdm = "^1.3.3" # Parallel progress bars
 xmltodict = "^0.13.0" # read ome-tiff metadata
 zeroc-ice = {version="3.6.5"} # networking interface, slow to build
