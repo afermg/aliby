@@ -255,6 +255,8 @@ class Tiler(ProcessABC):
         except Exception as e:
             print(f"Warning:Tiler: No z_perchannel data: {e}")
 
+        self.tile_size = self.tile_size or min(self.image.shape[-2:])
+
     @classmethod
     def from_image(cls, image: Image, parameters: TilerParameters):
         """
