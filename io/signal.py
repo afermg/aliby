@@ -83,7 +83,7 @@ class Signal(BridgeH5):
         elif isinstance(df, list):
             return [self.get_retained(d) for d in df]
 
-    def apply_prepost(self, dataset: str):
+    def apply_prepost(self, dataset: str, skip_pick: bool = None):
         """
         Apply modifier operations (picker, merger) to a given dataframe.
         """
@@ -117,7 +117,7 @@ class Signal(BridgeH5):
                     (merged, df.loc[nonmergeable_ids]), names=df.index.names
                 )
 
-            if "modifiers/picks" in f:
+            if "modifiers/picks" in f and not skip_pick:
                 picks = self.get_picks(names=merged.index.names)
                 # missing_cells = [i for i in picks if tuple(i) not in
                 # set(merged.index)]
@@ -155,10 +155,12 @@ class Signal(BridgeH5):
 
     @property
     def p_siglist(self):
+        """Print signal list"""
         self.datasets
 
     @property
     def siglist(self):
+        """Return list of signals"""
         try:
             if not hasattr(self, "_siglist"):
                 self._siglist = []
@@ -270,7 +272,7 @@ class Signal(BridgeH5):
             columns=f[path + "/timepoint"][()],
         )
 
-    def get_siglist(self, name, node):
+    def get_siglist(self, name: str, node):
         fullname = node.name
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
@@ -297,7 +299,10 @@ class Signal(BridgeH5):
             return obj[()]
 
     @staticmethod
-    def join_tracks_pair(target, source):
+    def join_tracks_pair(target: pd.Series, source: pd.Series):
+        """
+        Join two tracks
+        """
         tgt_copy = copy(target)
         end = find_1st(target.values[::-1], 0, cmp_larger)
         tgt_copy.iloc[-end:] = source.iloc[-end:].values
