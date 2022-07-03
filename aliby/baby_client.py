@@ -142,7 +142,11 @@ class BabyRunner:
 
     def get_data(self, tp):
         # Swap axes x and z, probably shouldn't swap, just move z
-        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3).swapaxes(1, 2)
+        return (
+            self.tiler.get_tp_data(tp, self.bf_channel)
+            .swapaxes(1, 3)
+            .swapaxes(1, 2)
+        )
 
     def run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
@@ -152,7 +156,10 @@ class BabyRunner:
         logging.debug(f"Timing:BF_fetch:{perf_counter()-t}s")
         t = perf_counter()
         segmentation = self.crawler.step(
-            img, with_edgemasks=with_edgemasks, assign_mothers=assign_mothers, **kwargs
+            img,
+            with_edgemasks=with_edgemasks,
+            assign_mothers=assign_mothers,
+            **kwargs,
         )
         logging.debug(f"Timing:crawler_step:{perf_counter()-t}s")
         return format_segmentation(segmentation, tp)
@@ -240,8 +247,6 @@ def choose_model_from_params(
 
     Parameters
     ----------
-    valid_models: List[str]
-                  The names of the models that are available.
     modelset_filter: str
                     A regex filter to apply on the models to start.
     camera: str
@@ -273,6 +278,8 @@ def choose_model_from_params(
     valid_models = list(filter(params_re.search, valid_models))
     # Check that there are valid models
     if len(valid_models) == 0:
-        raise KeyError("No model sets found matching {}".format(", ".join(params)))
+        raise KeyError(
+            "No model sets found matching {}".format(", ".join(params))
+        )
     # Pick the first model
     return valid_models[0]
