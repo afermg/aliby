@@ -96,8 +96,8 @@ class CellsHDF(Cells):
         return list(set(self["trap"]))
 
     @property
-    def ntimepoints(self)->int:
-        return cells['timepoint'].max()+1
+    def ntimepoints(self) -> int:
+        return cells["timepoint"].max() + 1
 
     @property
     def tile_size(self) -> int:
