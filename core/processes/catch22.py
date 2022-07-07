@@ -36,7 +36,10 @@ class catch22(PostProcessABC):
             else signal.shape[1] * self.min_len
         )
         adf = signal.loc[signal.notna().sum(axis=1) > thresh]
-        catches = [catch22_all(adf.iloc[i, :].dropna().values) for i in range(len(adf))]
+        catches = [
+            catch22_all(adf.iloc[i, :].dropna().values)
+            for i in range(len(adf))
+        ]
 
         norm = pd.DataFrame(
             [catches[j]["values"] for j in range(len(catches))],
