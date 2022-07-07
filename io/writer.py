@@ -26,7 +26,8 @@ def load_attributes(file: str, group="/"):
 class DynamicWriter:
     data_types = {}
     group = ""
-    compression = None
+    compression = "gzip"
+    compression_opts = 9
 
     def __init__(self, file: str):
         self.file = file
@@ -49,6 +50,9 @@ class DynamicWriter:
                 maxshape=max_shape,
                 dtype=dtype,
                 compression=self.compression,
+                compression_opts=self.compression_opts
+                if self.compression is not None
+                else None,
             )
             hgroup[key][()] = data
         else:
