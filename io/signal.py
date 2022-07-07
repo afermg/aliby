@@ -40,7 +40,8 @@ class Signal(BridgeH5):
                     for dset in dsets
                 ]
 
-        return self.cols_in_mins(self.add_name(df, dsets))
+        # return self.cols_in_mins(self.add_name(df, dsets))
+        return self.add_name(df, dsets)
 
     @staticmethod
     def add_name(df, name):
@@ -88,35 +89,32 @@ class Signal(BridgeH5):
         Apply modifier operations (picker, merger) to a given dataframe.
         """
         merges = self.get_merges()
+        df = self.get_raw(dataset)
+        merged = copy(df)
+        if merges.any():
+            # Split in two dfs, one with rows relevant for merging and one
+            # without them
+            valid_merges = merges[
+                (
+                    merges[:, :, :, None]
+                    == np.array(list(df.index)).T[:, None, :]
+                )
+                .all(axis=(1, 2))
+                .any(axis=1)
+            ]  # Casting allows fast multiindexing
+
+            merged = self.apply_merge(
+                df.loc[map(tuple, valid_merges.reshape(-1, 2))],
+                valid_merges,
+            )
+
+            nonmergeable_ids = df.index.difference(valid_merges.reshape(-1, 2))
+
+            merged = pd.concat(
+                (merged, df.loc[nonmergeable_ids]), names=df.index.names
+            )
+
         with h5py.File(self.filename, "r") as f:
-            df = self.dset_to_df(f, dataset)
-
-            merged = df
-            if merges.any():
-                # Split in two dfs, one with rows relevant for merging and one
-                # without them
-                valid_merges = merges[
-                    (
-                        merges[:, :, :, None]
-                        == np.array(list(df.index)).T[:, None, :]
-                    )
-                    .all(axis=(1, 2))
-                    .any(axis=1)
-                ]  # Casting allows fast multiindexing
-
-                merged = self.apply_merge(
-                    df.loc[map(tuple, valid_merges.reshape(-1, 2))],
-                    valid_merges,
-                )
-
-                nonmergeable_ids = df.index.difference(
-                    valid_merges.reshape(-1, 2)
-                )
-
-                merged = pd.concat(
-                    (merged, df.loc[nonmergeable_ids]), names=df.index.names
-                )
-
             if "modifiers/picks" in f and not skip_pick:
                 picks = self.get_picks(names=merged.index.names)
                 # missing_cells = [i for i in picks if tuple(i) not in
@@ -208,11 +206,14 @@ class Signal(BridgeH5):
 
         return df
 
-    def get_raw(self, dataset):
+    def get_raw(self, dataset, in_minutes=True):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    return self.dset_to_df(f, dataset)
+                    df = self.dset_to_df(f, dataset)
+                    if in_minutes:
+                        df = self.cols_in_mins(df)
+                    return df
             elif isinstance(dataset, list):
                 return [self.get_raw(dset) for dset in dataset]
         except Exception as e:
