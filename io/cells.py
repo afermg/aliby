@@ -1,8 +1,8 @@
 import logging
+import typing as t
 from collections.abc import Iterable
 from itertools import groupby
 from pathlib import Path, PosixPath
-from typing import Union
 
 import h5py
 import numpy as np
@@ -12,14 +12,6 @@ from scipy import ndimage
 from scipy.sparse.base import isdense
 from utils_find_1st import cmp_equal, find_1st
 
-# def cell_factory(store, type="hdf5"):
-#     if type == "hdf5":
-#         return CellsHDF(store)
-#     else:
-#         raise TypeError(
-#             "Could not get cells for type {}:" "valid types are matlab and hdf5"
-#         )
-
 
 class Cells:
     """An object that gathers information about all the cells in a given
@@ -27,16 +19,9 @@ class Cells:
     This is the abstract object, used for type testing
     """
 
-    def __init__(self):
-        pass
-
     @classmethod
-    def from_source(cls, source: Union[PosixPath, str]):
-        if isinstance(source, str):
-            source = Path(source)
-        if source.suffix == ".mat":  # Infer kind from filename
-            raise ("Matlab files no longer supported")
-        return cls(source)
+    def from_source(cls, source: t.Union[PosixPath, str]):
+        return cls(Path(source))
 
     @staticmethod
     def _asdense(array):
@@ -56,14 +41,10 @@ class Cells:
     def hdf(cls, fpath):
         return CellsHDF(fpath)
 
-    # @classmethod
-    # def mat(cls, path):
-    #     return CellsMat(matObject(store))
-
 
 class CellsHDF(Cells):
     def __init__(
-        self, filename: Union[str, PosixPath], path: str = "cell_info"
+        self, filename: t.Union[str, PosixPath], path: str = "cell_info"
     ):
         self.filename = filename
         self.cinfo_path = path
@@ -71,7 +52,7 @@ class CellsHDF(Cells):
         self._edgemasks = None
         self._tile_size = None
 
-    def __getitem__(self, item: str):
+    def __getitem__(self, item: str) -> np.ndarray:
         if item == "edgemasks":
             return self.edgemasks
         _item = "_" + item
@@ -79,12 +60,17 @@ class CellsHDF(Cells):
             setattr(self, _item, self._fetch(item))
         return getattr(self, _item)
 
-    def _get_idx(self, cell_id: int, trap_id: int):
+    def _get_idx(self, cell_id: int, trap_id: int) -> t.List[bool]:
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
-    def _fetch(self, path: str):
+    def _fetch(self, path: str) -> t.List[t.Union[np.ndarray, int]]:
         with h5py.File(self.filename, mode="r") as f:
             return f[self.cinfo_path][path][()]
+
+    @property
+    def max_labels(self) -> t.List[int]:
+        with h5py.File(self.filename, mode="r") as f:
+            return [max(self.labels_in_trap(i)) for i in range(self.ntraps)]
 
     @property
     def ntraps(self) -> int:
@@ -92,52 +78,52 @@ class CellsHDF(Cells):
             return len(f["/trap_info/trap_locations"][()])
 
     @property
-    def traps(self) -> list:
+    def traps(self) -> t.List[int]:
         return list(set(self["trap"]))
 
     @property
     def ntimepoints(self) -> int:
-        return cells["timepoint"].max() + 1
+        return self["timepoint"].max() + 1
 
     @property
-    def tile_size(self) -> int:
+    def tile_size(self) -> t.Union[int, t.Tuple[int], None]:
         if self._tile_size is None:
             with h5py.File(self.filename, mode="r") as f:
                 self._tile_size == f["trap_info/tile_size"][0]
         return self._tile_size
 
     @property
-    def edgem_indices(self) -> np.array:
+    def edgem_indices(self) -> t.Union[np.ndarray, None]:
         if self._edgem_indices is None:
             edgem_path = "edgemasks/indices"
             self._edgem_indices = load_complex(self._fetch(edgem_path))
         return self._edgem_indices
 
-    def nonempty_tp_in_trap(self, trap_id: int) -> set:
+    def nonempty_tp_in_trap(self, trap_id: int) -> t.Set[bool]:
         # Returns time-points in which cells are available
         return set(self["timepoint"][self["trap"] == trap_id])
 
     @property
-    def edgemasks(self):
+    def edgemasks(self) -> t.List[np.ndarray]:
         if self._edgemasks is None:
             edgem_path = "edgemasks/values"
             self._edgemasks = self._fetch(edgem_path)
 
         return self._edgemasks
 
-    def _edgem_where(self, cell_id, trap_id):
+    def _edgem_where(self, cell_id: int, trap_id: int):
         ix = trap_id + 1j * cell_id
         return find_1st(self.edgem_indices == ix, True, cmp_equal)
 
     @property
-    def labels(self):
+    def labels(self) -> t.List[t.List[int]]:
         """
         Return all cell labels in object
         We use mother_assign to list traps because it is the only propriety that appears even
         when no cells are found"""
         return [self.labels_in_trap(trap) for trap in self.traps]
 
-    def where(self, cell_id, trap_id):
+    def where(self, cell_id: int, trap_id: int):
         """
         Returns
         Parameters
@@ -159,9 +145,11 @@ class CellsHDF(Cells):
             self["timepoint"][indices],
             indices,
             edgem_ix,
-        )  # FIXME edgem_ix makes output different to matlab's Cell
+        )
 
-    def outline(self, cell_id, trap_id):
+    def outline(
+        self, cell_id: int, trap_id: int
+    ) -> t.Tuple[t.List, np.ndarray]:
         times, indices, cell_ix = self.where(cell_id, trap_id)
         return times, self["edgemasks"][cell_ix, times]
 
@@ -171,7 +159,9 @@ class CellsHDF(Cells):
             [ndimage.morphology.binary_fill_holes(o) for o in outlines]
         )
 
-    def at_time(self, timepoint, kind="mask"):
+    def at_time(
+        self, timepoint: int, kind: str = "mask"
+    ) -> t.Dict[int, np.ndarray]:
         ix = self["timepoint"] == timepoint
         cell_ix = self["cell_label"][ix]
         traps = self["trap"][ix]
