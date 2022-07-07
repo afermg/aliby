@@ -138,7 +138,7 @@ class Signal(BridgeH5):
                     else:
                         index = pd.Index([], name=merged.index.name)
                     merged = pd.DataFrame([], index=index)
-            return merged
+        return merged
 
     @property
     def datasets(self):
