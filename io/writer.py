@@ -237,7 +237,9 @@ class BabyWriter(DynamicWriter):
         n_tps = val_dset.shape[1] + 1
         n_add_cells = len(missing)
         # RESIZE DATASET FOR TIME and Cells
-        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[2:]
+        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[
+            2:
+        ]
         val_dset.resize(new_shape)
         logging.debug(f"Timing:resizing:{perf_counter() - t}")
         # Writing data
@@ -365,7 +367,9 @@ class StateWriter(DynamicWriter):
 
     @staticmethod
     def format_values_tpback(states: list, val_name: str):
-        tp_back, trap, value = [[[] for _ in states[0][val_name]] for _ in range(3)]
+        tp_back, trap, value = [
+            [[] for _ in states[0][val_name]] for _ in range(3)
+        ]
 
         lbl_tuples = [
             (tp_back, trap, cell_label)
@@ -399,7 +403,9 @@ class StateWriter(DynamicWriter):
 
     def format_states(self, states: list):
         formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
-        tp_back, trap, cell_label = self.format_values_tpback(states, "cell_lbls")
+        tp_back, trap, cell_label = self.format_values_tpback(
+            states, "cell_lbls"
+        )
         _, _, prev_feats = self.format_values_tpback(states, "prev_feats")
 
         # Heterogeneous datasets
@@ -410,12 +416,17 @@ class StateWriter(DynamicWriter):
 
         # One entry per cell label - tp_back independent
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
-            formatted_state[val_name] = self.format_values_traps(states, val_name)
+            formatted_state[val_name] = self.format_values_traps(
+                states, val_name
+            )
 
         bacum_max = max([len(state["ba_cum"]) for state in states])
 
         formatted_state["ba_cum"] = np.array(
-            [self.pad_if_needed(state["ba_cum"], bacum_max) for state in states]
+            [
+                self.pad_if_needed(state["ba_cum"], bacum_max)
+                for state in states
+            ]
         )
 
         return formatted_state
@@ -571,7 +582,9 @@ class Writer(BridgeH5):
             indices[()] = ids
 
     def write_pd(self, f, path, df, **kwargs):
-        values_path = path + "values" if path.endswith("/") else path + "/values"
+        values_path = (
+            path + "values" if path.endswith("/") else path + "/values"
+        )
         if path not in f:
             max_ncells = 2e5
 
@@ -626,7 +639,8 @@ class Writer(BridgeH5):
             df = df[new_tps]
 
             if (
-                not hasattr(self, "id_cache") or not df.index.nlevels in self.id_cache
+                not hasattr(self, "id_cache")
+                or not df.index.nlevels in self.id_cache
             ):  # Use cache dict to store previously-obtained indices
                 self.id_cache[df.index.nlevels] = {}
                 existing_ids = self.get_existing_ids(
@@ -634,7 +648,9 @@ class Writer(BridgeH5):
                 )
                 # Split indices in existing and additional
                 new = df.index.tolist()
-                if df.index.nlevels == 1:  # Cover for cases with a single index
+                if (
+                    df.index.nlevels == 1
+                ):  # Cover for cases with a single index
                     new = [(x,) for x in df.index.tolist()]
                 (
                     found_multis,
@@ -643,13 +659,15 @@ class Writer(BridgeH5):
                     existing=existing_ids,
                     new=new,
                 )
-                found_indices = np.array(locate_indices(existing_ids, found_multis))
+                found_indices = np.array(
+                    locate_indices(existing_ids, found_multis)
+                )
 
                 # We must sort our indices for h5py indexing
                 incremental_existing = np.argsort(found_indices)
-                self.id_cache[df.index.nlevels]["found_indices"] = found_indices[
-                    incremental_existing
-                ]
+                self.id_cache[df.index.nlevels][
+                    "found_indices"
+                ] = found_indices[incremental_existing]
                 self.id_cache[df.index.nlevels]["found_multi"] = found_multis[
                     incremental_existing
                 ]
@@ -663,7 +681,9 @@ class Writer(BridgeH5):
             new_values = df.loc[
                 [
                     _tuple_or_int(x)
-                    for x in self.id_cache[df.index.nlevels]["additional_multis"]
+                    for x in self.id_cache[df.index.nlevels][
+                        "additional_multis"
+                    ]
                 ]
             ].values
             ncells, ntps = f[values_path].shape
@@ -676,7 +696,9 @@ class Writer(BridgeH5):
                     self.id_cache[df.index.nlevels]["found_indices"], tp
                 ] = existing_values[:, i]
             # Add new cells
-            n_newcells = len(self.id_cache[df.index.nlevels]["additional_multis"])
+            n_newcells = len(
+                self.id_cache[df.index.nlevels]["additional_multis"]
+            )
             dset.resize(dset.shape[0] + n_newcells, axis=0)
             dset[ncells:, :] = np.nan
 
@@ -691,7 +713,11 @@ class Writer(BridgeH5):
                 dset.resize(n + n_newcells, axis=0)
                 dset[n:] = (
                     self.id_cache[df.index.nlevels]["additional_multis"][:, i]
-                    if len(self.id_cache[df.index.nlevels]["additional_multis"].shape)
+                    if len(
+                        self.id_cache[df.index.nlevels][
+                            "additional_multis"
+                        ].shape
+                    )
                     > 1
                     else self.id_cache[df.index.nlevels]["additional_multis"]
                 )
@@ -727,21 +753,20 @@ def locate_indices(existing, new):
         if new.shape[1] > 1:
             return [
                 find_1st(
-                    (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]), True, cmp_equal
+                    (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]),
+                    True,
+                    cmp_equal,
                 )
                 for n in new
             ]
         else:
-            return [find_1st(existing[:, 0] == n, True, cmp_equal) for n in new]
+            return [
+                find_1st(existing[:, 0] == n, True, cmp_equal) for n in new
+            ]
     else:
         return []
 
 
-# def tuple_or_int(x):
-#     if isinstance(x, Iterable):
-#         return tuple(x)
-#     else:
-#         return x
 def _tuple_or_int(x):
     # Convert tuple to int if it only contains one value
     if len(x) == 1:
