@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
-from catch22 import catch22_all
+from pycatch22 import catch22_all
 
 from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
@@ -37,7 +36,10 @@ class catch22(PostProcessABC):
             else signal.shape[1] * self.min_len
         )
         adf = signal.loc[signal.notna().sum(axis=1) > thresh]
-        catches = [catch22_all(adf.iloc[i, :].dropna().values) for i in range(len(adf))]
+        catches = [
+            catch22_all(adf.iloc[i, :].dropna().values)
+            for i in range(len(adf))
+        ]
 
         norm = pd.DataFrame(
             [catches[j]["values"] for j in range(len(catches))],
