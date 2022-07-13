@@ -12,7 +12,10 @@ poses = [
 
 gr = Group(
     GroupParameters(
-        signals=["/extraction/general/None/area", "/extraction/mCherry/np_max/median"]
+        signals=[
+            "/extraction/general/None/area",
+            "/extraction/mCherry/np_max/median",
+        ]
     )
 )
 gr.run(

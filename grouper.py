@@ -59,7 +59,6 @@ class Grouper(ABC):
 
     @property
     def siglist_grouped(self) -> None:
-
         if not hasattr(self, "_siglist_grouped"):
             self._siglist_grouped = Counter(
                 [x for s in self.signals.values() for x in s.siglist]
@@ -117,7 +116,8 @@ class Grouper(ABC):
         nsignals_dif = len(self.signals) - len(sitems)
         if nsignals_dif:
             print(
-                f"Grouper:Warning: {nsignals_dif} signals do not contain channel {path}"
+                f"Grouper:Warning: {nsignals_dif} signals do not contain"
+                f" channel {path}"
             )
 
         if pool or pool is None:
@@ -195,7 +195,6 @@ class NameGrouper(Grouper):
         return self._group_names
 
     def aggregate_multisignals(self, paths=None, **kwargs):
-
         aggregated = pd.concat(
             [
                 self.concat_signal(path, reduce_cols=np.nanmean, **kwargs)

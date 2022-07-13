@@ -121,7 +121,9 @@ class autoreg(PostProcessABC):
         # ar_coeffs: 1D array of coefficients (i.e. phi values)
         sample_acfs_toeplitz = linalg.toeplitz(sample_acfs[0:ar_order])
         # phi vector goes from 1 to P in Jia & Grima (2020)
-        ar_coeffs = linalg.inv(sample_acfs_toeplitz).dot(sample_acfs[1 : ar_order + 1])
+        ar_coeffs = linalg.inv(sample_acfs_toeplitz).dot(
+            sample_acfs[1 : ar_order + 1]
+        )
         # defines a dummy phi_0 as 1.  This is so that the indices I use in
         # get_noise_param are consistent with Jia & Grima (2020)
         ar_coeffs = np.insert(ar_coeffs, 0, 1.0, axis=0)
@@ -307,12 +309,18 @@ class autoreg(PostProcessABC):
                         freq_npoints=self.freq_npoints,
                         ar_order=optimal_ar_order,
                     ),
-                    optimal_ar_order
+                    optimal_ar_order,
                 ),
             )
 
-        freqs_df = pd.DataFrame([element.freqs for element in axes], index=signal.index)
-        power_df = pd.DataFrame([element.power for element in axes], index=signal.index)
-        order_df = pd.DataFrame([element.order for element in axes], index=signal.index)
+        freqs_df = pd.DataFrame(
+            [element.freqs for element in axes], index=signal.index
+        )
+        power_df = pd.DataFrame(
+            [element.power for element in axes], index=signal.index
+        )
+        order_df = pd.DataFrame(
+            [element.order for element in axes], index=signal.index
+        )
 
         return freqs_df, power_df, order_df

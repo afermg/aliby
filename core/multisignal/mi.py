@@ -133,7 +133,10 @@ class mi(PostProcessABC):
         n_classes = len(data)
         Xo = np.vstack([timeseries for timeseries in data])
         y = np.hstack(
-            [i * np.ones(timeseries.shape[0]) for i, timeseries in enumerate(data)]
+            [
+                i * np.ones(timeseries.shape[0])
+                for i, timeseries in enumerate(data)
+            ]
         )
 
         if self.overtime:
@@ -152,10 +155,15 @@ class mi(PostProcessABC):
             X = Xo[:, :duration]
 
             # initialise sself.cikit-learn routines
-            nPCArange = range(1, X.shape[1] + 1) if X.shape[1] < 7 else [3, 4, 5, 6, 7]
+            nPCArange = (
+                range(1, X.shape[1] + 1) if X.shape[1] < 7 else [3, 4, 5, 6, 7]
+            )
             params = [
                 {"project__n_components": nPCArange},
-                {"classifier__kernel": ["linear"], "classifier__C": self.Crange},
+                {
+                    "classifier__kernel": ["linear"],
+                    "classifier__C": self.Crange,
+                },
                 {
                     "classifier__kernel": ["rbf"],
                     "classifier__C": self.Crange,
@@ -196,9 +204,13 @@ class mi(PostProcessABC):
                 y_predict = pipe.predict(X_test)
                 # estimate mutual information
                 p_y = 1 / n_classes
-                p_yhat_given_y = confusion_matrix(y_test, y_predict, normalize="true")
+                p_yhat_given_y = confusion_matrix(
+                    y_test, y_predict, normalize="true"
+                )
                 p_yhat = np.sum(p_y * p_yhat_given_y, 0)
-                h_yhat = -np.sum(p_yhat[p_yhat > 0] * np.log2(p_yhat[p_yhat > 0]))
+                h_yhat = -np.sum(
+                    p_yhat[p_yhat > 0] * np.log2(p_yhat[p_yhat > 0])
+                )
                 log2_p_yhat_given_y = np.ma.log2(p_yhat_given_y).filled(0)
                 h_yhat_given_y = -np.sum(
                     p_y * np.sum(p_yhat_given_y * log2_p_yhat_given_y, 1)

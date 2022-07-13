@@ -121,8 +121,12 @@ class align(PostProcessABC):
         # Remove bits of traces before first event
         if self.slice_before_first_event:
             # minus sign in front of shift_list to shift to the left
-            mask_aligned = df_shift(mask_aligned, common_index.to_list(), -shift_list)
-            trace_aligned = df_shift(trace_aligned, common_index.to_list(), -shift_list)
+            mask_aligned = df_shift(
+                mask_aligned, common_index.to_list(), -shift_list
+            )
+            trace_aligned = df_shift(
+                trace_aligned, common_index.to_list(), -shift_list
+            )
         # Do not remove bits of traces before first event
         else:
             # Add columns to left, filled with NaNs
@@ -130,7 +134,11 @@ class align(PostProcessABC):
             mask_aligned = df_extend_nan(mask_aligned, max_shift)
             trace_aligned = df_extend_nan(trace_aligned, max_shift)
             # shift each
-            mask_aligned = df_shift(mask_aligned, common_index.to_list(), -shift_list)
-            trace_aligned = df_shift(trace_aligned, common_index.to_list(), -shift_list)
+            mask_aligned = df_shift(
+                mask_aligned, common_index.to_list(), -shift_list
+            )
+            trace_aligned = df_shift(
+                trace_aligned, common_index.to_list(), -shift_list
+            )
 
         return trace_aligned, mask_aligned

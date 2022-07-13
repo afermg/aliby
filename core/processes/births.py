@@ -41,15 +41,14 @@ class births(LineageProcess):
     def load_lineage(self, lineage):
         self.lineage = lineage
 
-    def run(self, signal: pd.DataFrame, lineage: np.ndarray = None) -> pd.DataFrame:
+    def run(
+        self, signal: pd.DataFrame, lineage: np.ndarray = None
+    ) -> pd.DataFrame:
         if lineage is None:
             lineage = self.lineage
 
-        get_mothers = lambda trap: lineage[:, 1][lineage[:, 0] == trap]
-        # get_daughters = lambda trap: lineage[:, 2][lineage[:, 0] == trap]
-
-        # birth_events = signal.groupby("trap").apply(lambda x: x.first_valid_index())
-        fvi = signal.apply(lambda x: x.first_valid_index(), axis=1)
+        def fvi(signal):
+            return signal.apply(lambda x: x.first_valid_index(), axis=1)
 
         traps_mothers = {
             tuple(mo): [] for mo in lineage[:, :2] if tuple(mo) in signal.index
@@ -58,7 +57,9 @@ class births(LineageProcess):
             if (trap, mother) in traps_mothers.keys():
                 traps_mothers[(trap, mother)].append(daughter)
 
-        mothers = signal.loc[set(signal.index).intersection(traps_mothers.keys())]
+        mothers = signal.loc[
+            set(signal.index).intersection(traps_mothers.keys())
+        ]
         births = pd.DataFrame(
             np.zeros((mothers.shape[0], signal.shape[1])).astype(bool),
             index=mothers.index,
@@ -68,7 +69,9 @@ class births(LineageProcess):
         for mother_id, daughters in traps_mothers.items():
             daughters_idx = set(
                 fvi.loc[
-                    fvi.index.intersection(list(product((mother_id[0],), daughters)))
+                    fvi.index.intersection(
+                        list(product((mother_id[0],), daughters))
+                    )
                 ].values
             ).difference({0})
             births.loc[

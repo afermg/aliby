@@ -12,7 +12,6 @@ import pandas as pd
 from utils_find_1st import find_1st, cmp_larger
 
 import more_itertools as mit
-from scipy.signal import savgol_filter
 
 # from scipy.optimize import linear_sum_assignment
 # from scipy.optimize import curve_fit
@@ -42,12 +41,13 @@ def max_ntps(track: pd.Series) -> int:
 def max_nonstop_ntps(track: pd.Series) -> int:
     nona_tracks = track.notna()
     consecutive_nonas_grouped = [
-        len(list(x)) for x in mit.consecutive_groups(np.flatnonzero(nona_tracks))
+        len(list(x))
+        for x in mit.consecutive_groups(np.flatnonzero(nona_tracks))
     ]
     return max(consecutive_nonas_grouped)
 
 
-def get_tracks_ntps(tracks: pd.DataFrame) -> pd.Series:
+def get_tracks_ntps(tracks: pd.DataFrame) -> pd.FrameorSeriesUnion:
     return tracks.apply(max_ntps, axis=1)
 
 
@@ -73,7 +73,9 @@ def get_avg_grs(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks.apply(get_avg_gr, axis=1)
 
 
-def clean_tracks(tracks, min_len: int = 15, min_gr: float = 1.0) -> pd.DataFrame:
+def clean_tracks(
+    tracks, min_len: int = 15, min_gr: float = 1.0
+) -> pd.DataFrame:
     """
     Clean small non-growing tracks and return the reduced dataframe
 
@@ -227,7 +229,9 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         clean = clean_tracks(
             tracks, min_len=window + 1, min_gr=0.9
         )  # get useful tracks
-        savgol_on_srs = lambda x: non_uniform_savgol(x.index, x.values, window, degree)
+        savgol_on_srs = lambda x: non_uniform_savgol(
+            x.index, x.values, window, degree
+        )
         contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
         contig = contig.loc[contig.apply(len) > 0]
         flat = set([k for v in contig.values for i in v for j in i for k in j])
@@ -236,7 +240,9 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         contig = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
         contig = contig.loc[contig.apply(len) > 0]
         flat = set([k for v in contig.values for i in v for j in i for k in j])
-        smoothed_tracks = tracks.loc[flat].apply(lambda x: np.array(x.values), axis=1)
+        smoothed_tracks = tracks.loc[flat].apply(
+            lambda x: np.array(x.values), axis=1
+        )
 
     # fetch edges from ids TODO (IF necessary, here we can compare growth rates)
     idx_to_edge = lambda preposts: [
@@ -263,7 +269,9 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
                 pre_res.append(
                     np.poly1d(np.polyfit(range(len(y)), y, 1))(len(y) + 1),
                 )
-            pos_res = [get_means(smoothed_tracks.loc[post], window) for post in posts]
+            pos_res = [
+                get_means(smoothed_tracks.loc[post], window) for post in posts
+            ]
             result.append([pre_res, pos_res])
 
         return result
@@ -296,7 +304,8 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
 
     # match local with global ids
     joinable_ids = [
-        localid_to_idx(closest_pairs.loc[i], contig.loc[i]) for i in closest_pairs.index
+        localid_to_idx(closest_pairs.loc[i], contig.loc[i])
+        for i in closest_pairs.index
     ]
 
     return [pair for pairset in joinable_ids for pair in pairset]
@@ -341,7 +350,9 @@ def localid_to_idx(local_ids, contig_trap):
     for i, pairs in enumerate(local_ids):
         if len(pairs):
             for left, right in pairs:
-                lin_pairs.append((contig_trap[i][0][left], contig_trap[i][1][right]))
+                lin_pairs.append(
+                    (contig_trap[i][0][left], contig_trap[i][1][right])
+                )
     return lin_pairs
 
 
@@ -355,11 +366,14 @@ def get_dMetric_wrap(lst: List, **kwargs):
 
 def solve_matrices_wrap(dMetric: List, edges: List, **kwargs):
     return [
-        solve_matrices(mat, edgeset, **kwargs) for mat, edgeset in zip(dMetric, edges)
+        solve_matrices(mat, edgeset, **kwargs)
+        for mat, edgeset in zip(dMetric, edges)
     ]
 
 
-def get_dMetric(pre: List[float], post: List[float], tol: Union[float, int] = 1):
+def get_dMetric(
+    pre: List[float], post: List[float], tol: Union[float, int] = 1
+):
     """Calculate a cost matrix
 
     input
@@ -376,13 +390,18 @@ def get_dMetric(pre: List[float], post: List[float], tol: Union[float, int] = 1)
     else:
         dMetric = np.abs(np.subtract.outer(pre, post))
 
-    dMetric[np.isnan(dMetric)] = tol + 1 + np.nanmax(dMetric)  # nans will be filtered
+    dMetric[np.isnan(dMetric)] = (
+        tol + 1 + np.nanmax(dMetric)
+    )  # nans will be filtered
     return dMetric
 
 
-def solve_matrices(dMetric: np.ndarray, prepost: List, tol: Union[float, int] = 1):
+def solve_matrices(
+    dMetric: np.ndarray, prepost: List, tol: Union[float, int] = 1
+):
     """
-    Solve the distance matrices obtained in get_dMetric and/or merged from independent dMetric matrices
+    Solve the distance matrices obtained in get_dMetric and/or merged from
+    independent dMetric matrices
     """
 
     ids = solve_matrix(dMetric)
@@ -399,7 +418,9 @@ def solve_matrices(dMetric: np.ndarray, prepost: List, tol: Union[float, int] = 
     return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
 
 
-def get_closest_pairs(pre: List[float], post: List[float], tol: Union[float, int] = 1):
+def get_closest_pairs(
+    pre: List[float], post: List[float], tol: Union[float, int] = 1
+):
     """Calculate a cost matrix the Hungarian algorithm to pick the best set of
     options
 
@@ -479,12 +500,13 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
 
     :param tracks: (m x n) dataframe where rows are cell tracks and
         columns are timepoints
-    :param min_dgr: float minimum difference in growth rate from the interpolation
+    :param min_dgr: float minimum difference in growth rate from
+        the interpolation
     """
-    # indices = np.where(tracks.notna())
 
     mins, maxes = [
-        tracks.notna().apply(np.where, axis=1).apply(fn) for fn in (np.min, np.max)
+        tracks.notna().apply(np.where, axis=1).apply(fn)
+        for fn in (np.min, np.max)
     ]
 
     mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
@@ -492,7 +514,9 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
     # TODO add support for skipping time points
     maxes_d = maxes.groupby(maxes).apply(lambda x: x.index.tolist())
 
-    common = sorted(set(mins_d.index).intersection(maxes_d.index), reverse=True)
+    common = sorted(
+        set(mins_d.index).intersection(maxes_d.index), reverse=True
+    )
 
     return [(maxes_d[t], mins_d[t]) for t in common]
 
