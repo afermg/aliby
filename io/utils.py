@@ -4,11 +4,14 @@ Utility functions and classes
 import itertools
 import logging
 import operator
+from functools import partial, wraps
 from pathlib import Path
+from time import perf_counter
 from typing import Callable
+import typing as t
 
-import h5py
 import cv2
+import h5py
 import numpy as np
 
 
@@ -89,9 +92,10 @@ class Cache:
         self._queue.clear()
 
 
-def accumulate(l: list):
-    l = sorted(l)
-    it = itertools.groupby(l, operator.itemgetter(0))
+def accumulate(list_: list) -> t.Generator:
+    """Accumulate list based on the first value"""
+    list_ = sorted(list_)
+    it = itertools.groupby(list_, operator.itemgetter(0))
     for key, sub_iter in it:
         yield key, [x[1] for x in sub_iter]
 
@@ -123,11 +127,6 @@ def parametrized(dec):
         return repl
 
     return layer
-
-
-from functools import wraps, partial
-from time import perf_counter
-import logging
 
 
 @parametrized

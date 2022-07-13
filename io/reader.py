@@ -67,13 +67,13 @@ class StateReader(DynamicReader):
     def read_all(self):
 
         self.raw_data = {
-            key: self.read_raw(key, dtype) for key, (_, dtype) in self.datatypes.items()
+            key: self.read_raw(key, dtype)
+            for key, (_, dtype) in self.datatypes.items()
         }
 
         return self.raw_data
 
     def reconstruct_states(self, data: dict):
-        ntraps = len(data["max_lbl"])
         ntps_back = max(data["tp_back"]) + 1
 
         from copy import copy
@@ -88,14 +88,19 @@ class StateReader(DynamicReader):
                     states[k][val_name] = [[] for _ in range(ntps_back)]
                 else:
                     states[k][val_name] = [
-                        np.zeros((0, data[val_name].shape[1]), dtype=np.float64)
+                        np.zeros(
+                            (0, data[val_name].shape[1]), dtype=np.float64
+                        )
                         for _ in range(ntps_back)
                     ]
 
-            data[val_name] = list(zip(trap_as_idx, tpback_as_idx, data[val_name]))
+            data[val_name] = list(
+                zip(trap_as_idx, tpback_as_idx, data[val_name])
+            )
             for k, v in groupsort(data[val_name]).items():
                 states[k][val_name] = [
-                    np.array([w[0] for w in val]) for val in groupsort(v).values()
+                    np.array([w[0] for w in val])
+                    for val in groupsort(v).values()
                 ]
 
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):

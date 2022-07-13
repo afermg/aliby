@@ -15,10 +15,12 @@ class ParametersABC(ABC):
     """
 
     def __init__(self, **kwargs):
-        '''
+        """
         Defines parameters as attributes
-        '''
-        assert "parameters" not in kwargs, "No attribute should be named parameters"
+        """
+        assert (
+            "parameters" not in kwargs
+        ), "No attribute should be named parameters"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -38,7 +40,9 @@ class ParametersABC(ABC):
                 ]
             ):
                 return {
-                    k: v.to_dict() if hasattr(v, "to_dict") else self.to_dict(v)
+                    k: v.to_dict()
+                    if hasattr(v, "to_dict")
+                    else self.to_dict(v)
                     for k, v in iterable.items()
                 }
             else:
@@ -76,16 +80,12 @@ class ParametersABC(ABC):
         Returns instance from a yaml filename or stdin
         """
         is_buffer = True
-        try:
-            if Path(source).exists():
-                is_buffer = False
-        except:
-            pass
+        if Path(source).exists():
+            is_buffer = False
         if is_buffer:
             params = safe_load(source)
-        else:
-            with open(source) as f:
-                params = safe_load(f)
+        with open(source) as f:
+            params = safe_load(f)
         return cls(**params)
 
     @classmethod
@@ -94,6 +94,7 @@ class ParametersABC(ABC):
         for k, v in kwargs.items():
             overriden_defaults[k] = v
         return cls.from_dict(overriden_defaults)
+
 
 ###
 

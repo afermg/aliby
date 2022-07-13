@@ -37,8 +37,10 @@ class DynamicWriter:
         """Append data to existing dataset."""
         try:
             n = len(data)
-        except:
-            # Attributes have no length
+        except Exception as e:
+            logging.debug(
+                "DynamicWriter:Attributes have no length: {}".format(e)
+            )
             n = 1
         if key not in hgroup:
             # TODO Include sparsity check
@@ -62,9 +64,11 @@ class DynamicWriter:
                 dset = hgroup[key]
                 dset.resize(dset.shape[0] + n, axis=0)
                 dset[-n:] = data
-            except:
+            except Exception as e:
                 logging.debug(
-                    "DynamicWriter:Inconsistency between dataset shape and new empty data"
+                    "DynamicWriter:Inconsistency between dataset shape and new empty data: {}".format(
+                        e
+                    )
                 )
         return
 
@@ -228,7 +232,7 @@ class BabyWriter(DynamicWriter):
         save_complex(current_indices, ix_dset)
 
     def __append_edgemasks(self, hgroup, edgemasks, current_indices):
-        key = "edgemasks"
+        # key = "edgemasks"
         val_dset = hgroup["values"]
         ix_dset = hgroup["indices"]
         existing_indices = load_complex(ix_dset)
@@ -252,7 +256,11 @@ class BabyWriter(DynamicWriter):
             try:
                 val_dset[ix, n_tps - 1] = mask
             except Exception as e:
-                logging.debug(f"{ix}, {n_tps}, {val_dset.shape}")
+                logging.debug(
+                    "Exception: {}:{}, {}, {}".format(
+                        e, ix, n_tps, val_dset.shape
+                    )
+                )
         # Save the index values
         save_complex(missing, ix_dset)
 
@@ -262,7 +270,7 @@ class BabyWriter(DynamicWriter):
         # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
         key = "edgemasks"
         val_key = "values"
-        idx_key = "indices"
+        # idx_key = "indices"
         # Length of edgemasks
         traps, cell_labels, edgemasks = data
         n_cells = len(cell_labels)
@@ -503,7 +511,6 @@ class Writer(BridgeH5):
         data : Iterable, default = None
         meta : Dict, default = {}
 
-
         """
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
@@ -644,7 +651,7 @@ class Writer(BridgeH5):
 
             if (
                 not hasattr(self, "id_cache")
-                or not df.index.nlevels in self.id_cache
+                or df.index.nlevels not in self.id_cache
             ):  # Use cache dict to store previously-obtained indices
                 self.id_cache[df.index.nlevels] = {}
                 existing_ids = self.get_existing_ids(

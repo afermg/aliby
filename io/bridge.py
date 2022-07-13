@@ -29,23 +29,9 @@ class BridgeH5:
     def close(self):
         self._hdf.close()
 
-    def max_ncellpairs(self, nstepsback):
-        """
-        Get maximum number of cell pairs to be calculated
-        """
-
-        dset = self._hdf["cell_info"][()]
-        # attrs = self._hdf[dataset].attrs
-        pass
-
     @property
     def cell_tree(self):
         return self.get_info_tree()
-
-    def get_n_cellpairs(self, nstepsback=2):
-        cell_tree = self.cell_tree
-        # get pair of consecutive trap-time points
-        pass
 
     @staticmethod
     def get_consecutives(tree, nstepsback):
@@ -83,7 +69,8 @@ class BridgeH5:
         npairs = []
         for t in self._hdf["cell_info"]["processed_timepoints"][()]:
             tmp_tree = {
-                k: {k2: v2 for k2, v2 in v.items() if k2 <= t} for k, v in tree.items()
+                k: {k2: v2 for k2, v2 in v.items() if k2 <= t}
+                for k, v in tree.items()
             }
             npairs.append(self.get_npairs(tree=tmp_tree))
 
@@ -122,14 +109,18 @@ def groupsort(iterable: Union[tuple, list]):
     # Sorts iterable and returns a dictionary where the values are grouped by the first element.
 
     iterable = sorted(iterable, key=lambda x: x[0])
-    grouped = {k: [x[1:] for x in v] for k, v in groupby(iterable, lambda x: x[0])}
+    grouped = {
+        k: [x[1:] for x in v] for k, v in groupby(iterable, lambda x: x[0])
+    }
     return grouped
 
 
 def recursive_groupsort(iterable):
     # Recursive extension of groupsort
     if len(iterable[0]) > 1:
-        return {k: recursive_groupsort(v) for k, v in groupsort(iterable).items()}
+        return {
+            k: recursive_groupsort(v) for k, v in groupsort(iterable).items()
+        }
     else:  # Only two elements in list
         return [x[0] for x in iterable]
 

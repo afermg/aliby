@@ -34,11 +34,9 @@ class Signal(BridgeH5):
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
             ), "Trap data and cell data can't be mixed"
-            with h5py.File(self.filename, "r") as f:
-                return [
-                    self.add_name(self.apply_prepost(dset), dset)
-                    for dset in dsets
-                ]
+            return [
+                self.add_name(self.apply_prepost(dset), dset) for dset in dsets
+            ]
 
         # return self.cols_in_mins(self.add_name(df, dsets))
         return self.add_name(df, dsets)
@@ -182,12 +180,6 @@ class Signal(BridgeH5):
     @property
     def n_merges(self):
         print("{} merge events".format(len(self.merges)))
-
-    @property
-    def merges(self):
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_merges)
-        return dsets
 
     @property
     def picks(self):

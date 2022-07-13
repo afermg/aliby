@@ -69,13 +69,17 @@ class CellsHDF(Cells):
 
     @property
     def max_labels(self) -> t.List[int]:
-        with h5py.File(self.filename, mode="r") as f:
-            return [max(self.labels_in_trap(i)) for i in range(self.ntraps)]
+        return [max(self.labels_in_trap(i)) for i in range(self.ntraps)]
 
     @property
     def ntraps(self) -> int:
         with h5py.File(self.filename, mode="r") as f:
             return len(f["/trap_info/trap_locations"][()])
+
+    @property
+    def tinterval(self):
+        with h5py.File(self.filename, mode="r") as f:
+            return f.attrs["time_settings/timeinterval"]
 
     @property
     def traps(self) -> t.List[int]:
@@ -306,28 +310,18 @@ class CellsLinear(CellsHDF):
         """
         Return nested list with final prediction of mother id for each cell
         """
-        with h5py.File(self.filename, "r") as f:
-
-            return self.mother_assign_from_dynamic(
-                self["mother_assign_dynamic"],
-                self["cell_label"],
-                self["trap"],
-                self.ntraps,
-            )
+        return self.mother_assign_from_dynamic(
+            self["mother_assign_dynamic"],
+            self["cell_label"],
+            self["trap"],
+            self.ntraps,
+        )
 
     @property
     def mothers_daughters(self):
         nested_massign = self.mothers
 
         if sum([x for y in nested_massign for x in y]):
-
-            idx = set(
-                [
-                    (tid, i + 1)
-                    for tid, x in enumerate(nested_massign)
-                    for i in range(len(x))
-                ]
-            )
             mothers, daughters = zip(
                 *[
                     ((tid, m), (tid, d))

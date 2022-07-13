@@ -48,5 +48,6 @@ def example_function(parameter: Union[int, str]):
         return ExampleClass(int(parameter))
     except ValueError as e:
         raise ValueError(
-            f"The parameter {parameter} could not be turned " f"into an integer."
+            f"The parameter {parameter} could not be turned "
+            f"into an integer."
         ) from e
