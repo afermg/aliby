@@ -29,7 +29,6 @@ class aggregate(PostProcessABC):
         super().__init__(parameters)
 
     def run(self, signals):
-        names = np.array([signal.index.names for signal in signals])
         index = signals[0].index
         for s in signals[0:]:
             index = index.intersection(s.index)
@@ -48,12 +47,15 @@ class aggregate(PostProcessABC):
             "np_max",
             "",
         }
-        get_keywords = lambda df: [
-            ind
-            for item in df.name.split("/")
-            for ind in item.split("/")
-            if ind not in bad_words
-        ]
+
+        def get_keywords(df):
+            return [
+                ind
+                for item in df.name.split("/")
+                for ind in item.split("/")
+                if ind not in bad_words
+            ]
+
         colnames = [
             "_".join(get_keywords(s) + [red])
             for s in signals

@@ -1,21 +1,21 @@
-import h5py
-from typing import List, Dict, Union
-from pydoc import locate
+from itertools import takewhile
+from typing import Dict, List, Union
 
+import h5py
 import numpy as np
 import pandas as pd
-
+from agora.abc import ParametersABC, ProcessABC
+from agora.io.cells import CellsLinear as Cells
+from agora.io.signal import Signal
+from agora.io.writer import Writer
 from tqdm import tqdm
 
-from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import Writer
-from agora.io.signal import Signal
-from agora.io.cells import CellsLinear as Cells
-
-from postprocessor.core.abc import get_process, get_parameters
-from postprocessor.core.processes.merger import mergerParameters, merger
-from postprocessor.core.processes.picker import pickerParameters, picker
-from postprocessor.core.processes.lineageprocess import LineageProcessParameters
+from postprocessor.core.abc import get_parameters, get_process
+from postprocessor.core.processes.lineageprocess import (
+    LineageProcessParameters,
+)
+from postprocessor.core.processes.merger import merger, mergerParameters
+from postprocessor.core.processes.picker import picker, pickerParameters
 
 
 class PostProcessorParameters(ParametersABC):
@@ -162,14 +162,17 @@ class PostProcessor(ProcessABC):
         self._writer = Writer(filename)
 
         dicted_params = {
-            i: parameters["param_sets"]["prepost"][i] for i in ["merger", "picker"]
+            i: parameters["param_sets"]["prepost"][i]
+            for i in ["merger", "picker"]
         }
 
         for k in dicted_params.keys():
             if not isinstance(dicted_params[k], dict):
                 dicted_params[k] = dicted_params[k].to_dict()
 
-        self.merger = merger(mergerParameters.from_dict(dicted_params["merger"]))
+        self.merger = merger(
+            mergerParameters.from_dict(dicted_params["merger"])
+        )
 
         self.picker = picker(
             pickerParameters.from_dict(dicted_params["picker"]),
@@ -188,19 +191,27 @@ class PostProcessor(ProcessABC):
     def run_prepost(self):
         """Important processes run before normal post-processing ones"""
 
-        merge_events = self.merger.run(self._signal[self.targets["prepost"]["merger"]])
+        merge_events = self.merger.run(
+            self._signal[self.targets["prepost"]["merger"]]
+        )
 
         with h5py.File(self._filename, "r") as f:
             prev_idchanges = self._signal.get_merges()
 
-        changes_history = list(prev_idchanges) + [np.array(x) for x in merge_events]
+        changes_history = list(prev_idchanges) + [
+            np.array(x) for x in merge_events
+        ]
         self._writer.write("modifiers/merges", data=changes_history)
 
-        with h5py.File(self._filename, "a") as f:  # TODO Remove this once done tweaking
+        with h5py.File(
+            self._filename, "a"
+        ) as f:  # TODO Remove this once done tweaking
             if "modifiers/picks" in f:
                 del f["modifiers/picks"]
 
-        indices = self.picker.run(self._signal[self.targets["prepost"]["picker"][0]])
+        indices = self.picker.run(
+            self._signal[self.targets["prepost"]["picker"][0]]
+        )
 
         mothers, daughters = np.array(self.picker.mothers), np.array(
             self.picker.daughters
@@ -227,19 +238,20 @@ class PostProcessor(ProcessABC):
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
         multii = pd.MultiIndex(
-            [[], [], []], [[], [], []], names=["trap", "mother_label", "daughter_label"]
+            [[], [], []],
+            [[], [], []],
+            names=["trap", "mother_label", "daughter_label"],
         )
         self.lineage_merged = multii
         if merge_events.any():
-            merged_moda = set([tuple(x) for x in merge_events[:, 0, :]]).intersection(
-                set([*moset, *daset, *picked_set])
-            )
-            search = lambda a, b: np.where(
-                np.in1d(
-                    np.ravel_multi_index(a.T, a.max(0) + 1),
-                    np.ravel_multi_index(b.T, a.max(0) + 1),
+
+            def search(a, b):
+                return np.where(
+                    np.in1d(
+                        np.ravel_multi_index(a.T, a.max(0) + 1),
+                        np.ravel_multi_index(b.T, a.max(0) + 1),
+                    )
                 )
-            )
 
             for target, source in merge_events:
                 if (
@@ -257,7 +269,8 @@ class PostProcessor(ProcessABC):
 
             self.lineage_merged = pd.MultiIndex.from_arrays(
                 np.unique(
-                    np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1), axis=0
+                    np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1),
+                    axis=0,
                 ).T,
                 names=["trap", "mother_label", "daughter_label"],
             )
@@ -301,7 +314,9 @@ class PostProcessor(ProcessABC):
             if process in self.parameters["param_sets"].get(
                 "processes", {}
             ):  # If we assigned parameters
-                parameters = self.parameters_classfun[process](self.parameters[process])
+                parameters = self.parameters_classfun[process](
+                    self.parameters[process]
+                )
 
             else:
                 parameters = self.parameters_classfun[process].default()
@@ -345,7 +360,7 @@ class PostProcessor(ProcessABC):
                     # If no outpath defined, place the result in the minimum common
                     # branch of all signals used
                     prefix = "".join(
-                        prefix + c[0]
+                        c[0]
                         for c in takewhile(
                             lambda x: all(x[0] == y for y in x), zip(*dataset)
                         )
@@ -353,7 +368,10 @@ class PostProcessor(ProcessABC):
                     outpath = (
                         prefix
                         + "_".join(  # TODO check that it always finishes in '/'
-                            [d[len(prefix) :].replace("/", "_") for d in dataset]
+                            [
+                                d[len(prefix) :].replace("/", "_")
+                                for d in dataset
+                            ]
                         )
                     )
                 elif isinstance(dataset, str):
@@ -379,7 +397,10 @@ class PostProcessor(ProcessABC):
                     )
 
     def write_result(
-        self, path: str, result: Union[List, pd.DataFrame, np.ndarray], metadata: Dict
+        self,
+        path: str,
+        result: Union[List, pd.DataFrame, np.ndarray],
+        metadata: Dict,
     ):
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
 

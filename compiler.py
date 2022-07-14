@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from typing import Iterable, Union, Dict, Tuple
-from abc import abstractclassmethod, abstractmethod
-from pathlib import PosixPath, Path
+from abc import abstractmethod
+from pathlib import PosixPath
 import warnings
 from collections import Counter
 import re
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
 
-from agora.abc import ProcessABC, ParametersABC
+from agora.abc import ProcessABC
 from postprocessor.grouper import NameGrouper
 
 sns.set_style("darkgrid")
@@ -30,32 +30,32 @@ Main dataframe structure
 """
 # dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
 # dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
-dirs = [
-    "16543_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01",
-    "16545_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_secondRun_01",
-    "18069_2019_12_05_aggregates_updownshift_2_0_2_URA8_URA7H360A_URA7H360R_00",
-    "18616_2020_02_20_protAgg_downUpShift_2_0_2_Ura8_Ura8HA_Ura8HR_01",
-    "18617_2020_02_21_protAgg_downUpShift_2_0_2_pHluorin_Ura7HA_Ura7HR_00",
-    "19129_2020_09_06_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_00",
-    "19144_2020_09_07_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_secondRound_00",
-    "19169_2020_09_09_downUpshift_2_0_2_glu_ura8_phl_mig1_phl_msn2_03",
-    "19199_2020_09_29_downUpshift_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
-    "19203_2020_09_30_downUpshift_twice_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
-    "19207_2020_10_01_exp_00",
-    "19232_2020_10_02_downUpshift_twice_2_0_2_glu_ura8_phluorinMsn2_phluorinMig1_01",
-    "19307_2020_10_22_downUpshift_2_01_2_glucose_dual_pH__dot6_nrg1_tod6__00",
-    "19310_2020_10_22_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00",
-    "19311_2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04",
-    "19328_2020_10_31_downUpshift_four_2_0_2_glu_dual_phl__glt1_ura8_ura8__00",
-    "19329_2020_11_01_exp_00",
-    "19333_2020_11_02_downUpshift_2_0_2_glu_ura7_ura7ha_ura7hr_00",
-    "19334_2020_11_02_downUpshift_2_0_2_glu_ura8_ura8ha_ura8hr_00",
-    "19447_2020_11_18_downUpshift_2_0_2_glu_gcd2_gcd6_gcd7__02",
-    "19810_2021_02_21_ToxicityTest_00",
-    "19993_2021_06_15_pypipeline_unit_test_00",
-    "19996_2021_06_27_ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01",
-    "20419_2021_11_02_dose_response_raf_05_075_2_glu_005_2_constantMedia_00",
-]
+# dirs = [
+#     "16543_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01",
+#     "16545_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_secondRun_01",
+#     "18069_2019_12_05_aggregates_updownshift_2_0_2_URA8_URA7H360A_URA7H360R_00",
+#     "18616_2020_02_20_protAgg_downUpShift_2_0_2_Ura8_Ura8HA_Ura8HR_01",
+#     "18617_2020_02_21_protAgg_downUpShift_2_0_2_pHluorin_Ura7HA_Ura7HR_00",
+#     "19129_2020_09_06_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_00",
+#     "19144_2020_09_07_DownUpshift_2_0_2_glu_ura_mig1msn2_phluorin_secondRound_00",
+#     "19169_2020_09_09_downUpshift_2_0_2_glu_ura8_phl_mig1_phl_msn2_03",
+#     "19199_2020_09_29_downUpshift_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
+#     "19203_2020_09_30_downUpshift_twice_2_0_2_glu_ura8_ura8h360a_ura8h360r_00",
+#     "19207_2020_10_01_exp_00",
+#     "19232_2020_10_02_downUpshift_twice_2_0_2_glu_ura8_phluorinMsn2_phluorinMig1_01",
+#     "19307_2020_10_22_downUpshift_2_01_2_glucose_dual_pH__dot6_nrg1_tod6__00",
+#     "19310_2020_10_22_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__thrice_00",
+#     "19311_2020_10_23_downUpshift_2_0_2_glu_dual_phluorin__glt1_psa1_ura7__twice__04",
+#     "19328_2020_10_31_downUpshift_four_2_0_2_glu_dual_phl__glt1_ura8_ura8__00",
+#     "19329_2020_11_01_exp_00",
+#     "19333_2020_11_02_downUpshift_2_0_2_glu_ura7_ura7ha_ura7hr_00",
+#     "19334_2020_11_02_downUpshift_2_0_2_glu_ura8_ura8ha_ura8hr_00",
+#     "19447_2020_11_18_downUpshift_2_0_2_glu_gcd2_gcd6_gcd7__02",
+#     "19810_2021_02_21_ToxicityTest_00",
+#     "19993_2021_06_15_pypipeline_unit_test_00",
+#     "19996_2021_06_27_ph_calibration_dual_phl_ura8_5_04_5_83_7_69_7_13_6_59__01",
+#     "20419_2021_11_02_dose_response_raf_05_075_2_glu_005_2_constantMedia_00",
+# ]
 # outdir = "/home/alan/Documents/dev/skeletons/data"
 # dirs = Path(outdir).glob("*ph*")
 
@@ -72,9 +72,7 @@ dirs = [
 
 
 class Meta:
-    """
-    Convenience class to fetch data from hdf5 file
-    """
+    """Convenience class to fetch data from hdf5 file."""
 
     def __init__(self, filename):
         self.filename = filename
@@ -86,13 +84,12 @@ class Meta:
 
 
 class Compiler(ProcessABC):
-    def __init__(self, parameters):
-        pass
-        # super().__init__(parameters)
+    # def __init__(self, parameters):
+    #     super().__init__(parameters)
 
     @abstractmethod
     def load_data(self):
-        """Abstract function that must be reimplemented"""
+        """Abstract function that must be reimplemented."""
         pass
 
     @abstractmethod
@@ -106,7 +103,6 @@ class ExperimentCompiler(Compiler):
         self.load_data(exp_path)
 
     def run(self):
-
         return {
             method: getattr(self, "compile_" + method)()
             for method in (
@@ -127,58 +123,55 @@ class ExperimentCompiler(Compiler):
 
     @property
     def ntraps(self) -> dict:
-        """Get the number of traps in each position
+        """Get the number of traps in each position.
 
-        Returns
-        -------
-        dict str -> int
-
-        Examples
-        --------
-        FIXME: Add docs.
-
-
+        Returns ------- dict str -> int  Examples -------- FIXME: Add
+        docs.
         """
-        return {pos: coords.shape[0] for pos, coords in self.grouper.traplocs().items()}
+        return {
+            pos: coords.shape[0]
+            for pos, coords in self.grouper.traplocs().items()
+        }
 
-    def concat_signal(self, sigloc=None, mode=None, *args, **kwargs) -> pd.DataFrame:
-
-        if sigloc == None:
+    def concat_signal(self, sigloc=None, mode=None, **kwargs) -> pd.DataFrame:
+        if sigloc is None:
             sigloc = "extraction/general/None/volume"
         self.sigloc = sigloc
 
-        if mode == None:
+        if mode is None:
             mode = "retained"
 
         if not hasattr(self, "_concat") or self.sigloc != sigloc:
             self._concat = self.grouper.concat_signal(
-                self.sigloc, pool=7, mode="retained"
+                self.sigloc, mode=mode, **kwargs
             )
 
         return self._concat
 
-    def get_tp(self, sigloc=None, tp=None, mode=None, *args, **kwargs) -> pd.Series:
-
+    def get_tp(self, sigloc=None, tp=None, mode=None, **kwargs) -> pd.Series:
         if tp is None:
             tp = 0
 
-        if mode == None:
+        if mode is None:
             mode = True
 
-        return self.concat_signal(sigloc=sigloc, mode=mode, *args, **kwargs).iloc[:, tp]
+        return self.concat_signal(sigloc=sigloc, mode=mode, **kwargs).iloc[
+            :, tp
+        ]
 
     def count_cells(
-        self, signal="extraction/general/None/volume", mode="raw", *args, **kwargs
+        self,
+        signal="extraction/general/None/volume",
+        mode="raw",
+        **kwargs,
     ):
-        df = self.grouper.concat_signal(signal, mode=mode, *args, **kwargs)
+        df = self.grouper.concat_signal(signal, mode=mode, **kwargs)
         df = df.groupby(["group", "position", "trap"]).count()
         df[df == 0] = np.nan
         return df
 
-    def compile_dmetrics(self, metrics=["max_dVol", "max_bud_dVol"], stages=None):
-        """
-        Generate dataframe with dVol metrics without major cell picking
-        """
+    def compile_dmetrics(self, stages=None):
+        """Generate dataframe with dVol metrics without major cell picking."""
         names_signals = {
             "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
             "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
@@ -208,7 +201,9 @@ class ExperimentCompiler(Compiler):
             def process_dfs(dfs, rng):
                 return pd.DataFrame(
                     {
-                        k: getattr(dfs[sig].loc(axis=1)[rng].loc[ids], op)(axis=1)
+                        k: getattr(dfs[sig].loc(axis=1)[rng].loc[ids], op)(
+                            axis=1
+                        )
                         if isinstance(op, str)
                         else dfs[sig].loc[ids].apply(op, axis=1)
                         for k, (sig, op) in operations.items()
@@ -224,7 +219,10 @@ class ExperimentCompiler(Compiler):
 
         concat = pd.concat([x.reset_index() for x in stages_dfs.values()])
         concat["stage"] = np.array(
-            [np.repeat(x, len(concat) // len(stages_dfs)) for x in stages_dfs.keys()]
+            [
+                np.repeat(x, len(concat) // len(stages_dfs))
+                for x in stages_dfs.keys()
+            ]
         ).flatten()
 
         return (
@@ -238,21 +236,21 @@ class ExperimentCompiler(Compiler):
         return self.compile_dmetrics(stages=stages)
 
     def get_stages(self):
-        """
-        Use the metadata to give a prediction of the media being pumped at each time point. Works
-        for traditional metadata (pre-fluigent).
+        """Use the metadata to give a prediction of the media being pumped at
+        each time point. Works for traditional metadata (pre-fluigent).
 
-        Returns:
-        ------
-        A list of tuples where in each the first value is the active
-            pump's contents and the second its associated range of time points
+        Returns: ------ A list of tuples where in each the first value
+        is the active     pump's contents and the second its associated
+        range of time points
         """
         fpath = list(self.grouper.signals.values())[0].filename
         with h5py.File(fpath, "r") as f:
             tinterval = f.attrs.get("time_settings/timeinterval", None)[0]
             tnorm = tinterval / 60
             switch_times = f.attrs.get("switchtimes", None) / tnorm
-            last_tp = f.attrs.get("time_settings/totaltime", None)[0] / tinterval
+            last_tp = (
+                f.attrs.get("time_settings/totaltime", None)[0] / tinterval
+            )
             pump_contents = f.attrs.get("pumpinit/contents", None)
             init_frate = f.attrs.get("pumpinit/flowrate", None)
             prate = f.attrs.get("pumprate", None)
@@ -273,11 +271,9 @@ class ExperimentCompiler(Compiler):
 
     def compile_growth_metrics(
         self,
-        metrics=["max_dVol", "max_bud_dVol", "nbirths", "cycle_length"],
         min_nbirths: int = 2,
     ):
-        """
-        Filter mothers with n number of births and get their metrics
+        """Filter mothers with n number of births and get their metrics.
 
         Select cells with at least two recorded births
         """
@@ -290,8 +286,14 @@ class ExperimentCompiler(Compiler):
             "dvol": ("dvol", "max"),
             "bud_dvol": ("bud_dvol", "max"),
             "births": ("births", "sum"),
-            "cycle_length_mean": ("births", lambda x: np.diff(np.where(x)[0]).mean()),
-            "cycle_length_min": ("births", lambda x: np.diff(np.where(x)[0]).min()),
+            "cycle_length_mean": (
+                "births",
+                lambda x: np.diff(np.where(x)[0]).mean(),
+            ),
+            "cycle_length_min": (
+                "births",
+                lambda x: np.diff(np.where(x)[0]).min(),
+            ),
             "cycle_length_median": (
                 "births",
                 lambda x: np.median(np.diff(np.where(x)[0])),
@@ -316,9 +318,10 @@ class ExperimentCompiler(Compiler):
     def get_shared_ids(
         self, input_signals: Dict[str, pd.DataFrame], min_nbirths: int = None
     ):
-        """
-        Get the intersection id of multiple signals.
-        "births" must be one the keys in input_signals to use the argument min_nbirths.
+        """Get the intersection id of multiple signals.
+
+        "births" must be one the keys in input_signals to use the
+        argument min_nbirths.
         """
         ids = list(input_signals.values())[0].index
         if min_nbirths is not None:
@@ -339,20 +342,23 @@ class ExperimentCompiler(Compiler):
 
         return df
 
-    def compile_last_valid_tp(self):
-        """Last valid timepoint per position"""
+    def compile_last_valid_tp(self) -> pd.Series:
+        """Last valid timepoint per position."""
         df = self.count_cells()
         df = df.apply(lambda x: x.last_valid_index(), axis=1)
         df = df.groupby(["group", "position"]).max()
 
         return df
 
-    def compile_slices(self, nslices=2, *args, **kwargs):
+    def compile_slices(self, nslices=2, **kwargs):
         tps = [
-            min(i * (self.grouper.ntimepoints // nslices), self.grouper.ntimepoints - 1)
+            min(
+                i * (self.grouper.ntimepoints // nslices),
+                self.grouper.ntimepoints - 1,
+            )
             for i in range(nslices + 1)
         ]
-        slices = [self.compile_slice(tp=tp) for tp in tps]
+        slices = [self.compile_slice(tp=tp, **kwargs) for tp in tps]
         slices_df = pd.concat(slices)
 
         slices_df["timepoint"] = np.concatenate(
@@ -361,13 +367,12 @@ class ExperimentCompiler(Compiler):
 
         return slices_df
 
-    def compile_slice_end(self, *args, **kwargs):
-        return self.compile_slice(tp=-1, *args, **kwargs)
+    def compile_slice_end(self, **kwargs):
+        return self.compile_slice(tp=-1, **kwargs)
 
     def guess_metrics(self, metrics: Dict[str, Tuple[str]] = None):
-        """
-        First approach at autoselecting certain signals for automated analysis
-        """
+        """First approach at autoselecting certain signals for automated
+        analysis."""
 
         if metrics is None:
             metrics = {
@@ -392,23 +397,37 @@ class ExperimentCompiler(Compiler):
         return selection
 
     def compile_fluorescence(
-        self, metrics: Dict[str, Tuple[str]] = None, norm: tuple = None, *args, **kwargs
+        self,
+        metrics: Dict[str, Tuple[str]] = None,
+        norm: tuple = None,
+        **kwargs,
     ):
-        """
-        Get a single signal per"""
+        """Get a single signal per."""
         if norm is None:
-            norm = ("GFP", "GFPFast", "ph_ratio", "Flavin", "Citrine", "mCherry")
+            norm = (
+                "GFP",
+                "GFPFast",
+                "ph_ratio",
+                "Flavin",
+                "Citrine",
+                "mCherry",
+            )
 
         selection = self.guess_metrics(metrics)
 
-        input_signals = {k: self.grouper.concat_signal(v) for k, v in selection.items()}
+        input_signals = {
+            k: self.grouper.concat_signal(v, **kwargs)
+            for k, v in selection.items()
+        }
 
         # ids = self.get_shared_ids(input_signals)
 
         to_concat = []
 
         def format_df(df):
-            return df.melt(ignore_index=False, var_name="timepoint").reset_index()
+            return df.melt(
+                ignore_index=False, var_name="timepoint"
+            ).reset_index()
 
         for k, v in input_signals.items():
             tmp_formatted = format_df(v)
@@ -432,25 +451,24 @@ class ExperimentCompiler(Compiler):
         return concated
 
     def compile_slice(
-        self, sigloc=None, tp=None, metrics=None, mode=None, *args, **kwargs
+        self, sigloc=None, tp=None, metrics=None, mode=None, **kwargs
     ) -> pd.DataFrame:
-
-        if sigloc == None:
+        if sigloc is None:
             self.sigloc = "extraction/general/None/volume"
 
-        if tp == None:
+        if tp is None:
             tp = 0
 
-        if metrics == None:
+        if metrics is None:
             metrics = ("max", "mean", "median", "count", "std", "sem")
 
-        if mode == None:
+        if mode is None:
             mode = True
 
         df = pd.concat(
             [
                 getattr(
-                    self.get_tp(sigloc=sigloc, tp=tp, mode=mode, *args, **kwargs)
+                    self.get_tp(sigloc=sigloc, tp=tp, mode=mode, **kwargs)
                     .groupby(["group", "position", "trap"])
                     .max()
                     .groupby(["group", "position"]),
@@ -469,37 +487,29 @@ class ExperimentCompiler(Compiler):
 
     @staticmethod
     def add_column(df: pd.DataFrame, new_values_d: dict, name="new_col"):
-
         if name in df.columns:
-            warnings.warn("ExpCompiler: Replacing existing column in compilation")
-        df[name] = [new_values_d[pos] for pos in df.index.get_level_values("position")]
+            warnings.warn(
+                "ExpCompiler: Replacing existing column in compilation"
+            )
+        df[name] = [
+            new_values_d[pos] for pos in df.index.get_level_values("position")
+        ]
 
         return df
 
     @staticmethod
     def traploc_diffs(traplocs: ndarray) -> list:
-        """
-        Obtain metrics for trap localisation.
+        """Obtain metrics for trap localisation.
 
-        Parameters
-        ----------
-        traplocs : ndarray
-            (x,2) 2-dimensional array with the x,y coordinates of traps in each
-            column
-
-        Examples
-        --------
-        FIXME: Add docs.
-
+        Parameters ---------- traplocs : ndarray     (x,2) 2-dimensional
+        array with the x,y coordinates of traps in each     column
+        Examples -------- FIXME: Add docs.
         """
         signal = np.zeros((traplocs.max(), 2))
         for i in range(2):
             counts = Counter(traplocs[:, i])
             for j, v in counts.items():
                 signal[j - 1, i] = v
-
-        where_x = np.where(signal[:, 0])[0]
-        where_y = np.where(signal[:, 1])[0]
 
         diffs = [
             np.diff(x)
@@ -508,7 +518,7 @@ class ExperimentCompiler(Compiler):
         return diffs
 
     def compile_delta_traps(self):
-        group_names = compiler.grouper.group_names
+        group_names = self.grouper.group_names
         tups = [
             (group_names[pos], pos, axis, val)
             for pos, coords in self.grouper.traplocs().items()
@@ -516,7 +526,9 @@ class ExperimentCompiler(Compiler):
             for val in vals
         ]
 
-        return pd.DataFrame(tups, columns=["group", "position", "axis", "value"])
+        return pd.DataFrame(
+            tups, columns=["group", "position", "axis", "value"]
+        )
 
     def compile_pertrap_metric(
         self,
@@ -525,8 +537,8 @@ class ExperimentCompiler(Compiler):
         ],
         metric: str = "count",
     ):
-        "Get the number of cells per trap present during the given ranges"
-        sig = compiler.concat_signal()
+        """Get the number of cells per trap present during the given ranges."""
+        sig = self.concat_signal()
 
         for i, rngs in enumerate(ranges):
             for j, edge in enumerate(rngs):
@@ -534,21 +546,27 @@ class ExperimentCompiler(Compiler):
                     ranges[i][j] = sig.shape[1] - i + 1
         df = pd.concat(
             [
-                self.get_filled_trapcounts(sig.loc(axis=1)[slice(*rng)], metric=metric)
+                self.get_filled_trapcounts(
+                    sig.loc(axis=1)[slice(*rng)], metric=metric
+                )
                 for rng in ranges
             ],
             axis=1,
         )
         return df.astype(str)
 
-    def get_filled_trapcounts(self, signal: pd.DataFrame, metric: str) -> pd.Series:
+    def get_filled_trapcounts(
+        self, signal: pd.DataFrame, metric: str
+    ) -> pd.Series:
         present = signal.apply(
             lambda x: (not x.first_valid_index())
             & (x.last_valid_index() == len(x) - 1),
             axis=1,
         )
         results = getattr(
-            signal.loc[present].iloc[:, 0].groupby(["group", "position", "trap"]),
+            signal.loc[present]
+            .iloc[:, 0]
+            .groupby(["group", "position", "trap"]),
             metric,
         )()
         filled = self.fill_trapcount(results)
@@ -557,44 +575,39 @@ class ExperimentCompiler(Compiler):
     def fill_trapcount(
         self, srs: pd.Series, fill_value: Union[int, float] = 0
     ) -> pd.Series:
-        """Fill the last level of a MultiIndex in a pd.Series
+        """Fill the last level of a MultiIndex in a pd.Series.
 
-        Use compiler to get the max number of traps per position and use this
-        information to add rows with empty values (with plottings of distributions
-        in mind)
-
-        Parameters
-        ----------
-        srs : pd.Series
-            Series with a pd.MultiIndex index
-        compiler : ExperimentCompiler
-            class with 'ntraps' information that returns a dictionary with position
-            -> ntraps.
-        fill_value : Union[int, float]
-            Value used to fill new rows.
-
-        Returns
-        -------
-        pd.Series
-            Series with no numbers skipped on the last level.
-
-        Examples
-        --------
+        Use self to get the max number of traps per position and use
+        this information to add rows with empty values (with plottings
+        of distributions in mind)  Parameters ---------- srs : pd.Series
+        Series with a pd.MultiIndex index self : ExperimentSelf
+        class with 'ntraps' information that returns a dictionary with
+        position     -> ntraps. fill_value : Union[int, float]     Value
+        used to fill new rows.  Returns ------- pd.Series     Series
+        with no numbers skipped on the last level.  Examples --------
         FIXME: Add docs.
-
         """
 
         all_sets = set(
-            [(pos, i) for pos, ntraps in compiler.ntraps.items() for i in range(ntraps)]
+            [
+                (pos, i)
+                for pos, ntraps in self.ntraps.items()
+                for i in range(ntraps)
+            ]
         )
         dif = all_sets.difference(
             set(
-                zip(*[srs.index.get_level_values(i) for i in ("position", "trap")])
+                zip(
+                    *[
+                        srs.index.get_level_values(i)
+                        for i in ("position", "trap")
+                    ]
+                )
             ).difference()
         )
         new_indices = pd.MultiIndex.from_tuples(
             [
-                (compiler.grouper.group_names[idx[0]], idx[0], np.uint(idx[1]))
+                (self.grouper.group_names[idx[0]], idx[0], np.uint(idx[1]))
                 for idx in dif
             ]
         )
@@ -606,12 +619,13 @@ class ExperimentCompiler(Compiler):
 
 
 class Reporter(object):
-    """
-    Manages Multiple pages to generate a report
-    """
+    """Manages Multiple pages to generate a report."""
 
     def __init__(
-        self, data: Dict[str, pd.DataFrame], pages: dict = None, path: str = None
+        self,
+        data: Dict[str, pd.DataFrame],
+        pages: dict = None,
+        path: str = None,
     ):
         self.data = data
 
@@ -679,7 +693,11 @@ class Reporter(object):
                 "data": "pertrap_metric",
                 "func": "histplot",
                 "args": (0, None),
-                "kwargs": {"hue": "group", "multiple": "dodge", "discrete": True},
+                "kwargs": {
+                    "hue": "group",
+                    "multiple": "dodge",
+                    "discrete": True,
+                },
                 "loc": (2, 0),
             },
             {
@@ -748,9 +766,8 @@ class Reporter(object):
 
 
 class PageOrganiser(object):
-    """
-    Add multiple plots to a single page, wither using seaborn multiplots or manual GridSpec.
-    """
+    """Add multiple plots to a single page, wither using seaborn multiplots or
+    manual GridSpec."""
 
     def __init__(
         self,
@@ -768,7 +785,9 @@ class PageOrganiser(object):
 
         if not self.single_fig:  # Select grid_spec with location info
             if grid_spec is None:
-                locs = np.array([x.get("loc", (0, 0)) for x in instruction_set])
+                locs = np.array(
+                    [x.get("loc", (0, 0)) for x in instruction_set]
+                )
                 grid_spec = locs.max(axis=0) + 1
 
             if fig_kws is None:
@@ -785,22 +804,24 @@ class PageOrganiser(object):
             )
             self.data = {k: reset_index(df) for k, df in self.data.items()}
 
-    def place_plot(self, func, xloc=None, yloc=None, *args, **kwargs):
+    def place_plot(self, func, xloc=None, yloc=None, **kwargs):
         if xloc is None:
             xloc = 0
         if yloc is None:
             yloc = 0
 
-        if self.single_fig:  # If plotting using a figure method using seaborn cols/rows
-            self.g = func(*args, **kwargs)
+        if (
+            self.single_fig
+        ):  # If plotting using a figure method using seaborn cols/rows
+            self.g = func(**kwargs)
             self.axes = {
-                ax.title.get_text().split("=")[-1][1:]: ax for ax in self.g.axes.flat
+                ax.title.get_text().split("=")[-1][1:]: ax
+                for ax in self.g.axes.flat
             }
             self.fig = self.g.fig
         else:
             self.axes[(xloc, yloc)] = self.fig.add_subplot(self.gs[xloc, yloc])
             func(
-                *args,
                 ax=self.axes[(xloc, yloc)],
                 **kwargs,
             )
@@ -815,10 +836,14 @@ class PageOrganiser(object):
         ) and hasattr(self, "g"):
             for axes in self.g.axes.flat:
                 _ = axes.set_xticklabels(
-                    axes.get_xticklabels(), rotation=15, horizontalalignment="right"
+                    axes.get_xticklabels(),
+                    rotation=15,
+                    horizontalalignment="right",
                 )
 
-    def plot_page(self, instructions: Iterable[Dict[str, Union[str, Iterable]]] = None):
+    def plot_page(
+        self, instructions: Iterable[Dict[str, Union[str, Iterable]]] = None
+    ):
         if instructions is None:
             instructions = self.instruction_set
         if isinstance(instructions, dict):
@@ -839,10 +864,13 @@ class PageOrganiser(object):
                 ncols = kwargs.get("col_wrap", 1)
                 if "col" in kwargs:
                     nrows = np.ceil(
-                        len(np.unique(self.data[how["data"]][kwargs["col"]])) / ncols
+                        len(np.unique(self.data[how["data"]][kwargs["col"]]))
+                        / ncols
                     )
                 else:
-                    nrows = len(np.unique(self.data[how["data"]][kwargs["row"]]))
+                    nrows = len(
+                        np.unique(self.data[how["data"]][kwargs["row"]])
+                    )
 
                 kwargs["height"] = 11.7
                 # kwargs["aspect"] = 8.27 / (11.7 / kwargs["col_wrap"])
@@ -857,6 +885,12 @@ class PageOrganiser(object):
         return sns_wrapper
 
 
+# fpath = "/home/alan/Documents/dev/skeletons/scripts/aggregates_exploration/18616_2020_02_20_protAgg_downUpShift_2_0_2_Ura8_Ura8HA_Ura8HR_01"
+# # compiler = ExperimentCompiler(None, base_dir / dir)
+# compiler = ExperimentCompiler(None, fpath)
+# dfs = compiler.run()
+# rep = Reporter(data=dfs, path=Path(fpath) / "report.pdf")
+# rep.plot_report("./report.pdf")
 # base_dir = Path("/home/alan/Documents/dev/skeletons/scripts/data/")
 # for dir in dirs:
 #     try:

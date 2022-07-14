@@ -4,19 +4,17 @@ Functions to process, filter and merge tracks.
 
 # from collections import Counter
 
+import typing as t
 from copy import copy
-from typing import Union, List
-
-import numpy as np
-import pandas as pd
-from utils_find_1st import find_1st, cmp_larger
+from typing import List, Union
 
 import more_itertools as mit
-
-# from scipy.optimize import linear_sum_assignment
-# from scipy.optimize import curve_fit
-
+import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
+from utils_find_1st import cmp_larger, find_1st
+
+from postprocessor.core.processes.savgol import non_uniform_savgol
 
 
 def load_test_dset():
@@ -47,7 +45,7 @@ def max_nonstop_ntps(track: pd.Series) -> int:
     return max(consecutive_nonas_grouped)
 
 
-def get_tracks_ntps(tracks: pd.DataFrame) -> pd.FrameorSeriesUnion:
+def get_tracks_ntps(tracks: pd.DataFrame) -> pd.Series:
     return tracks.apply(max_ntps, axis=1)
 
 
@@ -92,7 +90,9 @@ def clean_tracks(
     return growing_long_tracks
 
 
-def merge_tracks(tracks, drop=False, **kwargs) -> pd.DataFrame:
+def merge_tracks(
+    tracks, drop=False, **kwargs
+) -> t.Tuple[pd.DataFrame, t.Collection]:
     """
     Join tracks that are contiguous and within a volume threshold of each other
 
@@ -111,7 +111,6 @@ def merge_tracks(tracks, drop=False, **kwargs) -> pd.DataFrame:
     joinable_pairs = get_joinable(tracks, **kwargs)
     if joinable_pairs:
         tracks = join_tracks(tracks, joinable_pairs, drop=drop)
-    joint_ids = get_joint_ids(joinable_pairs)
 
     return (tracks, joinable_pairs)
 
@@ -229,9 +228,10 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         clean = clean_tracks(
             tracks, min_len=window + 1, min_gr=0.9
         )  # get useful tracks
-        savgol_on_srs = lambda x: non_uniform_savgol(
-            x.index, x.values, window, degree
-        )
+
+        def savgol_on_srs(x):
+            return non_uniform_savgol(x.index, x.values, window, degree)
+
         contig = clean.groupby(["trap"]).apply(get_contiguous_pairs)
         contig = contig.loc[contig.apply(len) > 0]
         flat = set([k for v in contig.values for i in v for j in i for k in j])
@@ -471,7 +471,7 @@ def solve_matrix(dMetric):
     return (np.array(glob_is), np.array(glob_js))
 
 
-def plot_joinable(tracks, joinable_pairs, max=64):
+def plot_joinable(tracks, joinable_pairs):
     """
     Convenience plotting function for debugging and data vis
     """

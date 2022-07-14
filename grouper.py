@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from typing import Union, List, Dict
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractproperty
 from pathlib import Path, PosixPath
 from pathos.multiprocessing import Pool
 from collections import Counter
@@ -10,7 +10,6 @@ import re
 import h5py
 import numpy as np
 import pandas as pd
-from p_tqdm import p_map
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -71,7 +70,7 @@ class Grouper(ABC):
         return self.fsignal.datasets
 
     @abstractproperty
-    def group_names():
+    def group_names(self):
         pass
 
     def concat_signal(
@@ -79,7 +78,7 @@ class Grouper(ABC):
         path: str,
         reduce_cols: bool = None,
         axis: int = 0,
-        pool: int = None,
+        pool: int = 0,
         mode="retained",
         **kwargs,
     ):
@@ -140,7 +139,7 @@ class Grouper(ABC):
         signals = [s for s in signals if s is not None]
         if len(errors):
             print("Warning: Positions contain errors {errors}")
-            assert len(signals), f"All datasets contain errors"
+            assert len(signals), "All datasets contain errors"
         sorted = pd.concat(signals, axis=axis).sort_index()
         if reduce_cols:
             sorted = sorted.apply(np.nanmean, axis=1)
@@ -326,7 +325,6 @@ class MultiGrouper:
             sigs_idx = [regex_cleanup(x) for x in sigs_idx]
 
             nsigs = len(sigs_idx)
-            d = {}
 
             sig_matrix = np.zeros((nsigs, nexps))
             for i, c in enumerate(siglist_grouped):
@@ -387,7 +385,7 @@ class MultiGrouper:
         for s in signals:
             for grp in self.groupers:
                 try:
-                    sigset = grp.concat_signal(s)
+                    sigset = grp.concat_signal(s, **kwargs)
                     new_idx = pd.MultiIndex.from_tuples(
                         [(grp.name, *x) for x in sigset.index],
                         names=("experiment", *sigset.index.names),

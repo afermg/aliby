@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm, colors, ticker
+from matplotlib import cm, ticker
 
 from postprocessor.core.processes.standardscaler import standardscaler
 from postprocessor.routines.plottingabc import BasePlotter
