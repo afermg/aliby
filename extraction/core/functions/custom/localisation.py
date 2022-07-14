@@ -6,8 +6,8 @@ Especially lines 342 to  399.
 This part only replicates the method to get the nuc_est_conv values
 """
 import numpy as np
-from scipy import signal, stats
 import skimage
+from scipy import signal, stats
 
 
 def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
@@ -30,9 +30,9 @@ def gauss3D(shape=(3, 3, 3), sigma=(0.5, 0.5, 0.5)):
     m, n, p = [(ss - 1.0) / 2.0 for ss in shape]
     z, y, x = np.ogrid[-p : p + 1, -m : m + 1, -n : n + 1]
     sigmax, sigmay, sigmaz = sigma
-    xx = (x ** 2) / (2 * sigmax)
-    yy = (y ** 2) / (2 * sigmay)
-    zz = (z ** 2) / (2 * sigmaz)
+    xx = (x**2) / (2 * sigmax)
+    yy = (y**2) / (2 * sigmay)
+    zz = (z**2) / (2 * sigmaz)
     h = np.exp(-(xx + yy + zz))
     h[h < np.finfo(h.dtype).eps * h.max()] = 0  # Truncate
     sumh = h.sum()
@@ -93,7 +93,9 @@ def nuc_est_conv(cell_mask, trap_image):
 
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
-    nuc_est_conv /= np.sum(nuc_filter ** 2) * alpha * np.pi * chi2inv * sd_est ** 2
+    nuc_est_conv /= (
+        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * sd_est**2
+    )
     return nuc_est_conv
 
 
@@ -108,10 +110,14 @@ def nuc_conv_3d(cell_mask, trap_image, pixel_size=0.23, spacing=0.6):
     chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
     sd_est = approx_nuc_radius / np.sqrt(chi2inv)
     nuc_filt_hw = np.ceil(2 * approx_nuc_radius)
-    nuc_filter = gauss3D((2 * nuc_filt_hw + 1,) * 3, (sd_est, sd_est, sd_est * ratio))
+    nuc_filter = gauss3D(
+        (2 * nuc_filt_hw + 1,) * 3, (sd_est, sd_est, sd_est * ratio)
+    )
     cell_image = trap_image - np.median(cell_fluo)
     cell_image[~cell_mask] = 0
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
-    nuc_est_conv /= np.sum(nuc_filter ** 2) * alpha * np.pi * chi2inv * sd_est ** 2
+    nuc_est_conv /= (
+        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * sd_est**2
+    )
     return nuc_est_conv

@@ -1,5 +1,5 @@
 import numpy as np
-from pathlib import Path
+
 from extraction.core.extractor import Extractor, ExtractorParameters
 
 params = ExtractorParameters.from_meta(
@@ -14,7 +14,7 @@ def test_custom_output():
     mask = np.zeros((6, 6, 2), dtype=bool)
     mask[2:4, 2:4, 0] = True
     mask[3:5, 3:5, 1] = True
-    img = np.random.randint(1, 11, size=6 ** 2 * 5).reshape(6, 6, 5)
+    img = np.random.randint(1, 11, size=6**2 * 5).reshape(6, 6, 5)
 
     for i, f in self._custom_funs.items():
         if "3d" in i:

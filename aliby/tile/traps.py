@@ -2,19 +2,14 @@
 A set of utilities for dealing with ALCATRAS traps
 """
 
-from copy import copy
 
 import numpy as np
-import matplotlib.colors as colors
-from tqdm import tqdm
-
-from skimage import transform, feature
-from skimage.filters.rank import entropy
+from skimage import feature, transform
 from skimage.filters import threshold_otsu
-from skimage.segmentation import clear_border
+from skimage.filters.rank import entropy
 from skimage.measure import label, regionprops
-from skimage.morphology import disk, closing, square
-from skimage.registration import phase_cross_correlation
+from skimage.morphology import closing, disk, square
+from skimage.segmentation import clear_border
 from skimage.util import img_as_ubyte
 
 
@@ -103,7 +98,7 @@ def segment_traps(
         < region.centroid[1]
         < half_floor(image.shape[1], tile_size) - 1
     ]
-    idx, valid_region = zip(*idx_valid_region)
+    _, valid_region = zip(*idx_valid_region)
 
     # find centroids and minor axes lengths of valid regions
     centroids = (
@@ -115,14 +110,14 @@ def segment_traps(
 
     # make a template using the best trap in the image
     template = image[
-        half_floor(x, tile_size):half_ceil(x, tile_size),
-        half_floor(y, tile_size):half_ceil(y, tile_size),
+        half_floor(x, tile_size) : half_ceil(x, tile_size),
+        half_floor(y, tile_size) : half_ceil(y, tile_size),
     ]
     # make candidate templates from the other traps found
     candidate_templates = [
         image[
-            half_floor(x, tile_size):half_ceil(x, tile_size),
-            half_floor(y, tile_size):half_ceil(y, tile_size),
+            half_floor(x, tile_size) : half_ceil(x, tile_size),
+            half_floor(y, tile_size) : half_ceil(y, tile_size),
         ]
         for x, y in centroids
     ]
@@ -260,15 +255,11 @@ def stretch_image(image):
     return image
 
 
-def get_tile_shapes(x, tile_size, max_shape):
+def get_tile_shapes(x, tile_size):
     half_size = tile_size // 2
     xmin = int(x[0] - half_size)
     ymin = max(0, int(x[1] - half_size))
-    # if xmin + tile_size > max_shape[0]:
-    #     xmin = max_shape[0] - tile_size
-    # if ymin + tile_size > max_shape[1]:
-    # #     ymin = max_shape[1] - tile_size
-    # return max(xmin, 0), xmin + tile_size, max(ymin, 0), ymin + tile_size
+
     return xmin, xmin + tile_size, ymin, ymin + tile_size
 
 
@@ -340,61 +331,13 @@ def get_tile(shape, center, raw_expt, ch, t, z):
     tile[
         :,
         :,
-        (r_xmin - xmin): (r_xmax - xmin),
-        (r_ymin - ymin): (r_ymax - ymin),
+        (r_xmin - xmin) : (r_xmax - xmin),
+        (r_ymin - ymin) : (r_ymax - ymin),
         :,
     ] = raw_expt[ch, t, r_xmin:r_xmax, r_ymin:r_ymax, z]
     # fill_val = np.nanmedian(tile)
     # np.nan_to_num(tile, nan=fill_val, copy=False)
     return tile
-
-
-def get_traps_timepoint(
-    raw_expt, trap_locations, tp, tile_size=96, channels=None, z=None
-):
-    """
-    Get all the traps from a given time point
-    :param raw_expt:
-    :param trap_locations:
-    :param tp:
-    :param tile_size:
-    :param channels:
-    :param z:
-    :return: A numpy array with the traps in the (trap, C, T, X, Y,
-    Z) order
-    """
-
-    # Set the defaults (list is mutable)
-    channels = channels if channels is not None else [0]
-    z_positions = z if z is not None else [0]
-    if isinstance(z_positions, slice):
-        n_z = z_positions.stop
-        z_positions = list(range(n_z))  # slice is not iterable error
-    elif isinstance(z_positions, list):
-        n_z = len(z_positions)
-    else:
-        n_z = 1
-
-    n_traps = len(trap_locations[tp])
-    trap_ids = list(range(n_traps))
-    shape = (len(channels), 1, tile_size, tile_size, n_z)
-    # all tiles
-    zct_tiles, slices, trap_ids = all_tiles(
-        trap_locations, shape, raw_expt, z_positions, channels, [tp], trap_ids
-    )
-    # TODO Make this an explicit function in TimelapseOMERO
-    images = raw_expt.pixels.getTiles(zct_tiles)
-    # Initialise empty traps
-    traps = np.full((n_traps,) + shape, np.nan)
-    for trap_id, (z, c, _, _), (y, x), image in zip(
-        trap_ids, zct_tiles, slices, images
-    ):
-        ch = channels.index(c)
-        z_pos = z_positions.index(z)
-        traps[trap_id, ch, 0, x[0]: x[1], y[0]: y[1], z_pos] = image
-    for x in traps:  # By channel
-        np.nan_to_num(x, nan=np.nanmedian(x), copy=False)
-    return traps
 
 
 def centre(img, percentage=0.3):
@@ -403,54 +346,4 @@ def centre(img, percentage=0.3):
     cropy = int(np.ceil(y * percentage))
     startx = int(x // 2 - (cropx // 2))
     starty = int(y // 2 - (cropy // 2))
-    return img[starty: starty + cropy, startx: startx + cropx]
-
-
-def align_timelapse_images(
-    raw_data, channel=0, reference_reset_time=80, reference_reset_drift=25
-):
-    """
-    Uses image registration to align images in the timelapse.
-    Uses the channel with id `channel` to perform the registration.
-
-    Starts with the first timepoint as a reference and changes the
-    reference to the current timepoint if either the images have moved
-    by half of a trap width or `reference_reset_time` has been reached.
-
-    Sets `self.drift`, a 3D numpy array with shape (t, drift_x, drift_y).
-    We assume no drift occurs in the z-direction.
-
-    :param reference_reset_drift: Upper bound on the allowed drift before
-    resetting the reference image.
-    :param reference_reset_time: Upper bound on number of time points to
-    register before resetting the reference image.
-    :param channel: index of the channel to use for image registration.
-    """
-    ref = centre(np.squeeze(raw_data[channel, 0, :, :, 0]))
-    size_t = raw_data.shape[1]
-
-    drift = [np.array([0, 0])]
-    for i in range(1, size_t):
-        img = centre(np.squeeze(raw_data[channel, i, :, :, 0]))
-
-        shifts, _, _ = phase_cross_correlation(ref, img)
-        # If a huge move is detected at a single time point it is taken
-        # to be inaccurate and the correction from the previous time point
-        # is used.
-        # This might be common if there is a focus loss for example.
-        if any(
-            [
-                abs(x - y) > reference_reset_drift
-                for x, y in zip(shifts, drift[-1])
-            ]
-        ):
-            shifts = drift[-1]
-
-        drift.append(shifts)
-        ref = img
-
-        # TODO test necessity for references, description below
-        #   If the images have drifted too far from the reference or too
-        #   much time has passed we change the reference and keep track of
-        #   which images are kept as references
-    return np.stack(drift), ref
+    return img[starty : starty + cropy, startx : startx + cropx]

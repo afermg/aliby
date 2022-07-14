@@ -1,4 +1,4 @@
-from yaml import load, dump
+from yaml import dump, load
 
 
 def dict_to_yaml(d, f):

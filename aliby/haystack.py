@@ -1,12 +1,11 @@
 """
 Neural network initialisation.
 """
-import numpy as np
-from time import perf_counter
 from pathlib import Path
+from time import perf_counter
 
+import numpy as np
 import tensorflow as tf
-
 from agora.io.writer import DynamicWriter
 
 
@@ -24,7 +23,9 @@ def initialise_tf(version):
             for gpu in gpus:
                 tf.config.experimental.set_memory_growth(gpu, True)
             logical_gpus = tf.config.experimental.list_logical_devices("GPU")
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+            print(
+                len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs"
+            )
         return None
 
 
@@ -52,12 +53,16 @@ class ModelPredictor:
 
     def get_data(self, tp):
         # Change axes to X,Y,Z rather than Z,Y,X
-        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3).swapaxes(1, 2)
+        return (
+            self.tiler.get_tp_data(tp, self.bf_channel)
+            .swapaxes(1, 3)
+            .swapaxes(1, 2)
+        )
 
     def format_result(self, result, tp):
         return {self.name: result, "timepoints": [tp] * len(result)}
 
-    def run_tp(self, tp, **kwargs):
+    def run_tp(self, tp):
         """Simulating processing time with sleep"""
         # Access the image
         segmentation = self.model.predict(self.get_data(tp))
@@ -67,7 +72,10 @@ class ModelPredictor:
 class ModelPredictorWriter(DynamicWriter):
     def __init__(self, file, name, shape, dtype):
         super.__init__(file)
-        self.datatypes = {name: (shape, dtype), "timepoint": ((None,), np.uint16)}
+        self.datatypes = {
+            name: (shape, dtype),
+            "timepoint": ((None,), np.uint16),
+        }
         self.group = f"{self.name}_info"
 
 

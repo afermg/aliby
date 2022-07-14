@@ -25,13 +25,13 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     elif isinstance(source, str) and Path(source).is_file():
         instatiator = ImageLocal
     else:
-        raise ("Invalid data source at {}".format(source))
+        raise Exception(f"Invalid data source at {source}")
 
     return instatiator
 
 
 class ImageLocal:
-    def __init__(self, path: str, dimorder=None, *args, **kwargs):
+    def __init__(self, path: str, dimorder=None):
         self.path = path
         self.image_id = str(path)
 
@@ -52,7 +52,9 @@ class ImageLocal:
 
         except Exception as e:
             print("Metadata not found: {}".format(e))
-            assert "dims" != None, "No dimensional info provided."
+            assert (
+                self.dimorder or self.meta.get("dims") is not None
+            ), "No dimensional info provided."
 
             # Mark non-existent dimensions for padding
             base = "TCZXY"
@@ -67,6 +69,9 @@ class ImageLocal:
         return self
 
     def __exit__(self, *exc):
+        for e in exc:
+            if e is not None:
+                print(e)
         return False
 
     @property
@@ -150,7 +155,7 @@ class ImageDirectory(ImageLocal):
     - Provides Dimorder as TCZYX
     """
 
-    def __init__(self, path: t.Union[str, t.Dict[str, str]], *args, **kwargs):
+    def __init__(self, path: t.Union[str, t.Dict[str, str]]):
         if isinstance(path, str):
             path = {"Brightfield": path}
 

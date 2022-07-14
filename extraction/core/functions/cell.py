@@ -10,25 +10,27 @@ Input:
 
 
 np.where is used to cover for cases where z>1
+
+TODO: Implement membrane functions when needed
 """
 import math
 
 import numpy as np
 from scipy import ndimage
 from sklearn.cluster import KMeans
-from skimage.filters import threshold_otsu
-
-
-# Basic extraction functions
 
 
 def area(cell_mask, trap_image=None):
+    assert trap_image is None, "Passed image to mask-only function"
+
     return np.sum(cell_mask, dtype=int)
 
 
 def eccentricity(cell_mask, trap_image=None):
+    assert trap_image is None, "Passed image to mask-only function"
+
     min_ax, maj_ax = min_maj_approximation(cell_mask)
-    return np.sqrt(maj_ax ** 2 - min_ax ** 2) / maj_ax
+    return np.sqrt(maj_ax**2 - min_ax**2) / maj_ax
 
 
 def mean(cell_mask, trap_image):
@@ -83,16 +85,6 @@ def std(cell_mask, trap_image):
     return np.std(trap_image[np.where(cell_mask)], dtype=float)
 
 
-## Specialised extraction functions
-# def foci_area_otsu(cell_mask, trap_image):
-#     # Use otsu threshold to calculate the are of high-expression blobs inside a cell.
-#     cell_pixels = trap_image[cell_mask]
-#     cell_pixels = cell_pixels[~np.isnan(cell_pixels)]
-#     threshold = threshold_otsu(cell_pixels)
-
-#     return np.sum(cell_pixels > threshold)
-
-
 def k2_top_median(cell_mask, trap_image):
     # Use kmeans to cluster the contents of a cell in two, return the high median
     # Useful when a big non-tagged organelle (e.g. vacuole) occupies a big fraction
@@ -109,34 +101,34 @@ def k2_top_median(cell_mask, trap_image):
     return k2_top_median
 
 
-def membraneMax5(cell_mask, trap_image):
-    pass
-
-
-def membraneMedian(cell_mask, trap_image):
-    pass
-
-
 def volume(cell_mask, trap_image=None):
     """Volume from a cell mask, assuming an ellipse.
 
     Assumes the mask is the median plane of the ellipsoid.
     Assumes rotational symmetry around the major axis.
     """
+    assert trap_image is None, "Passed image to mask-only function"
+
     min_ax, maj_ax = min_maj_approximation(cell_mask, trap_image)
-    return (4 * math.pi * min_ax ** 2 * maj_ax) / 3
+    return (4 * math.pi * min_ax**2 * maj_ax) / 3
 
 
 def conical_volume(cell_mask, trap_image=None):
+    assert trap_image is None, "Passed image to mask-only function"
+
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
-    nearest_neighbor = ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    nearest_neighbor = (
+        ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    )
     return 4 * (nearest_neighbor.sum())
 
 
 def spherical_volume(cell_mask, trap_image=None):
+    assert trap_image is None, "Passed image to mask-only function"
+
     area = cell_mask.sum()
     r = np.sqrt(area / np.pi)
-    return (4 * np.pi * r ** 3) / 3
+    return (4 * np.pi * r**3) / 3
 
 
 def min_maj_approximation(cell_mask, trap_image=None):
@@ -147,6 +139,8 @@ def min_maj_approximation(cell_mask, trap_image=None):
     :param trap_image:
     :return:
     """
+    assert trap_image is None, "Passed image to mask-only function"
+
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
     dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded

@@ -1,8 +1,10 @@
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+
 from extraction.core.extractor import Extractor
-from extraction.core.parameters import Parameters
 from extraction.core.functions.defaults import get_params
+from extraction.core.parameters import Parameters
 
 params = Parameters(**get_params("batman_ph_dual_fast"))
 # ext = Extractor(params, source=19918)  # 19831

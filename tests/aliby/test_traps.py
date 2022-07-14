@@ -1,4 +1,5 @@
 import unittest
+
 import numpy as np
 
 from aliby.tile.traps import identify_trap_locations
@@ -22,7 +23,10 @@ class TestCase(unittest.TestCase):
             mode="constant",
         )
         self.expected_location = int(
-            (np.ceil((self.img_size - self.tile_size + self.trap_size) / 2) - 1)
+            (
+                np.ceil((self.img_size - self.tile_size + self.trap_size) / 2)
+                - 1
+            )
         )
 
     def test_identify_trap_locations(self):
@@ -57,8 +61,10 @@ class TestMultipleCase(TestCase):
         self.expected_locations = set(
             [
                 (
-                    self.expected_location + i * (self.img_size - self.trap_size),
-                    self.expected_location + j * (self.img_size - self.trap_size),
+                    self.expected_location
+                    + i * (self.img_size - self.trap_size),
+                    self.expected_location
+                    + j * (self.img_size - self.trap_size),
                 )
                 for i in range(self.nrows)
                 for j in range(self.ncols)
@@ -68,7 +74,11 @@ class TestMultipleCase(TestCase):
         self.assertEqual(len(coords), ntraps)
         self.assertEqual(
             ntraps,
-            len(self.expected_locations.intersection([tuple(x) for x in coords])),
+            len(
+                self.expected_locations.intersection(
+                    [tuple(x) for x in coords]
+                )
+            ),
         )
 
 

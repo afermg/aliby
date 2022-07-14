@@ -13,7 +13,9 @@ def trap_apply(cell_fun, cell_masks, trap_image, **kwargs):
     """
 
     cells_iter = (*range(cell_masks.shape[2]),)
-    return [cell_fun(cell_masks[..., i], trap_image, **kwargs) for i in cells_iter]
+    return [
+        cell_fun(cell_masks[..., i], trap_image, **kwargs) for i in cells_iter
+    ]
 
 
 def reduce_z(trap_image, fun):

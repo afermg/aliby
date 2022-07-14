@@ -1,16 +1,17 @@
+import unittest
+
 import matplotlib.pyplot as plt
 import numpy as np
 import skimage.morphology as morph
 from scipy import ndimage
 from skimage import draw
-import unittest
 
 from aliby.post_processing import (
+    circle_outline,
     conical,
     ellipse_perimeter,
     union_of_spheres,
     volume_of_sphere,
-    circle_outline,
 )
 
 
@@ -33,7 +34,7 @@ class VolumeEstimation(unittest.TestCase):
         radii = range(3, 30)
         con = [conical(circle_outline(radius)) for radius in radii]
         spheres = [union_of_spheres(circle_outline(r)) for r in radii]
-        true = [4 * (r ** 3) * np.pi / 3 for r in radii]
+        true = [4 * (r**3) * np.pi / 3 for r in radii]
         mVol = [
             4 / 3 * np.pi * np.sqrt(morph.disk(radius).sum() / np.pi) ** 3
             for radius in radii
@@ -51,7 +52,9 @@ class VolumeEstimation(unittest.TestCase):
     def test_ellipse_error(self):
         x_radii = range(3, 30)
         y_radii = [np.ceil(2.5 * r) for r in x_radii]
-        ellipses = [ellipse_perimeter(x_r, y_r) for x_r, y_r in zip(x_radii, y_radii)]
+        ellipses = [
+            ellipse_perimeter(x_r, y_r) for x_r, y_r in zip(x_radii, y_radii)
+        ]
         con = [conical(ellipse) for ellipse in ellipses]
         spheres = [union_of_spheres(ellipse) for ellipse in ellipses]
         mVol = np.array(
@@ -59,12 +62,16 @@ class VolumeEstimation(unittest.TestCase):
                 4
                 / 3
                 * np.pi
-                * np.sqrt(ndimage.binary_fill_holes(ellipse).sum() / np.pi) ** 3
+                * np.sqrt(ndimage.binary_fill_holes(ellipse).sum() / np.pi)
+                ** 3
                 for ellipse in ellipses
             ]
         )
         true = np.array(
-            [4 * np.pi * x_r * y_r * x_r / 3 for x_r, y_r in zip(x_radii, y_radii)]
+            [
+                4 * np.pi * x_r * y_r * x_r / 3
+                for x_r, y_r in zip(x_radii, y_radii)
+            ]
         )
         plt.scatter(true, con, label="Conical")
         plt.scatter(true, spheres, label="Spheres")
@@ -79,9 +86,11 @@ class VolumeEstimation(unittest.TestCase):
     def test_minor_major_error(self):
         r = np.random.choice(list(range(3, 30)))
         x_radii = np.linspace(r / 3, r, 20)
-        y_radii = r ** 2 / x_radii
+        y_radii = r**2 / x_radii
 
-        ellipses = [ellipse_perimeter(x_r, y_r) for x_r, y_r in zip(x_radii, y_radii)]
+        ellipses = [
+            ellipse_perimeter(x_r, y_r) for x_r, y_r in zip(x_radii, y_radii)
+        ]
         con = np.array([conical(ellipse) for ellipse in ellipses])
         spheres = np.array([union_of_spheres(ellipse) for ellipse in ellipses])
         mVol = np.array(
@@ -89,13 +98,17 @@ class VolumeEstimation(unittest.TestCase):
                 4
                 / 3
                 * np.pi
-                * np.sqrt(ndimage.binary_fill_holes(ellipse).sum() / np.pi) ** 3
+                * np.sqrt(ndimage.binary_fill_holes(ellipse).sum() / np.pi)
+                ** 3
                 for ellipse in ellipses
             ]
         )
 
         true = np.array(
-            [4 * np.pi * x_r * y_r * x_r / 3 for x_r, y_r in zip(x_radii, y_radii)]
+            [
+                4 * np.pi * x_r * y_r * x_r / 3
+                for x_r, y_r in zip(x_radii, y_radii)
+            ]
         )
 
         ratio = y_radii / x_radii

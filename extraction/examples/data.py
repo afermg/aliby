@@ -9,16 +9,15 @@ The most basic functions were copied from Swain Lab's baby module,
 specifically baby/io.py
 """
 
-import os
 import json
+import os
+import random
 import re
-
-from pathlib import Path
 from itertools import groupby
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
-import random
 from imageio import imread
 
 from extraction.core.functions.distributors import reduce_z
@@ -51,11 +50,14 @@ def load_paired_images(filenames, typeA="Brightfield", typeB="segoutlines"):
         k: {m.group(2): f for m, f in v}
         for k, v in groupby(valid, key=lambda m: m[0].group(1))
     }
-    valid = [set(v.keys()).issuperset({typeA, typeB}) for v in grouped.values()]
+    valid = [
+        set(v.keys()).issuperset({typeA, typeB}) for v in grouped.values()
+    ]
     if not all(valid):
         raise Exception
     return {
-        l: {t: load_tiled_image(f) for t, f in g.items()} for l, g in grouped.items()
+        lbl: {t: load_tiled_image(f) for t, f in g.items()}
+        for lbl, g in grouped.items()
     }
 
 
@@ -70,7 +72,9 @@ def load(path=None):
     list of dictionaries containing GFP, Brightfield and segoutlines channel
     """
     if path is None:
-        path = Path(os.path.dirname(os.path.realpath(__file__))) / Path("pairs_data")
+        path = Path(os.path.dirname(os.path.realpath(__file__))) / Path(
+            "pairs_data"
+        )
 
     image_dir = Path(path)
     channels = ["Brightfield", "GFP"]

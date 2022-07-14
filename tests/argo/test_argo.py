@@ -1,5 +1,6 @@
 # Example of argo experiment explorer
 import pytest
+
 from aliby.utils.argo import Argo
 
 

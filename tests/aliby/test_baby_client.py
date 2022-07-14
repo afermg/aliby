@@ -4,6 +4,7 @@ pytest.mark.skip
 
 import json
 import time
+
 import numpy as np
 
 # from aliby.experiment import ExperimentLocal
@@ -11,7 +12,9 @@ from aliby.baby_client import BabyClient
 from aliby.tile.tiler import Tiler
 
 
-@pytest.mark.skip(reason="No longer usable, requires local files. Kept until replaced.")
+@pytest.mark.skip(
+    reason="No longer usable, requires local files. Kept until replaced."
+)
 def test_client():
     root_dir = (
         "/Users/s1893247/PhD/pipeline-core/data/glclvl_0"

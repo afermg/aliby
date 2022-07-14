@@ -18,6 +18,7 @@ riv.plot_labelled_traps(trap_id, trange, ncols)
 import re
 import typing as t
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -57,22 +58,16 @@ def custom_imshow(a, norm=None, cmap=None, *args, **kwargs):
 
 class localImageViewer:
     """
-    This class is used to quickly access position images without tiling
+    Fast access to Images segmented locally without tiling
     from image.h5 objects.
     """
 
     def __init__(self, h5file):
-        """This class takes one parameter and is used to add one to that
-        parameter.
-
-        :param parameter: The parameter for this class
-        """
         self._hdf = h5py.File(h5file)
         self.positions = list(self._hdf.keys())
         self.current_position = self.positions[0]
-        self.parameter = parameter
 
-    def plot_position(channel=0, tp=0, z=0, stretch=True):
+    def plot_position(self, channel=0, tp=0, z=0, stretch=True):
         pixvals = self._hdf[self.current_position][channel, tp, ..., z]
         if stretch:
             minval = np.percentile(pixvals, 0.5)
@@ -135,7 +130,7 @@ class remoteImageViewer:
         return self.cells.random_valid_trap_tp(
             min_ncells=min_ncells,
             min_consecutive_tps=min_consecutive_tps,
-            label_modulo=label_modulo,
+            # label_modulo=label_modulo,
         )
 
     def get_entire_position(self):
@@ -352,7 +347,7 @@ class remoteImageViewer:
             **lbl_plot_kwargs,
         )
 
-        if remove_axis == True:
+        if remove_axis is True:
             plt.axis("off")
         elif remove_axis == "x":
             plt.tick_params(

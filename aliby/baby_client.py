@@ -1,34 +1,22 @@
 """
 Underlying methods for different neural network deployments.
 """
-import collections
 import itertools
-import json
+import logging
+import re
 import time
-from pathlib import Path
-from typing import Iterable
 from time import perf_counter
 
+import baby.errors
 import h5py
 import numpy as np
-import pandas as pd
-import re
 import requests
-import tensorflow as tf
-from tqdm import tqdm
-
-from agora.abc import ParametersABC, ProcessABC
-import baby.errors
+from agora.abc import ParametersABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
-from requests.exceptions import Timeout, HTTPError
-from requests_toolbelt.multipart.encoder import MultipartEncoder
+from requests.exceptions import HTTPError, Timeout
 
-from agora.io.utils import Cache, accumulate, get_store_path
-
-
-import logging
 
 ################### Dask Methods ################################
 def format_segmentation(segmentation, tp):
@@ -122,7 +110,7 @@ class BabyRunner:
 
     Does segmentation one time point at a time."""
 
-    def __init__(self, tiler, parameters=None, *args, **kwargs):
+    def __init__(self, tiler, parameters=None, **kwargs):
         self.tiler = tiler
         # self.model_config = modelsets()[choose_model_from_params(**kwargs)]
         self.model_config = modelsets()[
@@ -179,7 +167,7 @@ class BabyClient:
     max_tries = 50
     sleep_time = 0.1
 
-    def __init__(self, tiler, *args, **kwargs):
+    def __init__(self, tiler):
         self.tiler = tiler
         self._session = None
 
@@ -194,16 +182,16 @@ class BabyClient:
     def get_data(self, tp):
         return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3)
 
-    def queue_image(self, img, **kwargs):
-        bit_depth = img.dtype.itemsize * 8  # bit depth =  byte_size * 8
-        data = create_request(img.shape, bit_depth, img, **kwargs)
-        status = requests.post(
-            self.url + f"/segment?sessionid={self.session}",
-            data=data,
-            headers={"Content-Type": data.content_type},
-        )
-        status.raise_for_status()
-        return status
+    # def queue_image(self, img, **kwargs):
+    #     bit_depth = img.dtype.itemsize * 8  # bit depth =  byte_size * 8
+    #     data = create_request(img.shape, bit_depth, img, **kwargs)
+    #     status = requests.post(
+    #         self.url + f"/segment?sessionid={self.session}",
+    #         data=data,
+    #         headers={"Content-Type": data.content_type},
+    #     )
+    #     status.raise_for_status()
+    #     return status
 
     def get_segmentation(self):
         try:
@@ -222,7 +210,7 @@ class BabyClient:
         # Get data
         img = self.get_data(tp)
         # Queue image
-        status = self.queue_image(img, **kwargs)
+        _ = self.queue_image(img, **kwargs)
         # Get segmentation
         for _ in range(self.max_tries):
             try:
@@ -240,7 +228,6 @@ def choose_model_from_params(
     channel="brightfield",
     zoom="60x",
     n_stacks="5z",
-    **kwargs,
 ):
     """
     Define which model to query from the server based on a set of parameters.

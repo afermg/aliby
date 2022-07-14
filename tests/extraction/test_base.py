@@ -1,15 +1,16 @@
 from itertools import product
+
 import pytest
 
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions import cell
-from extraction.core.functions.trap import imBackground
 from extraction.core.functions.loaders import (
-    load_funs,
     load_cellfuns,
-    load_trapfuns,
+    load_funs,
     load_redfuns,
+    load_trapfuns,
 )
+from extraction.core.functions.trap import imBackground
 from extraction.examples import data
 
 dsets1z = data.load_1z()
@@ -37,7 +38,9 @@ def test_metrics_run(imgs, masks, f):
             f(masks, img)
 
 
-@pytest.mark.parametrize(["imgs", "masks", "tree"], product(dsets, masks, tree))
+@pytest.mark.parametrize(
+    ["imgs", "masks", "tree"], product(dsets, masks, tree)
+)
 def test_extractor(imgs, masks, tree):
     """
     Test a tiler-less extractor using an instance built using default parameters.
@@ -46,7 +49,9 @@ def test_extractor(imgs, masks, tree):
     Tests reduce-extract
     """
     extractor = Extractor(
-        ExtractorParameters.from_meta({"channels/channel": ["Brightfield", "GFP"]})
+        ExtractorParameters.from_meta(
+            {"channels/channel": ["Brightfield", "GFP"]}
+        )
     )
     # Load all available functions
     extractor._all_funs = load_funs()[2]

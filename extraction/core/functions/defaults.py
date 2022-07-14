@@ -52,24 +52,25 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
     base["sub_bg"] = av_flch
 
     # Additional extraction defaults when channels available
-    if {"pHluorin405", "GFPFast"}.issubset(av_flch):
+    if "ph" in extras:
+        if {"pHluorin405", "GFPFast"}.issubset(av_flch):
 
-        sets = {
-            b + a: (x, y)
-            for a, x in zip(
-                ["", "_bgsub"],
-                (
-                    ["GFPFast", "pHluorin405"],
-                    ["GFPFast_bgsub", "pHluorin405_bgsub"],
-                ),
-            )
-            for b, y in zip(["em_ratio", "gsum"], ["div0", "np_add"])
-        }
-        for i, v in sets.items():
-            base["multichannel_ops"][i] = [
-                *v,
-                default_rm,
-            ]
+            sets = {
+                b + a: (x, y)
+                for a, x in zip(
+                    ["", "_bgsub"],
+                    (
+                        ["GFPFast", "pHluorin405"],
+                        ["GFPFast_bgsub", "pHluorin405_bgsub"],
+                    ),
+                )
+                for b, y in zip(["em_ratio", "gsum"], ["div0", "np_add"])
+            }
+            for i, v in sets.items():
+                base["multichannel_ops"][i] = [
+                    *v,
+                    default_rm,
+                ]
 
     return base
 

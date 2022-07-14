@@ -99,7 +99,9 @@ class Dataset(Argo):
                 if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
         if not len(self._files):
-            raise Exception("exception:metadata: experiment has no annotation files.")
+            raise Exception(
+                "exception:metadata: experiment has no annotation files."
+            )
         return self._files
 
     @property

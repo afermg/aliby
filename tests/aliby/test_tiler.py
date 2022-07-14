@@ -1,7 +1,9 @@
 import argparse
 
+from aliby.io.omero import ImageLocal
+
 # from aliby.experiment import ExperimentLocal
-from aliby.tile.tiler import Tiler
+from aliby.tile.tiler import Tiler, TilerParameters
 
 
 def define_parser():
@@ -18,8 +20,8 @@ def define_parser():
 
 
 def initialise_objects(data_path, template=None):
-    expt = ExperimentLocal(data_path, finished=True)
-    tiler = Tiler(expt, finished=True, template=template)
+    image = ImageLocal(data_path)
+    tiler = Tiler.from_image(image, TilerParameters.default())
     return tiler
 
 
@@ -28,7 +30,7 @@ def change_position(position, tiler):
 
 
 def get_n_traps_timepoints(tiler):
-    return tiler.n_traps, tiler.n_timepoints
+    return tiler.n_traps, tiler.n
 
 
 def trap_timelapse(tiler, trap_idx, channel, z):
@@ -58,7 +60,9 @@ if __name__ == "__main__":
 
     n_traps, n_tps = get_n_traps_timepoints(tiler)
 
-    timelapse = trap_timelapse(tiler, args.trap, args.channel, args.z_positions)
+    timelapse = trap_timelapse(
+        tiler, args.trap, args.channel, args.z_positions
+    )
     traps = timepoint_traps(
         tiler, args.time, args.channel, args.z_positions, args.tile_size
     )

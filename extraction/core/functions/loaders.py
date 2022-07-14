@@ -1,9 +1,11 @@
+from inspect import getargspec, getmembers, isfunction
+
 import numpy as np
-from inspect import getmembers, isfunction, getargspec
+
 from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
-from extraction.core.functions.math import div0
 from extraction.core.functions.distributors import trap_apply
+from extraction.core.functions.math import div0
 
 
 def load_cellfuns_core():
@@ -11,7 +13,8 @@ def load_cellfuns_core():
     return {
         f[0]: f[1]
         for f in getmembers(cell)
-        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+        if isfunction(f[1])
+        and f[1].__module__.startswith("extraction.core.functions")
     }
 
 
@@ -23,7 +26,8 @@ def load_custom_args():
     funs = {
         f[0]: f[1]
         for f in getmembers(localisation)
-        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+        if isfunction(f[1])
+        and f[1].__module__.startswith("extraction.core.functions")
     }
     args = {
         k: getargspec(v).args[2:]
@@ -31,7 +35,10 @@ def load_custom_args():
         if set(["cell_mask", "trap_image"]).intersection(getargspec(v).args)
     }
 
-    return ({k: funs[k] for k in args.keys()}, {k: v for k, v in args.items() if v})
+    return (
+        {k: funs[k] for k in args.keys()},
+        {k: v for k, v in args.items() if v},
+    )
 
 
 def load_cellfuns():
@@ -62,7 +69,8 @@ def load_trapfuns():
     TRAPFUNS = {
         f[0]: f[1]
         for f in getmembers(trap)
-        if isfunction(f[1]) and f[1].__module__.startswith("extraction.core.functions")
+        if isfunction(f[1])
+        and f[1].__module__.startswith("extraction.core.functions")
     }
     return TRAPFUNS
 

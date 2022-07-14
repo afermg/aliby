@@ -1,9 +1,8 @@
+import os
 import unittest
+from pathlib import Path
 
 import pytest
-import os
-
-from pathlib import Path
 
 from aliby.baby_client import BabyRunner
 

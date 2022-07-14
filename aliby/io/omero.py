@@ -1,9 +1,8 @@
-import numpy as np
 import dask.array as da
+import numpy as np
 from dask import delayed
 from omero.gateway import BlitzGateway
 from omero.model import enums as omero_enums
-
 
 # convert OMERO definitions into numpy types
 PIXEL_TYPES = {
@@ -56,8 +55,13 @@ class Argo:
 
     # standard method required for Python's with statement
     def __exit__(self, *exc):
+        for e in exc:
+            if e is not None:
+                print(e)
+
         self.conn.close()
         return False
+
 
 ###
 

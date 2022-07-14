@@ -1,17 +1,15 @@
+import csv
 import io
 import operator
-from pathlib import Path, PosixPath
+import re
 from collections import Counter
 from datetime import datetime
-import re
-import csv
+from pathlib import Path, PosixPath
 
 import numpy as np
-
-from tqdm import tqdm
-
 from logfile_parser import Parser
 from omero.gateway import BlitzGateway, TagAnnotationWrapper
+from tqdm import tqdm
 
 
 class OmeroExplorer:
@@ -64,14 +62,20 @@ class OmeroExplorer:
 
         if min_date:
             if len(min_date) < 3:
-                min_date = min_date + tuple([1 for i in range(3 - len(min_date))])
+                min_date = min_date + tuple(
+                    [1 for _ in range(3 - len(min_date))]
+                )
             min_date = datetime(*min_date)
 
             # sort by dates
             dates = [d.getDate() for d in self._dsets_bak]
-            self._dsets_bak[:] = [a for b, a in sorted(zip(dates, self._dsets_bak))]
+            self._dsets_bak[:] = [
+                a for _, a in sorted(zip(dates, self._dsets_bak))
+            ]
 
-            self._dsets_bak = [d for d in self._dsets_bak if d.getDate() >= min_date]
+            self._dsets_bak = [
+                d for d in self._dsets_bak if d.getDate() >= min_date
+            ]
 
         self.dsets = self._dsets_bak
         self.n_dsets
@@ -79,8 +83,8 @@ class OmeroExplorer:
     def dset(self, n):
         try:
             return [x for x in self.dsets if x.id == n][0]
-        except:
-            return
+        except Exception as e:
+            print(f"Could not fetch all data xsets: {e}")
 
     def channels(self, setkey, present=True):
         """
@@ -105,7 +109,9 @@ class OmeroExplorer:
                     self,
                     attr,
                     {
-                        v.id: parse_annot(getattr(self, "raw_" + attr)[v.id], attr)
+                        v.id: parse_annot(
+                            getattr(self, "raw_" + attr)[v.id], attr
+                        )
                         for v in self.dsets
                     },
                 )
@@ -113,7 +119,9 @@ class OmeroExplorer:
 
             for attr in ["acq", "log", "raw_acq", "raw_log"]:
                 setattr(
-                    self, attr, {i.id: getattr(self, attr)[i.id] for i in self.dsets}
+                    self,
+                    attr,
+                    {i.id: getattr(self, attr)[i.id] for i in self.dsets},
                 )
 
     @property
@@ -141,7 +149,9 @@ class OmeroExplorer:
         if type(tags) is not list:
             tags = [str(tags)]
 
-        self.dsets = [v for v in self.dsets if present == self.has_tags(v, tags)]
+        self.dsets = [
+            v for v in self.dsets if present == self.has_tags(v, tags)
+        ]
         self.n_dsets
 
     @property
@@ -158,7 +168,9 @@ class OmeroExplorer:
         return self._tags
 
     def get_timepoints(self):
-        self.image_wrappers = {d.id: list(d.listChildren())[0] for d in self.dsets}
+        self.image_wrappers = {
+            d.id: list(d.listChildren())[0] for d in self.dsets
+        }
 
         return {k: i.getSizeT() for k, i in self.image_wrappers.items()}
 
@@ -167,11 +179,14 @@ class OmeroExplorer:
         op = operator.gt if op == "greater" else operator.le
         self._timepoints = self.get_timepoints()
 
-        self.dsets = [v for v in tqdm(self.dsets) if op(self._timepoints[v.id], n)]
+        self.dsets = [
+            v for v in tqdm(self.dsets) if op(self._timepoints[v.id], n)
+        ]
 
     def microscope(self, microscope):
         self.microscopes = {
-            dset.id: self.get_microscope(self.log[dset.id]) for dset in self.dsets
+            dset.id: self.get_microscope(self.log[dset.id])
+            for dset in self.dsets
         }
 
         self.n_dsets
@@ -189,32 +204,9 @@ class OmeroExplorer:
     def reset_backup(self, name):
         self.dsets = self.backups[name]
 
-    def cExperiment(self, present=True):
-        self.dsets = [
-            v
-            for v in self.dsets
-            if present
-            * sum(
-                [
-                    "cExperiment" in x.getFileName()
-                    for x in v.listAnnotations()
-                    if hasattr(x, "getFileName")
-                ]
-            )
-        ]
-        self.n_dsets
-
     @staticmethod
     def is_complete(logfile):
         return logfile.endswith("Experiment completed\r\r\n")
-
-    @staticmethod
-    def contains_regex(logfile):
-        pass
-        # return re.
-
-    def tiler_cells(self, present=True):
-        self.__dsets = [v for v in self.dsets if present == tiler_cells_load(v)]
 
     @property
     def n_dsets(self):
@@ -236,25 +228,21 @@ class OmeroExplorer:
     def ids(self):
         return [d.getId() for d in self.dsets]
 
-    # @property
-    # def acqs(self):
-    #     if not hasattr(self, "_acqs") or len(self.__dict__.get("_acqs", [])) != len(
-    #         self.dsets
-    #     ):
-    #         self._acqs = [get_annot(get_annotsets(d), "acq") for d in self.dsets]
-    #     return self._acqs
-
     def get_ph_params(self):
         t = [
             {
                 ch: [exp, v]
-                for ch, exp, v in zip(j["channel"], j["exposure"], j["voltage"])
+                for ch, exp, v in zip(
+                    j["channel"], j["exposure"], j["voltage"]
+                )
                 if ch in {"GFPFast", "pHluorin405"}
             }
             for j in [i["channels"] for i in self.acqs]
         ]
 
-        ph_param_pairs = [(tuple(x.values())) for x in t if np.all(list(x.values()))]
+        ph_param_pairs = [
+            (tuple(x.values())) for x in t if np.all(list(x.values()))
+        ]
 
         return Counter([str(x) for x in ph_param_pairs])
 
@@ -263,16 +251,11 @@ class OmeroExplorer:
         # and group them for cleaning
         pass
 
-    def group_by_date(tol=1):
-        dates = [x.getDate() for x in self.dsets]
-        distances = np.array(
-            [[abs(convert_to_hours(a - b)) for a in dates] for b in dates]
-        )
-        return explore_booldiag(distances > tol, 0, [])
-
     @property
     def complete(self):
-        self.completed = {k: self.is_complete(v) for k, v in self.raw_log_end.items()}
+        self.completed = {
+            k: self.is_complete(v) for k, v in self.raw_log_end.items()
+        }
         self.dsets = [dset for dset in self.dsets if self.completed[dset.id]]
         return self.n_dsets
 
@@ -298,25 +281,6 @@ class OmeroExplorer:
             return True
 
 
-def explore_booldiag(bool_field, current_position, cluster_start_end):
-    # Recursively find the square clusters over the diagonal. Allows for duplicates
-    # returns a list of tuples with the start, end of clusters
-    if current_position < len(bool_field) - 1:
-        elements = np.where(bool_field[current_position])
-        if len(elements[0]) > 1:
-            start = elements[0][0]
-            end = elements[0][-1]
-        else:
-            start = elements[0][0]
-            end = elements[0][0]
-
-        cluster_start_end.append((start, end))
-        return explore_square(bool_field, end + 1, cluster_start_end)
-    else:
-        return cluster_start_end
-    _
-
-
 def convert_to_hours(delta):
     total_seconds = delta.total_seconds()
     hours = int(total_seconds // 3600)
@@ -324,8 +288,8 @@ def convert_to_hours(delta):
 
 
 class Argo(OmeroExplorer):
-    def __init__(self,*args, **kwargs):
-        super().__init__(*args,**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
 def get_creds():
@@ -341,26 +305,29 @@ def list_files(dset):
 
 def annot_from_dset(dset, kind):
     v = [x for x in dset.listAnnotations() if hasattr(x, "getFileName")]
-    infname = kind if kind is "log" else kind.title()
+    infname = kind if kind == "log" else kind.title()
     try:
-        acqfile = [x for x in v if x.getFileName().endswith(infname + ".txt")][0]
+        acqfile = [x for x in v if x.getFileName().endswith(infname + ".txt")][
+            0
+        ]
         decoded = list(acqfile.getFileInChunks())[0].decode("utf-8")
         acq = parse_annot(decoded, kind)
-    except:
+    except Exception as e:
+        print(f"Conversion from acquisition file failed: {e}")
         return {}
 
     return acq
 
 
 def check_channels(acq, channels, _all=True):
-    I = set(acq["channels"]["channel"]).intersection(channels)
+    shared_channels = set(acq["channels"]["channel"]).intersection(channels)
 
     condition = False
     if _all:
-        if len(I) == len(channels):
+        if len(shared_channels) == len(channels):
             condition = True
     else:
-        if len(I):
+        if len(shared_channels):
             condition = True
 
     return condition
@@ -414,7 +381,9 @@ def get_log_microscope(annot_sets):
 
 def get_annotsets(dset):
     annot_files = [
-        annot.getFile() for annot in dset.listAnnotations() if hasattr(annot, "getFile")
+        annot.getFile()
+        for annot in dset.listAnnotations()
+        if hasattr(annot, "getFile")
     ]
     annot_sets = {
         ftype[:-4].lower(): annot
@@ -438,8 +407,8 @@ def load_acq(dset):
     try:
         acq = annot_from_dset(dset, kind="acq")
         return acq
-    except:
-        print("dset", dset.getId(), " failed acq loading")
+    except Exception as e:
+        print(f"dset{dset.getId()}failed acq loading: {e}")
         return False
 
 
@@ -451,52 +420,6 @@ def has_channels(dset, exptype):
         return
 
 
-def get_id_from_name(exp_name, conn=None):
-    if conn is None:
-        conn = BlitzGateway(*get_creds(), host="islay.bio.ed.ac.uk", port=4064)
-
-    if not conn.isConnected():
-        conn.connect()
-
-    cand_dsets = [
-        d
-        for d in conn.getObjects("Dataset")  # , opts={'offset': 10600,
-        #      'limit':500})
-        if exp_name in d.name
-    ]  # increase the offset for better speed
-
-    # return cand_dsets
-    if len(cand_dsets) > 1:
-        # Get date and try to find it using date and microscope name and date
-
-        # found = []
-        # for cand in cand_dsets:
-        #     annot_sets = get_annotsets(cand)
-        #     date = get_log_date(annot_sets)
-        #     microscope = get_log_microscope(annot_sets)
-        #     if date==date_name and microscope == microscope_name:
-        #         found.append(cand)
-
-        # if True:#len(found)==1:
-        #     return best_cand.id#best_cand = found[0]
-        if True:
-
-            print("Multiple options found. Selecting the one with most children")
-
-            max_dset = np.argmax(
-                [
-                    len(list(conn.getObject("Dataset", c.id).listChildren()))
-                    for c in cand_dsets
-                ]
-            )
-
-            best_cand = cand_dsets[max_dset]
-
-            return best_cand.id
-    elif len(cand_dsets) == 1:
-        return cand_dsets[0].id
-
-
 # Custom functions
 def compare_dsets_voltages_exp(dsets):
     a = {}
@@ -505,11 +428,13 @@ def compare_dsets_voltages_exp(dsets):
             acq = annot_from_dset(d, kind="acq")["channels"]
             a[d.getId()] = {
                 k: (v, e)
-                for k, v, e in zip(acq["channel"], acq["voltage"], acq["exposure"])
+                for k, v, e in zip(
+                    acq["channel"], acq["voltage"], acq["exposure"]
+                )
             }
 
-        except:
-            print(d, "didnt work")
+        except Exception as e:
+            print(d, f"Data set voltage comparison did not work:{e}")
 
     return a
 
@@ -518,10 +443,7 @@ def get_logfile(dset):
     annot_file = [
         annot.getFile()
         for annot in dset.listAnnotations()
-        if hasattr(annot, "getFile") and annot.getFileName().endswith("log.txt")
+        if hasattr(annot, "getFile")
+        and annot.getFileName().endswith("log.txt")
     ][0]
     return list(annot_file.getFileInChunks())[-1].decode("utf-8")
-
-
-# 19920 -> 19300/19310
-#

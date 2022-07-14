@@ -1,6 +1,5 @@
-from extraction.core.parameters import Parameters
 from extraction.core.extractor import Extractor
-import numpy as np
+from extraction.core.parameters import Parameters
 
 params = Parameters(
     tree={
@@ -16,5 +15,4 @@ params = Parameters(
 
 ext = Extractor(params, omero_id=19310)
 # ext.extract_exp(tile_size=117)
-d=ext.extract_tp(tp=1,tile_size=117)
-
+d = ext.extract_tp(tp=1, tile_size=117)

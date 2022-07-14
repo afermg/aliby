@@ -411,7 +411,7 @@ class Tiler(ProcessABC):
         """
         prev_tp = max(0, tp - 1)
         # cross-correlate
-        drift, error, _ = phase_cross_correlation(
+        drift, _, _ = phase_cross_correlation(
             self.image[prev_tp, self.ref_channel, self.ref_z],
             self.image[tp, self.ref_channel, self.ref_z],
         )
@@ -482,7 +482,7 @@ class Tiler(ProcessABC):
         if hasattr(self.trap_locs, "drifts"):
             drift_len = len(self.trap_locs.drifts)
             if self.n_processed != drift_len:
-                raise Exception("Tiler:n_processed and ndrifts don't match")
+                warnings.warn("Tiler:n_processed and ndrifts don't match")
                 self.n_processed = drift_len
         # determine drift
         self.find_drift(tp)
@@ -503,10 +503,19 @@ class Tiler(ProcessABC):
         return None
 
     # The next set of functions are necessary for the extraction object
-    def get_traps_timepoint(self, tp, tile_size=None, channels=None, z=None):
-        # FIXME we currently ignore the tile size
+    def get_traps_timepoint(
+        self, tp, tile_shape=None, channels=None, z=None
+    ) -> np.ndarray:
+        """
+        Get a multidimensional array with all tiles for a set of channels
+        and z-stacks.
+        """
+
+        # FIXME add support for subtiling trap
         # FIXME can we ignore z(always  give)
-        if isinstance(channels, str):
+        if channels is None:
+            channels = [0]
+        elif isinstance(channels, str):
             channels = [channels]
         res = []
         for c in channels:
@@ -517,6 +526,15 @@ class Tiler(ProcessABC):
             val = val.swapaxes(1, 3).swapaxes(1, 2)
             val = np.expand_dims(val, axis=1)
             res.append(val)
+        if tile_shape is not None:
+            if isinstance(tile_shape, int):
+                tile_shape = (tile_shape, tile_shape)
+            assert np.all(
+                [
+                    (tile_size - ax) > -1
+                    for tile_size, ax in zip(tile_shape, res[0].shape[-3:-2])
+                ]
+            )
         return np.stack(res, axis=1)
 
     def get_channel_index(self, item):

@@ -1,24 +1,24 @@
 import logging
 from time import perf_counter
+from typing import Callable, Dict, List
 
-from typing import Union, List, Dict, Callable
-
+import h5py
 import numpy as np
 import pandas as pd
-
-from extraction.core.functions.loaders import (
-    load_funs,
-    load_custom_args,
-    load_redfuns,
-    load_mergefuns,
-)
-from extraction.core.functions.defaults import exparams_from_meta
-from extraction.core.functions.distributors import trap_apply, reduce_z
-from extraction.core.functions.utils import depth
-from aliby.tile.tiler import Tiler
-from agora.abc import ProcessABC, ParametersABC
-from agora.io.writer import Writer, load_attributes
+from agora.abc import ParametersABC, ProcessABC
 from agora.io.cells import CellsLinear
+from agora.io.writer import Writer, load_attributes
+
+from aliby.tile.tiler import Tiler
+from extraction.core.functions.defaults import exparams_from_meta
+from extraction.core.functions.distributors import reduce_z, trap_apply
+from extraction.core.functions.loaders import (
+    load_custom_args,
+    load_funs,
+    load_mergefuns,
+    load_redfuns,
+)
+from extraction.core.functions.utils import depth
 
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
@@ -141,11 +141,6 @@ class Extractor(ProcessABC):
         if not hasattr(self, "_out_path"):
             self._group = "/extraction/"
         return self._group
-
-    @property
-    def pos_file(self, store_name="store.h5"):
-        if not hasattr(self, "_pos_file"):
-            return self.local
 
     def load_custom_funs(self):
         """
@@ -372,7 +367,7 @@ class Extractor(ProcessABC):
         masks = [np.array(v) for v in masks.values()]
 
         # traps
-        traps = self.get_traps(tp, tile_size=tile_size, channels=tree_chs)
+        traps = self.get_traps(tp, tile_shape=tile_size, channels=tree_chs)
 
         self.img_bgsub = {}
         if self.params.sub_bg:
