@@ -70,7 +70,7 @@ def mean_plot(
     error_color="lightblue",
     mean_linestyle="-",
     xlabel="Time (min)",
-    ylabel=f"Normalised flavin fluorescence (AU)",
+    ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
     ax=None,
 ):

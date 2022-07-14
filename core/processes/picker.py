@@ -71,7 +71,11 @@ class picker(PostProcessABC):
         cell_gid = np.unique(idlist, axis=0)
 
         last_lin_preds = [
-            find_1st(((cell_label[::-1] == lbl) & (trap[::-1] == tr)), True, cmp_equal)
+            find_1st(
+                ((cell_label[::-1] == lbl) & (trap[::-1] == tr)),
+                True,
+                cmp_equal,
+            )
             for tr, lbl in cell_gid
         ]
         mother_assign_sorted = ma[::-1][last_lin_preds]
@@ -93,12 +97,18 @@ class picker(PostProcessABC):
             daughters = set(self.daughters)
             # daughters, mothers = np.where(mother_bud_mat)
 
-            search = lambda a, b: np.where(
-                np.in1d(
-                    np.ravel_multi_index(np.array(a).T, np.array(a).max(0) + 1),
-                    np.ravel_multi_index(np.array(b).T, np.array(a).max(0) + 1),
+            def search(a, b):
+                return np.where(
+                    np.in1d(
+                        np.ravel_multi_index(
+                            np.array(a).T, np.array(a).max(0) + 1
+                        ),
+                        np.ravel_multi_index(
+                            np.array(b).T, np.array(a).max(0) + 1
+                        ),
+                    )
                 )
-            )
+
             if how == "mothers":
                 idx = mothers
             elif how == "daughters":
@@ -109,7 +119,9 @@ class picker(PostProcessABC):
                     [
                         tuple(x)
                         for m in present_mothers
-                        for x in np.array(self.daughters)[search(self.mothers, m)]
+                        for x in np.array(self.daughters)[
+                            search(self.mothers, m)
+                        ]
                     ]
                 )
 
@@ -120,7 +132,9 @@ class picker(PostProcessABC):
                     [
                         tuple(x)
                         for d in present_daughters
-                        for x in np.array(self.mothers)[search(self.daughters, d)]
+                        for x in np.array(self.mothers)[
+                            search(self.daughters, d)
+                        ]
                     ]
                 )
             elif how == "full_families":
@@ -171,13 +185,6 @@ class picker(PostProcessABC):
 
         if sum([x for y in nested_massign for x in y]):
 
-            idx = set(
-                [
-                    (tid, i + 1)
-                    for tid, x in enumerate(nested_massign)
-                    for i in range(len(x))
-                ]
-            )
             mothers, daughters = zip(
                 *[
                     ((tid, m), (tid, d))
@@ -197,6 +204,7 @@ class picker(PostProcessABC):
         indices = set(signals.index)
         self.mothers, self.daughters = self.get_mothers_daughters()
         for alg, op, *params in self.sequence:
+            new_indices = tuple()
             if indices:
                 if alg == "lineage":
                     param1 = params[0]
@@ -209,7 +217,7 @@ class picker(PostProcessABC):
                         signals.loc[list(indices)], param1, param2
                     )
 
-            if op is "union":
+            if op == "union":
                 # new_indices = new_indices.intersection(set(signals.index))
                 new_indices = indices.union(new_indices)
 
@@ -228,7 +236,8 @@ class picker(PostProcessABC):
         case_mgr = {
             "any_present": lambda s, thresh: any_present(s, thresh),
             "present": lambda s, thresh: s.notna().sum(axis=1) > thresh,
-            "nonstoply_present": lambda s, thresh: s.apply(thresh, axis=1) > thresh,
+            "nonstoply_present": lambda s, thresh: s.apply(thresh, axis=1)
+            > thresh,
             "growing": lambda s, thresh: s.diff(axis=1).sum(axis=1) > thresh,
             "mb_guess": lambda s, p1, p2: self.mb_guess_wrap(s, p1, p2)
             # "quantile": [np.quantile(signals.values[signals.notna()], threshold)],
@@ -258,16 +267,15 @@ class picker(PostProcessABC):
         nomother = df.drop(mother_id)
         if not len(nomother):
             return []
-        nomother = (  # Clean short-lived cells outside our mother cell's timepoints
-            nomother.loc[
-                nomother.apply(
-                    lambda x: x.first_valid_index()
-                    >= df.loc[mother_id].first_valid_index()
-                    and x.first_valid_index() <= df.loc[mother_id].last_valid_index(),
-                    axis=1,
-                )
-            ]
-        )
+        nomother = nomother.loc[  # Clean short-lived cells outside our mother cell's timepoints
+            nomother.apply(
+                lambda x: x.first_valid_index()
+                >= df.loc[mother_id].first_valid_index()
+                and x.first_valid_index()
+                <= df.loc[mother_id].last_valid_index(),
+                axis=1,
+            )
+        ]
 
         score = -nomother.apply(  # Get slope of candidate daughters
             lambda x: self.get_slope(x.dropna()), axis=1
@@ -299,8 +307,12 @@ class picker(PostProcessABC):
             bud_candidates = pd.DataFrame()
         else:
             # Find the set with the highest number of growing cells and highest avg growth rate for this #
-            mivs = self.max_ind_vertex_sets(cols_sorted.values, min_budgrowth_t)
-            best_set = list(mivs[np.argmin([sum(score.iloc[list(s)]) for s in mivs])])
+            mivs = self.max_ind_vertex_sets(
+                cols_sorted.values, min_budgrowth_t
+            )
+            best_set = list(
+                mivs[np.argmin([sum(score.iloc[list(s)]) for s in mivs])]
+            )
             best_indices = cols_sorted.index[best_set]
 
             start = start.loc[best_indices]

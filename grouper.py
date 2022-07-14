@@ -19,9 +19,7 @@ from agora.io.signal import Signal
 
 
 class Grouper(ABC):
-    """
-    Base grouper class
-    """
+    """Base grouper class."""
 
     files = []
 
@@ -103,8 +101,6 @@ class Grouper(ABC):
         Examples
         --------
         FIXME: Add docs.
-
-
         """
         if not path.startswith("/"):
             path = "/" + path
@@ -168,15 +164,13 @@ class Grouper(ABC):
 
 
 class MetaGrouper(Grouper):
-    """Group positions using metadata's 'group' number"""
+    """Group positions using metadata's 'group' number."""
 
     pass
 
 
 class NameGrouper(Grouper):
-    """
-    Group a set of positions using a subsection of the name
-    """
+    """Group a set of positions using a subsection of the name."""
 
     def __init__(self, dir, by=None):
         super().__init__(dir=dir)
@@ -216,10 +210,8 @@ class NameGrouper(Grouper):
 
 
 class phGrouper(NameGrouper):
-    """
-    Grouper for pH calibration experiments where all surveyed media pH values
-    are within a single experiment.
-    """
+    """Grouper for pH calibration experiments where all surveyed media pH
+    values are within a single experiment."""
 
     def __init__(self, dir, by=(3, 7)):
         super().__init__(dir=dir, by=by)
@@ -235,9 +227,7 @@ class phGrouper(NameGrouper):
         return float(group_name.replace("_", "."))
 
     def aggregate_multisignals(self, paths: list) -> pd.DataFrame:
-        """
-        Accumulate multiple signals
-        """
+        """Accumulate multiple signals."""
 
         aggregated = pd.concat(
             [
@@ -269,9 +259,8 @@ def concat_signal_ind(
     mode: str = "retained",
     **kwargs,
 ) -> pd.DataFrame:
-    """
-    Core function that handles retrieval of an individual signal, applies filtering if requested and adjusts indices.
-    """
+    """Core function that handles retrieval of an individual signal, applies
+    filtering if requested and adjusts indices."""
     if mode == "retained":
         combined = signal.retained(path, **kwargs)
     if mode == "mothers":
@@ -291,9 +280,8 @@ def concat_signal_ind(
 
 
 class MultiGrouper:
-    """
-    Wrap results from multiple experiments stored as folders inside a folder.
-    """
+    """Wrap results from multiple experiments stored as folders inside a
+    folder."""
 
     def __init__(self, source: Union[str, list]):
         if isinstance(source, str):
@@ -312,9 +300,8 @@ class MultiGrouper:
 
     @property
     def sigtable(self) -> pd.DataFrame:
-        """
-        Generate a matrix containing the number of datasets for each signal and experiment
-        """
+        """Generate a matrix containing the number of datasets for each signal
+        and experiment."""
 
         def regex_cleanup(x):
             x = re.sub(r"\/extraction\/", "", x)
@@ -360,7 +347,6 @@ class MultiGrouper:
         Examples
         --------
         FIXME: Add docs.
-
         """
         ax = sns.heatmap(self.sigtable, cmap="viridis")
         ax.set_xticklabels(
@@ -393,7 +379,6 @@ class MultiGrouper:
         Examples
         --------
         FIXME: Add docs.
-
         """
         if isinstance(signals, str):
             signals = [signals]

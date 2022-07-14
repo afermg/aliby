@@ -91,12 +91,12 @@ class _HeatmapPlotter(BasePlotter):
                 births_array == 0, births_array
             )
             # Overlay
-            births_heatmap = ax.imshow(
+            ax.imshow(
                 births_heatmap_mask,
                 interpolation="none",
             )
         # Draw colour bar
-        colorbar = ax.figure.colorbar(
+        ax.figure.colorbar(
             mappable=trace_heatmap, cax=cax, ax=ax, label=self.colorbarlabel
         )
 

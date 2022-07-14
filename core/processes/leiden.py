@@ -2,7 +2,6 @@ from itertools import product
 
 import numpy as np
 import pandas as pd
-from itertools import product
 import igraph as ig
 import leidenalg
 
@@ -28,15 +27,22 @@ class leiden(PostProcessABC):
 
     def run(self, features: pd.DataFrame):
         # Generate euclidean distance matrix
-        distances = np.linalg.norm(features.values - features.values[:, None], axis=2)
+        distances = np.linalg.norm(
+            features.values - features.values[:, None], axis=2
+        )
         ind = [
-            "_".join([str(y) for y in x[1:]]) for x in features.index.to_flat_index()
+            "_".join([str(y) for y in x[1:]])
+            for x in features.index.to_flat_index()
         ]
         source, target = zip(*product(ind, ind))
         df = pd.DataFrame(
-            {"source": source, "target": target, "distance": distances.flatten()}
+            {
+                "source": source,
+                "target": target,
+                "distance": distances.flatten(),
+            }
         )
         df = df.loc[df["source"] != df["target"]]
         g = ig.Graph.DataFrame(df, directed=False)
 
-        part = leidenalg.find_partition(g, leidenalg.ModularityVertexPartition)
+        return leidenalg.find_partition(g, leidenalg.ModularityVertexPartition)

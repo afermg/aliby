@@ -31,16 +31,23 @@ class savgol(PostProcessABC):
     def run(self, signal: pd.DataFrame):
         try:
             post_savgol = pd.DataFrame(
-                savgol_filter(signal, self.parameters.window, self.parameters.polynom),
+                savgol_filter(
+                    signal, self.parameters.window, self.parameters.polynom
+                ),
                 index=signal.index,
                 columns=signal.columns,
             )
         except Exception as e:
             print(e)
 
-            savgol_on_srs = lambda x: self.non_uniform_savgol(
-                x.index, x.values, self.parameters.window, self.parameters.polynom
-            )
+            def savgol_on_srs(x):
+                return self.non_uniform_savgol(
+                    x.index,
+                    x.values,
+                    self.parameters.window,
+                    self.parameters.polynom,
+                )
+
             post_savgol = signal.apply(savgol_on_srs, 1).apply(pd.Series)
         return post_savgol
 
@@ -72,23 +79,34 @@ class savgol(PostProcessABC):
         np.array of float
             The smoothed y values
         """
-        if len(x) != len(y):
-            raise ValueError('"x" and "y" must be of the same size')
+        _raiseif(
+            len(x) != len(y),
+            '"x" and "y" must be of the same size',
+            ValueError,
+        )
+        _raiseif(
+            len(x) < window,
+            "The data size must be larger than the window size",
+            ValueError,
+        )
+        _raiseif(
+            not isinstance(window, int),
+            '"window" must be an integer',
+            TypeError,
+        )
+        _raiseif(window % 2, 'The "window" must be an odd integer', ValueError)
 
-        if len(x) < window:
-            raise ValueError("The data size must be larger than the window size")
+        _raiseif(
+            not isinstance(polynom, int),
+            '"polynom" must be an integer',
+            TypeError,
+        )
 
-        if type(window) is not int:
-            raise TypeError('"window" must be an integer')
-
-        if window % 2 == 0:
-            raise ValueError('The "window" must be an odd integer')
-
-        if type(polynom) is not int:
-            raise TypeError('"polynom" must be an integer')
-
-        if polynom >= window:
-            raise ValueError('"polynom" must be less than "window"')
+        _raiseif(
+            polynom >= window,
+            '"polynom" must be less than "window"',
+            ValueError,
+        )
 
         half_window = window // 2
         polynom += 1
@@ -156,3 +174,8 @@ class savgol(PostProcessABC):
                 x_i *= x[i] - x[-half_window - 1]
 
         return y_smoothed
+
+
+def _raiseif(cond, msg="", exc=AssertionError):
+    if cond:
+        raise exc(msg)

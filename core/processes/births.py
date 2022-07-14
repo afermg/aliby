@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import typing as t
 from itertools import product
 
 import numpy as np
@@ -47,10 +48,9 @@ class births(LineageProcess):
         if lineage is None:
             lineage = self.lineage
 
-        def fvi(signal):
-            return signal.apply(lambda x: x.first_valid_index(), axis=1)
+        fvi = signal.apply(lambda x: x.first_valid_index(), axis=1)
 
-        traps_mothers = {
+        traps_mothers: t.Dict[tuple, list] = {
             tuple(mo): [] for mo in lineage[:, :2] if tuple(mo) in signal.index
         }
         for trap, mother, daughter in lineage:

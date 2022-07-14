@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
 import igraph as ig
@@ -41,7 +42,9 @@ class knngraph(PostProcessABC):
             Feature matrix.
         """
         distance_matrix = euclidean_distances(signal)
-        distance_matrix_pruned = graph_prune(distance_matrix, self.n_neighbours)
+        distance_matrix_pruned = graph_prune(
+            distance_matrix, self.n_neighbours
+        )
         graph = ig.Graph.Weighted_Adjacency(
             distance_matrix_pruned.tolist(), mode="undirected"
         )

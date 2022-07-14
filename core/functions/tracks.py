@@ -245,13 +245,15 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
         )
 
     # fetch edges from ids TODO (IF necessary, here we can compare growth rates)
-    idx_to_edge = lambda preposts: [
-        (
-            [get_val(smoothed_tracks.loc[pre], -1) for pre in pres],
-            [get_val(smoothed_tracks.loc[post], 0) for post in posts],
-        )
-        for pres, posts in preposts
-    ]
+    def idx_to_edge(preposts):
+        return [
+            (
+                [get_val(smoothed_tracks.loc[pre], -1) for pre in pres],
+                [get_val(smoothed_tracks.loc[post], 0) for post in posts],
+            )
+            for pres, posts in preposts
+        ]
+
     # idx_to_means = lambda preposts: [
     #     (
     #         [get_means(smoothed_tracks.loc[pre], -window) for pre in pres],
@@ -311,7 +313,8 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
     return [pair for pairset in joinable_ids for pair in pairset]
 
 
-get_val = lambda x, n: x[~np.isnan(x)][n] if len(x[~np.isnan(x)]) else np.nan
+def get_val(x, n):
+    return x[~np.isnan(x)][n] if len(x[~np.isnan(x)]) else np.nan
 
 
 def get_means(x, i):
@@ -357,11 +360,11 @@ def localid_to_idx(local_ids, contig_trap):
 
 
 def get_vec_closest_pairs(lst: List, **kwargs):
-    return [get_closest_pairs(*l, **kwargs) for l in lst]
+    return [get_closest_pairs(*sublist, **kwargs) for sublist in lst]
 
 
 def get_dMetric_wrap(lst: List, **kwargs):
-    return [get_dMetric(*l, **kwargs) for l in lst]
+    return [get_dMetric(*sublist, **kwargs) for sublist in lst]
 
 
 def solve_matrices_wrap(dMetric: List, edges: List, **kwargs):

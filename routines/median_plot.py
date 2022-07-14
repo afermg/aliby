@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 from postprocessor.routines.plottingabc import BasePlotter
 
 
@@ -71,11 +72,12 @@ def median_plot(
     error_color="lightblue",
     median_linestyle="-",
     xlabel="Time (min)",
-    ylabel=f"Normalised flavin fluorescence (AU)",
+    ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
     ax=None,
 ):
-    """Plot median time series of a DataFrame, with interquartile range shading.
+    """Plot median time series of a DataFrame, with interquartile range
+    shading.
 
     Parameters
     ----------
@@ -105,7 +107,6 @@ def median_plot(
     Examples
     --------
     FIXME: Add docs.
-
     """
     plotter = _MedianPlotter(
         trace_df,
