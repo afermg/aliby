@@ -172,7 +172,7 @@ class BabyWriter(DynamicWriter):
         "position": ((None,), np.uint16),
         "angles": ((None,), h5py.vlen_dtype(np.float32)),
         "radii": ((None,), h5py.vlen_dtype(np.float32)),
-        "edgemasks": ((max_ncells, max_tps, tile_size, tile_size), np.bool),
+        "edgemasks": ((max_ncells, max_tps, tile_size, tile_size), bool),
         "ellipse_dims": ((None, 2), np.float32),
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
@@ -195,7 +195,7 @@ class BabyWriter(DynamicWriter):
         max_tps = self.metadata["time_settings/ntimepoints"][0]
         self.datatypes["edgemasks"] = (
             (self.max_ncells, max_tps, tile_size, tile_size),
-            np.bool,
+            bool,
         )
         self._traps_initialised = True
 
@@ -329,7 +329,7 @@ class LinearBabyWriter(DynamicWriter):
         "position": ((None,), np.uint16),
         "angles": ((None,), h5py.vlen_dtype(np.float32)),
         "radii": ((None,), h5py.vlen_dtype(np.float32)),
-        "edgemasks": ((None, tile_size, tile_size), np.bool),
+        "edgemasks": ((None, tile_size, tile_size), bool),
         "ellipse_dims": ((None, 2), np.float32),
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
