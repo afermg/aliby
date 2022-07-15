@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.35"
+version = "0.1.36"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -32,16 +32,18 @@ xmltodict = "^0.13.0" # read ome-tiff metadata
 zeroc-ice = {version="3.6.5"} # networking interface, slow to build
 # zeroc-ice = {version="3.6.5", optional=true} # To be set as optional in the future
 
-
 [tool.poetry.dev-dependencies]
-black = "^22.3.0"
+black = "^22.6.0"
 Sphinx = "^4.3.2"
 pytest = "^6.2.5"
 mypy = "^0.930"
 numpydoc = "^1.3.1"
-pyflakes = "^2.4.0"
 isort = "^5.10.1"
 jupyter = "^1.0.0"
+flake8 = "^4.0.1"
+pyright = "^1.1.258"
+pre-commit = "^2.20.0"
+data-science-types = "^0.2.23"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.0.0"]
@@ -52,12 +54,21 @@ line-length = 79
 target-version = ['py37']
 include = '\.pyi?$'
 extend-exclude = '''
-# A regex preceded with ^/ will apply only to files and directories
-# in the root of the project.
-^/foo.py  # exclude a file named foo.py in the root of the project (in addition to the defaults)
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
 '''
+
 [tool.isort]
+profile = "black"
 multi_line_output = 3
 line_length = 79
 include_trailing_comma = true
-

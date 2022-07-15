@@ -1,9 +1,9 @@
-# Installation 
+# Installation
 
 Tested on: Mac OSX Mojave and Ubuntu 20.04
 
 ## Requirements
-We strongly recommend installing within a python environment as there are many dependencies that you may not want polluting your regular python environment. 
+We strongly recommend installing within a python environment as there are many dependencies that you may not want polluting your regular python environment.
 Make sure you are using python 3.
 
 An environment can be created with using the conda package manager:
@@ -11,25 +11,25 @@ An environment can be created with using the conda package manager:
     $ conda create --name <env>
     $ conda activate <env>
 
-Which you can deactivate with: 
+Which you can deactivate with:
 
     $ conda deactivate
 
-Or using virtualenv: 
+Or using virtualenv:
 
     $ python -m virtualenv /path/to/venv/
     $ source /path/to/venv/bin/activate
 
-This will download all of your packages under `/path/to/venv` and then activate it. 
-Deactivate using 
+This will download all of your packages under `/path/to/venv` and then activate it.
+Deactivate using
 
     $ deactivate
 
 You will also need to make sure you have a recent version of pip.
-In your local environment, run: 
+In your local environment, run:
 
     $ pip install --upgrade pip
-    
+
 Or using [pyenv](https://github.com/pyenv/pyenv) with pyenv-virtualenv:
 
     $ pyenv install 3.7.9
@@ -48,7 +48,7 @@ Once you have created your local environment, run:
 
 ### Git version
 
-We use [ poetry ](https://python-poetry.org/docs/#installation) for dependency management. 
+We use [ poetry ](https://python-poetry.org/docs/#installation) for dependency management.
 
 
 In case you want to have local versions (usually for development) the main three aliby dependencies you must install them in a specific order:

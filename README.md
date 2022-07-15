@@ -12,14 +12,14 @@ See [INSTALL.md](./INSTALL.md) for installation instructions.
 ## Quickstart Documentation
 ### Setting up a server
 For testing and development, the easiest way to set up an OMERO server is by
-using Docker images. 
+using Docker images.
 [The software carpentry](https://software-carpentry.org/) and the [Open
  Microscopy Environment](https://www.openmicroscopy.org), have provided
 [instructions](https://ome.github.io/training-docker/) to do this.
 
 The `docker-compose.yml` file can be used to create an OMERO server with an
 accompanying PostgreSQL database, and an OMERO web server.
-It is described in detail 
+It is described in detail
 [here](https://ome.github.io/training-docker/12-dockercompose/).
 
 Our version of the `docker-compose.yml` has been adapted from the above to
@@ -59,7 +59,7 @@ with Image(list(image_ids.values())[0], **server_info) as image:
     imgs = dimg[tps, image.metadata["channels"].index("Brightfield"), 2, ...].compute()
     # tps timepoints, Brightfield channel, z=2, all x,y
 ```
- 
+
 ### Tiling the raw data
 
 A `Tiler` object performs trap registration. It may be built in different ways but the simplest one is using an image and a the default parameters set.
@@ -72,7 +72,7 @@ with Image(list(image_ids.values())[0], **server_info) as image:
 ```
 
 The initialisation should take a few seconds, as it needs to align the images
-in time. 
+in time.
 
 It fetches the metadata from the Image object, and uses the TilerParameters values (all Processes in aliby depend on an associated Parameters class, which is in essence a dictionary turned into a class.)
 
@@ -97,7 +97,7 @@ seg_expt.channels # Get a list of channels
 channel = 'Brightfield'
 ch_id = seg_expt.get_channel_index(channel)
 
-n_traps = seg_expt.n_traps # Get the number of traps 
+n_traps = seg_expt.n_traps # Get the number of traps
 ```
 
 #### Get the traps for a given time point
@@ -105,7 +105,7 @@ Alternatively, if you want to get all the traps at a given timepoint:
 
 ```python
 timepoint = 0
-seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None, 
+seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None,
                                 z=[0,1,2,3,4])
 ```
 

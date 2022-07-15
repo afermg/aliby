@@ -1,6 +1,6 @@
+import matplotlib.pyplot as plt
 from core.experiment import Experiment
 from core.segment import Tiler
-import matplotlib.pyplot as plt
 
 expt = Experiment.from_source(
     19310,  # Experiment ID on OMERO

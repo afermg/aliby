@@ -1,4 +1,4 @@
-from inspect import getmembers, isfunction, getfullargspec
+from inspect import getfullargspec, getmembers, isfunction
 
 import numpy as np
 

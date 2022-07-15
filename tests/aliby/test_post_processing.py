@@ -1,8 +1,8 @@
-import pytest
 import unittest
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pytest
 import skimage.morphology as morph
 from scipy import ndimage
 from skimage import draw

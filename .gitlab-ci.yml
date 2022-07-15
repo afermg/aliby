@@ -4,9 +4,8 @@ cache:
     key: "project-${CI_JOB_NAME}"
     paths:
       - .venv
-    key:
-      files:
-        - poetry.lock
+    files:
+      - poetry.lock
 
 variables:
   TRIGGER_PYPI_NAME: ""

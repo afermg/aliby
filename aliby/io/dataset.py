@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import shutil
-from typing import Union
 from pathlib import Path, PosixPath
+from typing import Union
 
 import omero
 
-from aliby.io.omero import Argo
 from aliby.io.image import ImageLocal
+from aliby.io.omero import Argo
 
 
 class DatasetLocal:

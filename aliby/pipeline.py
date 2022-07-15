@@ -2,10 +2,10 @@
 Pipeline and chaining elements.
 """
 import logging
-import typing as t
 import os
 import re
 import traceback
+import typing as t
 from copy import copy
 from itertools import groupby
 from pathlib import Path, PosixPath
