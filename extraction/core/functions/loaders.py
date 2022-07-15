@@ -1,11 +1,11 @@
-from inspect import getargspec, getmembers, isfunction
+from inspect import getmembers, isfunction, getfullargspec
 
 import numpy as np
 
 from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
 from extraction.core.functions.distributors import trap_apply
-from extraction.core.functions.math import div0
+from extraction.core.functions.math_utils import div0
 
 
 def load_cellfuns_core():
@@ -30,9 +30,11 @@ def load_custom_args():
         and f[1].__module__.startswith("extraction.core.functions")
     }
     args = {
-        k: getargspec(v).args[2:]
+        k: getfullargspec(v).args[2:]
         for k, v in funs.items()
-        if set(["cell_mask", "trap_image"]).intersection(getargspec(v).args)
+        if set(["cell_mask", "trap_image"]).intersection(
+            getfullargspec(v).args
+        )
     }
 
     return (
@@ -55,7 +57,11 @@ def load_cellfuns():
         if isfunction(f):
 
             def tmp(f):
-                return lambda m, img: trap_apply(f, m, img)
+                args = getfullargspec(f).args
+                if len(args) == 1:
+                    return lambda m, _: trap_apply(f, m)
+                else:
+                    return lambda m, img: trap_apply(f, m, img)
 
             CELLFUNS[k] = tmp(f)
     return CELLFUNS
