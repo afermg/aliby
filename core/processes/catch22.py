@@ -2,10 +2,10 @@
 
 import numpy as np
 import pandas as pd
-from sklearn import decomposition
-from pycatch22 import catch22_all
-
 from agora.abc import ParametersABC
+from pycatch22 import catch22_all
+from sklearn import decomposition
+
 from postprocessor.core.abc import PostProcessABC
 
 

@@ -2,12 +2,11 @@
 Class to group multiple positions into one using one different available criteria.
 """
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 import h5py
 import pandas as pd
-
 from agora.io.bridge import groupsort
 from agora.io.signal import Signal
 
@@ -36,7 +35,9 @@ class Group(ProcessABC):
         central_store = Path(exp_root) / "store.h5"
         if central_store.exists():
             hdf = h5py.File(central_store, "r")
-            self.filenames = [pos.attrs["filename"] for pos in hdf["/positions/"]]
+            self.filenames = [
+                pos.attrs["filename"] for pos in hdf["/positions/"]
+            ]
             hdf.close()
         else:  # If no central store just list position files in expt root folder
             fullfiles = [x for x in Path(exp_root).glob("*store.h5")]
@@ -44,13 +45,16 @@ class Group(ProcessABC):
             filenames = [False for _ in poses]
             for i, pos in enumerate(poses):
                 matches = [
-                    True if re.match(pos + ".*.h5", fname) else False for fname in files
+                    True if re.match(pos + ".*.h5", fname) else False
+                    for fname in files
                 ]
                 if any(matches):
                     assert sum(matches) == 1, "More than one match"
                     filenames[i] = (pos, fullfiles[matches.index(True)])
 
-            self.filenames = {fname[0]: fname[1] for fname in filenames if fname}
+            self.filenames = {
+                fname[0]: fname[1] for fname in filenames if fname
+            }
 
         self.positions = list(self.filenames.keys())
         return self.filenames
@@ -118,7 +122,10 @@ poses = [
 ]
 gr = Group(
     GroupParameters(
-        signals=["/extraction/general/None/area", "/extraction/mCherry/np_max/median"]
+        signals=[
+            "/extraction/general/None/area",
+            "/extraction/mCherry/np_max/median",
+        ]
     )
 )
 gr.run(

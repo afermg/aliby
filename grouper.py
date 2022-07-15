@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 
-from typing import Union, List, Dict
-from abc import ABC, abstractproperty
-from pathlib import Path, PosixPath
-from pathos.multiprocessing import Pool
-from collections import Counter
-
 import re
+from abc import ABC, abstractproperty
+from collections import Counter
+from pathlib import Path, PosixPath
+from typing import Dict, List, Union
+
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
 import seaborn as sns
-
 from agora.io.signal import Signal
+from pathos.multiprocessing import Pool
 
 
 class Grouper(ABC):

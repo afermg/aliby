@@ -1,13 +1,12 @@
 """Gaussian process fit of a Signal."""
 import logging
 
-
+import gaussianprocessderivatives as gp
 import numpy as np
 import pandas as pd
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
-import gaussianprocessderivatives as gp
 
 
 def estimate_gr(volume, dt, noruns, bounds, verbose):
@@ -79,7 +78,10 @@ class gpsignalParameters(ParametersABC):
     """
 
     _defaults = dict(
-        dt=5, noruns=5, bounds={0: (-2, 3), 1: (-2, 1), 2: (-4, -1)}, verbose=False
+        dt=5,
+        noruns=5,
+        bounds={0: (-2, 3), 1: (-2, 1), 2: (-4, -1)},
+        verbose=False,
     )
 
 

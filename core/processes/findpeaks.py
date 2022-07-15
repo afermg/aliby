@@ -2,9 +2,9 @@
 
 import numpy as np
 import pandas as pd
+from agora.abc import ParametersABC
 from scipy.signal import find_peaks
 
-from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 
 

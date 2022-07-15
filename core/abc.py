@@ -38,7 +38,9 @@ def get_process(process, suffix=""):
 
     found = None
     for possible_location in possible_locations:
-        location = f"{base_location}.{possible_location}.{process}.{process}{suffix}"
+        location = (
+            f"{base_location}.{possible_location}.{process}.{process}{suffix}"
+        )
         found = locate(location)
         if found is not None:
             return found

@@ -1,6 +1,6 @@
 import pandas as pd
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -21,4 +21,8 @@ class dsignal(PostProcessABC):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
-        return signal.rolling(window=self.parameters.window, axis=1).mean().diff(axis=1)
+        return (
+            signal.rolling(window=self.parameters.window, axis=1)
+            .mean()
+            .diff(axis=1)
+        )

@@ -1,33 +1,33 @@
-#!/usr/bin/env python3
-from typing import Iterable, Union, Dict, Tuple
-from abc import abstractmethod
-from pathlib import PosixPath
-import warnings
-from collections import Counter
-import re
+"""
+Script in development
+"""
 
+# /usr/bin/env python3
+import re
+import warnings
+from abc import abstractmethod
+from collections import Counter
+from pathlib import PosixPath
+from typing import Dict, Iterable, Tuple, Union
 
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
-from numpy import ndarray
 import pandas as pd
+import seaborn as sns
+from agora.abc import ProcessABC
+from matplotlib.backends.backend_pdf import PdfPages
+from numpy import ndarray
 from scipy.signal import find_peaks
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-import seaborn as sns
-
-from agora.abc import ProcessABC
 from postprocessor.grouper import NameGrouper
 
 sns.set_style("darkgrid")
 
 
-"""
-Main dataframe structure
+# Main dataframe structure
 
-| position | group | ntraps |robustness index | initial_ncells | final_ncells
-"""
+# | position | group | ntraps |robustness index | initial_ncells | final_ncells
 # dir = "/home/alan/Documents/dev/skeletons/data/2021_06_15_pypipeline_unit_test_00/2021_06_15_pypipeline_unit_test_00/"
 # dir = "/home/alan/Documents/dev/libs/aliby/data/2021_08_24_2Raf_00/2021_08_24_2Raf_00/"
 # dirs = [

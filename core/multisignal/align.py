@@ -2,8 +2,8 @@
 
 import numpy as np
 import pandas as pd
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -96,7 +96,9 @@ class align(PostProcessABC):
         # Remove cells that have less than or equal to events_at_least events,
         # i.e. if events_at_least = 1, then cells that have no birth events are
         # deleted.
-        event_mask = mask_df.apply(lambda x: np.sum(x) >= self.events_at_least, axis=1)
+        event_mask = mask_df.apply(
+            lambda x: np.sum(x) >= self.events_at_least, axis=1
+        )
         mask_df = mask_df.iloc[event_mask.to_list()]
 
         # Match trace and event signals by index, e.g. cellID

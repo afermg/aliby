@@ -1,8 +1,9 @@
 from typing import Dict, Tuple
+
 import numpy as np
 import pandas as pd
-
 from agora.utils.lineage import mb_array_to_dict
+
 from postprocessor.core.processes.lineageprocess import (
     LineageProcess,
     LineageProcessParameters,
@@ -59,7 +60,9 @@ class bud_metric(LineageProcess):
         for i, daughters in enumerate(md.values()):
             dau_vals = signal.loc[set(daughters)].droplevel("trap")
             sorted_da_ids = dau_vals.sort_index(level="cell_label")
-            tp_fvt = sorted_da_ids.apply(lambda x: x.last_valid_index(), axis=0)
+            tp_fvt = sorted_da_ids.apply(
+                lambda x: x.last_valid_index(), axis=0
+            )
 
             tp_fvt = sorted_da_ids.index.get_indexer(tp_fvt)
             tp_fvt[tp_fvt < 0] = sorted_da_ids.shape[0] - 1

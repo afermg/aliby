@@ -1,9 +1,10 @@
+from collections import namedtuple
+
 import numpy as np
 import pandas as pd
-from collections import namedtuple
+from agora.abc import ParametersABC
 from scipy.signal import periodogram
 
-from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -141,8 +142,12 @@ class fft(PostProcessABC):
             for row_index in range(len(signal))
         ]
 
-        freqs_df = pd.DataFrame([element.freqs for element in axes], index=signal.index)
+        freqs_df = pd.DataFrame(
+            [element.freqs for element in axes], index=signal.index
+        )
 
-        power_df = pd.DataFrame([element.power for element in axes], index=signal.index)
+        power_df = pd.DataFrame(
+            [element.power for element in axes], index=signal.index
+        )
 
         return freqs_df, power_df

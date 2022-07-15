@@ -1,19 +1,18 @@
-from typing import Tuple, Union, List
 from abc import ABC, abstractmethod
 
 # from copy import copy
 from itertools import groupby
+from typing import List, Tuple, Union
 
-from utils_find_1st import find_1st, cmp_equal
+import igraph as ig
 import numpy as np
 import pandas as pd
-import igraph as ig
-
 from agora.abc import ParametersABC
-from postprocessor.core.abc import PostProcessABC
 from agora.io.cells import CellsHDF
+from utils_find_1st import cmp_equal, find_1st
 
-from postprocessor.core.functions.tracks import max_ntps, max_nonstop_ntps
+from postprocessor.core.abc import PostProcessABC
+from postprocessor.core.functions.tracks import max_nonstop_ntps, max_ntps
 
 
 class pickerParameters(ParametersABC):

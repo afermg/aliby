@@ -2,8 +2,8 @@
 
 import pandas as pd
 import umap
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
+import igraph as ig
 import numpy as np
 import pandas as pd
-from sklearn.metrics.pairwise import euclidean_distances
-import igraph as ig
-
 from agora.abc import ParametersABC
+from sklearn.metrics.pairwise import euclidean_distances
+
 from postprocessor.core.abc import PostProcessABC
 
 

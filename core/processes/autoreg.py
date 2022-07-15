@@ -1,9 +1,10 @@
+from collections import namedtuple
+
 import numpy as np
 import pandas as pd
-from collections import namedtuple
 import scipy.linalg as linalg
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 # TODO: Provide the option of whether to optimise AR order -- see issue #1

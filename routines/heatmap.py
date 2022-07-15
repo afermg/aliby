@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import cm, ticker
 
 from postprocessor.core.processes.standardscaler import standardscaler

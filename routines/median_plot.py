@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 from postprocessor.routines.plottingabc import BasePlotter
 

@@ -2,8 +2,8 @@
 
 import numpy as np
 import pandas as pd
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -53,7 +53,11 @@ class crosscorr(PostProcessABC):
             corresponding replicate and each column a time point
         """
 
-        df = trace_dfA.copy() if type(trace_dfA) == pd.core.frame.DataFrame else None
+        df = (
+            trace_dfA.copy()
+            if type(trace_dfA) == pd.core.frame.DataFrame
+            else None
+        )
         # convert from aliby dataframe to arrays
         trace_A = trace_dfA.to_numpy()
         # number of time points

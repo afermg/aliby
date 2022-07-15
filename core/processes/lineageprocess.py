@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-
 from agora.abc import ParametersABC
+
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -32,9 +32,15 @@ class LineageProcess(PostProcessABC):
         """
 
         sig_ind = np.array(list(signal.index)).T[:, None, :]
-        mo_av = (self.lineage[:, :2].T[:, :, None] == sig_ind).all(axis=0).any(axis=1)
+        mo_av = (
+            (self.lineage[:, :2].T[:, :, None] == sig_ind)
+            .all(axis=0)
+            .any(axis=1)
+        )
         da_av = (
-            (self.lineage[:, [0, 2]].T[:, :, None] == sig_ind).all(axis=0).any(axis=1)
+            (self.lineage[:, [0, 2]].T[:, :, None] == sig_ind)
+            .all(axis=0)
+            .any(axis=1)
         )
 
         return self.lineage[mo_av & da_av]
