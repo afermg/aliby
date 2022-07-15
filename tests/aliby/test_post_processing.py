@@ -1,3 +1,4 @@
+import pytest
 import unittest
 
 import matplotlib.pyplot as plt
@@ -6,13 +7,13 @@ import skimage.morphology as morph
 from scipy import ndimage
 from skimage import draw
 
-from aliby.post_processing import (
-    circle_outline,
-    conical,
-    ellipse_perimeter,
-    union_of_spheres,
-    volume_of_sphere,
-)
+# from aliby.post_processing import (
+#     circle_outline,
+#     conical,
+#     ellipse_perimeter,
+#     union_of_spheres,
+#     volume_of_sphere,
+# )
 
 
 @pytest.mark.skip(
@@ -27,12 +28,18 @@ class VolumeEstimation(unittest.TestCase):
         print(radius, con, b_sum)
         self.assertAlmostEqual(abs(con - b_sum) / b_sum, 0, delta=0.10)
 
+    @pytest.mark.skip(
+        reason="No longer usable, post_processing unused inside aliby. Kept temporarily"
+    )
     def test_conical_ellipse(self):
         e = ellipse_perimeter(4, 5)
         con = conical(e)
         true = draw.ellipsoid_stats(4, 5, 4)[0]
         print(con, true)
 
+    @pytest.mark.skip(
+        reason="No longer usable, post_processing unused inside aliby. Kept temporarily"
+    )
     def test_sphere_error(self):
         radii = range(3, 30)
         con = [conical(circle_outline(radius)) for radius in radii]
@@ -52,6 +59,9 @@ class VolumeEstimation(unittest.TestCase):
         plt.legend()
         # plt.show()
 
+    @pytest.mark.skip(
+        reason="No longer usable, post_processing unused inside aliby. Kept temporarily"
+    )
     def test_ellipse_error(self):
         x_radii = range(3, 30)
         y_radii = [np.ceil(2.5 * r) for r in x_radii]
@@ -86,6 +96,9 @@ class VolumeEstimation(unittest.TestCase):
         plt.legend()
         # plt.show()
 
+    @pytest.mark.skip(
+        reason="No longer usable, post_processing unused inside aliby. Kept temporarily"
+    )
     def test_minor_major_error(self):
         r = np.random.choice(list(range(3, 30)))
         x_radii = np.linspace(r / 3, r, 20)
