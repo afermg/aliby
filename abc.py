@@ -80,16 +80,16 @@ class ParametersABC(ABC):
         Returns instance from a yaml filename or stdin
         """
         is_buffer = True
-
         try:
             if Path(source).exists():
                 is_buffer = False
-        except Exception:
+        except:
             pass
         if is_buffer:
             params = safe_load(source)
-        with open(source) as f:
-            params = safe_load(f)
+        else:
+            with open(source) as f:
+                params = safe_load(f)
         return cls(**params)
 
     @classmethod
