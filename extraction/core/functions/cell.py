@@ -20,14 +20,12 @@ from scipy import ndimage
 from sklearn.cluster import KMeans
 
 
-def area(cell_mask, trap_image=None):
-    assert trap_image is None, "Passed image to mask-only function"
+def area(cell_mask):
 
     return np.sum(cell_mask, dtype=int)
 
 
-def eccentricity(cell_mask, trap_image=None):
-    assert trap_image is None, "Passed image to mask-only function"
+def eccentricity(cell_mask):
 
     min_ax, maj_ax = min_maj_approximation(cell_mask)
     return np.sqrt(maj_ax**2 - min_ax**2) / maj_ax
@@ -101,20 +99,18 @@ def k2_top_median(cell_mask, trap_image):
     return k2_top_median
 
 
-def volume(cell_mask, trap_image=None):
+def volume(cell_mask):
     """Volume from a cell mask, assuming an ellipse.
 
     Assumes the mask is the median plane of the ellipsoid.
     Assumes rotational symmetry around the major axis.
     """
-    assert trap_image is None, "Passed image to mask-only function"
 
-    min_ax, maj_ax = min_maj_approximation(cell_mask, trap_image)
+    min_ax, maj_ax = min_maj_approximation(cell_mask)
     return (4 * math.pi * min_ax**2 * maj_ax) / 3
 
 
-def conical_volume(cell_mask, trap_image=None):
-    assert trap_image is None, "Passed image to mask-only function"
+def conical_volume(cell_mask):
 
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     nearest_neighbor = (
@@ -123,15 +119,14 @@ def conical_volume(cell_mask, trap_image=None):
     return 4 * (nearest_neighbor.sum())
 
 
-def spherical_volume(cell_mask, trap_image=None):
-    assert trap_image is None, "Passed image to mask-only function"
+def spherical_volume(cell_mask):
 
     area = cell_mask.sum()
     r = np.sqrt(area / np.pi)
     return (4 * np.pi * r**3) / 3
 
 
-def min_maj_approximation(cell_mask, trap_image=None):
+def min_maj_approximation(cell_mask):
     """Length approximation of minor and major axes of an ellipse from mask.
 
 
@@ -139,7 +134,6 @@ def min_maj_approximation(cell_mask, trap_image=None):
     :param trap_image:
     :return:
     """
-    assert trap_image is None, "Passed image to mask-only function"
 
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded

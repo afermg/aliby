@@ -15,6 +15,9 @@ from aliby.post_processing import (
 )
 
 
+@pytest.mark.skip(
+    reason="No longer usable, post_processing unused inside aliby. Kept temporarily"
+)
 class VolumeEstimation(unittest.TestCase):
     def test_conical(self):
         radius = np.random.choice(range(60, 100))

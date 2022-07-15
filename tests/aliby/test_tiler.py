@@ -1,6 +1,6 @@
 import argparse
 
-from aliby.io.omero import ImageLocal
+from aliby.io.image import ImageLocal
 
 # from aliby.experiment import ExperimentLocal
 from aliby.tile.tiler import Tiler, TilerParameters
