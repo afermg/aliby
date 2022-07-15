@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from copy import copy
 from pathlib import Path, PosixPath
 from typing import Union
-from copy import copy
+
 from yaml import dump, safe_load
 
 
@@ -83,7 +84,7 @@ class ParametersABC(ABC):
         try:
             if Path(source).exists():
                 is_buffer = False
-        except:
+        except Exception:
             pass
         if is_buffer:
             params = safe_load(source)

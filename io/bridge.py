@@ -1,12 +1,12 @@
 """
 Tools to interact with hdf5 files and handle data consistently.
 """
-from typing import Union
 import collections
-from itertools import groupby, chain, product
+from itertools import chain, groupby, product
+from typing import Union
 
-import numpy as np
 import h5py
+import numpy as np
 import yaml
 
 

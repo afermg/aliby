@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-import numpy as np
 import h5py
+import numpy as np
 
-from agora.io.writer import load_attributes
 from agora.io.bridge import groupsort
+from agora.io.writer import load_attributes
 
 
 class DynamicReader:

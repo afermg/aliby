@@ -1,12 +1,12 @@
 import glob
 import os
 from datetime import datetime
-from pytz import timezone
 
 import pandas as pd
+from pytz import timezone
 
-from logfile_parser import Parser
 from agora.io.writer import Writer
+from logfile_parser import Parser
 
 
 class MetaData:

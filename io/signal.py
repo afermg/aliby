@@ -1,12 +1,11 @@
-from typing import Union
-
 from copy import copy
 from pathlib import PosixPath
+from typing import Union
 
 import h5py
 import numpy as np
 import pandas as pd
-from utils_find_1st import find_1st, cmp_larger
+from utils_find_1st import cmp_larger, find_1st
 
 from agora.io.bridge import BridgeH5
 

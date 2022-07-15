@@ -1,18 +1,16 @@
 import itertools
 import logging
+from collections.abc import Iterable
 from time import perf_counter
+from typing import Dict
 
 import h5py
 import numpy as np
 import pandas as pd
-from collections.abc import Iterable
-from typing import Dict
-
-from utils_find_1st import find_1st, cmp_equal
+from utils_find_1st import cmp_equal, find_1st
 
 from agora.io.bridge import BridgeH5
 from agora.io.utils import timed
-
 
 #################### Dynamic version ##################################
 

@@ -4,11 +4,11 @@ Utility functions and classes
 import itertools
 import logging
 import operator
+import typing as t
 from functools import partial, wraps
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
-import typing as t
 
 import cv2
 import h5py
