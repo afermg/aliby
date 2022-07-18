@@ -17,6 +17,9 @@ class MetaData:
         self.store = store
         self.metadata_writer = Writer(self.store)
 
+    def __getitem__(self, item):
+        return self.load_logs()[item]
+
     def load_logs(self):
         parsed_flattened = parse_logfiles(self.log_dir)
         return parsed_flattened
