@@ -99,16 +99,16 @@ class PipelineParameters(ParametersABC):
                 # Download logs to use for metadata
             conn.cache_logs(directory)
         try:
-            meta = MetaData(directory, None).load_logs()
+            meta_d = MetaData(directory, None).load_logs()
         except Exception as e:
             print("WARNING: Metadata could not be loaded: {}".format(e))
             # Set minimal metadata
-            meta = {
+            meta_d = {
                 "channels/channel": "Brightfield",
                 "time_settings/ntimepoints": [200],
             }
 
-        tps = meta["time_settings/ntimepoints"][0]
+        tps = meta_d["time_settings/ntimepoints"][0]
         defaults = {
             "general": dict(
                 id=expt_id,
@@ -138,7 +138,7 @@ class PipelineParameters(ParametersABC):
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
         defaults["extraction"] = (
-            exparams_from_meta(meta)
+            exparams_from_meta(meta_d)
             or BabyParameters.default(**extraction).to_dict()
         )
         defaults["postprocessing"] = PostProcessorParameters.default(
@@ -603,14 +603,14 @@ class Pipeline(ProcessABC):
         # Set up
         directory = general_config["directory"]
 
+        trackers_state: t.List[np.ndarray] = []
         with get_image_class(image_id)(
             image_id, **self.general.get("server_info", {})
         ) as image:
             filename = Path(f"{directory}/{image.name}.h5")
             meta = MetaData(directory, filename)
 
-            from_start = False if np.any(ow.values()) else True
-            trackers_state = []
+            from_start = True if np.any(ow.values()) else False
             # If no previous segmentation and keep tiler
             if filename.exists():
                 if not ow["tiler"]:
