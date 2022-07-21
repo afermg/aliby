@@ -373,13 +373,6 @@ class Extractor(ProcessABC):
         t = perf_counter()
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
-            nmasks = len([y.shape for x in raw_masks.values() for y in x])
-            # plt.imshow(np.dstack(raw_masks.get(1, [[]])).sum(axis=2))
-            # plt.savefig(f"{tp}.png")
-            # plt.close()
-            logging.debug(f"Timing:nmasks:{nmasks}")
-            logging.debug(f"Timing:MasksFetch:TP_{tp}:{perf_counter() - t}s")
-
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}
             for trap_id, cells in raw_masks.items():
                 if len(cells):
