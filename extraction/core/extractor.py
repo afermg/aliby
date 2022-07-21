@@ -324,12 +324,33 @@ class Extractor(ProcessABC):
         labels=None,
         **kwargs,
     ) -> dict:
-        """
-        Extract individual time-point from images and masks
+        """Core extraction method for an individual time-point.
 
-        :param tp: int timepoint from which to extract results
-        :param tree: dict of dict {channel : {reduction_function : metrics}}
-        :**kwargs: Must include masks and preferably labels.
+        Parameters
+        ----------
+        tp : int
+            Time-point being analysed.
+        tree : dict
+            Nested dictionary indicating channels, reduction functions and
+            metrics to use during extraction.
+        tile_size : int
+            size of the tile to be extracted.
+        masks : np.ndarray
+            3-D boolean numpy array with dimensions (ncells, tile_size,
+            tile_size.
+        labels : t.List[t.List[int]]
+            List of list of ints indicating the ids of masks.
+        **kwargs : Additional keyword arguments to be passed to extractor.reduce_extract.
+
+        Returns
+        -------
+        dict
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+
         """
 
         if tree is None:
