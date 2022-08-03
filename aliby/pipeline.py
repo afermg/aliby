@@ -170,14 +170,14 @@ class Pipeline(ProcessABC):
         "postprocessing",
     ]
 
-    # Indicate groupings to perform special operations during step iteration
+    # Indicate step-writer groupings to perform special operations during step iteration
     writer_groups = {
         "tiler": ["trap_info"],
         "baby": ["cell_info"],
         "extraction": ["extraction"],
         "postprocessing": ["postprocessing", "modifiers"],
     }
-    writers = {
+    writers = {  # TODO integrate Extractor and PostProcessing in here
         "tiler": [("tiler", TilerWriter)],
         "baby": [("baby", LinearBabyWriter), ("state", StateWriter)],
     }
