@@ -333,7 +333,12 @@ class Pipeline(ProcessABC):
 
         return results
 
-    def create_pipeline(self, image_id, index=None):
+    def create_pipeline(
+        self,
+        image_id: t.Tuple[str, t.Union[str, PosixPath, int]],
+        index: t.Optional[int] = None,
+    ):
+        """ """
         self._pool_index = index
         name, image_id = image_id
         session = None
@@ -399,7 +404,6 @@ class Pipeline(ProcessABC):
                         config["extraction"]["sub_bg"]
                     )
 
-                    #
                     av_channels_wsub = av_channels.union(
                         [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
                     )
@@ -580,7 +584,45 @@ class Pipeline(ProcessABC):
         }
         return switch_case[step]
 
-    def _setup_pipeline(self, image_id: int):
+    def _setup_pipeline(
+        self, image_id: int
+    ) -> t.Tuple[
+        PosixPath,
+        MetaData,
+        t.Dict,
+        int,
+        t.Dict,
+        t.Dict,
+        t.Optional[int],
+        t.List[np.ndarray],
+    ]:
+        """
+        Initialise pipeline components and if necessary use
+        exising file to continue existing experiments.
+
+
+        Parameters
+        ----------
+        image_id : int
+            identifier of image in OMERO server, or filename
+
+        Returns
+        ---------
+        filename: str
+        meta:
+        config:
+        process_from:
+        tps:
+        steps:
+        earlystop:
+        session:
+        trackers_state:
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
         config = self.parameters.to_dict()
         pparams = config
         image_id = image_id
