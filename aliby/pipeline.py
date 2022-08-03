@@ -690,26 +690,6 @@ class Pipeline(ProcessABC):
             )
 
 
-def groupby_traps(traps, labels, edgemasks, ntraps):
-    # Group data by traps to pass onto extractor without re-reading hdf5
-    iterators = [
-        groupby(zip(traps, dset), lambda x: x[0])
-        for dset in (labels, edgemasks)
-    ]
-    label_d = {key: [x[1] for x in group] for key, group in iterators[0]}
-    mask_d = {
-        key: np.dstack(
-            [ndimage.morphology.binary_fill_holes(x[1]) for x in group]
-        )
-        for key, group in iterators[1]
-    }
-
-    labels = {i: label_d.get(i, []) for i in range(ntraps)}
-    masks = {i: mask_d.get(i, []) for i in range(ntraps)}
-
-    return labels, masks
-
-
 def _close_session(session):
     if session:
         session.close()
