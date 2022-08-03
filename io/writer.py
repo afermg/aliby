@@ -7,6 +7,7 @@ from typing import Dict
 import h5py
 import numpy as np
 import pandas as pd
+import yaml
 from utils_find_1st import cmp_equal, find_1st
 
 from agora.io.bridge import BridgeH5
@@ -18,6 +19,8 @@ from agora.io.utils import timed
 def load_attributes(file: str, group="/"):
     with h5py.File(file, "r") as f:
         meta = dict(f[group].attrs.items())
+    if "parameters" in meta:
+        meta["parameters"] = yaml.safe_load(meta["parameters"])
     return meta
 
 
