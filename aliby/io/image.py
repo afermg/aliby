@@ -6,6 +6,7 @@ from pathlib import Path, PosixPath
 
 import dask.array as da
 import xmltodict
+from agora.io.writer import load_attributes
 from dask.array.image import imread
 from tifffile import TiffFile
 
@@ -208,6 +209,30 @@ class Image(Argo):
         self.image_id = image_id
         # images from OMERO
         self._image_wrap = None
+
+    @classmethod
+    def from_h5(
+        cls,
+        filepath: t.Union[str, PosixPath],
+    ):
+        """Instatiate Image from a hdf5 file.
+
+        Parameters
+        ----------
+        cls : Image
+            Image class
+        filepath : t.Union[str, PosixPath]
+            Location of hdf5 file.
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
+        metadata = load_attributes(filepath)
+        image_id = metadata["image_id"]
+        server_info = metadata["parameters"]["general"].get("server_info", {})
+        return cls(image_id, **server_info)
 
     @property
     def image_wrap(self):
