@@ -11,13 +11,12 @@ from scipy import ndimage
 from scipy.sparse.base import isdense
 from utils_find_1st import cmp_equal, find_1st
 
-from agora.io.writer import load_complex
-
 
 class Cells:
-    """An object that gathers information about all the cells in a given
+    """
+    An object that gathers information about all the cells in a given
     trap.
-    This is the abstract object, used for type testing
+    This is the abstract object, used for type testing.
     """
 
     @classmethod
@@ -47,26 +46,47 @@ class CellsHDF(Cells):
     def __init__(
         self, filename: t.Union[str, PosixPath], path: str = "cell_info"
     ):
+        """
+        Extracts information from an h5 file. This class accesses:
+
+        'cell_info', which contains 'angles', 'cell_label', 'centres',
+        'edgemasks', 'ellipse_dims', 'mother_assign', 'mother_assign_dynamic',
+        'radii', 'timepoint', 'trap'.
+        All of these except for 'edgemasks' are a 1D ndarray.
+
+        'trap_info', which contains 'drifts', 'trap_locations'
+        """
         self.filename = filename
         self.cinfo_path = path
         self._edgem_indices = None
         self._edgemasks = None
         self._tile_size = None
 
-    def __getitem__(self, item: str) -> np.ndarray:
+    def __getitem__(self, item: str):
+        """
+        Defines attributes from the h5 file, which can then be accessed like items in a dictionary.
+
+        Data is accessed from /cinfo_path in the h5 file via _fetch.
+
+        Alan: is cells[X] and cells._X better than cells.X?
+        """
         if item == "edgemasks":
             return self.edgemasks
-        _item = "_" + item
-        if not hasattr(self, _item):
-            setattr(self, _item, self._fetch(item))
-        return getattr(self, _item)
+        else:
+            _item = "_" + item
+            if not hasattr(self, _item):
+                # define from the h5 file
+                setattr(self, _item, self._fetch(item))
+            return getattr(self, _item)
 
-    def _get_idx(self, cell_id: int, trap_id: int) -> t.List[bool]:
+    def _get_idx(self, cell_id: int, trap_id: int):
+        # returns boolean array of time points where both the cell with cell_id and the trap with trap_id exist
         return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
 
-    def _fetch(self, path: str) -> t.List[t.Union[np.ndarray, int]]:
+    def _fetch(self, item: str):
+        # get data from /cinfo_path in h5 file
         with h5py.File(self.filename, mode="r") as f:
-            return f[self.cinfo_path][path][()]
+            return f[self.cinfo_path][item][()]
 
     @property
     def max_labels(self) -> t.List[int]:
@@ -74,8 +94,9 @@ class CellsHDF(Cells):
 
     @property
     def ntraps(self) -> int:
+        # find the number of traps from the h5 file
         with h5py.File(self.filename, mode="r") as f:
-            return len(f["/trap_info/trap_locations"][()])
+            return len(f["trap_info/trap_locations"][()])
 
     @property
     def tinterval(self):
@@ -84,6 +105,7 @@ class CellsHDF(Cells):
 
     @property
     def traps(self) -> t.List[int]:
+        # returns a list of traps
         return list(set(self["trap"]))
 
     @property
@@ -104,33 +126,29 @@ class CellsHDF(Cells):
             self._edgem_indices = load_complex(self._fetch(edgem_path))
         return self._edgem_indices
 
-    def nonempty_tp_in_trap(self, trap_id: int) -> t.Set[bool]:
-        # Returns time-points in which cells are available
+    def nonempty_tp_in_trap(self, trap_id: int) -> set:
+        # given a trap_id returns time points in which cells are available
         return set(self["timepoint"][self["trap"] == trap_id])
 
     @property
     def edgemasks(self) -> t.List[np.ndarray]:
+        # returns the masks per tile
         if self._edgemasks is None:
-            edgem_path = "edgemasks/values"
+            edgem_path = "edgemasks"
             self._edgemasks = self._fetch(edgem_path)
-
         return self._edgemasks
-
-    def _edgem_where(self, cell_id: int, trap_id: int):
-        ix = trap_id + 1j * cell_id
-        return find_1st(self.edgem_indices == ix, True, cmp_equal)
 
     @property
     def labels(self) -> t.List[t.List[int]]:
         """
         Return all cell labels in object
-        We use mother_assign to list traps because it is the only propriety that appears even
-        when no cells are found"""
+        We use mother_assign to list traps because it is the only property that appears even
+        when no cells are found
+        """
         return [self.labels_in_trap(trap) for trap in self.traps]
 
     def where(self, cell_id: int, trap_id: int):
         """
-        Returns
         Parameters
         ----------
             cell_id: int
@@ -182,13 +200,14 @@ class CellsHDF(Cells):
 
     def group_by_traps(self, traps, data):
         # returns a dict with traps as keys and labels as value
+        # Alan: what is data?
         iterator = groupby(zip(traps, data), lambda x: x[0])
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}
         return d
 
     def labels_in_trap(self, trap_id):
-        # Return set of cell ids in a trap.
+        # return set of cell ids for a given trap
         return set((self["cell_label"][self["trap"] == trap_id]))
 
     def labels_at_time(self, timepoint):
