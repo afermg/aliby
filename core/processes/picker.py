@@ -8,7 +8,7 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC
-from agora.io.cells import CellsHDF
+from agora.io.cells import Cells
 from utils_find_1st import cmp_equal, find_1st
 
 from postprocessor.core.abc import PostProcessABC
@@ -40,51 +40,11 @@ class picker(PostProcessABC):
     def __init__(
         self,
         parameters: pickerParameters,
-        cells: CellsHDF,
+        cells: Cells,
     ):
         super().__init__(parameters=parameters)
 
         self._cells = cells
-
-    @staticmethod
-    def mother_assign_to_mb_matrix(ma: List[np.array]):
-        # Convert from list of lists to mother_bud sparse matrix
-        ncells = sum([len(t) for t in ma])
-        mb_matrix = np.zeros((ncells, ncells), dtype=bool)
-        c = 0
-        for cells in ma:
-            for d, m in enumerate(cells):
-                if m:
-                    mb_matrix[c + d, c + m - 1] = True
-
-            c += len(cells)
-
-        return mb_matrix
-
-    @staticmethod
-    def mother_assign_from_dynamic(ma, cell_label, trap, ntraps: int):
-        """
-        Interpolate the list of lists containing the associated mothers from the mother_assign_dynamic feature
-        """
-        idlist = list(zip(trap, cell_label))
-        cell_gid = np.unique(idlist, axis=0)
-
-        last_lin_preds = [
-            find_1st(
-                ((cell_label[::-1] == lbl) & (trap[::-1] == tr)),
-                True,
-                cmp_equal,
-            )
-            for tr, lbl in cell_gid
-        ]
-        mother_assign_sorted = ma[::-1][last_lin_preds]
-
-        traps = cell_gid[:, 0]
-        iterator = groupby(zip(traps, mother_assign_sorted), lambda x: x[0])
-        d = {key: [x[1] for x in group] for key, group in iterator}
-        nested_massign = [d.get(i, []) for i in range(ntraps)]
-
-        return nested_massign
 
     def pick_by_lineage(self, signals, how):
         self.orig_signals = signals
@@ -177,7 +137,7 @@ class picker(PostProcessABC):
         ma = self._cells["mother_assign_dynamic"]
         trap = self._cells["trap"]
         label = self._cells["cell_label"]
-        nested_massign = self.mother_assign_from_dynamic(
+        nested_massign = self._cells.mother_assign_from_dynamic(
             ma, label, trap, self._cells.ntraps
         )
         # mother_bud_mat = self.mother_assign_to_mb_matrix(nested_massign)
