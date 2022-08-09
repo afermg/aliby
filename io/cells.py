@@ -12,7 +12,7 @@ from scipy.sparse.base import isdense
 from utils_find_1st import cmp_equal, find_1st
 
 
-class CellsLinear:
+class Cells:
     """
     Extracts information from an h5 file. This class accesses:
 
@@ -143,7 +143,7 @@ class CellsLinear:
 
     def group_by_traps(
         self, traps: t.Collection, cell_labels: t.Collection
-    ) -> t.Dict[int, t.List[t.int]]:
+    ) -> t.Dict[int, t.List[int]]:
         # returns a dict with traps as keys and list of labels as value
         # Data is a
         iterator = groupby(zip(traps, cell_labels), lambda x: x[0])
