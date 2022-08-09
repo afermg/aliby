@@ -27,7 +27,7 @@ def segment_traps(
     downscale=0.4,
     disk_radius_frac=0.01,
     square_size=3,
-    min_frac_tilesize=0.2,
+    min_frac_tilesize=0.3,
     max_frac_tilesize=0.8,
     **identify_traps_kwargs,
 ):
@@ -64,8 +64,8 @@ def segment_traps(
     # keep a memory of image in case need to re-run
     img = image
     # bounds on major axis length of traps
-    min_mal = min_frac_tilesize * np.sqrt(2) * tile_size
-    max_mal = max_frac_tilesize * np.sqrt(2) * tile_size
+    min_mal = min_frac_tilesize * tile_size
+    max_mal = max_frac_tilesize * tile_size
 
     # shrink image
     if downscale != 1:
@@ -108,11 +108,6 @@ def segment_traps(
     # coords for best trap
     x, y = np.round(centroids[np.argmin(minals)]).astype(int)
 
-    # make a template using the best trap in the image
-    template = image[
-        half_floor(x, tile_size) : half_ceil(x, tile_size),
-        half_floor(y, tile_size) : half_ceil(y, tile_size),
-    ]
     # make candidate templates from the other traps found
     candidate_templates = [
         image[
@@ -124,15 +119,10 @@ def segment_traps(
     # make a mean template from all the found traps
     mean_template = np.dstack(candidate_templates).astype(int).mean(axis=-1)
 
-    # find traps using the best found trap
-    traps = identify_trap_locations(image, template, **identify_traps_kwargs)
     # find traps using the mean trap template
-    mean_traps = identify_trap_locations(
+    traps = identify_trap_locations(
         image, mean_template, **identify_traps_kwargs
     )
-    # choose the approach that identifies the most traps
-    if len(traps) < len(mean_traps):
-        traps = mean_traps
 
     # if there are too few traps, try again
     traps_retry = []
