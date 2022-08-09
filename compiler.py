@@ -179,20 +179,20 @@ class ExperimentCompiler(Compiler):
         names_signals = {
             "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
             "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
-            "births": "postprocessing/births/extraction_general_None_volume",
+            "buddings": "postprocessing/buddings/extraction_general_None_volume",
         }
         operations = {
             "dvol": ("dvol", "max"),
             "bud_dvol": ("bud_dvol", "max"),
-            "births": ("births", "sum"),
-            "births_mean": ("births", "mean"),
+            "buddings": ("buddings", "sum"),
+            "buddings_mean": ("buddings", "mean"),
         }
 
         input_signals = {
             k: self.grouper.concat_signal(v) for k, v in names_signals.items()
         }
 
-        ids = input_signals["births"].index
+        ids = input_signals["buddings"].index
         for v in input_signals.values():
             ids = ids.intersection(v.index)
 
@@ -271,31 +271,31 @@ class ExperimentCompiler(Compiler):
 
     def compile_growth_metrics(
         self,
-        min_nbirths: int = 2,
+        min_nbuddings: int = 2,
     ):
-        """Filter mothers with n number of births and get their metrics.
+        """Filter mothers with n number of buddings and get their metrics.
 
-        Select cells with at least two recorded births
+        Select cells with at least two recorded buddings
         """
         names_signals = {
             "dvol": "postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
             "bud_dvol": "postprocessing/bud_metric/postprocessing_dsignal_postprocessing_savgol_extraction_general_None_volume",
-            "births": "postprocessing/births/extraction_general_None_volume",
+            "buddings": "postprocessing/buddings/extraction_general_None_volume",
         }
         operations = {
             "dvol": ("dvol", "max"),
             "bud_dvol": ("bud_dvol", "max"),
-            "births": ("births", "sum"),
+            "buddings": ("buddings", "sum"),
             "cycle_length_mean": (
-                "births",
+                "buddings",
                 lambda x: np.diff(np.where(x)[0]).mean(),
             ),
             "cycle_length_min": (
-                "births",
+                "buddings",
                 lambda x: np.diff(np.where(x)[0]).min(),
             ),
             "cycle_length_median": (
-                "births",
+                "buddings",
                 lambda x: np.median(np.diff(np.where(x)[0])),
             ),
         }
@@ -303,7 +303,7 @@ class ExperimentCompiler(Compiler):
         input_signals = {
             k: self.grouper.concat_signal(v) for k, v in names_signals.items()
         }
-        ids = self.get_shared_ids(input_signals, min_nbirths=min_nbirths)
+        ids = self.get_shared_ids(input_signals, min_nbuddings=min_nbuddings)
 
         compiled_df = pd.DataFrame(
             {
@@ -316,18 +316,18 @@ class ExperimentCompiler(Compiler):
         return compiled_df
 
     def get_shared_ids(
-        self, input_signals: Dict[str, pd.DataFrame], min_nbirths: int = None
+        self, input_signals: Dict[str, pd.DataFrame], min_nbuddings: int = None
     ):
         """Get the intersection id of multiple signals.
 
-        "births" must be one the keys in input_signals to use the
-        argument min_nbirths.
+        "buddings" must be one the keys in input_signals to use the
+        argument min_nbuddings.
         """
         ids = list(input_signals.values())[0].index
-        if min_nbirths is not None:
+        if min_nbuddings is not None:
             ids = (
-                input_signals["births"]
-                .loc[input_signals["births"].sum(axis=1) >= min_nbirths]
+                input_signals["buddings"]
+                .loc[input_signals["buddings"].sum(axis=1) >= min_nbuddings]
                 .index
             )
         for v in input_signals.values():

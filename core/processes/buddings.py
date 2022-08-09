@@ -12,7 +12,7 @@ from postprocessor.core.processes.lineageprocess import (
 )
 
 
-class birthsParameters(LineageProcessParameters):
+class buddingsParameters(LineageProcessParameters):
     """Parameter class to obtain birth events.
 
     Parameters
@@ -29,14 +29,14 @@ class birthsParameters(LineageProcessParameters):
     _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
 
-class births(LineageProcess):
+class buddings(LineageProcess):
     """
-    Calculate births in a trap assuming one mother per trap
+    Calculate buddings in a trap assuming one mother per trap
 
-    returns a pandas series with the births
+    returns a pandas series with the buddings
     """
 
-    def __init__(self, parameters: birthsParameters):
+    def __init__(self, parameters: buddingsParameters):
         super().__init__(parameters)
 
     def load_lineage(self, lineage):
@@ -60,12 +60,12 @@ class births(LineageProcess):
         mothers = signal.loc[
             set(signal.index).intersection(traps_mothers.keys())
         ]
-        births = pd.DataFrame(
+        buddings = pd.DataFrame(
             np.zeros((mothers.shape[0], signal.shape[1])).astype(bool),
             index=mothers.index,
             columns=signal.columns,
         )
-        births.columns.names = ["timepoint"]
+        buddings.columns.names = ["timepoint"]
         for mother_id, daughters in traps_mothers.items():
             daughters_idx = set(
                 fvi.loc[
@@ -74,9 +74,9 @@ class births(LineageProcess):
                     )
                 ].values
             ).difference({0})
-            births.loc[
+            buddings.loc[
                 mother_id,
                 daughters_idx,
             ] = True
 
-        return births
+        return buddings

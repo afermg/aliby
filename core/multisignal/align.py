@@ -48,7 +48,7 @@ class alignParameters(ParametersABC):
         Specifies the number of events required for each cell.  For example, if
         events_at_least is 2, then it will discard time series (from the DataFrame)
         that have less than 2 events.  As a more pratical example: discarding
-        flavin time series that derive from cells with less than 2 births
+        flavin time series that derive from cells with less than 2 buddings
         identified.
     """
 

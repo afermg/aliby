@@ -6,7 +6,7 @@ from postprocessor.routines.single_plot import _SinglePlotter
 
 
 class _SingleBirthPlotter(_SinglePlotter):
-    """Draw a line plot of a single time series, but with births overlaid"""
+    """Draw a line plot of a single time series, but with buddings overlaid"""
 
     def __init__(
         self,
@@ -33,7 +33,7 @@ class _SingleBirthPlotter(_SinglePlotter):
             xlabel,
             plot_title,
         )
-        # Add some more attributes useful for births
+        # Add some more attributes useful for buddings
         self.birth_mask = birth_mask
         self.birth_color = birth_color
         self.birth_linestyle = birth_linestyle
@@ -71,7 +71,7 @@ def single_birth_plot(
     plot_title="",
     ax=None,
 ):
-    """Plot time series of trace, overlaid with births
+    """Plot time series of trace, overlaid with buddings
 
     Parameters
     ----------
@@ -82,18 +82,18 @@ def single_birth_plot(
     trace_name : string
         Name of trace being plotted, e.g. 'flavin'.
     birth_mask : array_like
-        Mask to indicate where births are. Expect values of '0' and '1' or
+        Mask to indicate where buddings are. Expect values of '0' and '1' or
         'False' and 'True' in the elements.
     unit_scaling : int or float
         Unit scaling factor, e.g. 1/60 to convert minutes to hours.
     trace_color : string
         matplotlib colour string for the trace
     birth_color : string
-        matplotlib colour string for the vertical lines indicating births
+        matplotlib colour string for the vertical lines indicating buddings
     trace_linestyle : string
         matplotlib linestyle argument for the trace
     birth_linestyle : string
-        matplotlib linestyle argument for the vertical lines indicating births
+        matplotlib linestyle argument for the vertical lines indicating buddings
     xlabel : string
         x axis label.
     plot_title : string

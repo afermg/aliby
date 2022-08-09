@@ -15,7 +15,7 @@ class _HeatmapPlotter(BasePlotter):
         self,
         trace_df,
         trace_name,
-        births_df,
+        buddings_df,
         cmap,
         unit_scaling,
         xtick_step,
@@ -27,7 +27,7 @@ class _HeatmapPlotter(BasePlotter):
         super().__init__(trace_name, unit_scaling, xlabel, plot_title)
         # Define attributes from arguments
         self.trace_df = trace_df
-        self.births_df = births_df
+        self.buddings_df = buddings_df
         self.cmap = cmap
         self.xtick_step = xtick_step
         self.scale = scale
@@ -83,16 +83,16 @@ class _HeatmapPlotter(BasePlotter):
         ax.xaxis.set_major_locator(
             ticker.MultipleLocator(self.xtick_step / self.unit_scaling)
         )
-        # Overlay births, if present
-        if self.births_df is not None:
+        # Overlay buddings, if present
+        if self.buddings_df is not None:
             # Must be masked array for transparency
-            births_array = self.births_df.to_numpy()
-            births_heatmap_mask = np.ma.masked_where(
-                births_array == 0, births_array
+            buddings_array = self.buddings_df.to_numpy()
+            buddings_heatmap_mask = np.ma.masked_where(
+                buddings_array == 0, buddings_array
             )
             # Overlay
             ax.imshow(
-                births_heatmap_mask,
+                buddings_heatmap_mask,
                 interpolation="none",
             )
         # Draw colour bar
@@ -104,7 +104,7 @@ class _HeatmapPlotter(BasePlotter):
 def heatmap(
     trace_df,
     trace_name,
-    births_df=None,
+    buddings_df=None,
     cmap=cm.RdBu,
     unit_scaling=1,
     xtick_step=60,
@@ -123,7 +123,7 @@ def heatmap(
         Time series of traces (rows = cells, columns = time points).
     trace_name : string
         Name of trace being plotted, e.g. 'flavin'.
-    births_df : pandas.DataFrame
+    buddings_df : pandas.DataFrame
         Birth mask (rows = cells, columns = time points).  Elements should be
         0 or 1.
     cmap : matplotlib ColorMap
@@ -160,7 +160,7 @@ def heatmap(
     plotter = _HeatmapPlotter(
         trace_df,
         trace_name,
-        births_df,
+        buddings_df,
         cmap,
         unit_scaling,
         xtick_step,
