@@ -1,9 +1,21 @@
 """
-Segment/segmented pipelines.
-Includes splitting the image into traps/parts,
-cell segmentation, nucleus segmentation
+Tiler: Tiles and tracks traps.
 
-Standard order is (T, C, Z, Y, X)
+The tasks of the Tiler are selecting regions of interest, or tiles, of an image - with one tile per trap, tracking and correcting for the drift of the microscope stage over time, and handling errors and bridging between the image data and ALIBY’s image-processing steps.
+
+Tiler subclasses deal with either network connections or local files.
+
+To find traps, we use a two-step process: we analyse the bright-field image to produce the template of a trap, and we fit this template to the image to find the traps' centres.
+
+We use texture-based segmentation (entropy) to split the image into foreground -- cells and traps -- and background, which we then identify with an Otsu filter. Two methods are used to produce a template trap from these regions: pick the trap with the smallest minor axis length and average over all validated traps.
+
+A peak-identifying algorithm recovers the x and y-axis location of traps in the original image, and we choose the templating approach that identifies the most traps
+
+One key method is Tiler.run.
+
+The image-processing is performed by traps/segment_traps.
+
+The experiment is stored as an array wuth a standard indexing order of (Time, Channels, Z-stack, Y, X).
 """
 import warnings
 from functools import lru_cache
@@ -306,27 +318,26 @@ class Tiler(ProcessABC):
     @lru_cache(maxsize=2)
     def get_tc(self, t, c):
         """
-            Load image using dask.
-            Assumes the image is arranged as
-                no of time points
-                no of channels
-                no of z stacks
-                no of pixels in y direction
-                no of pixels in z direction
+        Load image using dask.
+        Assumes the image is arranged as
+            no of time points
+            no of channels
+            no of z stacks
+            no of pixels in y direction
+            no of pixels in z direction
 
-            Parameters
-            ----------
-            t: integer
-                An index for a time point
-            c: integer
-                An index for a channel
+        Parameters
+        ----------
+        t: integer
+            An index for a time point
+        c: integer
+            An index for a channel
 
-        def _initialise_traps(self, tile_size: int):
-            -------
-            full: an array of images
+        Retruns
+        -------
+        full: an array of images
         """
         full = self.image[t, c].compute(scheduler="synchronous")
-
         return full
 
     @property
@@ -401,7 +412,7 @@ class Tiler(ProcessABC):
 
     def find_drift(self, tp):
         """
-        Find any translational drifts between two images at consecutive
+        Find any translational drift between two images at consecutive
         time points using cross correlation.
 
         Arguments
@@ -499,7 +510,6 @@ class Tiler(ProcessABC):
             time_dim = 0
         for t in range(self.image.shape[time_dim]):
             self.run_tp(t)
-
         return None
 
     # The next set of functions are necessary for the extraction object
@@ -510,7 +520,6 @@ class Tiler(ProcessABC):
         Get a multidimensional array with all tiles for a set of channels
         and z-stacks.
         """
-
         # FIXME add support for subtiling trap
         # FIXME can we ignore z(always  give)
         if channels is None:
