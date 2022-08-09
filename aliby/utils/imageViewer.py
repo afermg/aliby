@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import yaml
-from agora.io.cells import CellsLinear as Cells
+from agora.io.cells import Cells
 from agora.io.writer import load_attributes
 from PIL import Image
 from skimage.morphology import dilation

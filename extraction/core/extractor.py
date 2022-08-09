@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.cells import CellsLinear
+from agora.io.cells import Cells
 from agora.io.writer import Writer, load_attributes
 
 from aliby.tile.tiler import Tiler
@@ -338,7 +338,7 @@ class Extractor(ProcessABC):
         ch_tree = {ch: v for ch, v in tree.items() if ch != "general"}
         tree_chs = (*ch_tree,)
 
-        cells = CellsLinear(self.local)
+        cells = Cells(self.local)
 
         # labels
         if labels is None:
