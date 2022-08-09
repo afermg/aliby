@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.cells import CellsLinear as Cells
+from agora.io.cells import Cells
 from agora.io.signal import Signal
 from agora.io.writer import Writer
 from tqdm import tqdm
