@@ -35,7 +35,9 @@ class _MeanPlotter(BasePlotter):
         self.ylabel = ylabel
 
         # Mean and standard error
-        self.trace_time = np.array(self.trace_df.columns) * self.unit_scaling
+        self.trace_time = (
+            np.array(self.trace_df.columns, dtype=float) * self.unit_scaling
+        )
         self.mean_ts = self.trace_df.mean(axis=0)
         self.stderr = self.trace_df.std(axis=0) / np.sqrt(len(self.trace_df))
 
