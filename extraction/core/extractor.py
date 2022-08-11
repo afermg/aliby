@@ -370,7 +370,6 @@ class Extractor(ProcessABC):
             }
 
         # masks
-        t = perf_counter()
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}

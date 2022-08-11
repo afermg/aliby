@@ -2,18 +2,25 @@ import csv
 import io
 import operator
 import re
+import typing as t
 from collections import Counter
 from datetime import datetime
 from pathlib import Path, PosixPath
 
 import numpy as np
 from logfile_parser import Parser
-from omero.gateway import BlitzGateway, TagAnnotationWrapper
+from omero.gateway import BlitzGateway, TagAnnotationWrapper, _DatasetWrapper
 from tqdm import tqdm
 
 
 class OmeroExplorer:
-    def __init__(self, host, user, password, min_date=(2020, 6, 1)):
+    def __init__(
+        self,
+        host: str,
+        user: str,
+        password: str,
+        min_date: t.Tuple[int, int, int] = (2020, 6, 1),
+    ):
         self.conn = BlitzGateway(user, password, host=host)
         self.conn.connect()
 
@@ -79,6 +86,12 @@ class OmeroExplorer:
 
         self.dsets = self._dsets_bak
         self.n_dsets
+
+    def image_ids(self):
+        return {
+            dset.getId(): [im.getId() for im in dset.listChildren()]
+            for dset in self.dsets
+        }
 
     def dset(self, n):
         try:
@@ -205,8 +218,20 @@ class OmeroExplorer:
         self.dsets = self.backups[name]
 
     @staticmethod
-    def is_complete(logfile):
+    def is_complete(logfile: str):
         return logfile.endswith("Experiment completed\r\r\n")
+
+    @staticmethod
+    def count_errors(logfile: str):
+        return re.findall("ERROR CAUGHT", logfile)
+
+    @staticmethod
+    def count_drift_alert(logfile: str):
+        return re.findall("High drift alert!", logfile)
+
+    @staticmethod
+    def is_interrupted(logfile: str):
+        return "Experiment stopped by user" in logfile
 
     @property
     def n_dsets(self):
@@ -251,10 +276,44 @@ class OmeroExplorer:
         # and group them for cleaning
         pass
 
+    def return_completed(self, kind="complete"):
+        return {
+            k: getattr(self, f"is_{kind}")(v.get("log", ""))
+            for k, v in self.cache.items()
+        }
+
+    # @staticfunction
+    # def number_of_X(logfile: str):
+    #     return re.findall("X", logfile)
+
+    def dset_count(
+        self,
+        dset: t.Union[int, _DatasetWrapper],
+        kind: str = "errors",
+        norm: bool = True,
+    ):
+        if isinstance(dset, int):
+            dset = self.conn.getObject("Dataset", dset)
+
+        total_images_tps = sum([im.getSizeT() for im in dset.listChildren()])
+
+        return len(
+            getattr(self, f"count_{kind}")(
+                self.cache[dset.getId()].get("log", ""), norm=norm
+            )
+        ) / (norm * total_images_tps)
+
+    def count_in_log(self, kind="errors", norm: bool = True):
+        return {
+            k: self.dset_count(k, kind=kind, norm=norm)
+            for k, v in self.cache.items()
+        }
+
     @property
     def complete(self):
         self.completed = {
-            k: self.is_complete(v) for k, v in self.raw_log_end.items()
+            k: self.is_complete(v.get("log", ""))
+            for k, v in self.cache.items()
         }
         self.dsets = [dset for dset in self.dsets if self.completed[dset.id]]
         return self.n_dsets
