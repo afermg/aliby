@@ -63,9 +63,6 @@ class Argo:
         return False
 
 
-###
-
-
 def get_data_lazy(image) -> da.Array:
     """
     Get 5D dask array, with delayed reading from OMERO image.
