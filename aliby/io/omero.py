@@ -43,13 +43,16 @@ class Argo:
         self.username = username
         self.password = password
 
-    # standard method required for Python's with statement
-    def __enter__(self):
+    def create_gateway(self):
         self.conn = BlitzGateway(
             host=self.host, username=self.username, passwd=self.password
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
+
+    # standard method required for Python's with statement
+    def __enter__(self):
+        self.create_gateway()
 
         return self
 
