@@ -77,7 +77,8 @@ class Cells:
     def tile_size(self) -> t.Union[int, t.Tuple[int], None]:
         if self._tile_size is None:
             with h5py.File(self.filename, mode="r") as f:
-                self._tile_size = f["trap_info/tile_size"][0]
+                # self._tile_size = f["trap_info/tile_size"][0]
+                self._tile_size = f["cell_info/edgemasks"].shape[1:]
         return self._tile_size
 
     def nonempty_tp_in_trap(self, trap_id: int) -> set:
@@ -99,7 +100,7 @@ class Cells:
         We use mother_assign to list traps because it is the only property that appears even
         when no cells are found
         """
-        return [self.labels_in_trap(trap) for trap in self.traps]
+        return [self.labels_in_trap(trap) for trap in range(self.ntraps)]
 
     def where(self, cell_id: int, trap_id: int):
         """
