@@ -17,8 +17,8 @@ class PostProcessABC(ProcessABC):
     @classmethod
     def as_function(cls, data, *args, **kwargs):
         # Find the parameter's default
-        parameters = cls.default_parameters(*args, **kwargs)
-        return cls(parameters=parameters).run(data)
+        parameters = cls.default_parameters(**kwargs)
+        return cls(parameters=parameters).run(data, *args)
 
     @classmethod
     def default_parameters(cls, *args, **kwargs):

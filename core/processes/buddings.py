@@ -13,7 +13,7 @@ from postprocessor.core.processes.lineageprocess import (
 
 
 class buddingsParameters(LineageProcessParameters):
-    """Parameter class to obtain birth events.
+    """Parameter class to obtain budding events.
 
     Parameters
     ----------
