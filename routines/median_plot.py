@@ -35,7 +35,9 @@ class _MedianPlotter(BasePlotter):
         self.ylabel = ylabel
 
         # Median and interquartile range
-        self.trace_time = np.array(self.trace_df.columns) * self.unit_scaling
+        self.trace_time = (
+            np.array(self.trace_df.columns, dtype=float) * self.unit_scaling
+        )
         self.median_ts = self.trace_df.median(axis=0)
         self.quartile1_ts = self.trace_df.quantile(0.25)
         self.quartile3_ts = self.trace_df.quantile(0.75)

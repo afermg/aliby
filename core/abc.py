@@ -15,10 +15,10 @@ class PostProcessABC(ProcessABC):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def as_function(cls, data, *args, **kwargs):
+    def as_function(cls, data, *extra_data, **kwargs):
         # Find the parameter's default
         parameters = cls.default_parameters(**kwargs)
-        return cls(parameters=parameters).run(data, *args)
+        return cls(parameters=parameters).run(data, *extra_data)
 
     @classmethod
     def default_parameters(cls, *args, **kwargs):
