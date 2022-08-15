@@ -267,3 +267,35 @@ class Image(Argo):
         meta["channels"] = self.image_wrap.getChannelLabels()
         meta["name"] = self.image_wrap.getName()
         return meta
+
+
+class UnsafeImage(Image):
+    """
+    Loads images from OMERO and gives access to the data and metadata.
+    This class is a temporary solution while we find a way to use
+    context managers inside napari. It risks resulting in zombie connections
+    and producing freezes in an OMERO server.
+
+    """
+
+    def __init__(self, image_id, **server_info):
+        """
+        Establishes the connection to the OMERO server via the Argo
+        base class.
+
+        Parameters
+        ----------
+        image_id: integer
+        server_info: dictionary
+            Specifies the host, username, and password as strings
+        """
+        super().__init__(image_id, **server_info)
+        self.create_gateway()
+
+    @property
+    def data(self):
+        try:
+            return get_data_lazy(self.image_wrap)
+        except Exception as e:
+            print(f"ERROR: Failed fetching image from server: {e}")
+            self.conn.connect(False)
