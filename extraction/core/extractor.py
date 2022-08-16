@@ -1,4 +1,14 @@
+"""
+The Extractor applies a metric, such as area or median, to image tiles using the cell masks.
+
+Its methods therefore require both tile images and masks.
+
+Usually one metric is applied per mask, but there are tile-specific backgrounds, which apply one metric per tile.
+
+Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the second level is the reduction algorithm, such as maximum projection; the last level is the metric -- the specific operation to apply to the cells in the image identified by the mask, such as median -- the median value of the pixels in each cell.
+"""
 import logging
+import typing as t
 from time import perf_counter
 from typing import Callable, Dict, List
 
@@ -323,23 +333,24 @@ class Extractor(ProcessABC):
         masks=None,
         labels=None,
         **kwargs,
-    ) -> dict:
-        """Core extraction method for an individual time-point.
+    ) -> t.Dict[str, t.Dict[str, pd.Series]]:
+        """
+        Core extraction method for an individual time-point.
 
         Parameters
         ----------
         tp : int
-            Time-point being analysed.
+            Time point being analysed.
         tree : dict
             Nested dictionary indicating channels, reduction functions and
-            metrics to use during extraction.
+            metrics to be used.
         tile_size : int
             size of the tile to be extracted.
         masks : np.ndarray
-            3-D boolean numpy array with dimensions (ncells, tile_size,
-            tile_size.
+            A 3-D boolean numpy array with dimensions (ncells, tile_size,
+            tile_size).
         labels : t.List[t.List[int]]
-            List of list of ints indicating the ids of masks.
+            List of lists of ints indicating the ids of masks.
         **kwargs : Additional keyword arguments to be passed to extractor.reduce_extract.
 
         Returns
@@ -352,11 +363,12 @@ class Extractor(ProcessABC):
 
 
         """
-
         if tree is None:
+            # use default
             tree = self.params.tree
-
+        # dictionary with channel: {reduction algorithm : metric}
         ch_tree = {ch: v for ch, v in tree.items() if ch != "general"}
+        # tuple of the channels
         tree_chs = (*ch_tree,)
 
         cells = Cells(self.local)
@@ -384,6 +396,7 @@ class Extractor(ProcessABC):
 
         self.img_bgsub = {}
         if self.params.sub_bg:
+            # Generate boolean masks for background
             bg = [
                 ~np.sum(m, axis=2).astype(bool)
                 if np.any(m)
