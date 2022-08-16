@@ -267,3 +267,25 @@ class Image(Argo):
         meta["channels"] = self.image_wrap.getChannelLabels()
         meta["name"] = self.image_wrap.getName()
         return meta
+
+
+class UnsafeImage(Image):
+    """
+    Loads images from OMERO and gives access to the data and metadata.
+    This does not require context management to work, making it possible
+    to leave hanging sessions and freeze an Omero server.
+    """
+
+    def __init__(self, image_id, **server_info):
+        """
+        Establishes the connection to the OMERO server via the Argo
+        base class.
+
+        Parameters
+        ----------
+        image_id: integer
+        server_info: dictionary
+            Specifies the host, username, and password as strings
+        """
+        super().__init__(image_id, **server_info)
+        self.create_gate()
