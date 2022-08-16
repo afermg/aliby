@@ -47,23 +47,6 @@ class Trap:
         self.half_size = size // 2
         self.max_size = max_size
 
-    def padding_required(self, tp):
-        """
-        Check if we need to pad the trap image for this time point.
-
-        Parameters
-        ----------
-        tp: integer
-            Index for a time point
-        """
-        try:
-            assert all(self.at_time(tp) - self.half_size >= 0)
-            assert all(self.at_time(tp) + self.half_size <= self.max_size)
-            # return False
-        except AssertionError:
-            return True
-        return False
-
     def at_time(self, tp):
         """
         Return trap centre at time tp by applying drifts
@@ -164,17 +147,6 @@ class TrapLocations:
         Returns no of traps and no of drifts
         """
         return len(self.traps), len(self.drifts)
-
-    def padding_required(self, tp):
-        """
-        Check if any traps need padding
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        """
-        return any([trap.padding_required(tp) for trap in self.traps])
 
     def to_dict(self, tp):
         """
@@ -559,12 +531,8 @@ class Tiler(ProcessABC):
             if item in ch:
                 return i
 
-    def get_position_annotation(self):
-        # TODO required for matlab support
-        return None
-
     @staticmethod
-    def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
+    def ifoob_pad(full, slices):
         """
         Returns the slices padded if it is out of bounds.
 
