@@ -17,10 +17,10 @@ The image-processing is performed by traps/segment_traps.
 
 The experiment is stored as an array wuth a standard indexing order of (Time, Channels, Z-stack, Y, X).
 """
+import typing as t
 import warnings
 from functools import lru_cache
 from pathlib import PosixPath
-from typing import Union
 
 import dask.array as da
 import h5py
@@ -256,8 +256,8 @@ class Tiler(ProcessABC):
     @classmethod
     def from_hdf5(
         cls,
-        image: Union[Image, ImageLocal],
-        filepath: Union[str, PosixPath],
+        image: t.Union[Image, ImageLocal],
+        filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
         """
@@ -480,8 +480,8 @@ class Tiler(ProcessABC):
         """
         if time_dim is None:
             time_dim = 0
-        for t in range(self.image.shape[time_dim]):
-            self.run_tp(t)
+        for frame in range(self.image.shape[time_dim]):
+            self.run_tp(frame)
         return None
 
     # The next set of functions are necessary for the extraction object
