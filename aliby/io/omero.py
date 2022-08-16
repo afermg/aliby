@@ -43,18 +43,21 @@ class Argo:
         self.username = username
         self.password = password
 
-    # standard method required for Python's with statement
-    def __enter__(self):
+    def create_gate(self) -> None:
         self.conn = BlitzGateway(
             host=self.host, username=self.username, passwd=self.password
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
 
+    # standard method required for Python's with statement
+    def __enter__(self):
+        self.create_gate()
+
         return self
 
     # standard method required for Python's with statement
-    def __exit__(self, *exc):
+    def __exit__(self, *exc) -> bool:
         for e in exc:
             if e is not None:
                 print(e)
