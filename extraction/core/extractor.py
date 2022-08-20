@@ -1,12 +1,3 @@
-"""
-The Extractor applies a metric, such as area or median, to image tiles using the cell masks.
-
-Its methods therefore require both tile images and masks.
-
-Usually one metric is applied per mask, but there are tile-specific backgrounds, which apply one metric per tile.
-
-Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the second level is the reduction algorithm, such as maximum projection; the last level is the metric -- the specific operation to apply to the cells in the image identified by the mask, such as median -- the median value of the pixels in each cell.
-"""
 import logging
 import typing as t
 from time import perf_counter
@@ -42,9 +33,6 @@ MERGE_FUNS = load_mergefuns()
 class ExtractorParameters(ParametersABC):
     """
     Base class to define parameters for extraction
-    :tree: dict of depth n. If not of depth three tree will be filled with Nones
-        str channel -> U(function,None) reduction -> str metric
-
     """
 
     def __init__(
@@ -53,31 +41,36 @@ class ExtractorParameters(ParametersABC):
         sub_bg: set = set(),
         multichannel_ops: Dict = {},
     ):
-
+        """
+        Parameters
+        ----------
+        tree: dict
+            Nested dictionary indicating channels, reduction functions and
+            metrics to be used.
+            str channel -> U(function,None) reduction -> str metric
+            If not of depth three, tree will be filled with Nones.
+        sub_bg: set
+        multichannel_ops: dict
+        """
         self.tree = fill_tree(tree)
-
         self.sub_bg = sub_bg
         self.multichannel_ops = multichannel_ops
 
     @staticmethod
     def guess_from_meta(store_name: str, suffix="fast"):
         """
-        Make a guess on the parameters using the hdf5 metadata
+        Find the microscope used from the h5 metadata
 
-        Add anything as a suffix, default "fast"
-
-
-        Parameters:
-            store_name : str or Path indicating the results' storage.
-            suffix : str to add at the end of the predicted parameter set
+        Parameters
+        ----------
+        store_name : str or Path
+            For a h5 file
+        suffix : str
+            Added at the end of the predicted parameter set
         """
-
-        with h5py.open(store_name, "r") as f:
-            microscope = f["/"].attrs.get(
-                "microscope"
-            )  # TODO Check this with Arin
+        with h5py.File(store_name, "r") as f:
+            microscope = f["/"].attrs.get("microscope")
         assert microscope, "No metadata found"
-
         return "_".join((microscope, suffix))
 
     @classmethod
@@ -91,20 +84,30 @@ class ExtractorParameters(ParametersABC):
 
 class Extractor(ProcessABC):
     """
-    Base class to perform feature extraction.
+    The Extractor applies a metric, such as area or median, to cells identified in the image tiles using the cell masks.
+
+    Its methods therefore require both tile images and masks.
+
+    Usually one metric is applied per mask, but there are tile-specific backgrounds (Alan), which apply one metric per tile.
+
+    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the second level is the reduction algorithm, such as maximum projection; the last level is the metric - the specific operation to apply to the cells in the image identified by the mask, such as median, which is the median value of the pixels in each cell.
 
     Parameters
     ----------
-        parameters: core.extractor Parameters
-            Parameters that include with channels, reduction and
-            extraction functions to use.
-        store: str
-            Path to hdf5 storage file. Must contain cell outlines.
-        tiler: pipeline-core.core.segmentation tiler
-            Class that contains or fetches the image to be used for segmentation.
+    parameters: core.extractor Parameters
+        Parameters that include with channels, reduction and
+        extraction functions to use.
+    store: str
+        Path to hdf5 storage file. Must contain cell outlines.
+    tiler: pipeline-core.core.segmentation tiler
+        Class that contains or fetches the image to be used for segmentation.
     """
 
-    default_meta = {"pixel_size": 0.236, "z_size": 0.6, "spacing": 0.6}
+    default_meta = {
+        "pixel_size": 0.236,
+        "z_size": 0.6,
+        "spacing": 0.6,
+    }
 
     def __init__(
         self,
@@ -112,11 +115,22 @@ class Extractor(ProcessABC):
         store: str = None,
         tiler: Tiler = None,
     ):
+        """
+        Initialise Extractor.
+
+        Parameters
+        ----------
+        parameters: ExtractorParameters object
+        store: str
+            Name of h5 file
+        tiler: Tiler object
+        """
         self.params = parameters
         if store:
             self.local = store
             self.load_meta()
-        else:  # In case no h5 file is used, just use the parameters straight ahead
+        else:
+            # if no h5 file, use the parameters directly
             self.meta = {"channel": parameters.to_dict()["tree"].keys()}
         if tiler:
             self.tiler = tiler
@@ -124,22 +138,30 @@ class Extractor(ProcessABC):
 
     @classmethod
     def from_tiler(
-        cls, parameters: ExtractorParameters, store: str, tiler: Tiler
+        cls,
+        parameters: ExtractorParameters,
+        store: str,
+        tiler: Tiler,
     ):
+        # initate from tiler
         return cls(parameters, store=store, tiler=tiler)
 
     @classmethod
     def from_img(
-        cls, parameters: ExtractorParameters, store: str, img_meta: tuple
+        cls,
+        parameters: ExtractorParameters,
+        store: str,
+        img_meta: tuple,
     ):
+        # initiate from image
         return cls(parameters, store=store, tiler=Tiler(*img_meta))
 
     @property
     def channels(self):
+        # returns a tuple of strings of the available channels
         if not hasattr(self, "_channels"):
             if type(self.params.tree) is dict:
                 self._channels = tuple(self.params.tree.keys())
-
         return self._channels
 
     @property
@@ -147,16 +169,18 @@ class Extractor(ProcessABC):
         return self.local.split("/")[-1][:-3]
 
     @property
-    def group(self):  # Path within hdf5
+    def group(self):
+        # returns path within h5 file
         if not hasattr(self, "_out_path"):
             self._group = "/extraction/"
         return self._group
 
     def load_custom_funs(self):
         """
-        Load parameters of functions that require them from expt.
-        These must be loaded within the Extractor instance because their parameters
-        depend on their experiment's metadata.
+        Load any necessary parameters for functions.
+        These parameters must be loaded within an Extractor instance because they depend on the experiment's metadata.
+
+        Alan: this is challenging to follow!
         """
         funs = set(
             [
@@ -188,21 +212,40 @@ class Extractor(ProcessABC):
         self._all_funs = {**self._custom_funs, **FUNS}
 
     def load_meta(self):
+        # load metadata from h5 file whose name is given by self.local
         self.meta = load_attributes(self.local)
 
     def get_traps(
         self, tp: int, channels: list = None, z: list = None, **kwargs
     ) -> tuple:
+        """
+        Finds traps for a given time point and given channels and z-stacks.
+        Returns None if no traps are found.
+
+        Any additional keyword arguments are passed to tiler.get_traps_timepoint
+
+        Parameters
+        ----------
+        tp: int
+            Time point of interest
+        channels: list of strings (optional)
+            Channels of interest
+        z: list of integers (optional)
+            Indices for the z-stacks of interest
+        """
         if channels is None:
+            # find channels from tiler
             channel_ids = list(range(len(self.tiler.channels)))
         elif len(channels):
+            # a subset of channels was specified
             channel_ids = [self.tiler.get_channel_index(ch) for ch in channels]
         else:
+            # oh oh
             channel_ids = None
-
+        # a list of the indices of the z stacks
         if z is None:
             z = list(range(self.tiler.shape[-1]))
-
+        # find the appropiate traps from tiler
         traps = (
             self.tiler.get_traps_timepoint(
                 tp, channels=channel_ids, z=z, **kwargs
@@ -210,7 +253,6 @@ class Extractor(ProcessABC):
             if channel_ids
             else None
         )
-
         return traps
 
     def extract_traps(
@@ -272,7 +314,6 @@ class Extractor(ProcessABC):
             )
             for metric in metrics
         }
-
         return d
 
     def reduce_extract(
@@ -322,8 +363,8 @@ class Extractor(ProcessABC):
         """
         if method is None:
             return img
-
-        return reduce_z(img, method)
+        else:
+            return reduce_z(img, method)
 
     def extract_tp(
         self,
@@ -370,10 +411,10 @@ class Extractor(ProcessABC):
         ch_tree = {ch: v for ch, v in tree.items() if ch != "general"}
         # tuple of the channels
         tree_chs = (*ch_tree,)
-
+        # create a Cells object to extract information from the h5 file
         cells = Cells(self.local)
 
-        # labels
+        # find the cell labels and store as dict with trap_ids as keys
         if labels is None:
             raw_labels = cells.labels_at_time(tp)
             labels = {
@@ -381,22 +422,22 @@ class Extractor(ProcessABC):
                 for trap_id in range(cells.ntraps)
             }
 
-        # masks
+        # find the cell masks as a dict with trap_ids as keys
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}
             for trap_id, cells in raw_masks.items():
                 if len(cells):
                     masks[trap_id] = np.dstack(np.array(cells)).astype(bool)
-
+        # convert to a list of masks
         masks = [np.array(v) for v in masks.values()]
 
-        # traps
+        # find traps at the time point
         traps = self.get_traps(tp, tile_shape=tile_size, channels=tree_chs)
 
         self.img_bgsub = {}
         if self.params.sub_bg:
-            # Generate boolean masks for background
+            # generate boolean masks for background
             bg = [
                 ~np.sum(m, axis=2).astype(bool)
                 if np.any(m)
@@ -405,7 +446,6 @@ class Extractor(ProcessABC):
             ]
 
         d = {}
-
         for ch, red_metrics in tree.items():
             img = None
             # ch != is necessary for threading

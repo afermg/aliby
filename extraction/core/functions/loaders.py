@@ -69,8 +69,7 @@ def load_cellfuns():
 
 def load_trapfuns():
     """
-    Load functions that are applied to an entire trap (or tile, or subsection of a given image),
-    instead of being applied to single cells.
+    Load functions that are applied to an entire trap (or tile or subsection of a given image) rather than to single cells.
     """
     TRAPFUNS = {
         f[0]: f[1]
@@ -83,11 +82,10 @@ def load_trapfuns():
 
 def load_funs():
     """
-    Combine all automatically-loaded functions
+    Combine all automatically loaded functions
     """
     CELLFUNS = load_cellfuns()
     TRAPFUNS = load_trapfuns()
-
     return CELLFUNS, TRAPFUNS, {**TRAPFUNS, **CELLFUNS}
 
 
