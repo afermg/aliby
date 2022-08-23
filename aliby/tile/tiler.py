@@ -166,6 +166,10 @@ class TrapLocations:
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         return res
 
+    def at_time(self, tp: int) -> np.ndarray:
+        # Returns ( ntraps, 2 ) ndarray with the trap centres as individual rows
+        return np.array([trap.at_time(tp) for trap in self.traps])
+
     @classmethod
     def from_tiler_init(
         cls, initial_location, tile_size: int = None, max_size: int = 1200
