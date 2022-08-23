@@ -47,7 +47,7 @@ class Trap:
         self.half_size = size // 2
         self.max_size = max_size
 
-    def at_time(self, tp):
+    def at_time(self, tp: int) -> t.List[int]:
         """
         Return trap centre at time tp by applying drifts
 
@@ -62,7 +62,7 @@ class Trap:
         """
         drifts = self.parent.drifts
         trap_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
-        return trap_centre
+        return list(trap_centre.astype(int))
 
     def as_tile(self, tp):
         """
