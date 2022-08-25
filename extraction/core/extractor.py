@@ -21,6 +21,7 @@ from extraction.core.functions.loaders import (
 )
 from extraction.core.functions.utils import depth
 
+# Global parameters used to load functions that either analyse cells or their background. These global parameters both allow the functions to be stored in a dictionary for access only on demand and to be defined simply in extraction/core/functions.
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
 RED_FUNS = load_redfuns()
@@ -177,11 +178,11 @@ class Extractor(ProcessABC):
 
     def load_custom_funs(self):
         """
-        Load any necessary parameters for functions.
-        These parameters must be loaded within an Extractor instance because they depend on the experiment's metadata.
+        Define any custom functions to be functions of cell_masks and trap_image only.
 
-        Alan: this is challenging to follow!
+        Any other parameters are taken from the experiment's metadata and automatically applied. These parameters therefore must be loaded within an Extractor instance.
         """
+        # find functions specified in params.tree
         funs = set(
             [
                 fun
@@ -190,18 +191,21 @@ class Extractor(ProcessABC):
                 for fun in red
             ]
         )
+        # consider only those already loaded from CUSTOM_FUNS
         funs = funs.intersection(CUSTOM_FUNS.keys())
+        # find their arguments
         ARG_VALS = {
             k: {k2: self.get_meta(k2) for k2 in v}
             for k, v in CUSTOM_ARGS.items()
         }
-        # self._custom_funs = {trap_apply(CUSTOM_FUNS[fun],])
+        # define custom functions - those with extra arguments other than cell_masks and trap_image - as functions of two variables
         self._custom_funs = {}
         for k, f in CUSTOM_FUNS.items():
 
             def tmp(f):
-                return lambda m, img: trap_apply(
-                    f, m, img, **ARG_VALS.get(k, {})
+                # pass extra arguments to custom function
+                return lambda cell_masks, trap_image: trap_apply(
+                    f, cell_masks, trap_image, **ARG_VALS.get(k, {})
                 )
 
             self._custom_funs[k] = tmp(f)
@@ -209,6 +213,7 @@ class Extractor(ProcessABC):
     def load_funs(self):
         self.load_custom_funs()
         self._all_cell_funs = set(self._custom_funs.keys()).union(CELL_FUNS)
+        # merge the two dicts
         self._all_funs = {**self._custom_funs, **FUNS}
 
     def load_meta(self):
@@ -328,16 +333,16 @@ class Extractor(ProcessABC):
 
         Parameters
         ----------
-        :param red_metrics: dict in which keys are reduction funcions and
-        values are strings indicating the metric function
-        :**kwargs: All other arguments, must include masks and traps.
+        param red_metrics: dict
+            dict for which keys are reduction funcions and values are strings indicating the metric function
+        **kwargs: dict
+            All other arguments and must include masks and traps.
 
         Returns
         ------
         Dictionary of dataframes with the corresponding reductions and metrics nested.
-
         """
-
+        # create dict of traps with reduction in the z-direction
         reduced_traps = {}
         if traps is not None:
             for red_fun in red_metrics.keys():
@@ -359,7 +364,7 @@ class Extractor(ProcessABC):
 
     def reduce_dims(self, img: np.array, method=None) -> np.array:
         """
-        Collapse a z-stack into a single file. It may perform a null operation.
+        Collapse a z-stack into 2d array. It may perform a null operation.
         """
         if method is None:
             return img
@@ -397,12 +402,6 @@ class Extractor(ProcessABC):
         Returns
         -------
         dict
-
-        Examples
-        --------
-        FIXME: Add docs.
-
-
         """
         if tree is None:
             # use default
@@ -618,6 +617,7 @@ class Extractor(ProcessABC):
 
     def get_meta(self, flds):
         if not hasattr(flds, "__iter__"):
+            # make flds a list
             flds = [flds]
         meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
         return {
