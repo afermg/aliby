@@ -11,7 +11,7 @@ trange = list(range(0, 30))
 ncols = 8
 
 riv = remoteImageViewer(fpath)
-riv.plot_labelled_traps(trap_id, trange, ncols)
+riv.plot_labelled_trap(trap_id, trange, [0], ncols=ncols)
 
 """
 
@@ -92,9 +92,7 @@ class remoteImageViewer:
         assert self.image_id is not None, "No valid image_id found in metadata"
 
         if server_info is None:
-            server_info = yaml.safe_load(attrs["parameters"])["general"][
-                "server_info"
-            ]
+            server_info = attrs["parameters"]["general"]["server_info"]
         self.server_info = server_info
 
         with OImage(self.image_id, **self.server_info) as image:

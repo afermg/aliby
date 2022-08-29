@@ -290,7 +290,7 @@ class UnsafeImage(Image):
             Specifies the host, username, and password as strings
         """
         super().__init__(image_id, **server_info)
-        self.create_gateway()
+        self.create_gate()
 
     @property
     def data(self):

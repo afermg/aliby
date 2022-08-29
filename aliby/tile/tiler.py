@@ -17,10 +17,10 @@ The image-processing is performed by traps/segment_traps.
 
 The experiment is stored as an array wuth a standard indexing order of (Time, Channels, Z-stack, Y, X).
 """
+import typing as t
 import warnings
 from functools import lru_cache
 from pathlib import PosixPath
-from typing import Union
 
 import dask.array as da
 import h5py
@@ -47,24 +47,7 @@ class Trap:
         self.half_size = size // 2
         self.max_size = max_size
 
-    def padding_required(self, tp):
-        """
-        Check if we need to pad the trap image for this time point.
-
-        Parameters
-        ----------
-        tp: integer
-            Index for a time point
-        """
-        try:
-            assert all(self.at_time(tp) - self.half_size >= 0)
-            assert all(self.at_time(tp) + self.half_size <= self.max_size)
-            # return False
-        except AssertionError:
-            return True
-        return False
-
-    def at_time(self, tp):
+    def at_time(self, tp: int) -> t.List[int]:
         """
         Return trap centre at time tp by applying drifts
 
@@ -79,7 +62,7 @@ class Trap:
         """
         drifts = self.parent.drifts
         trap_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
-        return trap_centre
+        return list(trap_centre.astype(int))
 
     def as_tile(self, tp):
         """
@@ -165,17 +148,6 @@ class TrapLocations:
         """
         return len(self.traps), len(self.drifts)
 
-    def padding_required(self, tp):
-        """
-        Check if any traps need padding
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        """
-        return any([trap.padding_required(tp) for trap in self.traps])
-
     def to_dict(self, tp):
         """
         Export inital locations, tile_size, max_size, and drifts
@@ -193,6 +165,10 @@ class TrapLocations:
             res["attrs/max_size"] = self.max_size
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         return res
+
+    def at_time(self, tp: int) -> np.ndarray:
+        # Returns ( ntraps, 2 ) ndarray with the trap centres as individual rows
+        return np.array([trap.at_time(tp) for trap in self.traps])
 
     @classmethod
     def from_tiler_init(
@@ -284,8 +260,8 @@ class Tiler(ProcessABC):
     @classmethod
     def from_hdf5(
         cls,
-        image: Union[Image, ImageLocal],
-        filepath: Union[str, PosixPath],
+        image: t.Union[Image, ImageLocal],
+        filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
         """
@@ -508,8 +484,8 @@ class Tiler(ProcessABC):
         """
         if time_dim is None:
             time_dim = 0
-        for t in range(self.image.shape[time_dim]):
-            self.run_tp(t)
+        for frame in range(self.image.shape[time_dim]):
+            self.run_tp(frame)
         return None
 
     # The next set of functions are necessary for the extraction object
@@ -559,12 +535,8 @@ class Tiler(ProcessABC):
             if item in ch:
                 return i
 
-    def get_position_annotation(self):
-        # TODO required for matlab support
-        return None
-
     @staticmethod
-    def ifoob_pad(full, slices):  # TODO Remove when inheriting TilerABC
+    def ifoob_pad(full, slices):
         """
         Returns the slices padded if it is out of bounds.
 
