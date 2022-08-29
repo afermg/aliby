@@ -45,6 +45,7 @@ pyright = "^1.1.258"
 pre-commit = "^2.20.0"
 data-science-types = "^0.2.23"
 jupytext = "^1.14.1"
+python-lsp-server = "^1.5.0"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.0.0"]
