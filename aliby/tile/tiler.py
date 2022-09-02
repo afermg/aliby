@@ -15,7 +15,7 @@ One key method is Tiler.run.
 
 The image-processing is performed by traps/segment_traps.
 
-The experiment is stored as an array wuth a standard indexing order of (Time, Channels, Z-stack, Y, X).
+The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, Y, X).
 """
 import warnings
 from functools import lru_cache
@@ -519,6 +519,24 @@ class Tiler(ProcessABC):
         """
         Get a multidimensional array with all tiles for a set of channels
         and z-stacks.
+
+        Used by extractor.
+
+        Parameters
+        ---------
+        tp: int
+            Index of time point
+        tile_shape: int or tuple of two ints
+            Size of tile in x and y dimensions
+        channels: string or list of strings
+            Names of channels of interest
+        z: int
+            Index of z-channel of interest
+
+        Returns
+        -------
+        res: array
+            Data arranged as (traps, channels, timepoints, X, Y, Z)
         """
         # FIXME add support for subtiling trap
         # FIXME can we ignore z(always  give)
@@ -526,12 +544,13 @@ class Tiler(ProcessABC):
             channels = [0]
         elif isinstance(channels, str):
             channels = [channels]
+        # get the data
         res = []
         for c in channels:
-            val = self.get_tp_data(tp, c)[:, z]  # Only return requested z
-            # positions
-            # Starts at traps, z, y, x
-            # Turn to Trap, C, T, X, Y, Z order
+            # only return requested z
+            val = self.get_tp_data(tp, c)[:, z]
+            # starts with the order: traps, z, y, x
+            # returns the order: trap, C, T, X, Y, Z
             val = val.swapaxes(1, 3).swapaxes(1, 2)
             val = np.expand_dims(val, axis=1)
             res.append(val)
