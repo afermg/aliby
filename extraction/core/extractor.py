@@ -1,7 +1,7 @@
 import logging
 import typing as t
 from time import perf_counter
-from typing import Callable, Dict, List
+from typing import List
 
 import h5py
 import numpy as np
@@ -19,7 +19,6 @@ from extraction.core.functions.loaders import (
     load_mergefuns,
     load_redfuns,
 )
-from extraction.core.functions.utils import depth
 
 # Global parameters used to load functions that either analyse cells or their background. These global parameters both allow the functions to be stored in a dictionary for access only on demand and to be defined simply in extraction/core/functions.
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
@@ -38,9 +37,9 @@ class ExtractorParameters(ParametersABC):
 
     def __init__(
         self,
-        tree: Dict[str, Dict[Callable, List[str]]] = None,
+        tree: t.Dict[str, t.Dict[t.Callable, t.List[str]]],
         sub_bg: set = set(),
-        multichannel_ops: Dict = {},
+        multichannel_ops: t.Dict = {},
     ):
         """
         Parameters
@@ -53,7 +52,7 @@ class ExtractorParameters(ParametersABC):
         sub_bg: set
         multichannel_ops: dict
         """
-        self.tree = fill_tree(tree)
+        self.tree = tree
         self.sub_bg = sub_bg
         self.multichannel_ops = multichannel_ops
 
@@ -220,7 +219,7 @@ class Extractor(ProcessABC):
         # load metadata from h5 file whose name is given by self.local
         self.meta = load_attributes(self.local)
 
-    def get_traps(
+    def get_tiles(
         self,
         tp: int,
         channels: list = None,
@@ -231,7 +230,7 @@ class Extractor(ProcessABC):
         Finds traps for a given time point and given channels and z-stacks.
         Returns None if no traps are found.
 
-        Any additional keyword arguments are passed to tiler.get_traps_timepoint
+        Any additional keyword arguments are passed to tiler.get_tiles_timepoint
 
         Parameters
         ----------
@@ -270,7 +269,7 @@ class Extractor(ProcessABC):
         traps: List[np.array],
         masks: List[np.array],
         metric: str,
-        labels: Dict = None,
+        labels: t.Dict = None,
     ) -> dict:
         """
         Apply a function to a whole position.
