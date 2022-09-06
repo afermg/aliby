@@ -2,9 +2,17 @@ import numpy as np
 
 
 def div0(a, b, fill=0):
-    """a / b, divide by 0 -> `fill`
-    div0( [-1, 0, 1], 0, fill=np.nan) -> [nan nan nan]
-    div0( 1, 0, fill=np.inf ) -> inf
+    """
+    Divide array a by array b.
+
+    If the result is a scalar and infinite, return fill.
+
+    If the result contain elements that are infinite, replace these elements with fill.
+
+    Parameters
+    ----------
+    a: array
+    b: array
     """
     with np.errstate(divide="ignore", invalid="ignore"):
         c = np.true_divide(a, b)
