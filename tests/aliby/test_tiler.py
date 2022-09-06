@@ -43,7 +43,7 @@ def trap_timelapse(tiler, trap_idx, channel, z):
 
 def timepoint_traps(tiler, tp_idx, channel, z, tile_size):
     channel_id = tiler.get_channel_index(channel)
-    traps = tiler.get_traps_timepoint(
+    traps = tiler.get_tiles_timepoint(
         tp_idx, tile_size=tile_size, channels=[channel_id], z=list(range(z))
     )
     return traps

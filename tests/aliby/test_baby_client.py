@@ -42,7 +42,7 @@ def test_client():
     num_timepoints = 5
 
     traps_tps = [
-        seg_expt.get_traps_timepoint(
+        seg_expt.get_tiles_timepoint(
             tp, tile_size=81, channels=[0], z=[0, 1, 2, 3, 4]
         ).squeeze()
         for tp in range(num_timepoints)

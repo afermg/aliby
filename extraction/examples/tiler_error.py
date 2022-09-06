@@ -27,7 +27,7 @@ plt.show()
 tiler = Tiler(expt, template=trap_template)
 
 # Load images (takes about 5 mins)
-trap_tps = tiler.get_traps_timepoint(0, tile_size=117, z=[2])
+trap_tps = tiler.get_tiles_timepoint(0, tile_size=117, z=[2])
 
 # Plot found traps
 nrows, ncols = (5, 5)
