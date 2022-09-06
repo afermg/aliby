@@ -105,7 +105,7 @@ Alternatively, if you want to get all the traps at a given timepoint:
 
 ```python
 timepoint = 0
-seg_expt.get_traps_timepoints(timepoint, tile_size=96, channels=None,
+seg_expt.get_tiles_timepoints(timepoint, tile_size=96, channels=None,
                                 z=[0,1,2,3,4])
 ```
 

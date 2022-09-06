@@ -488,8 +488,16 @@ class Tiler(ProcessABC):
             self.run_tp(frame)
         return None
 
+    def get_traps_timepoint(self, *args, **kwargs):
+        #
+        print(
+            DeprecationWarning("Deprecated:Use get_tiles_timepoint instead.")
+        )
+
+        return self.get_tiles_timepoint(*args, **kwargs)
+
     # The next set of functions are necessary for the extraction object
-    def get_traps_timepoint(
+    def get_tiles_timepoint(
         self, tp, tile_shape=None, channels=None, z=None
     ) -> np.ndarray:
         """

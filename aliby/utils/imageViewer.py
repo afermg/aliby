@@ -197,7 +197,7 @@ class remoteImageViewer:
             # tps = set(tps).difference(self.full.keys())
             for ch, tp in ch_tps:
                 if (ch, tp) not in self.full:
-                    self.full[(ch, tp)] = self.tiler.get_traps_timepoint(
+                    self.full[(ch, tp)] = self.tiler.get_tiles_timepoint(
                         tp, channels=[ch], z=[z]
                     )[:, 0, 0, ..., z]
             requested_trap = {tp: self.full[(ch, tp)] for ch, tp in ch_tps}

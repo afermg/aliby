@@ -256,7 +256,7 @@ class Extractor(ProcessABC):
             z = list(range(self.tiler.shape[-1]))
         # gets the data via tiler
         traps = (
-            self.tiler.get_traps_timepoint(
+            self.tiler.get_tiles_timepoint(
                 tp, channels=channel_ids, z=z, **kwargs
             )
             if channel_ids
@@ -294,7 +294,8 @@ class Extractor(ProcessABC):
             A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
         """
         if labels is None:
-            raise Warning("No labels given. Sorting cells using index.")
+            print("Warning: No labels given. Sorting cells using index.")
+
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []
         results = []
@@ -471,7 +472,7 @@ class Extractor(ProcessABC):
         # find image data at the time point
         # stored as an array arranged as (traps, channels, timepoints, X, Y, Z)
         # Alan: traps does not appear the best name here!
-        traps = self.get_traps(tp, tile_shape=tile_size, channels=tree_chs)
+        traps = self.get_tiles(tp, tile_shape=tile_size, channels=tree_chs)
 
         # generate boolean masks for background as a list with one mask per trap
         if self.params.sub_bg:
