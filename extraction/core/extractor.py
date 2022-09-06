@@ -89,7 +89,7 @@ class Extractor(ProcessABC):
 
     Its methods therefore require both tile images and masks.
 
-    Usually one metric is applied per mask, but there are tile-specific backgrounds (Alan), which apply one metric per tile.
+    Usually one metric is applied to the masked area in a tile, but there are metrics that depend on the whole tile.
 
     Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the second level is the reduction algorithm, such as maximum projection; the last level is the metric - the specific operation to apply to the cells in the image identified by the mask, such as median, which is the median value of the pixels in each cell.
 
@@ -166,9 +166,8 @@ class Extractor(ProcessABC):
         return self._channels
 
     @property
-    # Alan: does this work. local is not a string.
     def current_position(self):
-        return self.local.split("/")[-1][:-3]
+        return str(self.local).split("/")[-1][:-3]
 
     @property
     def group(self):
@@ -295,7 +294,6 @@ class Extractor(ProcessABC):
             A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
         """
         if labels is None:
-            # Alan: it looks like this will crash if Labels is None
             raise Warning("No labels given. Sorting cells using index.")
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []
@@ -357,7 +355,7 @@ class Extractor(ProcessABC):
             dict for which keys are reduction functions and values are either a list or a set of strings giving the metric functions.
             For example: {'np_max': {'max5px', 'mean', 'median'}}
         **kwargs: dict
-            All other arguments and must include masks and traps. Alan: stll true?
+            All other arguments passed to Extractor.extract_funs.
 
         Returns
         ------
@@ -509,14 +507,13 @@ class Extractor(ProcessABC):
                 ch_bs = ch + "_bgsub"
                 self.img_bgsub[ch_bs] = []
                 for trap, bg in zip(img, bgs):
-                    cells_fl = np.zeros_like(trap)
-                    # Alan: should this not be is_not_cell?
-                    is_cell = np.where(bg)
+                    bg_fluo = np.zeros_like(trap)
+                    not_cell = np.where(bg)
                     # skip for empty traps
-                    if len(is_cell[0]):
-                        cells_fl = np.median(trap[is_cell], axis=0)
+                    if len(not_cell[0]):
+                        bg_fluo = np.median(trap[not_cell], axis=0)
                     # subtract median background
-                    self.img_bgsub[ch_bs].append(trap - cells_fl)
+                    self.img_bgsub[ch_bs].append(trap - bg_fluo)
                 # apply metrics to background-corrected data
                 d[ch_bs] = self.reduce_extract(
                     red_metrics=ch_tree[ch],
@@ -636,45 +633,6 @@ class Extractor(ProcessABC):
             self.save_to_hdf(d)
         return d
 
-    # Alan: isn't this identical to run?
-    # def extract_pos(
-    #     self, tree=None, tps: List[int] = None, save=True, **kwargs
-    # ) -> dict:
-
-    #     if tree is None:
-    #         tree = self.params.tree
-
-    #     if tps is None:
-    #         tps = list(range(self.meta["time_settings/ntimepoints"]))
-
-    #     d = {}
-    #     for tp in tps:
-    #         new = flatten_nest(
-    #             self.extract_tp(tp=tp, tree=tree, **kwargs),
-    #             to="series",
-    #             tp=tp,
-    #         )
-
-    #         for k in new.keys():
-    #             n = new[k]
-    #             d[k] = pd.concat((d.get(k, None), n), axis=1)
-
-    #     for k in d.keys():
-    #         indices = ["experiment", "position", "trap", "cell_label"]
-    #         idx = (
-    #             indices[-d[k].index.nlevels :]
-    #             if d[k].index.nlevels > 1
-    #             else [indices[-2]]
-    #         )
-    #         d[k].index.names = idx
-
-    #         toreturn = d
-
-    #     if save:
-    #         self.save_to_hdf(toreturn)
-
-    #     return toreturn
-
     def save_to_hdf(self, dict_series, path=None):
         """
         Save the extracted data to the h5 file.
@@ -732,20 +690,6 @@ def flatten_nesteddict(nest: dict, to="series", tp: int = None) -> dict:
                     pd.Series(*v2, name=tp) if to == "series" else v2
                 )
     return d
-
-
-# Alan: this no longer seems to be used
-def fill_tree(tree):
-    if tree is None:
-        return None
-    tree_depth = depth(tree)
-    if depth(tree) < 3:
-        d = {None: {None: {None: []}}}
-        for _ in range(2 - tree_depth):
-            d = d[None]
-        d[None] = tree
-        tree = d
-    return tree
 
 
 class hollowExtractor(Extractor):

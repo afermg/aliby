@@ -269,10 +269,17 @@ def min_maj_approximation(cell_mask):
     cell_mask: 3d array
         Segmentation masks for cells
     """
+    # pad outside with zeros so that the distance transforms have no edge artifacts
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    # get the distance from the edge, masked
     nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    # get the distance from the top of the cone, masked
     dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded
+    # get the size of the top of the cone (points that are equally maximal)
     cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
+    # minor axis = largest distance from the edge of the ellipse
     min_ax = np.round(nn.max())
+    # major axis = largest distance from the cone top
+    # + distance from the center of cone top to edge of cone top
     maj_ax = np.round(dn.max() + cone_top.sum() / 2)
     return min_ax, maj_ax

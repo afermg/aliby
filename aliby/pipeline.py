@@ -24,7 +24,7 @@ from agora.io.writer import (  # BabyWriter,
     TilerWriter,
 )
 from pathos.multiprocessing import Pool
-from postprocessor.core.processor import PostProcessor, PostProcessorParameters
+# from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # import pandas as pd
 from scipy import ndimage
@@ -141,10 +141,13 @@ class PipelineParameters(ParametersABC):
             exparams_from_meta(meta_d)
             or BabyParameters.default(**extraction).to_dict()
         )
-        defaults["postprocessing"] = PostProcessorParameters.default(
-            **postprocessing
-        ).to_dict()
+        defaults["postprocessing"] = {}
         defaults["reporting"] = {}
+
+        # defaults["postprocessing"] = PostProcessorParameters.default(
+        #     **postprocessing
+        # ).to_dict()
+        # defaults["reporting"] = {}
 
         return cls(**{k: v for k, v in defaults.items()})
 
@@ -485,6 +488,7 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
+                            print(f"Runs to frame {i}")
                             logging.debug(
                                 f"Quality:Clogged_traps:{frac_clogged_traps}"
                             )
@@ -503,12 +507,12 @@ class Pipeline(ProcessABC):
 
                         meta.add_fields({"last_processed": i})
                     # Run post processing
-
+                    # 1/0
                     meta.add_fields({"end_status": "Success"})
-                    post_proc_params = PostProcessorParameters.from_dict(
-                        config["postprocessing"]
-                    )
-                    PostProcessor(filename, post_proc_params).run()
+                    # post_proc_params = PostProcessorParameters.from_dict(
+                    #     config["postprocessing"]
+                    # )
+                    # PostProcessor(filename, post_proc_params).run()
 
                     return 1
 
