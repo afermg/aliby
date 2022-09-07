@@ -1,3 +1,4 @@
+import typing as t
 from inspect import getfullargspec, getmembers, isfunction
 
 import numpy as np
@@ -12,6 +13,7 @@ Load functions for analysing cells and their background.
 Note that inspect.getmembers returns a list of function names and functions, and inspect.getfullargspec returns a function's arguments.
 """
 
+
 def load_cellfuns_core():
     """
     Load functions from the cell module and return as a dict.
@@ -24,7 +26,9 @@ def load_cellfuns_core():
     }
 
 
-def load_custom_args():
+def load_custom_args() -> t.Tuple[
+    (t.Dict[str, t.Callable], t.Dict[str, t.List[str]])
+]:
     """
     Load custom functions from the localisation module and return the functions and any additional arguments, other than cell_mask and trap_image, as dictionaries.
     """
