@@ -652,10 +652,9 @@ class Extractor(ProcessABC):
             self.writer.write(dset_path, series)
         self.writer.id_cache.clear()
 
-    def get_meta(self, flds):
-        # Alan: unsure what this is doing. seems to break for "nuc_conv_3d"
-        # make flds a list
-        if not hasattr(flds, "__iter__"):
+    def get_meta(self, flds: t.Union[str, t.Collection]):
+        # Obtain metadata for one or multiple fields
+        if isinstance(flds, str):
             flds = [flds]
         meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
         return {
