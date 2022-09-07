@@ -7,13 +7,13 @@ import re
 import traceback
 import typing as t
 from copy import copy
-from itertools import groupby
 from pathlib import Path, PosixPath
 from time import perf_counter
 from typing import Union
 
 import h5py
 import numpy as np
+import pandas as pd
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
@@ -24,12 +24,7 @@ from agora.io.writer import (  # BabyWriter,
     TilerWriter,
 )
 from pathos.multiprocessing import Pool
-# from postprocessor.core.processor import PostProcessor, PostProcessorParameters
-
-# import pandas as pd
-from scipy import ndimage
-
-# import yaml
+from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 from tqdm import tqdm
 
 from aliby.baby_client import BabyParameters, BabyRunner
@@ -144,10 +139,10 @@ class PipelineParameters(ParametersABC):
         defaults["postprocessing"] = {}
         defaults["reporting"] = {}
 
-        # defaults["postprocessing"] = PostProcessorParameters.default(
-        #     **postprocessing
-        # ).to_dict()
-        # defaults["reporting"] = {}
+        defaults["postprocessing"] = PostProcessorParameters.default(
+            **postprocessing
+        ).to_dict()
+        defaults["reporting"] = {}
 
         return cls(**{k: v for k, v in defaults.items()})
 
@@ -488,7 +483,6 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            print(f"Runs to frame {i}")
                             logging.debug(
                                 f"Quality:Clogged_traps:{frac_clogged_traps}"
                             )
@@ -506,13 +500,13 @@ class Pipeline(ProcessABC):
                             break
 
                         meta.add_fields({"last_processed": i})
-                    # Run post processing
-                    # 1/0
+
+                    # Run post-processing
                     meta.add_fields({"end_status": "Success"})
-                    # post_proc_params = PostProcessorParameters.from_dict(
-                    #     config["postprocessing"]
-                    # )
-                    # PostProcessor(filename, post_proc_params).run()
+                    post_proc_params = PostProcessorParameters.from_dict(
+                        config["postprocessing"]
+                    )
+                    PostProcessor(filename, post_proc_params).run()
 
                     return 1
 
