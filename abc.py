@@ -29,7 +29,7 @@ class ParametersABC(ABC):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def to_dict(self, iterable="null"):
+    def to_dict(self, iterable="null") -> t.Dict:
         """
         Recursive function to return a nested dictionary of the
         attributes of the class instance.
