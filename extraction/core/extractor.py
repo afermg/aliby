@@ -500,7 +500,7 @@ class Extractor(ProcessABC):
         self.img_bgsub = {}
         for ch, red_metrics in tree.items():
             # NB ch != is necessary for threading
-            if ch != "general" and tiles is not None and len(traps):
+            if ch != "general" and tiles is not None and len(tiles):
                 # image data for all traps and z sections for a particular channel
                 # as an array arranged as (no traps, X, Y, no Z channels)
                 img = tiles[:, tree_chs.index(ch), 0]
