@@ -5,6 +5,7 @@ GUI/@timelapseTraps/extractCellDataStacksParfor.m
 Especially lines 342 to  399.
 This part only replicates the method to get the nuc_est_conv values
 """
+import typing as t
 import numpy as np
 import skimage
 from scipy import signal, stats
@@ -25,7 +26,9 @@ def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
     return h
 
 
-def gauss3D(shape=(3, 3, 3), sigma=(0.5, 0.5, 0.5)):
+def gauss3D(
+    shape: t.Tuple[int] = (3, 3, 3), sigma: t.Tuple[float] = (0.5, 0.5, 0.5)
+):
     """3D gaussian mask - based on MATLAB's fspecial but made 3D."""
     m, n, p = [(ss - 1.0) / 2.0 for ss in shape]
     z, y, x = np.ogrid[-p : p + 1, -m : m + 1, -n : n + 1]
@@ -41,7 +44,7 @@ def gauss3D(shape=(3, 3, 3), sigma=(0.5, 0.5, 0.5)):
     return h
 
 
-def small_peaks_conv(cell_mask, trap_image):
+def small_peaks_conv(cell_mask: np.ndarray, trap_image: np.ndarray):
     cell_fluo = trap_image[cell_mask]
     # Get the number of pixels in the cell
     num_cell_fluo = len(np.nonzero(cell_fluo)[0])
@@ -69,24 +72,50 @@ def small_peaks_conv(cell_mask, trap_image):
     return small_peak_conv
 
 
-def nuc_est_conv(cell_mask, trap_image):
+def nuc_est_conv(
+    cell_mask: np.ndarray,
+    trap_image: np.ndarray,
+    alpha: t.Optional[float] = 0.95,
+    object_radius_estimation: t.Optional[float] = 0.085,
+    gaussian_filter_shape: t.Optional[t.Union[int, t.Tuple[int]]] = None,
+    gaussian_sigma: t.Optional[float] = None,
+):
     """
     :param cell_mask: the segmentation mask of the cell (filled)
     :param trap_image: the image for the trap in which the cell is (all
     channels)
+    :param alpha: optional distribution alpha to get confidence intervals
+    :param object_radius_estimation: optional estimated object volume
+    (in pixels), used to estimate the object radius.
+    :param gaussian_filter_shape: optional tuple to pass to matlab_style_gauss2D,
+    determines the kernel shape for convolutions.
+    :param gaussian_sigma: optional optional sigma to pass to matlab_style_gauss2D
+    as sigma argument.
     """
+    if alpha is None:
+        alpha = 0.95
+
+    if object_radius_estimation is None:
+        object_radius_estimation = 0.085
+
     cell_loc = cell_mask  # np.where(cell_mask)[0]
     cell_fluo = trap_image[cell_mask]
     num_cell_fluo = len(np.nonzero(cell_fluo)[0])
 
-    # Nuc Est Conv
-    alpha = 0.95
-    approx_nuc_radius = np.sqrt(0.085 * num_cell_fluo / np.pi)
     chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
-    sd_est = approx_nuc_radius / np.sqrt(chi2inv)
 
-    nuc_filt_hw = np.ceil(2 * approx_nuc_radius)
-    nuc_filter = matlab_style_gauss2D((2 * nuc_filt_hw + 1,) * 2, sd_est)
+    approx_nuc_radius = np.sqrt(
+        object_radius_estimation * num_cell_fluo / np.pi
+    )
+
+    if gaussian_sigma is None:
+        gaussian_sigma = float(approx_nuc_radius / np.sqrt(chi2inv))
+
+    # Nuc Est Conv
+    filter_size = int(np.ceil(2 * approx_nuc_radius))
+    gaussian_filter_shape = (2 * filter_size + 1,) * 2
+
+    nuc_filter = matlab_style_gauss2D(gaussian_filter_shape, gaussian_sigma)
 
     cell_image = trap_image - np.median(cell_fluo)
     cell_image[~cell_loc] = 0
@@ -94,7 +123,7 @@ def nuc_est_conv(cell_mask, trap_image):
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
     nuc_est_conv /= (
-        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * sd_est**2
+        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * gaussian_sigma**2
     )
     return nuc_est_conv
 
