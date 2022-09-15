@@ -1,11 +1,13 @@
 # File with defaults for ease of use
+import typing as t
 from pathlib import PosixPath
-from typing import Union
 
 import h5py
 
 
-def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
+def exparams_from_meta(
+    meta: t.Union[dict, PosixPath, str], extras: t.Collection[str] = ["ph"]
+):
     """
     Obtain parameters from metadata of hdf5 file
     """
@@ -31,16 +33,12 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
         "mean",
         "median",
         "imBackground",
-        "background_max5",
-        "max2p5pc",
-        "max2p5pc_med",
         "max5px",
-        "max5px_med",
-        # "nuc_est_conv",
+        "nuc_est_conv",
     }
 
     default_rm = {r: default_metrics for r in default_reductions}
-    # default_rm["None"] = ["nuc_conv_3d"]
+    # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
 
     av_flch = av_channels.intersection(meta["channels/channel"]).difference(
         {"Brightfield", "DIC", "BrightfieldGFP"}
@@ -75,7 +73,7 @@ def exparams_from_meta(meta: Union[dict, PosixPath, str], extras=["ph"]):
     return base
 
 
-def load_attributes(file: str, group="/"):
+def load_attributes(file: t.Union[str, PosixPath], group="/"):
     with h5py.File(file, "r") as f:
         meta = dict(f[group].attrs.items())
     return meta
