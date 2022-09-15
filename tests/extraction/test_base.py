@@ -3,14 +3,10 @@ from itertools import product
 import pytest
 
 from extraction.core.extractor import Extractor, ExtractorParameters
-from extraction.core.functions import cell
 from extraction.core.functions.loaders import (
-    load_cellfuns,
     load_funs,
     load_redfuns,
-    load_trapfuns,
 )
-from extraction.core.functions.trap import imBackground
 from extraction.examples import data
 
 dsets1z = data.load_1z()
@@ -33,13 +29,13 @@ def test_metrics_run(imgs, masks, f):
     """
 
     for ch, img in imgs.items():
-        if ch is not "segoutlines":
+        if ch != "segoutlines":
             assert tuple(masks.shape[:2]) == tuple(imgs[ch].shape)
             f(masks, img)
 
 
 @pytest.mark.parametrize(
-    ["imgs", "masks", "tree"], product(dsets, masks, tree)
+    ["imgs", "masks", "tree"], list(product(dsets, masks, tree))
 )
 def test_extractor(imgs, masks, tree):
     """
@@ -54,8 +50,7 @@ def test_extractor(imgs, masks, tree):
         )
     )
     # Load all available functions
-    extractor._all_funs = load_funs()[2]
-    extractor._all_cell_funs = load_cellfuns()
+    extractor.load_funs()
     extractor.tree = tree
     traps = imgs["GFP"]
     # Generate mock labels
