@@ -4,6 +4,7 @@ Tools to interact with hdf5 files and handle data consistently.
 import collections
 from itertools import chain, groupby, product
 from typing import Union
+import typing as t
 
 import h5py
 import numpy as np
@@ -28,6 +29,14 @@ class BridgeH5:
 
     def close(self):
         self._hdf.close()
+
+    @property
+    def meta_h5(self) -> t.Dict[str, t.Any]:
+        # Return metadata as indicated in h5 file
+        if not hasattr(self, "_meta_h5"):
+            with h5py.File(self.filename, "r") as f:
+                self._meta_h5 = dict(f.attrs)
+        return self._meta_h5
 
     @property
     def cell_tree(self):
