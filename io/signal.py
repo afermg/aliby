@@ -1,6 +1,6 @@
+import typing as t
 from copy import copy
 from pathlib import PosixPath
-from typing import Union
 
 import h5py
 import numpy as np
@@ -13,14 +13,22 @@ from agora.io.bridge import BridgeH5
 class Signal(BridgeH5):
     """
     Class that fetches data from the hdf5 storage for post-processing
+
+    Signal is works under the assumption that metadata and data are
+    accessible, to perform time-adjustments and apply previously-recorded
+    postprocesses.
     """
 
-    def __init__(self, file: Union[str, PosixPath]):
+    def __init__(self, file: t.Union[str, PosixPath]):
         super().__init__(file, flag=None)
 
         self.names = ["experiment", "position", "trap"]
 
-    def __getitem__(self, dsets):
+    def __getitem__(self, dsets: t.Union[str, t.Collection]):
+
+        assert isinstance(
+            dsets, (str, t.Collection)
+        ), "Incorrect type for dset"
 
         if isinstance(dsets, str) and dsets.endswith("imBackground"):
             df = self.get_raw(dsets)
@@ -64,9 +72,10 @@ class Signal(BridgeH5):
             return f["extraction/general/None/area/timepoint"][-1] + 1
 
     @property
-    def tinterval(self):
+    def tinterval(self) -> int:
+        tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
-            return f.attrs["time_settings/timeinterval"]
+            return f.attrs[tinterval_location][0]
 
     @staticmethod
     def get_retained(df, cutoff):
@@ -79,9 +88,9 @@ class Signal(BridgeH5):
             return self.get_retained(df, cutoff)
 
         elif isinstance(df, list):
-            return [self.get_retained(d) for d in df]
+            return [self.get_retained(d, cutoff=cutoff) for d in df]
 
-    def apply_prepost(self, dataset: str, skip_pick: bool = None):
+    def apply_prepost(self, dataset: str, skip_pick: t.Optional[bool] = None):
         """
         Apply modifier operations (picker, merger) to a given dataframe.
         """
@@ -249,6 +258,10 @@ class Signal(BridgeH5):
 
         return df
 
+    @property
+    def stem(self):
+        return self.filename.stem
+
     @staticmethod
     def dataset_to_df(f: h5py.File, path: str):
 
@@ -299,3 +312,46 @@ class Signal(BridgeH5):
         end = find_1st(target.values[::-1], 0, cmp_larger)
         tgt_copy.iloc[-end:] = source.iloc[-end:].values
         return tgt_copy
+
+    # TODO FUTURE add stages support to fluigent system
+    @property
+    def ntps(self) -> int:
+        # Return number of time-points according to the metadata
+        return self.meta_h5["time_settings/ntimepoints"][0]
+
+    @property
+    def stages(self) -> t.List[str]:
+        """
+        Return the contents of the pump with highest flow rate
+        at each stage.
+        """
+        flowrate_name = "pumpinit/flowrate"
+        pumprate_name = "pumprate"
+        main_pump_id = np.concatenate(
+            (
+                (np.argmax(self.meta_h5[flowrate_name]),),
+                np.argmax(self.meta_h5[pumprate_name], axis=0),
+            )
+        )
+        return [self.meta_h5["pumpinit/contents"][i] for i in main_pump_id]
+
+    @property
+    def nstages(self) -> int:
+        switchtimes_name = "switchtimes"
+        return self.meta_h5[switchtimes_name] + 1
+
+    @property
+    def max_span(self) -> int:
+        return int(self.tinterval * self.ntps / 60)
+
+    @property
+    def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
+        # Return consecutive stages and their corresponding number of time-points
+        switchtimes_name = "switchtimes"
+        transition_tps = (0, *self.meta_h5[switchtimes_name])
+        spans = [
+            end - start
+            for start, end in zip(transition_tps[:-1], transition_tps[1:])
+            if end <= self.max_span
+        ]
+        return tuple((stage, ntps) for stage, ntps in zip(self.stages, spans))
