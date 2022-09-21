@@ -1,8 +1,13 @@
-import dask.array as da
+import typing as t
+from abc import abstractmethod
+from pathlib import PosixPath
+import re
+
 import numpy as np
-from dask import delayed
+from agora.io.bridge import BridgeH5
 from omero.gateway import BlitzGateway
 from omero.model import enums as omero_enums
+from yaml import safe_load
 
 # convert OMERO definitions into numpy types
 PIXEL_TYPES = {
@@ -17,9 +22,9 @@ PIXEL_TYPES = {
 }
 
 
-class Argo:
+class BridgeOmero:
     """
-    Base class to interact with OMERO.
+    Core to interact with OMERO, using credentials or fetching them from h5 file (temporary trick).
     See
     https://docs.openmicroscopy.org/omero/5.6.0/developers/Python.html
     """
@@ -43,18 +48,31 @@ class Argo:
         self.username = username
         self.password = password
 
-    def create_gate(self) -> None:
+    # standard method required for Python's with statement
+    def __enter__(self):
+        self.create_gate()
+        self.init_wrapper()
+
+        return self
+
+    def init_wrapper(self):
+        # Initialise Omero Object Wrapper for instances when applicable.
+        if hasattr(self, "ome_id"):
+            ome_type = [
+                valid_name
+                for valid_name in ("Dataset", "Image")
+                if re.match(valid_name, self.__class__.__name__, re.IGNORECASE)
+            ][0]
+            self.ome_class = self.conn.getObject(ome_type, self.ome_id)
+
+    def create_gate(self) -> bool:
         self.conn = BlitzGateway(
             host=self.host, username=self.username, passwd=self.password
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
 
-    # standard method required for Python's with statement
-    def __enter__(self):
-        self.create_gate()
-
-        return self
+        self.conn.isConnected()
 
     # standard method required for Python's with statement
     def __exit__(self, *exc) -> bool:
@@ -65,29 +83,55 @@ class Argo:
         self.conn.close()
         return False
 
+    @classmethod
+    def server_info_from_h5(
+        cls,
+        filepath: t.Union[str, PosixPath],
+    ):
+        """Return server info from hdf5 file.
 
-def get_data_lazy(image) -> da.Array:
-    """
-    Get 5D dask array, with delayed reading from OMERO image.
-    """
-    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
-    pixels = image.getPrimaryPixels()
-    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
-    # using dask
-    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
+        Parameters
+        ----------
+        cls : BridgeOmero
+            BridgeOmero class
+        filepath : t.Union[str, PosixPath]
+            Location of hdf5 file.
 
-    def get_lazy_plane(zct):
-        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
+        Examples
+        --------
+        FIXME: Add docs.
 
-    # 5D stack: TCZXY
-    t_stacks = []
-    for t in range(nt):
-        c_stacks = []
-        for c in range(nc):
-            z_stack = []
-            for z in range(nz):
-                z_stack.append(get_lazy_plane((z, c, t)))
-            c_stacks.append(da.stack(z_stack))
-        t_stacks.append(da.stack(c_stacks))
+        """
+        # metadata = load_attributes(filepath)
+        bridge = BridgeH5(filepath)
+        server_info = safe_load(bridge.meta_h5["parameters"])["general"][
+            "server_info"
+        ]
+        return server_info
 
-    return da.stack(t_stacks)
+    def set_id(self, ome_id: int):
+        self.ome_id = ome_id
+
+    @abstractmethod
+    def init_interface(self):
+        ...
+
+    @property
+    def file_annotations(self):
+        valid_annotations = [
+            ann.getFileName()
+            for ann in self.ome_class.listAnnotations()
+            if hasattr(ann, "getFileName")
+        ]
+        return valid_annotations
+
+    def add_file_as_annotation(
+        self, file_to_upload: t.Union[str, PosixPath], **kwargs
+    ):
+        "Upload annotation to object on OMERO server. Only valid in subclasses."
+        file_annotation = self.conn.createFileAnnfromLocalFile(
+            file_to_upload,
+            mimetype="text/plain",
+            **kwargs,
+        )
+        self.ome_class.linkAnnotation(file_annotation)
