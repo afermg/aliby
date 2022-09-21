@@ -26,7 +26,7 @@ import dask.array as da
 import h5py
 import numpy as np
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import load_attributes
+from agora.io.writer import BridgeH5
 from skimage.registration import phase_cross_correlation
 
 from aliby.io.image import Image, ImageLocal
@@ -258,7 +258,7 @@ class Tiler(ProcessABC):
         return cls(image.data, image.metadata, parameters)
 
     @classmethod
-    def from_hdf5(
+    def from_h5(
         cls,
         image: t.Union[Image, ImageLocal],
         filepath: t.Union[str, PosixPath],
@@ -275,7 +275,7 @@ class Tiler(ProcessABC):
         parameters: an instance of TileParameters (optional)
         """
         trap_locs = TrapLocations.read_hdf5(filepath)
-        metadata = load_attributes(filepath)
+        metadata = BridgeH5(filepath).meta_h5
         metadata["channels"] = image.metadata["channels"]
         # metadata["zsectioning/nsections"] = image.metadata["zsectioning/nsections"]
         # metadata["channels/zsect"] = image.metadata["channels/zsect"]
