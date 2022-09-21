@@ -3,23 +3,9 @@ from abc import abstractmethod
 from pathlib import PosixPath
 import re
 
-import numpy as np
 from agora.io.bridge import BridgeH5
 from omero.gateway import BlitzGateway
-from omero.model import enums as omero_enums
 from yaml import safe_load
-
-# convert OMERO definitions into numpy types
-PIXEL_TYPES = {
-    omero_enums.PixelsTypeint8: np.int8,
-    omero_enums.PixelsTypeuint8: np.uint8,
-    omero_enums.PixelsTypeint16: np.int16,
-    omero_enums.PixelsTypeuint16: np.uint16,
-    omero_enums.PixelsTypeint32: np.int32,
-    omero_enums.PixelsTypeuint32: np.uint32,
-    omero_enums.PixelsTypefloat: np.float32,
-    omero_enums.PixelsTypedouble: np.float64,
-}
 
 
 class BridgeOmero:
@@ -128,7 +114,15 @@ class BridgeOmero:
     def add_file_as_annotation(
         self, file_to_upload: t.Union[str, PosixPath], **kwargs
     ):
-        "Upload annotation to object on OMERO server. Only valid in subclasses."
+        """Upload annotation to object on OMERO server. Only valid in subclasses.
+
+        Parameters
+        ----------
+        file_to_upload: File to upload
+        **kwargs: Additional keyword arguments passed on
+            to BlitzGateway.createFileAnnfromLocalFile
+        """
+
         file_annotation = self.conn.createFileAnnfromLocalFile(
             file_to_upload,
             mimetype="text/plain",
