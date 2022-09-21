@@ -547,7 +547,7 @@ class Extractor(ProcessABC):
                     set(self.img_bgsub.keys()).union(tree_chs)
                 )
             ) == len(chs):
-                imgs = [self.get_imgs(ch, traps, tree_chs) for ch in chs]
+                imgs = [self.get_imgs(ch, tiles, tree_chs) for ch in chs]
                 merged = MERGE_FUNS[merge_fun](*imgs)
                 d[name] = self.reduce_extract(
                     red_metrics=red_metrics,
