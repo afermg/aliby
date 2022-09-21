@@ -5,12 +5,28 @@ from datetime import datetime
 from pathlib import Path, PosixPath
 
 import dask.array as da
+import numpy as np
 import xmltodict
-from agora.io.writer import load_attributes
+from agora.io.bridge import BridgeH5
+from dask import delayed
 from dask.array.image import imread
+from omero.model import enums as omero_enums
 from tifffile import TiffFile
+from yaml import safe_load
 
-from aliby.io.omero import Argo, get_data_lazy
+from aliby.io.omero import BridgeOmero
+
+# convert OMERO definitions into numpy types
+PIXEL_TYPES = {
+    omero_enums.PixelsTypeint8: np.int8,
+    omero_enums.PixelsTypeuint8: np.uint8,
+    omero_enums.PixelsTypeint16: np.int16,
+    omero_enums.PixelsTypeuint16: np.uint16,
+    omero_enums.PixelsTypeint32: np.int32,
+    omero_enums.PixelsTypeuint32: np.uint32,
+    omero_enums.PixelsTypefloat: np.float32,
+    omero_enums.PixelsTypedouble: np.float64,
+}
 
 
 def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
@@ -189,12 +205,12 @@ class ImageDirectory(ImageLocal):
         return self._formatted_img
 
 
-class Image(Argo):
+class Image(BridgeOmero):
     """
     Loads images from OMERO and gives access to the data and metadata.
     """
 
-    def __init__(self, image_id, **server_info):
+    def __init__(self, image_id: int, **server_info):
         """
         Establishes the connection to the OMERO server via the Argo
         base class.
@@ -205,10 +221,12 @@ class Image(Argo):
         server_info: dictionary
             Specifies the host, username, and password as strings
         """
+        self.ome_id = image_id
         super().__init__(**server_info)
-        self.image_id = image_id
-        # images from OMERO
-        self._image_wrap = None
+
+    def init_interface(self, ome_id: int):
+        self.set_id(ome_id)
+        self.ome_class = self.conn.getObject("Image", ome_id)
 
     @classmethod
     def from_h5(
@@ -229,28 +247,21 @@ class Image(Argo):
         FIXME: Add docs.
 
         """
-        metadata = load_attributes(filepath)
-        image_id = metadata["image_id"]
-        server_info = metadata["parameters"]["general"].get("server_info", {})
-        return cls(image_id, **server_info)
-
-    @property
-    def image_wrap(self):
-        """
-        Get images from OMERO
-        """
-        if self._image_wrap is None:
-            # get images using OMERO
-            self._image_wrap = self.conn.getObject("Image", self.image_id)
-        return self._image_wrap
+        # metadata = load_attributes(filepath)
+        bridge = BridgeH5(filepath)
+        image_id = bridge.meta_h5["image_id"]
+        # server_info = safe_load(bridge.meta_h5["parameters"])["general"][
+        #     "server_info"
+        # ]
+        return cls(image_id, **cls.server_info_from_h5(filepath))
 
     @property
     def name(self):
-        return self.image_wrap.getName()
+        return self.ome_class.getName()
 
     @property
     def data(self):
-        return get_data_lazy(self.image_wrap)
+        return get_data_lazy(self.ome_class)
 
     @property
     def metadata(self):
@@ -259,13 +270,13 @@ class Image(Argo):
         labels of channels, and image name.
         """
         meta = dict()
-        meta["size_x"] = self.image_wrap.getSizeX()
-        meta["size_y"] = self.image_wrap.getSizeY()
-        meta["size_z"] = self.image_wrap.getSizeZ()
-        meta["size_c"] = self.image_wrap.getSizeC()
-        meta["size_t"] = self.image_wrap.getSizeT()
-        meta["channels"] = self.image_wrap.getChannelLabels()
-        meta["name"] = self.image_wrap.getName()
+        meta["size_x"] = self.ome_class.getSizeX()
+        meta["size_y"] = self.ome_class.getSizeY()
+        meta["size_z"] = self.ome_class.getSizeZ()
+        meta["size_c"] = self.ome_class.getSizeC()
+        meta["size_t"] = self.ome_class.getSizeT()
+        meta["channels"] = self.ome_class.getChannelLabels()
+        meta["name"] = self.ome_class.getName()
         return meta
 
 
@@ -291,11 +302,39 @@ class UnsafeImage(Image):
         """
         super().__init__(image_id, **server_info)
         self.create_gate()
+        self.init_wrapper()
 
     @property
     def data(self):
         try:
-            return get_data_lazy(self.image_wrap)
+            return get_data_lazy(self.ome_class)
         except Exception as e:
             print(f"ERROR: Failed fetching image from server: {e}")
             self.conn.connect(False)
+
+
+def get_data_lazy(image) -> da.Array:
+    """
+    Get 5D dask array, with delayed reading from OMERO image.
+    """
+    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
+    pixels = image.getPrimaryPixels()
+    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
+    # using dask
+    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
+
+    def get_lazy_plane(zct):
+        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
+
+    # 5D stack: TCZXY
+    t_stacks = []
+    for t in range(nt):
+        c_stacks = []
+        for c in range(nc):
+            z_stack = []
+            for z in range(nz):
+                z_stack.append(get_lazy_plane((z, c, t)))
+            c_stacks.append(da.stack(z_stack))
+        t_stacks.append(da.stack(c_stacks))
+
+    return da.stack(t_stacks)

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import shutil
+import typing as t
 from pathlib import Path, PosixPath
 from typing import Union
 
 import omero
+from agora.io.bridge import BridgeH5
 
 from aliby.io.image import ImageLocal
-from aliby.io.omero import Argo
+from aliby.io.omero import BridgeOmero
 
 
 class DatasetLocal:
@@ -59,49 +61,50 @@ class DatasetLocal:
         return True
 
 
-class Dataset(Argo):
+class Dataset(BridgeOmero):
     def __init__(self, expt_id, **server_info):
-        super().__init__(**server_info)
-        self.expt_id = expt_id
-        self._files = None
+        self.ome_id = expt_id
 
-    @property
-    def dataset(self):
-        return self.conn.getObject("Dataset", self.expt_id)
+        super().__init__(**server_info)
 
     @property
     def name(self):
-        return self.dataset.getName()
+        return self.ome_class.getName()
 
     @property
     def date(self):
-        return self.dataset.getDate()
+        return self.ome_class.getDate()
 
     @property
     def unique_name(self):
         return "_".join(
             (
-                str(self.expt_id),
+                str(self.ome_id),
                 self.date.strftime("%Y_%m_%d").replace("/", "_"),
                 self.name,
             )
         )
 
     def get_images(self):
-        return {im.getName(): im.getId() for im in self.dataset.listChildren()}
+        return {
+            im.getName(): im.getId() for im in self.ome_class.listChildren()
+        }
 
     @property
     def files(self):
-        if self._files is None:
+        if not hasattr(self, "_files"):
             self._files = {
                 x.getFileName(): x
-                for x in self.dataset.listAnnotations()
+                for x in self.ome_class.listAnnotations()
                 if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
         if not len(self._files):
             raise Exception(
                 "exception:metadata: experiment has no annotation files."
             )
+        elif len(self.file_annotations) != len(self._files):
+            raise Exception("Number of files and annotations do not match")
+
         return self._files
 
     @property
@@ -109,7 +112,7 @@ class Dataset(Argo):
         if self._tags is None:
             self._tags = {
                 x.getname(): x
-                for x in self.dataset.listAnnotations()
+                for x in self.ome_class.listAnnotations()
                 if isinstance(x, omero.gateway.TagAnnotationWrapper)
             }
         return self._tags
@@ -123,3 +126,31 @@ class Dataset(Argo):
                     for chunk in annotation.getFileInChunks():
                         fd.write(chunk)
         return True
+
+    @classmethod
+    def from_h5(
+        cls,
+        filepath: t.Union[str, PosixPath],
+    ):
+        """Instatiate Dataset from a hdf5 file.
+
+        Parameters
+        ----------
+        cls : Image
+            Image class
+        filepath : t.Union[str, PosixPath]
+            Location of hdf5 file.
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
+        # metadata = load_attributes(filepath)
+        bridge = BridgeH5(filepath)
+        dataset_keys = ("omero_id", "omero_id,", "dataset_id")
+        for k in dataset_keys:
+            if k in bridge.meta_h5:
+                return cls(
+                    bridge.meta_h5[k], **cls.server_info_from_h5(filepath)
+                )
