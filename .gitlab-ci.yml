@@ -27,7 +27,7 @@ before_script:
   # - git pull origin HEAD:master
   - rm -rf ~/.cache/pypoetry
   - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
-  - poetry install -vv
+  - poetry install -vv --with test
 
 Unit test:
   stage: test
