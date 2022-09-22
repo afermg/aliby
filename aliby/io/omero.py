@@ -47,7 +47,11 @@ class BridgeOmero:
             ome_type = [
                 valid_name
                 for valid_name in ("Dataset", "Image")
-                if re.match(valid_name, self.__class__.__name__, re.IGNORECASE)
+                if re.match(
+                    f".*{ valid_name }.*",
+                    self.__class__.__name__,
+                    re.IGNORECASE,
+                )
             ][0]
             self.ome_class = self.conn.getObject(ome_type, self.ome_id)
 
