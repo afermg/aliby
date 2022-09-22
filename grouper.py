@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import re
+import typing as t
 from abc import ABC, abstractproperty
 from collections import Counter
+from functools import cached_property as property
 from pathlib import Path, PosixPath
 from typing import Dict, List, Union
 
@@ -28,11 +30,13 @@ class Grouper(ABC):
         assert len(self.files), "No valid h5 files in dir"
         self.load_signals()
 
-    def load_signals(self):
+    def load_signals(self) -> None:
+        # Sets self.signals
         self.signals = {f.name[:-3]: Signal(f) for f in self.files}
 
     @property
-    def fsignal(self) -> list:
+    def fsignal(self) -> Signal:
+        # Returns first signal
         return list(self.signals.values())[0]
 
     @property
@@ -41,7 +45,7 @@ class Grouper(ABC):
 
     @property
     def tintervals(self) -> float:
-        tintervals = set([s.tinterval[0] / 60 for s in self.signals.values()])
+        tintervals = set([s.tinterval / 60 for s in self.signals.values()])
         assert (
             len(tintervals) == 1
         ), "Not all signals have the same time interval"
@@ -68,16 +72,16 @@ class Grouper(ABC):
         return self.fsignal.datasets
 
     @abstractproperty
-    def group_names(self):
+    def positions_groups(self):
         pass
 
     def concat_signal(
         self,
         path: str,
-        reduce_cols: bool = None,
+        reduce_cols: t.Optional[bool] = None,
         axis: int = 0,
-        pool: int = 0,
-        mode="retained",
+        mode: str = "retained",
+        pool: t.Optional[int] = None,
         **kwargs,
     ):
         """Concatenate a single signal.
@@ -102,8 +106,6 @@ class Grouper(ABC):
         if not path.startswith("/"):
             path = "/" + path
 
-        group_names = self.group_names
-
         # Check the path is in a given signal
         sitems = {k: v for k, v in self.signals.items() if path in v.siglist}
         nsignals_dif = len(self.signals) - len(sitems)
@@ -113,25 +115,9 @@ class Grouper(ABC):
                 f" channel {path}"
             )
 
-        if pool or pool is None:
-            if pool is None:
-                pool = 8
-            with Pool(pool) as p:
-                signals = p.map(
-                    lambda x: concat_signal_ind(
-                        path, group_names, x[0], x[1], mode=mode, **kwargs
-                    ),
-                    sitems.items(),
-                )
-        else:
-            signals = []
-            for name, signal in sitems.items():
-                print(name)
-                signals.append(
-                    concat_signal_ind(
-                        path, group_names, name, signal, **kwargs
-                    )
-                )
+        signals = self.pool_function(
+            path=path, f=concat_signal_ind, mode=mode, pool=pool, **kwargs
+        )
 
         errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
         signals = [s for s in signals if s is not None]
@@ -147,10 +133,29 @@ class Grouper(ABC):
         return sorted
 
     @property
+    def nmembers(self) -> t.Dict[str, int]:
+        # Return the number of positions belonging to each group
+        return Counter(self.positions_groups.values())
+
+    @property
     def ntraps(self):
         for pos, s in self.signals.items():
             with h5py.File(s.filename, "r") as f:
                 print(pos, f["/trap_info/trap_locations"].shape[0])
+
+    @property
+    def ntraps_by_pos(self) -> t.Dict[str, int]:
+        # Return total number of traps grouped
+        ntraps = {}
+        for pos, s in self.signals.items():
+            with h5py.File(s.filename, "r") as f:
+                ntraps[pos] = f["/trap_info/trap_locations"].shape[0]
+
+        ntraps_by_pos = {k: 0 for k in self.groups}
+        for posname, vals in ntraps.items():
+            ntraps_by_pos[self.positions_groups[posname]] += vals
+
+        return ntraps_by_pos
 
     def traplocs(self):
         d = {}
@@ -250,52 +255,54 @@ class MetaGrouper(Grouper):
 class NameGrouper(Grouper):
     """Group a set of positions using a subsection of the name."""
 
-    def __init__(self, dir, by=None):
+    def __init__(self, dir, criteria=None):
         super().__init__(dir=dir)
 
-        if by is None:
-            by = (0, -4)
-        self.by = by
+        if criteria is None:
+            criteria = (0, -4)
+        self.criteria = criteria
 
     @property
-    def group_names(self):
-        if not hasattr(self, "_group_names"):
-            self._group_names = {}
+    def positions_groups(self) -> t.Dict[str, str]:
+        if not hasattr(self, "_positions_groups"):
+            self._positions_groups = {}
             for name in self.signals.keys():
-                self._group_names[name] = name[self.by[0] : self.by[1]]
+                self._positions_groups[name] = name[
+                    self.criteria[0] : self.criteria[1]
+                ]
 
-        return self._group_names
+        return self._positions_groups
 
-    def aggregate_multisignals(self, paths=None, **kwargs):
-        aggregated = pd.concat(
-            [
-                self.concat_signal(path, reduce_cols=np.nanmean, **kwargs)
-                for path in paths
-            ],
-            axis=1,
-        )
-        # ph = pd.Series(
-        #     [
-        #         self.ph_from_group(x[list(aggregated.index.names).index("group")])
-        #         for x in aggregated.index
-        #     ],
-        #     index=aggregated.index,
-        #     name="media_pH",
-        # )
-        # self.aggregated = pd.concat((aggregated, ph), axis=1)
+    # def aggregate_multisignals(self, paths=None, **kwargs):
+    #     aggregated = pd.concat(
+    #         [
+    #             self.concat_signal(path, reduce_cols=np.nanmean, **kwargs)
+    #             for path in paths
+    #         ],
+    #         axis=1,
+    #     )
+    #     # ph = pd.Series(
+    #     #     [
+    #     #         self.ph_from_group(x[list(aggregated.index.names).index("group")])
+    #     #         for x in aggregated.index
+    #     #     ],
+    #     #     index=aggregated.index,
+    #     #     name="media_pH",
+    #     # )
+    #     # self.aggregated = pd.concat((aggregated, ph), axis=1)
 
-        return aggregated
+    #     return aggregated
 
 
 class phGrouper(NameGrouper):
     """Grouper for pH calibration experiments where all surveyed media pH
     values are within a single experiment."""
 
-    def __init__(self, dir, by=(3, 7)):
-        super().__init__(dir=dir, by=by)
+    def __init__(self, dir, criteria=(3, 7)):
+        super().__init__(dir=dir, criteria=criteria)
 
     def get_ph(self) -> None:
-        self.ph = {gn: self.ph_from_group(gn) for gn in self.group_names}
+        self.ph = {gn: self.ph_from_group(gn) for gn in self.positions_groups}
 
     @staticmethod
     def ph_from_group(group_name: int) -> float:
@@ -331,14 +338,16 @@ class phGrouper(NameGrouper):
 
 def concat_signal_ind(
     path: str,
-    group_names: List[str],
+    signal: Signal,
     group: str,
-    signal: str,
     mode: str = "retained",
+    position=None,
     **kwargs,
 ) -> pd.DataFrame:
     """Core function that handles retrieval of an individual signal, applies
     filtering if requested and adjusts indices."""
+    if position is None:
+        position = signal.stem
     if mode == "retained":
         combined = signal.retained(path, **kwargs)
     if mode == "mothers":
@@ -347,8 +356,8 @@ def concat_signal_ind(
         combined = signal.get_raw(path, **kwargs)
     elif mode == "families":
         combined = signal[path]
-    combined["position"] = group
-    combined["group"] = group_names[group]
+    combined["position"] = position
+    combined["group"] = group
     combined.set_index(["group", "position"], inplace=True, append=True)
     combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
 
