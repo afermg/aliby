@@ -1,0 +1,276 @@
+
+
+=====================
+06-Jan-2020 18:30:59	Start creating new experiment using parameters:
+Omero experiment name: 001
+Temporary working directory: C:06-Jan-2020 18:30:59	Processing position 2 (1108_002)
+06-Jan-2020 18:31:00	Processing position 3 (1108_003)
+06-Jan-2020 18:31:01	Processing position 4 (1109_004)
+06-Jan-2020 18:31:02	Processing position 5 (1109_005)
+06-Jan-2020 18:31:04	Processing position 6 (1109_006)
+06-Jan-2020 18:31:05	Processing position 7 (1110_007)
+06-Jan-2020 18:31:06	Processing position 8 (1110_008)
+06-Jan-2020 18:31:07	Processing position 9 (1110_009)
+06-Jan-2020 18:31:10	Successfully completed creating new experiment in 11 secs.
+---------------------
+
+
+=====================
+06-Jan-2020 18:31:33	Start selecting traps...
+06-Jan-2020 18:31:33	Processing position 1 (1108_001)
+06-Jan-2020 18:31:40	Remove trap at 550  1188
+06-Jan-2020 18:31:40	Remove trap at 733  1179
+06-Jan-2020 18:31:41	Remove trap at 384  1189
+06-Jan-2020 18:31:42	Remove trap at 201  1186
+06-Jan-2020 18:31:47	Processing position 2 (1108_002)
+06-Jan-2020 18:31:52	Remove trap at 384  1060
+06-Jan-2020 18:31:54	Remove trap at 1081   571
+06-Jan-2020 18:32:01	Processing position 3 (1108_003)
+06-Jan-2020 18:32:05	Remove trap at 948  1140
+06-Jan-2020 18:32:06	Remove trap at 1141  1174
+06-Jan-2020 18:32:17	Remove trap at 139  1111
+06-Jan-2020 18:32:18	Add trap at 130  1138
+06-Jan-2020 18:32:26	Processing position 4 (1109_004)
+06-Jan-2020 18:32:32	Remove trap at 1176   388
+06-Jan-2020 18:32:39	Processing position 5 (1109_005)
+06-Jan-2020 18:32:44	Remove trap at 1141  1135
+06-Jan-2020 18:32:51	Remove trap at 955  379
+06-Jan-2020 18:32:55	Processing position 6 (1109_006)
+06-Jan-2020 18:33:00	Remove trap at 676  1177
+06-Jan-2020 18:33:01	Remove trap at 1111  1147
+06-Jan-2020 18:33:14	Processing position 7 (1110_007)
+06-Jan-2020 18:33:20	Remove trap at 46  46
+06-Jan-2020 18:33:28	Remove trap at 1150    84
+06-Jan-2020 18:33:34	Processing position 8 (1110_008)
+06-Jan-2020 18:33:49	Processing position 9 (1110_009)
+06-Jan-2020 18:33:55	Add trap at 1153  1129
+06-Jan-2020 18:33:57	Remove trap at 1135  1141
+06-Jan-2020 18:33:57	Remove trap at 1176  1095
+06-Jan-2020 18:34:15	Successfully completed selecting traps in 2.7 mins.
+---------------------
+
+
+=====================
+06-Jan-2020 18:34:28	Start setting extraction parameters using parameters:
+extractionParameters: {
+  extractFunction: extractCellDataStandardParfor
+  functionParameters: {
+    type: max
+    channels: 2  3
+    nuclearMarkerChannel: NaN
+    maxPixOverlap: 5
+    maxAllowedOverlap: 25
+  }
+}
+06-Jan-2020 18:34:28	Processing position 1 (1108_001)
+06-Jan-2020 18:34:28	Processing position 2 (1108_002)
+06-Jan-2020 18:34:29	Processing position 3 (1108_003)
+06-Jan-2020 18:34:29	Processing position 4 (1109_004)
+06-Jan-2020 18:34:30	Processing position 5 (1109_005)
+06-Jan-2020 18:34:30	Processing position 6 (1109_006)
+06-Jan-2020 18:34:30	Processing position 7 (1110_007)
+06-Jan-2020 18:34:31	Processing position 8 (1110_008)
+06-Jan-2020 18:34:31	Processing position 9 (1110_009)
+06-Jan-2020 18:34:33	Successfully completed setting extraction parameters in 5 secs.
+---------------------
+
+
+=====================
+07-Jan-2020 13:17:43	Start tracking traps in time...
+07-Jan-2020 13:17:43	Processing position 1 (1108_001)
+07-Jan-2020 13:23:31	Processing position 2 (1108_002)
+07-Jan-2020 13:29:21	Processing position 3 (1108_003)
+07-Jan-2020 13:35:13	Processing position 4 (1109_004)
+07-Jan-2020 13:41:19	Processing position 5 (1109_005)
+07-Jan-2020 13:47:09	Processing position 6 (1109_006)
+07-Jan-2020 13:52:57	Processing position 7 (1110_007)
+07-Jan-2020 13:58:41	Processing position 8 (1110_008)
+07-Jan-2020 14:04:41	Processing position 9 (1110_009)
+07-Jan-2020 14:10:38	Successfully completed tracking traps in time in 52.9 mins.
+---------------------
+
+
+=====================
+07-Jan-2020 14:10:38	Start baby segmentation...
+07-Jan-2020 14:10:39	Processing position 1 (1108_001)
+07-Jan-2020 14:14:32	cTimelapse: 210.344 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:18:30	cTimelapse: 240.345 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:22:31	cTimelapse: 272.459 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:26:32	cTimelapse: 303.876 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:30:34	cTimelapse: 336.470 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:32:32	Processing position 2 (1108_002)
+07-Jan-2020 14:36:22	cTimelapse: 206.699 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:40:12	cTimelapse: 235.726 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:44:13	cTimelapse: 268.814 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:48:27	cTimelapse: 306.046 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:52:43	cTimelapse: 343.681 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 14:54:44	Processing position 3 (1108_003)
+07-Jan-2020 14:58:47	cTimelapse: 214.895 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:02:44	cTimelapse: 247.137 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:06:47	cTimelapse: 280.902 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:10:51	cTimelapse: 314.796 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:15:13	cTimelapse: 354.774 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:17:16	Processing position 4 (1109_004)
+07-Jan-2020 15:21:06	cTimelapse: 222.663 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:25:09	cTimelapse: 253.596 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:29:16	cTimelapse: 286.597 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:33:46	cTimelapse: 325.040 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:38:35	cTimelapse: 369.190 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:40:50	Processing position 5 (1109_005)
+07-Jan-2020 15:45:01	cTimelapse: 235.110 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:49:23	cTimelapse: 268.760 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:53:50	cTimelapse: 304.703 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 15:58:15	cTimelapse: 339.861 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:02:47	cTimelapse: 377.877 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:04:53	Processing position 6 (1109_006)
+07-Jan-2020 16:08:32	cTimelapse: 205.246 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:12:09	cTimelapse: 231.500 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:15:49	cTimelapse: 259.276 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:19:45	cTimelapse: 291.813 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:24:03	cTimelapse: 331.193 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:26:11	Processing position 7 (1110_007)
+07-Jan-2020 16:29:30	cTimelapse: 222.990 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:32:46	cTimelapse: 238.288 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:36:03	cTimelapse: 255.524 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:39:21	cTimelapse: 275.165 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:42:40	cTimelapse: 297.244 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:44:14	Processing position 8 (1110_008)
+07-Jan-2020 16:47:32	cTimelapse: 215.583 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:50:51	cTimelapse: 235.959 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:54:09	cTimelapse: 256.409 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 16:57:25	cTimelapse: 275.563 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:00:43	cTimelapse: 296.390 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:02:13	Processing position 9 (1110_009)
+07-Jan-2020 17:05:35	cTimelapse: 225.847 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:08:54	cTimelapse: 245.291 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:12:17	cTimelapse: 266.060 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:15:41	cTimelapse: 288.448 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:19:04	cTimelapse: 311.290 MB; posOverviewGUI: 741.580 MB
+
+07-Jan-2020 17:20:36	Successfully completed baby segmentation in 3.2 hours.
+---------------------
+
+
+=====================
+07-Jan-2020 17:20:37	Start tracking cells using parameters:
+Tracking threshold: 10
+07-Jan-2020 17:20:39	Processing position 1 (1108_001)
+07-Jan-2020 17:21:23	Processing position 2 (1108_002)
+07-Jan-2020 17:22:06	Processing position 3 (1108_003)
+07-Jan-2020 17:22:49	Processing position 4 (1109_004)
+07-Jan-2020 17:23:33	Processing position 5 (1109_005)
+07-Jan-2020 17:24:18	Processing position 6 (1109_006)
+07-Jan-2020 17:24:58	Processing position 7 (1110_007)
+07-Jan-2020 17:25:25	Processing position 8 (1110_008)
+07-Jan-2020 17:25:55	Processing position 9 (1110_009)
+07-Jan-2020 17:26:25	Successfully completed tracking cells in 5.8 mins.
+---------------------
+
+
+=====================
+07-Jan-2020 17:26:25	Start autoselecting cells using parameters:
+Fraction of timelapse that cells are present for: 0.5
+Number of frames a cell must be present: 540
+Cell must appear by frame: 540
+Cell must still be present by frame: 1
+Maximum number of cells: Inf
+07-Jan-2020 17:26:27	Processing position 1 (1108_001)
+07-Jan-2020 17:26:42	Processing position 2 (1108_002)
+07-Jan-2020 17:26:58	Processing position 3 (1108_003)
+07-Jan-2020 17:27:14	Processing position 4 (1109_004)
+07-Jan-2020 17:27:31	Processing position 5 (1109_005)
+07-Jan-2020 17:27:48	Processing position 6 (1109_006)
+07-Jan-2020 17:28:03	Processing position 7 (1110_007)
+07-Jan-2020 17:28:13	Processing position 8 (1110_008)
+07-Jan-2020 17:28:25	Processing position 9 (1110_009)
+07-Jan-2020 17:28:36	Successfully completed autoselecting cells in 2.2 mins.
+---------------------
+
+
+=====================
+07-Jan-2020 17:28:37	Start extracting cell information...
+07-Jan-2020 17:28:39	Processing position 1 (1108_001)
+07-Jan-2020 17:58:38	Processing position 2 (1108_002)
+07-Jan-2020 18:28:43	Processing position 3 (1108_003)
+07-Jan-2020 18:58:45	Processing position 4 (1109_004)
+07-Jan-2020 19:29:03	Processing position 5 (1109_005)
+07-Jan-2020 19:59:31	Processing position 6 (1109_006)
+07-Jan-2020 20:29:01	Processing position 7 (1110_007)
+07-Jan-2020 20:56:05	Processing position 8 (1110_008)
+07-Jan-2020 21:23:53	Processing position 9 (1110_009)
+07-Jan-2020 21:51:15	Successfully completed extracting cell information in 4.4 hours.
+---------------------
+
+
+=====================
+07-Jan-2020 21:51:16	Start baby lineage extraction...
+07-Jan-2020 21:51:18	Processing position 1 (1108_001)
+07-Jan-2020 21:52:37	Processing position 2 (1108_002)
+07-Jan-2020 21:53:57	Processing position 3 (1108_003)
+07-Jan-2020 21:55:16	Processing position 4 (1109_004)
+07-Jan-2020 21:56:36	Processing position 5 (1109_005)
+07-Jan-2020 21:57:59	Processing position 6 (1109_006)
+07-Jan-2020 21:59:08	Processing position 7 (1110_007)
+07-Jan-2020 21:59:50	Processing position 8 (1110_008)
+07-Jan-2020 22:00:41	Processing position 9 (1110_009)
+07-Jan-2020 22:01:26	Successfully completed baby lineage extraction in 10.2 mins.
+---------------------
+
+
+=====================
+07-Jan-2020 22:01:26	Start compiling cell information...
+07-Jan-2020 22:01:28	Processing position 1 (1108_001)
+07-Jan-2020 22:01:30	Processing position 2 (1108_002)
+07-Jan-2020 22:01:33	Processing position 3 (1108_003)
+07-Jan-2020 22:01:35	Processing position 4 (1109_004)
+07-Jan-2020 22:01:38	Processing position 5 (1109_005)
+07-Jan-2020 22:01:40	Processing position 6 (1109_006)
+07-Jan-2020 22:01:42	Processing position 7 (1110_007)
+07-Jan-2020 22:01:44	Processing position 8 (1110_008)
+07-Jan-2020 22:01:46	Processing position 9 (1110_009)
+07-Jan-2020 22:02:20	Successfully completed compiling cell information in 54 secs.
+---------------------

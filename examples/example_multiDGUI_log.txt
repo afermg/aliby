@@ -1,0 +1,651 @@
+Swain Lab microscope experiment log file
+Swain lab microscope control software - MultiDGUI commit number:05903fb3769ccf612e7801b46e2248644ce7ca28
+Warning! - there are uncommitted changes - software may be different from the above commit
+29-Feb-2020
+Microscope name is: Batman
+Acquisition settings are saved in:
+C:\path\to\example_multiDGUI_log.txt
+Experiment details:
+Aim:   Strain:   Comments:   
+Microscope setup for used channels:
+Brightfield:
+White LED
+->(Polariser + Prism + condenser)]
+->Filter block:[Dual GFP/mCherry exciter (59022x),Dual dichroic (89021bs),No emission filter]
+->Emission filter wheel:[No filter in emission wheel]
+GFPFast:
+470nm LED
+->Combiner cube:[480/40 exciter, 515LP dichroic->(455LP dichroic)]
+->Filter block:[Dual GFP/mCherry exciter (59022x),Dual dichroic (89021bs),No emission filter]
+->Emission filter wheel:[520/40 emission filter]
+mCherry:
+White LED
+->Combiner cube:[No exciter, No reflecting dichroic->(515LP and 455LP dichroics)]
+->Filter block:[Dual GFP/mCherry exciter (59022x),Dual dichroic (89021bs),No emission filter]
+->Emission filter wheel:[632/60 emission filter]
+Micromanager config file:C:\path\to\config_file.cfg
+Omero project:
+SteadystateGlucose
+Omero tags:
+29-Feb-2020,Batman,3 chamber,GFP,mCherry,1106.Mig2-GFP Mig1-mCherry,900.Mig1-GFP Msn2-mCherry,898.Msn2-GFP Mig1-mCherry,0.1% glucose,2% glucose,
+Experiment started at:29-Feb-2020 01:16:51
+
+------Time point_1------
+Memory available for all arrays: 14141227008
+Memory used by Matlab: 2237132800
+Switching pumps at 29-Feb-2020 01:16:52. Fast infusion/withdrawal step: Rate=100. Volume=50
+Pump switch complete at:29-Feb-2020 01:16:52
+Dominant pump is now: COM8 pumping at 4ul/min
+Dominant medium is now: 0.1% glucose in SC
+Position:1,pos001
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:16:52
+Moved to X:568, Y:1302
+Call to readDrift after moving to position1
+Setting PFS offset to :122.45
+readDrift script. Reference z position is:1876.5
+readDrift script. Cumulative drift is:-5.9
+Channel configuration set to: Brightfield: 29-Feb-2020 01:17:01
+Channel:Brightfield set at:29-Feb-2020 01:17:01
+Exposure time:30ms
+Channel configuration set to: GFPFast: 29-Feb-2020 01:17:06
+Channel:GFPFast set at:29-Feb-2020 01:17:06
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:17:10
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:17:10
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:17:10
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:17:10
+Channel configuration set to: mCherry: 29-Feb-2020 01:17:12
+Channel:mCherry set at:29-Feb-2020 01:17:12
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:17:12
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:17:12
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.55. 29-Feb-2020 01:17:13
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:17:13
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:2,pos002
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:17:18
+Moved to X:1267, Y:1302
+Call to readDrift after moving to position2
+Setting PFS offset to :119.95
+readDrift script. Reference z position is:1880.125
+readDrift script. Cumulative drift is:-9.725
+Channel configuration set to: Brightfield: 29-Feb-2020 01:17:27
+Channel:Brightfield set at:29-Feb-2020 01:17:27
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:17:32
+Channel:GFPFast set at:29-Feb-2020 01:17:32
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:17:37
+Channel:mCherry set at:29-Feb-2020 01:17:38
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:3,pos003
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:17:43
+Moved to X:1026, Y:977
+Call to readDrift after moving to position3
+Setting PFS offset to :120.1
+readDrift script. Reference z position is:1877.575
+readDrift script. Cumulative drift is:-5.925
+Channel configuration set to: Brightfield: 29-Feb-2020 01:17:52
+Channel:Brightfield set at:29-Feb-2020 01:17:52
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.925. 29-Feb-2020 01:17:57
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:17:57
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.9. 29-Feb-2020 01:17:58
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:17:58
+Channel configuration set to: GFPFast: 29-Feb-2020 01:18:00
+Channel:GFPFast set at:29-Feb-2020 01:18:00
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.925. 29-Feb-2020 01:18:01
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:18:01
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.925. 29-Feb-2020 01:18:01
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:18:01
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:18:06
+Channel:mCherry set at:29-Feb-2020 01:18:07
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:4,pos004
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:18:14
+Moved to X:540, Y:-347
+Call to readDrift after moving to position4
+Setting PFS offset to :121.2
+readDrift script. Reference z position is:1868.725
+readDrift script. Cumulative drift is:3.65
+PFS not locked. Waiting for lock...
+PFS took 0.650000 seconds to lock.
+Channel configuration set to: Brightfield: 29-Feb-2020 01:18:18
+Channel:Brightfield set at:29-Feb-2020 01:18:18
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:18:23
+Channel:GFPFast set at:29-Feb-2020 01:18:23
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1862.575. 29-Feb-2020 01:18:28
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:18:28
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1862.55. 29-Feb-2020 01:18:28
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:18:28
+Channel configuration set to: mCherry: 29-Feb-2020 01:18:31
+Channel:mCherry set at:29-Feb-2020 01:18:31
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:5,pos005
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:18:37
+Moved to X:510, Y:-687
+Call to readDrift after moving to position5
+Setting PFS offset to :122.9
+readDrift script. Reference z position is:1867.15
+readDrift script. Cumulative drift is:-6.05
+Channel configuration set to: Brightfield: 29-Feb-2020 01:18:44
+Channel:Brightfield set at:29-Feb-2020 01:18:44
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:18:49
+Channel:GFPFast set at:29-Feb-2020 01:18:49
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:18:54
+Channel:mCherry set at:29-Feb-2020 01:18:55
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:6,pos006
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:00
+Moved to X:-187, Y:-470
+Call to readDrift after moving to position6
+Setting PFS offset to :119.6
+readDrift script. Reference z position is:1864.05
+readDrift script. Cumulative drift is:-4.725
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:05
+Channel:Brightfield set at:29-Feb-2020 01:19:05
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:19:10
+Channel:GFPFast set at:29-Feb-2020 01:19:10
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1859.075. 29-Feb-2020 01:19:13
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:19:13
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1859.05. 29-Feb-2020 01:19:13
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:19:13
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:19:18
+Channel:mCherry set at:29-Feb-2020 01:19:18
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:7,pos007
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:25
+Moved to X:-731, Y:916
+Call to readDrift after moving to position7
+Setting PFS offset to :117.05
+readDrift script. Reference z position is:1867.05
+readDrift script. Cumulative drift is:-7.625
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:33
+Channel:Brightfield set at:29-Feb-2020 01:19:33
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:19:38
+Channel:GFPFast set at:29-Feb-2020 01:19:39
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:19:44
+Channel:mCherry set at:29-Feb-2020 01:19:44
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:8,pos008
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:49
+Moved to X:-1003, Y:1178
+Call to readDrift after moving to position8
+Setting PFS offset to :121.7
+readDrift script. Reference z position is:1866.425
+readDrift script. Cumulative drift is:-4.275
+Channel configuration set to: Brightfield: 29-Feb-2020 01:19:54
+Channel:Brightfield set at:29-Feb-2020 01:19:54
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1861.825. 29-Feb-2020 01:19:58
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:19:58
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1861.85. 29-Feb-2020 01:19:58
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:19:58
+Channel configuration set to: GFPFast: 29-Feb-2020 01:20:03
+Channel:GFPFast set at:29-Feb-2020 01:20:03
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1861.8. 29-Feb-2020 01:20:06
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:06
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1861.825. 29-Feb-2020 01:20:07
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:07
+Channel configuration set to: mCherry: 29-Feb-2020 01:20:08
+Channel:mCherry set at:29-Feb-2020 01:20:09
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:9,pos009
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:20:14
+Moved to X:-568, Y:1157
+Call to readDrift after moving to position9
+readDrift script. Reference z position is:1868.45
+readDrift script. Cumulative drift is:-5.525
+Channel configuration set to: Brightfield: 29-Feb-2020 01:20:22
+Channel:Brightfield set at:29-Feb-2020 01:20:23
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:20:28
+Channel:GFPFast set at:29-Feb-2020 01:20:28
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1862.95. 29-Feb-2020 01:20:31
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:31
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1862.95. 29-Feb-2020 01:20:31
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:31
+Channel configuration set to: mCherry: 29-Feb-2020 01:20:32
+Channel:mCherry set at:29-Feb-2020 01:20:33
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1863. 29-Feb-2020 01:20:33
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:33
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863. 29-Feb-2020 01:20:33
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:33
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Timepoint:1 completed at:29-Feb-2020 01:20:35
+Time since start of timelapse:224.2978
+PFS is locked
+Time to next time point:-104.2112
+
+------Time point_2------
+Memory available for all arrays: 13728235520
+Memory used by Matlab: 2301521920
+Position:1,pos001
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:20:36
+Moved to X:568, Y:1302
+Call to readDrift after moving to position1
+Setting PFS offset to :122.45
+readDrift script. Reference z position is:1876.5
+readDrift script. Cumulative drift is:-6
+Channel configuration set to: Brightfield: 29-Feb-2020 01:20:40
+Channel:Brightfield set at:29-Feb-2020 01:20:40
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.6. 29-Feb-2020 01:20:41
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:41
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:20:41
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:41
+Channel configuration set to: GFPFast: 29-Feb-2020 01:20:42
+Channel:GFPFast set at:29-Feb-2020 01:20:42
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:20:43
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:43
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:20:43
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:43
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:20:48
+Channel:mCherry set at:29-Feb-2020 01:20:48
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:20:52
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:20:52
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.575. 29-Feb-2020 01:20:52
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:20:52
+Position:2,pos002
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:20:56
+Moved to X:1267, Y:1302
+Call to readDrift after moving to position2
+Setting PFS offset to :119.95
+readDrift script. Reference z position is:1880.125
+readDrift script. Cumulative drift is:-9.375
+Channel configuration set to: Brightfield: 29-Feb-2020 01:21:04
+Channel:Brightfield set at:29-Feb-2020 01:21:04
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1870.9. 29-Feb-2020 01:21:10
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:21:10
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1870.9. 29-Feb-2020 01:21:10
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:21:10
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:21:15
+Channel:GFPFast set at:29-Feb-2020 01:21:15
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:21:20
+Channel:mCherry set at:29-Feb-2020 01:21:21
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:3,pos003
+Position group:1
+Channel configuration set to: Brightfield: 29-Feb-2020 01:21:27
+Moved to X:1026, Y:977
+Call to readDrift after moving to position3
+Setting PFS offset to :120.1
+readDrift script. Reference z position is:1877.575
+readDrift script. Cumulative drift is:-2.825
+Channel configuration set to: Brightfield: 29-Feb-2020 01:21:35
+Channel:Brightfield set at:29-Feb-2020 01:21:35
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:21:40
+Channel:GFPFast set at:29-Feb-2020 01:21:41
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1874.825. 29-Feb-2020 01:21:41
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:21:41
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1874.75. 29-Feb-2020 01:21:42
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:21:42
+Channel configuration set to: mCherry: 29-Feb-2020 01:21:43
+Channel:mCherry set at:29-Feb-2020 01:21:43
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1874.775. 29-Feb-2020 01:21:44
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:21:44
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1874.75. 29-Feb-2020 01:21:44
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:21:44
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:4,pos004
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:21:50
+Moved to X:540, Y:-347
+Call to readDrift after moving to position4
+Setting PFS offset to :121.2
+readDrift script. Reference z position is:1868.725
+readDrift script. Cumulative drift is:3.175
+Channel configuration set to: Brightfield: 29-Feb-2020 01:21:55
+Channel:Brightfield set at:29-Feb-2020 01:21:55
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1863.425. 29-Feb-2020 01:21:55
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:21:55
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863.45. 29-Feb-2020 01:21:56
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:21:56
+Channel configuration set to: GFPFast: 29-Feb-2020 01:21:56
+Channel:GFPFast set at:29-Feb-2020 01:21:57
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:22:02
+Channel:mCherry set at:29-Feb-2020 01:22:02
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1863.4. 29-Feb-2020 01:22:04
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:22:04
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863.4. 29-Feb-2020 01:22:04
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:22:04
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:5,pos005
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:22:11
+Moved to X:510, Y:-687
+Call to readDrift after moving to position5
+Setting PFS offset to :122.9
+readDrift script. Reference z position is:1867.15
+readDrift script. Cumulative drift is:-4.2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:22:19
+Channel:Brightfield set at:29-Feb-2020 01:22:19
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:22
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:22:22
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:23
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:22:23
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:22:28
+Channel:GFPFast set at:29-Feb-2020 01:22:28
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:31
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:22:31
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:32
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:22:32
+Channel configuration set to: mCherry: 29-Feb-2020 01:22:34
+Channel:mCherry set at:29-Feb-2020 01:22:35
+Exposure time:100ms
+Exposure time:100ms
+captureStack (Batman). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:35
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:22:35
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1863.275. 29-Feb-2020 01:22:35
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:22:35
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:6,pos006
+Position group:2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:22:42
+Moved to X:-187, Y:-470
+Call to readDrift after moving to position6
+Setting PFS offset to :119.6
+readDrift script. Reference z position is:1864.05
+readDrift script. Cumulative drift is:-2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:22:50
+Channel:Brightfield set at:29-Feb-2020 01:22:51
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:22:56
+Channel:GFPFast set at:29-Feb-2020 01:22:56
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:23:01
+Channel:mCherry set at:29-Feb-2020 01:23:01
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:7,pos007
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:23:07
+Moved to X:-731, Y:916
+Call to readDrift after moving to position7
+Setting PFS offset to :117.05
+readDrift script. Reference z position is:1867.05
+readDrift script. Cumulative drift is:-6.275
+Channel configuration set to: Brightfield: 29-Feb-2020 01:23:16
+Channel:Brightfield set at:29-Feb-2020 01:23:16
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:23:21
+Channel:GFPFast set at:29-Feb-2020 01:23:21
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1860.775. 29-Feb-2020 01:23:22
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:23:22
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1860.775. 29-Feb-2020 01:23:23
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:23:23
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: mCherry: 29-Feb-2020 01:23:28
+Channel:mCherry set at:29-Feb-2020 01:23:28
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:8,pos008
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:23:34
+Moved to X:-1003, Y:1178
+Call to readDrift after moving to position8
+Setting PFS offset to :121.7
+readDrift script. Reference z position is:1866.425
+readDrift script. Cumulative drift is:-2.825
+PFS not locked. Waiting for lock...
+PFS took 0.600000 seconds to lock.
+Channel configuration set to: Brightfield: 29-Feb-2020 01:23:43
+Channel:Brightfield set at:29-Feb-2020 01:23:43
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:23:48
+Channel:GFPFast set at:29-Feb-2020 01:23:49
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1862.925. 29-Feb-2020 01:23:54
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:23:54
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1862.925. 29-Feb-2020 01:23:54
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:23:54
+Channel configuration set to: mCherry: 29-Feb-2020 01:23:55
+Channel:mCherry set at:29-Feb-2020 01:23:55
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position:9,pos009
+Position group:3
+Channel configuration set to: Brightfield: 29-Feb-2020 01:24:01
+Moved to X:-568, Y:1157
+Call to readDrift after moving to position9
+readDrift script. Reference z position is:1868.45
+readDrift script. Cumulative drift is:-6.2
+Channel configuration set to: Brightfield: 29-Feb-2020 01:24:10
+Channel:Brightfield set at:29-Feb-2020 01:24:10
+Exposure time:30ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Channel configuration set to: GFPFast: 29-Feb-2020 01:24:15
+Channel:GFPFast set at:29-Feb-2020 01:24:15
+Exposure time:30ms
+Exposure time:30ms
+captureStack (Batman). Z drive position before stack capture is: 1862.2. 29-Feb-2020 01:24:18
+captureStack (Batman). Starting PIFOC position is: 0. 29-Feb-2020 01:24:18
+captureStackMM2 (Batmanl). Z drive position before stack capture is: 1862.2. 29-Feb-2020 01:24:18
+captureStack (Batgirl). Starting Z stage position is: 50. 29-Feb-2020 01:24:18
+Channel configuration set to: mCherry: 29-Feb-2020 01:24:19
+Channel:mCherry set at:29-Feb-2020 01:24:19
+Exposure time:100ms
+WARNING - ERROR CAUGHT - NO IMAGE CAPTURED TO THIS CHANNEL AND TIMEPOINT. Error message:Java exception occurred: 
+java.lang.Exception: Wait for device "XYStage" timed out after 5000ms
+	at mmcorej.MMCoreJJNI.CMMCore_waitForSystem(Native Method)
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:Brightfield
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:GFPFast
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Position group_1. Channel:mCherry
+Maximum intensity measured in position group_1_is:0
+Channel does not use Smart EM camera mode. Settings remain unchanged.
+Timepoint:2 completed at:29-Feb-2020 01:24:25
+Time since start of timelapse:454.3878
+PFS is locked
+Time to next time point:-110.0053
+Experiment completed
