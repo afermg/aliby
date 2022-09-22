@@ -53,7 +53,7 @@ pycatch22 = "^0.4.2"
 pathos = "^0.2.8" # Lambda-friendly multithreading
 
 [tool.poetry.group.network]
-optional = false
+optional = true
 
 [tool.poetry.group.network.dependencies]
 omero-py = ">=5.6.2" # contact omero server
