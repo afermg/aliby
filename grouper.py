@@ -159,6 +159,87 @@ class Grouper(ABC):
                 d[pos] = f["/trap_info/trap_locations"][()]
         return d
 
+    @property
+    def groups(self) -> t.Tuple[str]:
+        # Return groups sorted alphabetically
+        return tuple(sorted(set(self.positions_groups.values())))
+
+    @property
+    def positions(self) -> t.Tuple[str]:
+        # Return positions sorted alphabetically
+        return tuple(sorted(set(self.positions_groups.keys())))
+
+    def ncells(
+        self, path="/extraction/general/None/area", mode="retained", **kwargs
+    ) -> t.Dict[str, int]:
+        """
+        Returns number of cells retained per position in base channel
+        """
+        return (
+            self.concat_signal(path=path, mode=mode, **kwargs)
+            .groupby("group")
+            .apply(len)
+            .to_dict()
+        )
+
+    @property
+    def nretained(self) -> t.Dict[str, int]:
+        return self.ncells()
+
+    def pool_function(
+        self,
+        path: str,
+        f: t.Callable,
+        pool: t.Optional[int] = None,
+        **kwargs,
+    ):
+        """
+        Wrapper to add support for threading to process independent signals.
+        Particularly useful when aggregating multiple elements.
+        """
+        if pool or pool is None:
+            if pool is None:
+                pool = 8
+
+            with Pool(pool) as p:
+                kymographs = p.map(
+                    lambda x: f(
+                        path=path,
+                        signal=x[1],
+                        group=self.positions_groups[x[0]],
+                        **kwargs,
+                    ),
+                    self.signals.items(),
+                )
+        else:
+            kymographs = [
+                f(
+                    path=path,
+                    signal=signal,
+                    group=self.positions_groups[name],
+                    **kwargs,
+                )
+                for name, signal in self.signals.items()
+            ]
+
+        return kymographs
+
+    @property
+    def stages_span(self):
+        return self.fsignal.stages_span
+
+    @property
+    def max_span(self):
+        return self.fsignal.max_span
+
+    @property
+    def tinterval(self):
+        return self.fsignal.tinterval
+
+    @property
+    def stages(self):
+        return self.fsignal.stages
+
 
 class MetaGrouper(Grouper):
     """Group positions using metadata's 'group' number."""
