@@ -42,10 +42,6 @@ class PostProcessorParameters(ParametersABC):
     def __getitem__(self, item):
         return getattr(self, item)
 
-    @staticmethod
-    def find_in_1st(string, lol):
-        pass
-
     @classmethod
     def default(cls, kind=[]):
         targets = {
@@ -61,30 +57,25 @@ class PostProcessorParameters(ParametersABC):
                     ],
                 ],
                 # [
-                #     "gpsignal",
-                #     ["/extraction/general/None/volume"],
+                #     "savgol",
+                #     [
+                #         "/extraction/general/None/volume",
+                #     ],
                 # ],
-                [
-                    "savgol",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
-                ],
                 [
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
-                        "/postprocessing/savgol/extraction_general_None_volume",
+                        # "/postprocessing/savgol/extraction_general_None_volume",
                     ],
                 ],
                 [
                     "bud_metric",
                     [
                         "/extraction/general/None/volume",
-                        "/postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
-                        "/postprocessing/savgol/extraction_general_None_volume",
-                        # "/postprocessing/gpsignal/postprocessing_savgol_extraction_general_None_volume/growthrate",
-                        "/postprocessing/dsignal/extraction_general_None_volume",
+                        # "/postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
+                        # "/postprocessing/savgol/extraction_general_None_volume",
+                        # "/postprocessing/dsignal/extraction_general_None_volume",
                     ],
                 ],
                 [
@@ -93,17 +84,15 @@ class PostProcessorParameters(ParametersABC):
                         "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
-                [
-                    "aggregate",
-                    [
-                        [
-                            "/extraction/general/None/volume",
-                            # "postprocessing/bud_metric/extraction_general_None_volume",
-                            "postprocessing/dsignal/extraction_general_None_volume",
-                            # "postprocessing/dsignal/postprocessing_bud_metric_extraction_general_None_volume",
-                        ],
-                    ],
-                ],
+                # [
+                #     "aggregate",
+                #     [
+                #         [
+                #             "/extraction/general/None/volume",
+                #             "postprocessing/dsignal/extraction_general_None_volume",
+                #         ],
+                #     ],
+                # ],
             ],
         }
         param_sets = {
@@ -195,8 +184,7 @@ class PostProcessor(ProcessABC):
             self._signal[self.targets["prepost"]["merger"]]
         )
 
-        with h5py.File(self._filename, "r") as f:
-            prev_idchanges = self._signal.get_merges()
+        prev_idchanges = self._signal.get_merges()
 
         changes_history = list(prev_idchanges) + [
             np.array(x) for x in merge_events
