@@ -7,7 +7,7 @@ packages = [
     { include = "aliby" },
     { include = "extraction" },
     { include = "agora" },
-    { include = "postprocessing" },
+    { include = "postprocessor" },
 ]
 readme = "README.md"
 
