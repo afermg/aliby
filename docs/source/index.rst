@@ -9,6 +9,8 @@
    Home page <self>
    ALIBY reference <_autosummary/aliby>
    extraction reference <_autosummary/extraction>
+   agora reference <_autosummary/agora>
+   postprocessor reference <_autosummary/postprocessor>
 
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_
