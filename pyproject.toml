@@ -8,6 +8,7 @@ packages = [
     { include = "extraction" },
     { include = "agora" },
     { include = "postprocessor" },
+    { include = "logfile_parser" },
 ]
 readme = "README.md"
 

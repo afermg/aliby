@@ -1,0 +1,108 @@
+{
+  "channels": {
+    "trigger_startswith": "Channels:",
+    "type": "table",
+    "column_map": {
+      "Channel name": ["channel","str"],
+      "Exposure time": ["exposure","int"],
+      "Skip": ["skip","int"],
+      "Z sect.": ["zsect","int"],
+      "Start time": ["start_time","int"],
+      "Camera mode": ["camera_mode","int"],
+      "EM gain": ["em_gain","int"],
+      "Voltage": ["voltage","float"]
+    }
+  },
+  "zsectioning": {
+    "trigger_startswith": "Z_sectioning:",
+    "type": "table",
+    "column_map": {
+      "Sections": ["nsections","int"],
+      "Spacing": ["spacing","float"],
+      "PFSon?": ["pfson","bool"],
+      "AnyZ?": ["anyz","bool"],
+      "Drift": ["drift","int"],
+      "Method": ["zmethod","int"]
+    }
+  },
+  "time_settings": {
+    "trigger_startswith": "Time_settings",
+    "type": "table",
+    "has_header": false,
+    "column_map": [
+      ["istimelapse","bool"],
+      ["timeinterval","int"],
+      ["ntimepoints","int"],
+      ["totaltime","int"]
+    ]
+  },
+  "positions": {
+    "trigger_startswith": "Points:",
+    "type": "table",
+    "column_map": {
+      "Position name": ["posname","str"],
+      "X position": ["xpos","float"],
+      "Y position": ["ypos","float"],
+      "Z position": ["zpos","float"],
+      "PFS offset": ["pfsoffset","float"],
+      "Group": ["group","int"]
+    },
+    "default_map": "int"
+  },
+  "npumps": {
+    "trigger_startswith": "Syringe pump details:",
+    "type": "regex",
+    "regex": "^.*:\\s*(\\d+)\\s*pumps\\.*$",
+    "map": "int"
+  },
+  "pumpinit": {
+    "trigger_startswith": "Pump states at beginning of experiment:",
+    "type": "table",
+    "column_map": {
+      "Pump port": ["pump_port","str"],
+      "Diameter": ["syringe_diameter","float"],
+      "Current rate": ["flowrate","float"],
+      "Direction": ["flowdirection","str"],
+      "Running": ["isrunning", "bool"],
+      "Contents": ["contents", "str"]
+    }
+  },
+  "nswitches": {
+    "trigger_startswith": "Number of pump changes:",
+    "type": "regex",
+    "regex": "(\\d+)",
+    "map": "int"
+  },
+  "switchvol": {
+    "trigger_startswith": "Infuse/withdraw volumes:",
+    "type": "regex",
+    "regex": "(\\d+)",
+    "map": "int"
+  },
+  "switchrate": {
+    "trigger_startswith": "Infuse/withdraw rates:",
+    "type": "regex",
+    "regex": "(\\d+)",
+    "map": "int"
+  },
+  "switchtimes": {
+    "trigger_startswith": "Times:",
+    "type": "list",
+    "map": "int"
+  },
+  "switchtopump": {
+    "trigger_startswith": "Switched to:",
+    "type": "list",
+    "map": "int"
+  },
+  "switchfrompump": {
+    "trigger_startswith": "Switched from:",
+    "type": "list",
+    "map": "int"
+  },
+  "pumprate": {
+    "trigger_startswith": "Flow post switch:",
+    "type": "lists",
+    "map": "float"
+  }
+}
