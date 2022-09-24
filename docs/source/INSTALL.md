@@ -32,8 +32,8 @@ In your local environment, run:
 
 Or using [pyenv](https://github.com/pyenv/pyenv) with pyenv-virtualenv:
 
-    $ pyenv install 3.7.9
-    $ pyenv virtualenv 3.7.9 aliby
+    $ pyenv install 3.8.13
+    $ pyenv virtualenv 3.8.13 aliby
     $ pyenv local aliby
 
 
