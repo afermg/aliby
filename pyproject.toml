@@ -13,42 +13,51 @@ packages = [
 readme = "README.md"
 
 [tool.poetry.dependencies]
+python = ">=3.8, <3.11"
 PyYAML = "^6.0"
 flatten-dict = "^0.4.2"
 gaussianprocessderivatives = "^0.1.5"
 h5py = "2.10" # File I/O
 numpy = ">=1.21.6"
 opencv-python = "4.1.2.30"
+p-tqdm = "^1.3.3"
 pandas = ">=1.3.3"
 py-find-1st = "^1.1.5" # Fast indexing
-python = ">=3.8, <3.11"
+scikit-learn = ">=1.0.2" # Used for an extraction metric
 scipy = ">=1.7.3"
 
 # [tool.poetry.group.pipeline.dependencies]
 aliby-baby = "^0.1.14"
 dask = "^2021.12.0"
 imageio = "2.8.0" # For image-visualisation utilities
-p-tqdm = "^1.3.3" # Parallel progress bars
 requests-toolbelt = "^0.9.1"
 scikit-image = ">=0.18.1"
-scikit-learn = ">=1.0.2" # Used for an extraction metric
 tqdm = "^4.62.3" # progress bars
 xmltodict = "^0.13.0" # read ome-tiff metadata
 
 # [tool.poetry.group.postprocessor.dependencies]
-PyYAML = "^6.0"
 leidenalg = "^0.8.8"
 more-itertools = "^8.12.0"
-p-tqdm = "^1.3.3"
 pathos = "^0.2.8" # Lambda-friendly multithreading
 pycatch22 = "^0.4.2"
-scikit-learn = ">=0.22"
-scipy = ">=1.4.1"
-seaborn = "^0.11.2"
 
 # [tool.poetry.group.network.dependencies]
 omero-py = {version = ">=5.6.2", optional = true } # contact omero server
 zeroc-ice = {version="3.6.5", optional = true} # networking interface, slow to build
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.6.0"
+mypy = "^0.930"
+numpydoc = "^1.3.1"
+isort = "^5.10.1"
+jupyter = "^1.0.0"
+flake8 = "^4.0.1"
+pyright = "^1.1.258"
+pre-commit = "^2.20.0"
+seaborn = "^0.11.2"
 
 # [tool.poetry.group.gui.dependencies]
 # napari = ">=0.4.16"
@@ -65,16 +74,6 @@ optional = true
 [tool.poetry.group.test.dependencies]
 pytest = "^6.2.5"
 
-
-[tool.poetry.group.dev.dependencies]
-black = "^22.6.0"
-mypy = "^0.930"
-numpydoc = "^1.3.1"
-isort = "^5.10.1"
-jupyter = "^1.0.0"
-flake8 = "^4.0.1"
-pyright = "^1.1.258"
-pre-commit = "^2.20.0"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.0.0"]
