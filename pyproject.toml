@@ -42,8 +42,12 @@ pathos = "^0.2.8" # Lambda-friendly multithreading
 pycatch22 = "^0.4.2"
 
 # [tool.poetry.group.network.dependencies]
-omero-py = {version = ">=5.6.2", optional = true } # contact omero server
-zeroc-ice = {version="3.6.5", optional = true} # networking interface, slow to build
+omero-py = { version = ">=5.6.2", optional = true } # contact omero server
+zeroc-ice = { version="3.6.5", optional = true } # networking interface, slow to build
+
+[tool.poetry.extras]
+omero = [ "omero-py" ]
+network = [ "omero-py", "zeroc-ice" ]
 
 [tool.poetry.group.dev]
 optional = true
