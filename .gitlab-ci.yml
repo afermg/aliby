@@ -30,7 +30,7 @@ before_script:
   # - export WITHOUT="docs,network";
   - export ARGS="--with test";
   - if [[ "$CI_STAGE_NAME" == "test" ]]; then echo "Installing system dependencies for ${CI_STAGE_NAME}"; apt update && apt install -y ffmpeg libsm6 libxext6; fi
-  - if [[ "$CI_JOB_NAME" == "Static Type" ]]; then echo "Setting flag to compile zeroc-ice"; export ARGS="${ARGS},dev"; fi
+  - if [[ "$CI_JOB_NAME" == "Static Type" ]]; then echo "Activating development group"; export ARGS="${ARGS},dev"; fi
   - if [[ "$CI_JOB_NAME" == "Network Tools Test" ]]; then echo "Setting flag to compile zeroc-ice"; export ARGS="${ARGS} --all-extras"; fi
   - poetry install -vv $ARGS
 
