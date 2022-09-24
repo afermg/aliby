@@ -30,8 +30,8 @@ before_script:
   # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
   - export OPT_DEP="test"
   - export PYTEST_FOLDER=""
-  - if [[ $CI_STAGE_NAME == "test"]]; then apt update && apt install ffmpeg libsm6 libxext6  -y;done
-  - if [[ $CI_JOB_NAME == "Integration"]]; then export OPT_DEP="test,network";done
+  - if [[ $CI_STAGE_NAME == "test"]]; then echo "Installing system dependencies for $CI_STAGE_NAME"; apt update && apt install ffmpeg libsm6 libxext6  -y; fi
+  - if [[ $CI_JOB_NAME == "Integration"]]; then echo "Setting flag to compile zeroc-ice"; export OPT_DEP="test,network"; fi
   - poetry install -vv --with $OPT_DEP
 
 Local Units Test:
