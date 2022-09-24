@@ -11,6 +11,7 @@
    extraction reference <_autosummary/extraction>
    agora reference <_autosummary/agora>
    postprocessor reference <_autosummary/postprocessor>
+   logfile_parser reference <_autosummary/logfile_parser>
 
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_

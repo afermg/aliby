@@ -10,4 +10,7 @@
    :recursive:
 
    aliby
+   agora
    extraction
+   postprocessing
+   logfile_parser
