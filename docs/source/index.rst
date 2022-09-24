@@ -7,6 +7,12 @@
    :hidden:
 
    Home page <self>
+   Installation <INSTALL.md>
+   ..
+      Examples <examples.rst>
+   Reference <api.rst>
+   ..
+      Contributing <CONTRIBUTING.md>
    ALIBY reference <_autosummary/aliby>
    extraction reference <_autosummary/extraction>
    agora reference <_autosummary/agora>

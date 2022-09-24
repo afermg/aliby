@@ -95,18 +95,20 @@ class BridgeH5:
 
         Default hierarchy is:
         - trap
-         - time point
-          - cell label
+        - time point
+        - cell label
 
         This function currently produces trees of depth 3, but it can easily be
         extended for deeper trees if needed (e.g. considering groups,
         chambers and/or positions).
 
-        input
-        :fields: Fields to fetch from 'cell_info' inside the hdf5 storage
+        Parameters
+        ----------
+            fields: Fields to fetch from 'cell_info' inside the hdf5 storage
 
-        returns
-        :tree: Nested dictionary where keys (or branches) are the upper levels
+        Returns
+        ----------
+            Nested dictionary where keys (or branches) are the upper levels
              and the leaves are the last element of :fields:.
         """
         zipped_info = (*zip(*[self._hdf["cell_info"][f][()] for f in fields]),)
