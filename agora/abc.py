@@ -5,8 +5,8 @@ from copy import copy
 from pathlib import Path, PosixPath
 from typing import Union
 
-from yaml import dump, safe_load
 from flatten_dict import flatten
+from yaml import dump, safe_load
 
 atomic = t.Union[int, float, str, bool]
 
@@ -84,8 +84,9 @@ class ParametersABC(ABC):
         try:
             if Path(source).exists():
                 is_buffer = False
-        except Exception:
-            pass
+        except Exception as _:
+            assert isinstance(source, str), "Invalid source type."
+
         if is_buffer:
             params = safe_load(source)
         else:
