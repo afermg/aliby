@@ -1,7 +1,7 @@
 # ALIBY (Analyser of Live-cell Imaging for Budding Yeast)
 
 [![PyPI version](https://badge.fury.io/py/aliby.svg)](https://badge.fury.io/py/aliby)
-[![readthedocs](https://readthedocs.org/projects/aliby/badge/?version=latest)](https://aliby.readthedocs.io/en/latest)
+[![docs](https://readthedocs.org/projects/aliby/badge/?version=latest)](https://aliby.readthedocs.io/en/latest)
 [![pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/master/pipeline.svg?key_text=master)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/pipelines)
 [![dev pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/dev/pipeline.svg?key_text=dev)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/commits/dev)
 
