@@ -27,17 +27,16 @@ before_script:
   # - git pull origin HEAD:master
   # - rm -rf ~/.cache/pypoetry
   # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
-  # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
-  - export OPT_DEP="test"
-  - export PYTEST_FOLDER=""
-  - if [[ $CI_STAGE_NAME == "test" ]]; then echo "Installing system dependencies for $CI_STAGE_NAME"; apt update && apt install ffmpeg libsm6 libxext6  -y; fi
-  - if [[ $CI_JOB_NAME == "Integration" ]]; then echo "Setting flag to compile zeroc-ice"; export OPT_DEP="test,network"; fi
+  - export OPT_DEP="test";
+  - export PYTEST_FOLDER="";
+  - if [[ $CI_STAGE_NAME == "test" ]]; then echo "Installing system dependencies for ${CI_STAGE_NAME}"; apt update && apt install -y ffmpeg libsm6 libxext6; fi
+  - if [[ $CI_JOB_NAME == "Integration Test" ]]; then echo "Setting flag to compile zeroc-ice"; export OPT_DEP="test,network"; fi
   - poetry install -vv --with $OPT_DEP
 
 Local Units Test:
   stage: test
   script:
-    - poetry run pytest
+    - poetry run pytest --ignore ./tests/aliby
 
 # TODO add Network Units
 
