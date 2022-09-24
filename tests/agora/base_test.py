@@ -17,6 +17,10 @@ class DummyParameters(ParametersABC):
         return cls.from_dict({})
 
 
+def test_file_exists(yaml_file):
+    assert yaml_file.exists()
+
+
 def test_from_yaml(yaml_file):
     # From yaml
     params = DummyParameters.from_yaml(yaml_file)
