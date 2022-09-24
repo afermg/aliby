@@ -30,7 +30,7 @@ before_script:
   - export OPT_DEP="test";
   - export PYTEST_FOLDER="";
   - if [[ "$CI_STAGE_NAME" == "test" ]]; then echo "Installing system dependencies for ${CI_STAGE_NAME}"; apt update && apt install -y ffmpeg libsm6 libxext6; fi
-  - if [[ "$CI_JOB_NAME" == "Integration Test" ]]; then echo "Setting flag to compile zeroc-ice"; export OPT_DEP="test,network"; fi
+  - if [[ "$CI_JOB_NAME" == "Network Tools Test" ]]; then echo "Setting flag to compile zeroc-ice"; export OPT_DEP="test,network"; fi
   - poetry install -vv --with $OPT_DEP
 
 Local Tests:
