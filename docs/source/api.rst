@@ -12,5 +12,5 @@
    aliby
    agora
    extraction
-   postprocessing
+   postprocessor
    logfile_parser
