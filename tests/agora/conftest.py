@@ -15,7 +15,10 @@ def data_dir():
 
 @pytest.fixture(scope="module")
 def yaml_file(data_dir: PosixPath):
-    return data_dir / "parameters.yaml"
+    data = data_dir / "parameters.yaml"
+    if not data.exists():
+        pytest.fail(f"There is no file at {str( data_dir )}.")
+    return data
 
 
 @pytest.fixture(scope="module", autouse=True)
