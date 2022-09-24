@@ -47,17 +47,12 @@ Network Tools Test:
   script:
     - poetry run pytest ./tests/aliby/network
 
-Code Lint:
+Static Type:
   stage: checks
   allow_failure: true
   script:
     - poetry run black .
     - poetry run isort .
-
-Static Type:
-  stage: checks
-  allow_failure: true
-  script:
     - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
