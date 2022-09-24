@@ -8,7 +8,8 @@ from agora.abc import ParametersABC
 
 
 class DummyParameters(ParametersABC):
-    yaml_file = "tests/data/parameters.yaml"
+    # TODO add default data folder and load for all tests
+    yaml_file = "tests/agora/data/parameters.yaml"
 
     def __init__(self):
         super().__init__()
