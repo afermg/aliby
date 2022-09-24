@@ -25,17 +25,28 @@ before_script:
   # - git remote rm origin && git remote add origin https://${ACCESS_TOKEN_NAME}:${ACCESS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git
   # - git config pull.rebase false
   # - git pull origin HEAD:master
-  - rm -rf ~/.cache/pypoetry
-  - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
-  - poetry install -vv --with test
+  # - rm -rf ~/.cache/pypoetry
+  # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
+  # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
+  - export OPT_DEP="test"
+  - export PYTEST_FOLDER=""
+  - if [[ $CI_STAGE_NAME == "test"]]; then apt update && apt install ffmpeg libsm6 libxext6  -y;done
+  - if [[ $CI_JOB_NAME == "Integration"]]; then export OPT_DEP="test,network";done
+  - poetry install -vv --with $OPT_DEP
 
-Unit test:
+Local Units Test:
   stage: test
   script:
-    - apt update && apt install ffmpeg libsm6 libxext6  -y
-    - poetry run pytest ./tests/
+    - poetry run pytest
 
-Python Code Lint:
+# TODO add Network Units
+
+Integration Test:
+  stage: test
+  script:
+    - poetry run pytest ./tests/aliby/
+
+Code Lint:
   stage: check
   script:
     - poetry run black .
@@ -47,6 +58,7 @@ Static Type:
     - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
+# TODO add more tests before activate automatic release
 # Bump_release:
 #   stage: release
 #   script:
