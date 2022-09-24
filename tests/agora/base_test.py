@@ -8,38 +8,41 @@ from agora.abc import ParametersABC
 
 
 class DummyParameters(ParametersABC):
-    # TODO add default data folder and load for all tests
-    yaml_file = "tests/agora/data/parameters.yaml"
-
-    def __init__(self):
-        super().__init__()
-
-    def test_dict(self):
-        param_dict = dict(a="a", b="b", c=dict(d="d", e="e"))
-        params = self.from_dict(param_dict)
-        assert params.to_dict() == param_dict
-        # Remove
-        params.to_yaml(self.yaml_file)
-
-    def test_yaml(self):
-        # From yaml
-        params = self.from_yaml(self.yaml_file)
-        # To yaml
-        with open(self.yaml_file, "r") as fd:
-            yaml_data = fd.read()
-        assert params.to_yaml() == yaml_data
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     @classmethod
     def default(cls):
+        # Necessary empty builder
         return cls.from_dict({})
 
 
-def test_to_yaml():
-    DummyParameters.default().to_yaml()
+def test_from_yaml(yaml_file):
+    # From yaml
+    params = DummyParameters.from_yaml(yaml_file)
 
 
-def test_from_yaml():
-    DummyParameters.default().test_yaml()
+def test_from_stdin(yaml_file):
+    # From yaml
+    params = DummyParameters.from_yaml(yaml_file)
+    # To yaml
+    assert isinstance(params, ParametersABC)
+
+
+def test_to_yaml(yaml_file):
+    with open(yaml_file, "r") as fd:
+        yaml_data = fd.read()
+
+    params = DummyParameters.from_yaml(yaml_file)
+
+    assert params.to_yaml() == yaml_data
+
+
+def test_dict(example_dict):
+    params = DummyParameters(**example_dict)
+    assert params.to_dict() == param_dict
+    # Remove
+    params.to_yaml("outfile.yml")
 
 
 def test_to_dict():
