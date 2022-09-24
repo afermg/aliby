@@ -110,7 +110,6 @@ venv.bak/
 omero_py/omeroweb/
 omero_py/pipeline/
 **.ipynb
-data/
 notebooks/
 *.pdf
 *.h5

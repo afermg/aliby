@@ -44,7 +44,7 @@ def test_to_yaml(yaml_file):
 
 def test_dict(example_dict):
     params = DummyParameters(**example_dict)
-    assert params.to_dict() == param_dict
+    assert params.to_dict() == example_dict
     # Remove
     params.to_yaml("outfile.yml")
 
