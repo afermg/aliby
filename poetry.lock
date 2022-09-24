@@ -1604,7 +1604,7 @@ zeroc-ice = ">=3.6.4,<3.7"
 name = "opencv-python"
 version = "4.1.2.30"
 description = "Wrapper package for OpenCV python bindings."
-category = "dev"
+category = "main"
 optional = false
 python-versions = "*"
 
@@ -3049,7 +3049,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8, <3.11"
-content-hash = "8d0cf053b6f4f7383916473308283ca729e43d21fea67a58129d23bf83110fb0"
+content-hash = "ce9a2e82b7d8412faf2ad300494aab29b1161b26664178c1c09284f1712cb2f4"
 
 [metadata.files]
 absl-py = [
