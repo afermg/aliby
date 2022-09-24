@@ -27,11 +27,11 @@ before_script:
   # - git pull origin HEAD:master
   # - rm -rf ~/.cache/pypoetry
   # - if [ ${var+TRIGGER_PYPI_NAME} ]; then echo "Pipeline triggered by ${TRIGGER_PYPI_NAME}"; poetry add ${TRIGGER_PYPI_NAME}@latest; fi
-  - export WITHOUT="docs,network";
-  - export PYTEST_FOLDER="";
+  # - export WITHOUT="docs,network";
+  - export ARGS="";
   - if [[ "$CI_STAGE_NAME" == "test" ]]; then echo "Installing system dependencies for ${CI_STAGE_NAME}"; apt update && apt install -y ffmpeg libsm6 libxext6; fi
-  - if [[ "$CI_JOB_NAME" == "Network Tools Test" ]]; then echo "Setting flag to compile zeroc-ice"; export WITHOUT="docs"; fi
-  - poetry install -vv --without $WITHOUT
+  - if [[ "$CI_JOB_NAME" == "Network Tools Test" ]]; then echo "Setting flag to compile zeroc-ice"; export ARGS="--all-extras"; fi
+  - poetry install -vv $ARGS
 
 Local Tests:
   stage: test
