@@ -5,12 +5,12 @@
 [![pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/master/pipeline.svg?key_text=master)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/pipelines)
 [![dev pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/dev/pipeline.svg?key_text=dev)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/commits/dev)
 
-The core classes and methods for the python microfluidics, microscopy, data analysis and reporting.
-
-### Installation
-See [INSTALL.md](./INSTALL.md) for installation instructions.
+End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentation, tracking, lineage predictions, post-processing and report production. It leverages the existing Python ecosystem and open-source scientific software available to produce seamless and standardised pipelines.
 
 ## Quickstart Documentation
+
+We use (and recommend) [OMERO](https://www.openmicroscopy.org/omero/) to manage our microscopy database, but ALIBY can process both locally-stored experiments and remote ones hosted on a server.
+
 ### Setting up a server
 For testing and development, the easiest way to set up an OMERO server is by
 using Docker images.
@@ -37,6 +37,10 @@ To stop them, in the same directory, run:
 ```shell script
 docker-compose stop
 ```
+
+### Installation
+
+See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INSTALL.html ) for more details.
 
 ### Raw data access
 

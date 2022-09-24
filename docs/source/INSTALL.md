@@ -1,12 +1,10 @@
 # Installation
 
-Tested on: Mac OSX Mojave and Ubuntu 20.04
-
 ## Requirements
 We strongly recommend installing within a python environment as there are many dependencies that you may not want polluting your regular python environment.
 Make sure you are using python 3.
 
-An environment can be created with using the conda package manager:
+An environment can be created using [Anaconda](https://www.anaconda.com/):
 
     $ conda create --name <env>
     $ conda activate <env>
@@ -32,33 +30,39 @@ In your local environment, run:
 
 Or using [pyenv](https://github.com/pyenv/pyenv) with pyenv-virtualenv:
 
-    $ pyenv install 3.8.13
-    $ pyenv virtualenv 3.8.13 aliby
+    $ pyenv install 3.8.14
+    $ pyenv virtualenv 3.8.14 aliby
     $ pyenv local aliby
 
 
 ## Pipeline installation
 
 ### Pip version
-Once you have created your local environment, run:
+Once you have created and activated your virtual environment, run:
 
-    $ cd aliby
-    $ pip install -e ./
+If you are analysing data locally:
 
+    $ pip install aliby
+
+If you are contacting an OMERO server:
+
+    $ pip install aliby[network]
+
+NOTE: Support for OMERO servers in GNU/Linux computers requires building ZeroC-Ice, thus it requires build tools. The versions for Windows and MacOS are provided as Python wheels and thus installation is faster.
 
 ### Git version
 
 We use [ poetry ](https://python-poetry.org/docs/#installation) for dependency management.
 
-
-In case you want to have local versions (usually for development) the main three aliby dependencies you must install them in a specific order:
+In case you want to have local version:
 
     $ git clone git@git.ecdf.ed.ac.uk:swain-lab/aliby/aliby.git
-    $ git clone git@git.ecdf.ed.ac.uk:swain-lab/aliby/postprocessor.git
-    $ git clone git@git.ecdf.ed.ac.uk:swain-lab/aliby/agora.git
-
     $ cd aliby && poetry install
-    $ cd ../postprocessor && poetry install
-    $ cd ../agora && poetry install
 
-And that should install all three main dependencies in an editable mode. The same process can be used for [BABY](https://git.ecdf.ed.ac.uk/swain-lab/aliby/baby)
+This will automatically install the [ BABY ](https://git.ecdf.ed.ac.uk/swain-lab/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
+
+### Troubleshooting
+
+Segmentation has been tested on: Mac OSX Mojave, Ubuntu 20.04 and Arch Linux.
+Data processing has been tested on all the above and Windows 11.
+
