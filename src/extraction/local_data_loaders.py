@@ -9,9 +9,8 @@ The most basic functions were copied from Swain Lab's baby module,
 specifically baby/io.py
 """
 
+from importlib_resources import files
 import json
-import os
-import random
 import re
 from itertools import groupby
 from pathlib import Path
@@ -72,8 +71,13 @@ def load(path=None):
     list of dictionaries containing GFP, Brightfield and segoutlines channel
     """
     if path is None:
-        path = Path(os.path.dirname(os.path.realpath(__file__))) / Path(
-            "pairs_data"
+
+        # FUTURE can be replaced by importlib.resources.files('aliby') after upgrading to 3.11
+        path = (
+            files("aliby").parent.parent
+            / "examples"
+            / "extraction"
+            / "pairs_data"
         )
 
     image_dir = Path(path)
