@@ -10,11 +10,6 @@ from extraction.core.functions.loaders import (
 from extraction import local_data_loaders as data
 from importlib_resources import files
 
-# FUTURETODO can be replaced by importlib.resources.files('aliby') after upgrading to 3.11
-files_dir = files("aliby")
-data_dir = files_dir.parent.parent / "tests" / "agora" / "data"
-
-
 dsets1z = data.load_1z()
 dsets = data.load()
 masks = [d["segoutlines"] for d in dsets1z]
