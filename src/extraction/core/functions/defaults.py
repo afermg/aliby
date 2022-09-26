@@ -28,7 +28,7 @@ def exparams_from_meta(
         "mKO2",
     }
 
-    default_reductions = {"np_max"}
+    default_reductions = {"max"}
     default_metrics = {
         "mean",
         "median",
@@ -62,7 +62,7 @@ def exparams_from_meta(
                         ["GFPFast_bgsub", "pHluorin405_bgsub"],
                     ),
                 )
-                for b, y in zip(["em_ratio", "gsum"], ["div0", "np_add"])
+                for b, y in zip(["em_ratio", "gsum"], ["div0", "add"])
             }
             for i, v in sets.items():
                 base["multichannel_ops"][i] = [
