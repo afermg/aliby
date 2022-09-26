@@ -7,7 +7,13 @@ from extraction.core.functions.loaders import (
     load_funs,
     load_redfuns,
 )
-from extraction.examples import data
+from extraction import local_data_loaders as data
+from importlib_resources import files
+
+# FUTURETODO can be replaced by importlib.resources.files('aliby') after upgrading to 3.11
+files_dir = files("aliby")
+data_dir = files_dir.parent.parent / "tests" / "agora" / "data"
+
 
 dsets1z = data.load_1z()
 dsets = data.load()
