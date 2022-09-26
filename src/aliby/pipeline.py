@@ -15,6 +15,9 @@ from typing import Union
 import h5py
 import numpy as np
 import pandas as pd
+from pathos.multiprocessing import Pool
+from tqdm import tqdm
+
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
@@ -24,10 +27,6 @@ from agora.io.writer import (  # BabyWriter,
     StateWriter,
     TilerWriter,
 )
-from pathos.multiprocessing import Pool
-from postprocessor.core.processor import PostProcessor, PostProcessorParameters
-from tqdm import tqdm
-
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
 from aliby.io.dataset import Dataset, DatasetLocal
@@ -35,6 +34,7 @@ from aliby.io.image import get_image_class
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
+from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # from postprocessor.compiler import ExperimentCompiler, PageOrganiser
 
