@@ -7,6 +7,7 @@ import re
 import traceback
 import typing as t
 from copy import copy
+from importlib.metadata import version
 from pathlib import Path, PosixPath
 from time import perf_counter
 from typing import Union
@@ -707,6 +708,7 @@ class Pipeline(ProcessABC):
                 meta.run()
                 meta.add_fields(  # Add non-logfile metadata
                     {
+                        "aliby_version": version('aliby')
                         "omero_id": config["general"]["id"],
                         "image_id": image_id,
                         "parameters": PipelineParameters.from_dict(
