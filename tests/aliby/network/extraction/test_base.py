@@ -8,7 +8,6 @@ from extraction.core.functions.loaders import (
     load_redfuns,
 )
 from extraction import local_data_loaders as data
-from importlib_resources import files
 
 dsets1z = data.load_1z()
 dsets = data.load()
