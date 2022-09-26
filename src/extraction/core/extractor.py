@@ -16,7 +16,6 @@ from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
     load_custom_args,
     load_funs,
-    load_mergefuns,
     load_redfuns,
 )
 
@@ -33,7 +32,6 @@ extraction_result = t.Dict[
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
 RED_FUNS = load_redfuns()
-MERGE_FUNS = load_mergefuns()
 
 # Assign datatype depending on the metric used
 # m2type = {"mean": np.float32, "median": np.ubyte, "imBackground": np.ubyte}
@@ -406,10 +404,10 @@ class Extractor(ProcessABC):
         method: function
             The reduction function
         """
-        if method is None:
-            return img
-        else:
-            return reduce_z(img, method)
+        reduced = img
+        if method is not None:
+            reduced = reduce_z(img, method)
+        return reduced
 
     def extract_tp(
         self,
@@ -547,8 +545,10 @@ class Extractor(ProcessABC):
                     set(self.img_bgsub.keys()).union(tree_chs)
                 )
             ) == len(chs):
-                imgs = [self.get_imgs(ch, tiles, tree_chs) for ch in chs]
-                merged = MERGE_FUNS[merge_fun](*imgs)
+                channels_stack = np.stack(
+                    [self.get_imgs(ch, tiles, tree_chs) for ch in chs]
+                )
+                merged = RED_FUNS[merge_fun](channels_stack, axis=-1)
                 d[name] = self.reduce_extract(
                     red_metrics=red_metrics,
                     traps=merged,

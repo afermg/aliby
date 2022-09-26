@@ -1,7 +1,8 @@
 import typing as t
-from inspect import getfullargspec, getmembers, isfunction
+from types import FunctionType
+from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 
-import numpy as np
+import bottleneck as bn
 
 from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
@@ -102,22 +103,30 @@ def load_funs():
     return CELLFUNS, TRAPFUNS, {**TRAPFUNS, **CELLFUNS}
 
 
-def load_redfuns():  # TODO make defining reduction functions more flexible
+def load_redfuns(
+    additional_reducers: t.Optional[
+        t.Union[t.Dict[str, t.Callable], t.Callable]
+    ] = None,
+) -> t.Dict[str, t.Callable]:
     """
-    Load functions to reduce the z-stack to two dimensions.
+    Load functions to reduce a multidimensional image by one dimension.
+
+    It can take custom functions as arguments.
     """
     RED_FUNS = {
-        "np_max": np.maximum,
-        "np_mean": np.mean,
-        "np_median": np.median,
+        "max": bn.nanmax,
+        "mean": bn.nanmean,
+        "median": bn.nanmedian,
+        "div0": div0,
+        "add": bn.nansum,
         "None": None,
     }
+
+    if additional_reducers is not None:
+        if isinstance(additional_reducers, FunctionType):
+            additional_reducers = [
+                (additional_reducers.__name__, additional_reducers)
+            ]
+        RED_FUNS.update(name, fun)
+
     return RED_FUNS
-
-
-def load_mergefuns():
-    """
-    Load functions to merge multiple channels
-    """
-    MERGE_FUNS = {"div0": div0, "np_add": np.add}
-    return MERGE_FUNS
