@@ -77,7 +77,9 @@ def max2p5pc(cell_mask, trap_image) -> float:
     npixels = bn.nansum(cell_mask)
     top_pixels = int(np.ceil(npixels * 0.025))
     # sort pixels in cell and find highest 2.5%
-    top_values = trap_image[bn.rankdata(trap_image[cell_mask])[:top_pixels]]
+    pixels = trap_image[cell_mask]
+    top_values = pixels[bn.rankdata(pixels)[:top_pixels].astype(int) - 1]
+
     # find mean of these highest pixels
     return bn.nanmean(top_values)
 
@@ -110,7 +112,7 @@ def std(cell_mask, trap_image):
         Segmentation mask for the cell
     trap_image: 2d array
     """
-    return bn.std(trap_image[cell_mask])
+    return bn.nanstd(trap_image[cell_mask])
 
 
 def k2_major_median(cell_mask, trap_image):
