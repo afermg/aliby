@@ -288,15 +288,15 @@ class ExperimentCompiler(Compiler):
             "buddings": ("buddings", "sum"),
             "cycle_length_mean": (
                 "buddings",
-                lambda x: np.diff(np.where(x)[0]).mean(),
+                lambda x: bn.nanmean(np.diff(np.where(x)[0])),
             ),
             "cycle_length_min": (
                 "buddings",
-                lambda x: np.diff(np.where(x)[0]).min(),
+                lambda x: bn.nanmin(np.diff(np.where(x)[0])),
             ),
             "cycle_length_median": (
                 "buddings",
-                lambda x: np.median(np.diff(np.where(x)[0])),
+                lambda x: np.nanmedian(np.diff(np.where(x)[0])),
             ),
         }
 
@@ -376,8 +376,8 @@ class ExperimentCompiler(Compiler):
 
         if metrics is None:
             metrics = {
-                "GFP": ("median", "max5px_med", "max5"),
-                "mCherry": ("median", "max5px_med", "max5"),
+                "GFP": ("median", "max5"),
+                "mCherry": ("median", "max5"),
                 # "general": ("eccentricity",),
                 "Flavin": ("median",),
                 "postprocessing/savgol": ("volume",),
