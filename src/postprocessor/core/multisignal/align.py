@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import bottleneck as bn
 import numpy as np
 import pandas as pd
-from agora.abc import ParametersABC
 
+from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 
 
@@ -97,7 +98,7 @@ class align(PostProcessABC):
         # i.e. if events_at_least = 1, then cells that have no birth events are
         # deleted.
         event_mask = mask_df.apply(
-            lambda x: np.sum(x) >= self.events_at_least, axis=1
+            lambda x: bn.nansum(x) >= self.events_at_least, axis=1
         )
         mask_df = mask_df.iloc[event_mask.to_list()]
 
@@ -132,7 +133,7 @@ class align(PostProcessABC):
         # Do not remove bits of traces before first event
         else:
             # Add columns to left, filled with NaNs
-            max_shift = np.max(shift_list)
+            max_shift = bn.nanmax(shift_list)
             mask_aligned = df_extend_nan(mask_aligned, max_shift)
             trace_aligned = df_extend_nan(trace_aligned, max_shift)
             # shift each
