@@ -57,7 +57,7 @@ We use [ poetry ](https://python-poetry.org/docs/#installation) for dependency m
 In case you want to have local version:
 
     $ git clone git@git.ecdf.ed.ac.uk:swain-lab/aliby/aliby.git
-    $ cd aliby && poetry install
+    $ cd aliby && poetry install --all-extras
 
 This will automatically install the [ BABY ](https://git.ecdf.ed.ac.uk/swain-lab/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
 
