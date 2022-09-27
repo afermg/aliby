@@ -709,6 +709,7 @@ class Pipeline(ProcessABC):
                 meta.add_fields(  # Add non-logfile metadata
                     {
                         "aliby_version": version("aliby"),
+                        "baby_version": version("aliby-baby"),
                         "omero_id": config["general"]["id"],
                         "image_id": image_id,
                         "parameters": PipelineParameters.from_dict(
