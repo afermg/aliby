@@ -91,6 +91,31 @@ class Signal(BridgeH5):
         elif isinstance(df, list):
             return [self.get_retained(d, cutoff=cutoff) for d in df]
 
+    def lineage(
+        self, lineage_location: t.Optional[str] = None, merged: bool = False
+    ) -> np.ndarray:
+        """
+        Return lineage data from a given location as a matrix where
+        the first column is the trap id,
+        the second column is the mother label and
+        the third column is the daughter label.
+        """
+        if lineage_location is None:
+            lineage_location = "postprocessing/lineage"
+            if merged:
+                lineage_location += "_merged"
+
+        with h5py.File(self.filename, "r") as f:
+            trap_mo_da = f[lineage_location]
+            lineage = np.array(
+                (
+                    trap_mo_da["trap"],
+                    trap_mo_da["mother_label"],
+                    trap_mo_da["daughter_label"],
+                )
+            ).T
+        return lineage
+
     def apply_prepost(self, dataset: str, skip_pick: t.Optional[bool] = None):
         """
         Apply modifier operations (picker, merger) to a given dataframe.
