@@ -44,6 +44,7 @@ See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INST
 
 ### Raw data access
 
+ALIBY's tooling can also be used as an interface to OMERO servers, taking care of fetching data when needed.
  ```python
 from aliby.io.dataset import Dataset
 from aliby.io.image import Image
@@ -96,15 +97,6 @@ trap_tps = riv.get_trap_timepoints(trap_id, trange, ncols)
 This can take several seconds at the moment.
 For a speed-up: take fewer z-positions if you can.
 
-If you're not sure what indices to use:
-```python
-seg_expt.channels # Get a list of channels
-channel = 'Brightfield'
-ch_id = seg_expt.get_channel_index(channel)
-
-n_traps = seg_expt.n_traps # Get the number of traps
-```
-
 #### Get the traps for a given time point
 Alternatively, if you want to get all the traps at a given timepoint:
 
@@ -116,4 +108,4 @@ seg_expt.get_tiles_timepoints(timepoint, tile_size=96, channels=None,
 
 
 ### Contributing
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for installation instructions.
+See [CONTRIBUTING](https://aliby.readthedocs.io/en/latest/INSTALL.html) on how to help out or get involved.
