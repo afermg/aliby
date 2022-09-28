@@ -241,7 +241,7 @@ class Signal(BridgeH5):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    df = self.dset_to_df(f, dataset)
+                    df = self.dataset_to_df(f, dataset)
                     if in_minutes:
                         df = self.cols_in_mins(df)
                     return df
@@ -269,8 +269,8 @@ class Signal(BridgeH5):
             else:
                 return None
 
-    def dset_to_df(self, f, dataset):
-        dset = f[dataset]
+    def dataset_to_df(self, f: h5py.File, path: str):
+        dset = f[path]
         index_names = copy(self.index_names)
 
         valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
@@ -278,34 +278,37 @@ class Signal(BridgeH5):
             [dset[lbl] for lbl in valid_names], names=valid_names
         )
 
-        columns = (
-            dset["timepoint"][()]
-            if "timepoint" in dset
-            else dset.attrs["columns"]
+        columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
+        if "timepoint" in dset:
+            columns = f[path + "/timepoint"][()]
+
+        return pd.DataFrame(
+            f[path + "/values"][()],
+            index=index,
+            columns=columns,
         )
-
-        df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
-
-        return df
 
     @property
     def stem(self):
         return self.filename.stem
 
-    @staticmethod
-    def dataset_to_df(f: h5py.File, path: str):
+    # def dataset_to_df(self, f: h5py.File, path: str):
 
-        all_indices = ["experiment", "position", "trap", "cell_label"]
-        indices = {
-            k: f[path][k][()] for k in all_indices if k in f[path].keys()
-        }
-        return pd.DataFrame(
-            f[path + "/values"][()],
-            index=pd.MultiIndex.from_arrays(
-                list(indices.values()), names=indices.keys()
-            ),
-            columns=f[path + "/timepoint"][()],
-        )
+    #     all_indices = self.index_names
+
+    #     valid_indices = {
+    #         k: f[path][k][()] for k in all_indices if k in f[path].keys()
+    #     }
+
+    #     new_index = pd.MultiIndex.from_arrays(
+    #         list(valid_indices.values()), names=valid_indices.keys()
+    #     )
+
+    #     return pd.DataFrame(
+    #         f[path + "/values"][()],
+    #         index=new_index,
+    #         columns=f[path + "/timepoint"][()],
+    #     )
 
     def get_siglist(self, name: str, node):
         fullname = node.name
