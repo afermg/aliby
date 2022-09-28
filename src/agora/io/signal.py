@@ -218,7 +218,7 @@ class Signal(BridgeH5):
 
     @property
     def n_merges(self):
-        print("{} merge events".format(len(self.merges)))
+        return len(self.merges)
 
     @property
     def picks(self):
