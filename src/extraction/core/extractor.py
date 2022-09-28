@@ -546,7 +546,7 @@ class Extractor(ProcessABC):
                 )
             ) == len(chs):
                 channels_stack = np.stack(
-                    [self.get_imgs(ch, tiles, tree_chs) for ch in chs]
+                    [self.get_imgs(ch, tiles, tree_chs) for ch in chs], axis=-1
                 )
                 merged = RED_FUNS[merge_fun](channels_stack, axis=-1)
                 d[name] = self.reduce_extract(
