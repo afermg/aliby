@@ -14,8 +14,8 @@ from postprocessor.core.abc import get_parameters, get_process
 from postprocessor.core.processes.lineageprocess import (
     LineageProcessParameters,
 )
-from postprocessor.core.processes.merger import merger, mergerParameters
-from postprocessor.core.processes.picker import picker, pickerParameters
+from postprocessor.core.reshapers.merger import merger, mergerParameters
+from postprocessor.core.reshapers.picker import picker, pickerParameters
 
 
 class PostProcessorParameters(ParametersABC):

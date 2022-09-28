@@ -24,7 +24,7 @@ class mergerParameters(ParametersABC):
 
 class merger(PostProcessABC):
     """
-    TODO check why it needs to be run a few times to complete the merging
+    Combines rows of tracklet that are likely to be the same.
     """
 
     def __init__(self, parameters):
