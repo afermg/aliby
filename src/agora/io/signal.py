@@ -23,7 +23,13 @@ class Signal(BridgeH5):
     def __init__(self, file: t.Union[str, PosixPath]):
         super().__init__(file, flag=None)
 
-        self.names = ["experiment", "position", "trap"]
+        self.index_names = (
+            "experiment",
+            "position",
+            "trap",
+            "cell_label",
+            "mother_label",
+        )
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
 
@@ -223,7 +229,6 @@ class Signal(BridgeH5):
 
     def apply_merge(self, df, changes):
         if len(changes):
-
             for target, source in changes:
                 df.loc[tuple(target)] = self.join_tracks_pair(
                     df.loc[tuple(target)], df.loc[tuple(source)]
@@ -266,12 +271,11 @@ class Signal(BridgeH5):
 
     def dset_to_df(self, f, dataset):
         dset = f[dataset]
-        names = copy(self.names)
-        if not dataset.endswith("imBackground"):
-            names.append("cell_label")
-        lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
+        index_names = copy(self.index_names)
+
+        valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
         index = pd.MultiIndex.from_arrays(
-            list(lbls.values()), names=names[-len(lbls) :]
+            [dset[lbl] for lbl in valid_names], names=valid_names
         )
 
         columns = (
