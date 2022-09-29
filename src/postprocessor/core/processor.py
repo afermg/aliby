@@ -11,7 +11,7 @@ from agora.io.writer import Writer
 from tqdm import tqdm
 
 from postprocessor.core.abc import get_parameters, get_process
-from postprocessor.core.processes.lineageprocess import (
+from postprocessor.core.lineageprocess import (
     LineageProcessParameters,
 )
 from postprocessor.core.reshapers.merger import merger, mergerParameters
@@ -78,12 +78,13 @@ class PostProcessorParameters(ParametersABC):
                         # "/postprocessing/dsignal/extraction_general_None_volume",
                     ],
                 ],
-                [
-                    "dsignal",
-                    [
-                        "/postprocessing/bud_metric/extraction_general_None_volume",
-                    ],
-                ],
+                # TODO activate after refactoring apply_prepost
+                # [
+                #     "dsignal",
+                #     [
+                #         "/postprocessing/bud_metric/extraction_general_None_volume",
+                #     ],
+                # ],
                 # [
                 #     "aggregate",
                 #     [
