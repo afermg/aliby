@@ -78,13 +78,12 @@ class PostProcessorParameters(ParametersABC):
                         # "/postprocessing/dsignal/extraction_general_None_volume",
                     ],
                 ],
-                # TODO activate after refactoring apply_prepost
-                # [
-                #     "dsignal",
-                #     [
-                #         "/postprocessing/bud_metric/extraction_general_None_volume",
-                #     ],
-                # ],
+                [
+                    "dsignal",
+                    [
+                        "/postprocessing/bud_metric/extraction_general_None_volume",
+                    ],
+                ],
                 # [
                 #     "aggregate",
                 #     [
@@ -299,7 +298,11 @@ class PostProcessor(ProcessABC):
 
         self.run_prepost()
 
-        for process, datasets in tqdm(self.targets["processes"]):
+        for i, (process, datasets) in tqdm(
+            enumerate(self.targets["processes"])
+        ):
+            if i == 3:
+                print("stop")
             if process in self.parameters["param_sets"].get(
                 "processes", {}
             ):  # If we assigned parameters
