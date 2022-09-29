@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from agora.utils.lineage import mb_array_to_dict
 
-from postprocessor.core.processes.lineageprocess import (
+from postprocessor.core.lineageprocess import (
     LineageProcess,
     LineageProcessParameters,
 )
@@ -74,10 +74,3 @@ class bud_metric(LineageProcess):
         df = pd.DataFrame(mothers_mat, index=md.keys(), columns=signal.columns)
         df.index.names = signal.index.names
         return df
-
-    def load_lineage(self, lineage):
-        """
-        Reshape the lineage information if needed
-        """
-
-        self.lineage = lineage
