@@ -704,9 +704,12 @@ class Writer(BridgeH5):
             dset.resize(dset.shape[1] + df.shape[1], axis=1)
             dset[:, ntps:] = np.nan
 
+            # TODO refactor this indices sorting. Could be simpler
             found_indices_sorted = self.id_cache[df.index.nlevels][
                 "found_indices"
             ]
+
+            # Cover for case when all labels are new
             if found_indices_sorted.any():
                 # h5py does not allow bidimensional indexing,
                 # so we have to iterate over the columns
