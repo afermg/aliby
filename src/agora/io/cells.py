@@ -160,8 +160,11 @@ class Cells:
     def group_by_traps(
         self, traps: t.Collection, cell_labels: t.Collection
     ) -> t.Dict[int, t.List[int]]:
-        # returns a dict with traps as keys and list of labels as value
-        # Data is a
+        """
+        Returns a dict with traps as keys and list of labels as value.
+        Note that the total number of traps are calculated from Cells.traps.
+
+        """
         iterator = groupby(zip(traps, cell_labels), lambda x: x[0])
         d = {key: [x[1] for x in group] for key, group in iterator}
         d = {i: d.get(i, []) for i in self.traps}

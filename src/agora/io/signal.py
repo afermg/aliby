@@ -2,12 +2,14 @@ import typing as t
 from copy import copy
 from pathlib import PosixPath
 
+import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
 from utils_find_1st import cmp_larger, find_1st
 
 from agora.io.bridge import BridgeH5
+from agora.io.decorators import _first_arg_str_to_df
 
 
 class Signal(BridgeH5):
@@ -22,7 +24,13 @@ class Signal(BridgeH5):
     def __init__(self, file: t.Union[str, PosixPath]):
         super().__init__(file, flag=None)
 
-        self.names = ["experiment", "position", "trap"]
+        self.index_names = (
+            "experiment",
+            "position",
+            "trap",
+            "cell_label",
+            "mother_label",
+        )
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
 
@@ -79,7 +87,7 @@ class Signal(BridgeH5):
 
     @staticmethod
     def get_retained(df, cutoff):
-        return df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
+        return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     def retained(self, signal, cutoff=0.8):
 
@@ -90,38 +98,68 @@ class Signal(BridgeH5):
         elif isinstance(df, list):
             return [self.get_retained(d, cutoff=cutoff) for d in df]
 
-    def apply_prepost(self, dataset: str, skip_pick: t.Optional[bool] = None):
+    def lineage(
+        self, lineage_location: t.Optional[str] = None, merged: bool = False
+    ) -> np.ndarray:
+        """
+        Return lineage data from a given location as a matrix where
+        the first column is the trap id,
+        the second column is the mother label and
+        the third column is the daughter label.
+        """
+        if lineage_location is None:
+            lineage_location = "postprocessing/lineage"
+            if merged:
+                lineage_location += "_merged"
+
+        with h5py.File(self.filename, "r") as f:
+            trap_mo_da = f[lineage_location]
+            lineage = np.array(
+                (
+                    trap_mo_da["trap"],
+                    trap_mo_da["mother_label"],
+                    trap_mo_da["daughter_label"],
+                )
+            ).T
+        return lineage
+
+    @_first_arg_str_to_df
+    def apply_prepost(
+        self,
+        data: t.Union[str, pd.DataFrame],
+        merges: np.ndarray = None,
+        picks: t.Optional[bool] = None,
+    ):
         """
         Apply modifier operations (picker, merger) to a given dataframe.
         """
-        merges = self.get_merges()
-        df = self.get_raw(dataset)
-        merged = copy(df)
+        if merges is None:
+            merges = self.get_merges()
+        merged = copy(data)
+
         if merges.any():
             # Split in two dfs, one with rows relevant for merging and one
             # without them
-            valid_merges = merges[
-                (
-                    merges[:, :, :, None]
-                    == np.array(list(df.index)).T[:, None, :]
-                )
-                .all(axis=(1, 2))
-                .any(axis=1)
-            ]  # Casting allows fast multiindexing
+            valid_merges = validate_merges(merges, np.array(list(data.index)))
 
+            # TODO use the same info from validate_merges to select both
+            valid_indices = [
+                tuple(x)
+                for x in (np.unique(valid_merges.reshape(-1, 2), axis=0))
+            ]
             merged = self.apply_merge(
-                df.loc[map(tuple, valid_merges.reshape(-1, 2))],
+                data.loc[valid_indices],
                 valid_merges,
             )
 
-            nonmergeable_ids = df.index.difference(valid_merges.reshape(-1, 2))
+            nonmergeable_ids = data.index.difference(valid_indices)
 
             merged = pd.concat(
-                (merged, df.loc[nonmergeable_ids]), names=df.index.names
+                (merged, data.loc[nonmergeable_ids]), names=data.index.names
             )
 
         with h5py.File(self.filename, "r") as f:
-            if "modifiers/picks" in f and not skip_pick:
+            if "modifiers/picks" in f and not picks:
                 picks = self.get_picks(names=merged.index.names)
                 # missing_cells = [i for i in picks if tuple(i) not in
                 # set(merged.index)]
@@ -132,7 +170,7 @@ class Signal(BridgeH5):
                             [tuple(x) for x in merged.index]
                         )
                     ]
-                    return merged.loc[picks]
+
                 else:
                     if isinstance(merged.index, pd.MultiIndex):
                         empty_lvls = [[] for i in merged.index.names]
@@ -187,7 +225,7 @@ class Signal(BridgeH5):
 
     @property
     def n_merges(self):
-        print("{} merge events".format(len(self.merges)))
+        return len(self.merges)
 
     @property
     def picks(self):
@@ -197,7 +235,6 @@ class Signal(BridgeH5):
 
     def apply_merge(self, df, changes):
         if len(changes):
-
             for target, source in changes:
                 df.loc[tuple(target)] = self.join_tracks_pair(
                     df.loc[tuple(target)], df.loc[tuple(source)]
@@ -206,11 +243,11 @@ class Signal(BridgeH5):
 
         return df
 
-    def get_raw(self, dataset, in_minutes=True):
+    def get_raw(self, dataset: str, in_minutes: bool = True):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    df = self.dset_to_df(f, dataset)
+                    df = self.dataset_to_df(f, dataset)
                     if in_minutes:
                         df = self.cols_in_mins(df)
                     return df
@@ -238,44 +275,52 @@ class Signal(BridgeH5):
             else:
                 return None
 
-    def dset_to_df(self, f, dataset):
-        dset = f[dataset]
-        names = copy(self.names)
-        if not dataset.endswith("imBackground"):
-            names.append("cell_label")
-        lbls = {lbl: dset[lbl][()] for lbl in names if lbl in dset.keys()}
+    def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
+        """
+        Fetch DataFrame from results storage file.
+        """
+
+        assert path in f, f"{path} not in {f}"
+
+        dset = f[path]
+        index_names = copy(self.index_names)
+
+        valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
         index = pd.MultiIndex.from_arrays(
-            list(lbls.values()), names=names[-len(lbls) :]
+            [dset[lbl] for lbl in valid_names], names=valid_names
         )
 
-        columns = (
-            dset["timepoint"][()]
-            if "timepoint" in dset
-            else dset.attrs["columns"]
+        columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
+        if "timepoint" in dset:
+            columns = f[path + "/timepoint"][()]
+
+        return pd.DataFrame(
+            f[path + "/values"][()],
+            index=index,
+            columns=columns,
         )
-
-        df = pd.DataFrame(dset[("values")][()], index=index, columns=columns)
-
-        return df
 
     @property
     def stem(self):
         return self.filename.stem
 
-    @staticmethod
-    def dataset_to_df(f: h5py.File, path: str):
+    # def dataset_to_df(self, f: h5py.File, path: str):
 
-        all_indices = ["experiment", "position", "trap", "cell_label"]
-        indices = {
-            k: f[path][k][()] for k in all_indices if k in f[path].keys()
-        }
-        return pd.DataFrame(
-            f[path + "/values"][()],
-            index=pd.MultiIndex.from_arrays(
-                list(indices.values()), names=indices.keys()
-            ),
-            columns=f[path + "/timepoint"][()],
-        )
+    #     all_indices = self.index_names
+
+    #     valid_indices = {
+    #         k: f[path][k][()] for k in all_indices if k in f[path].keys()
+    #     }
+
+    #     new_index = pd.MultiIndex.from_arrays(
+    #         list(valid_indices.values()), names=valid_indices.keys()
+    #     )
+
+    #     return pd.DataFrame(
+    #         f[path + "/values"][()],
+    #         index=new_index,
+    #         columns=f[path + "/timepoint"][()],
+    #     )
 
     def get_siglist(self, name: str, node):
         fullname = node.name
@@ -306,7 +351,8 @@ class Signal(BridgeH5):
     @staticmethod
     def join_tracks_pair(target: pd.Series, source: pd.Series):
         """
-        Join two tracks
+        Join two tracks and return the new value of the target.
+        TODO replace this with arrays only.
         """
         tgt_copy = copy(target)
         end = find_1st(target.values[::-1], 0, cmp_larger)
@@ -355,3 +401,44 @@ class Signal(BridgeH5):
             if end <= self.max_span
         ]
         return tuple((stage, ntps) for stage, ntps in zip(self.stages, spans))
+
+
+def validate_merges(merges: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    """Select rows from the first array that are present in both.
+    We use casting for fast multiindexing
+
+
+    Parameters
+    ----------
+    merges : np.ndarray
+        2-D array where columns are (trap, mother, daughter) or 3-D array where
+        dimensions are (X, (trap,mother), (trap,daughter))
+    indices : np.ndarray
+        2-D array where each column is a different level.
+
+    Returns
+    -------
+    np.ndarray
+        3-D array with elements in both arrays.
+
+    Examples
+    --------
+    FIXME: Add docs.
+
+    """
+    if merges.ndim < 3:
+        # Reshape into 3-D array for casting if neded
+        merges = np.stack((merges[:, [0, 1]], merges[:, [0, 2]]), axis=1)
+
+    # Compare existing merges with available indices
+    # Swap trap and label axes for the merges array to correctly cast
+    # valid_ndmerges = merges.swapaxes(1, 2)[..., None] == indices.T[:, None, :]
+    valid_ndmerges = merges[..., None] == indices.T[None, ...]
+
+    # Casting is confusing (but efficient):
+    # - First we check the dimension across trap and cell id, to ensure both match
+    # - Then we check the dimension that crosses all indices, to ensure the pair is present there
+    # - Finally we check the merge tuples to check which cases have both target and source
+    valid_merges = merges[valid_ndmerges.all(axis=2).any(axis=2).all(axis=1)]
+    # valid_merges = merges[allnan.any(axis=1)]
+    return valid_merges

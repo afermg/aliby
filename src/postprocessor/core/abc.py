@@ -30,11 +30,15 @@ def get_process(process, suffix=""):
     Dynamically import a process class from the available process locations.
     Assumes process filename and class name are the same
 
+    Processes return the same shape as their input.
+    MultiSignal either take or return multiple datasets (or both).
+    Reshapers return a different shape for processes: Merger and Picker belong here.
+
     suffix : str
         Name of suffix, generally "" (empty) or "Parameters".
     """
     base_location = "postprocessor.core"
-    possible_locations = ("processes", "multisignal")
+    possible_locations = ("processes", "multisignal", "reshapers")
 
     found = None
     for possible_location in possible_locations:

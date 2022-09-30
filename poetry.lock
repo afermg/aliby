@@ -27,7 +27,7 @@ python-versions = "*"
 
 [[package]]
 name = "aliby-baby"
-version = "0.1.14"
+version = "0.1.15"
 description = "Birth Annotator for Budding Yeast"
 category = "main"
 optional = false
@@ -2815,7 +2815,7 @@ omero = ["omero-py"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8, <3.11"
-content-hash = "1a3d00dd7aa638b2c4da93e14df10aa17610dd4016a458a0cd2218b0d68814cc"
+content-hash = "8ad7c71775623d47d8924e97925402bac8aa03eb9e21cd3abb624ee7da29bc3c"
 
 [metadata.files]
 absl-py = [
@@ -2831,8 +2831,8 @@ alabaster = [
     {file = "alabaster-0.7.12.tar.gz", hash = "sha256:a661d72d58e6ea8a57f7a86e37d86716863ee5e92788398526d58b26a4e4dc02"},
 ]
 aliby-baby = [
-    {file = "aliby-baby-0.1.14.tar.gz", hash = "sha256:836bd9af27d5d750f440238e17b157a2b0d4586387864bece925d391320005e8"},
-    {file = "aliby_baby-0.1.14-py3-none-any.whl", hash = "sha256:79e838e80c429af1cb9577df18ece8145500a07e2416bb3bbe7afd11dd7bc0b1"},
+    {file = "aliby-baby-0.1.15.tar.gz", hash = "sha256:3563f1a740e4a33dcb35be9242a3eca4ee4ca8f373590a6b74b5cc4d1ec29f37"},
+    {file = "aliby_baby-0.1.15-py3-none-any.whl", hash = "sha256:b2da8553ab6a59c72db846e6d40b73b03248b5af04b931e86026987ea23f7eba"},
 ]
 appdirs = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},

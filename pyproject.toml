@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.43"
+version = "0.1.46"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -27,7 +27,7 @@ scikit-learn = ">=1.0.2" # Used for an extraction metric
 scipy = ">=1.7.3"
 
 # [tool.poetry.group.pipeline.dependencies]
-aliby-baby = "^0.1.14"
+aliby-baby = "^0.1.15"
 dask = "^2021.12.0"
 imageio = "2.8.0" # For image-visualisation utilities
 requests-toolbelt = "^0.9.1"

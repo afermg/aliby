@@ -6,7 +6,7 @@ from itertools import product
 import numpy as np
 import pandas as pd
 
-from postprocessor.core.processes.lineageprocess import (
+from postprocessor.core.lineageprocess import (
     LineageProcess,
     LineageProcessParameters,
 )

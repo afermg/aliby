@@ -11,11 +11,11 @@ from agora.io.writer import Writer
 from tqdm import tqdm
 
 from postprocessor.core.abc import get_parameters, get_process
-from postprocessor.core.processes.lineageprocess import (
+from postprocessor.core.lineageprocess import (
     LineageProcessParameters,
 )
-from postprocessor.core.processes.merger import merger, mergerParameters
-from postprocessor.core.processes.picker import picker, pickerParameters
+from postprocessor.core.reshapers.merger import merger, mergerParameters
+from postprocessor.core.reshapers.picker import picker, pickerParameters
 
 
 class PostProcessorParameters(ParametersABC):
@@ -298,7 +298,11 @@ class PostProcessor(ProcessABC):
 
         self.run_prepost()
 
-        for process, datasets in tqdm(self.targets["processes"]):
+        for i, (process, datasets) in tqdm(
+            enumerate(self.targets["processes"])
+        ):
+            if i == 3:
+                print("stop")
             if process in self.parameters["param_sets"].get(
                 "processes", {}
             ):  # If we assigned parameters
@@ -310,23 +314,15 @@ class PostProcessor(ProcessABC):
                 parameters = self.parameters_classfun[process].default()
 
             if isinstance(parameters, LineageProcessParameters):
-                with h5py.File(self._filename, "r") as f:
-                    trap_mo_da = f[parameters.lineage_location]
-                    lineage = np.array(
-                        (
-                            trap_mo_da["trap"],
-                            trap_mo_da["mother_label"],
-                            trap_mo_da["daughter_label"],
-                        )
-                    ).T
+                lineage = self._signal.lineage(
+                    # self.parameters.lineage_location
+                )
                 loaded_process = self.classfun[process](parameters)
                 loaded_process.load_lineage(lineage)
             else:
                 loaded_process = self.classfun[process](parameters)
 
             for dataset in datasets:
-                # print("Processing", process, "for", dataset)
-
                 if isinstance(dataset, list):  # multisignal process
                     signal = [self._signal[d] for d in dataset]
                 elif isinstance(dataset, str):

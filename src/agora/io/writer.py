@@ -703,10 +703,18 @@ class Writer(BridgeH5):
             # Add found cells
             dset.resize(dset.shape[1] + df.shape[1], axis=1)
             dset[:, ntps:] = np.nan
-            for i, tp in enumerate(df.columns):
-                dset[
-                    self.id_cache[df.index.nlevels]["found_indices"], tp
-                ] = existing_values[:, i]
+
+            # TODO refactor this indices sorting. Could be simpler
+            found_indices_sorted = self.id_cache[df.index.nlevels][
+                "found_indices"
+            ]
+
+            # Cover for case when all labels are new
+            if found_indices_sorted.any():
+                # h5py does not allow bidimensional indexing,
+                # so we have to iterate over the columns
+                for i, tp in enumerate(df.columns):
+                    dset[found_indices_sorted, tp] = existing_values[:, i]
             # Add new cells
             n_newcells = len(
                 self.id_cache[df.index.nlevels]["additional_multis"]

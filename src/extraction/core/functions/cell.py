@@ -75,10 +75,10 @@ def max2p5pc(cell_mask, trap_image) -> float:
     """
     # number of pixels in mask
     npixels = bn.nansum(cell_mask)
-    top_pixels = int(np.ceil(npixels * 0.025))
+    n_top = int(np.ceil(npixels * 0.025))
     # sort pixels in cell and find highest 2.5%
     pixels = trap_image[cell_mask]
-    top_values = pixels[bn.rankdata(pixels)[:top_pixels].astype(int) - 1]
+    top_values = bn.partition(pixels, len(pixels) - n_top)[-n_top:]
 
     # find mean of these highest pixels
     return bn.nanmean(top_values)
@@ -96,7 +96,7 @@ def max5px(cell_mask, trap_image) -> float:
     """
     # sort pixels in cell
     pixels = trap_image[cell_mask]
-    top_values = pixels[bn.rankdata(pixels)[:5].astype(int) - 1]
+    top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
     # find mean of five brightest pixels
     max5px = bn.nanmean(top_values)
     return max5px
