@@ -32,6 +32,7 @@ def exparams_from_meta(
     default_metrics = {
         "mean",
         "median",
+        "std",
         "imBackground",
         "max5px",
         "nuc_est_conv",
