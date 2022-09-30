@@ -116,7 +116,12 @@ class Grouper(ABC):
             )
 
         signals = self.pool_function(
-            path=path, f=concat_signal_ind, mode=mode, pool=pool, **kwargs
+            path=path,
+            f=concat_signal_ind,
+            mode=mode,
+            pool=pool,
+            signals=sitems,
+            **kwargs,
         )
 
         errors = [k for s, k in zip(signals, self.signals.keys()) if s is None]
@@ -196,15 +201,17 @@ class Grouper(ABC):
         path: str,
         f: t.Callable,
         pool: t.Optional[int] = None,
+        signals: t.Dict[str, Signal] = None,
         **kwargs,
     ):
         """
         Wrapper to add support for threading to process independent signals.
         Particularly useful when aggregating multiple elements.
         """
-        if pool or pool is None:
-            if pool is None:
-                pool = 8
+        pool = pool or 8
+        signals = signals or self.signals
+
+        if pool:
 
             with Pool(pool) as p:
                 kymographs = p.map(
@@ -214,7 +221,7 @@ class Grouper(ABC):
                         group=self.positions_groups[x[0]],
                         **kwargs,
                     ),
-                    self.signals.items(),
+                    signals.items(),
                 )
         else:
             kymographs = [
