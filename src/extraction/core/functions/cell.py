@@ -2,6 +2,12 @@
 Base functions to extract information from a single cell
 
 These functions are automatically read by extractor.py, and so can only have the cell_mask and trap_image as inputs and must return only one value.
+
+They assume that there are no NaNs in the image.
+ We use bottleneck when it performs faster than numpy:
+- Median
+- values containing NaNs (We make sure this does not happen)
+
 """
 import math
 import typing as t
@@ -21,7 +27,7 @@ def area(cell_mask) -> int:
     cell_mask: 2d array
         Segmentation mask for the cell
     """
-    return bn.nansum(cell_mask)
+    return np.sum(cell_mask)
 
 
 def eccentricity(cell_mask) -> float:
@@ -47,7 +53,7 @@ def mean(cell_mask, trap_image) -> float:
         Segmentation mask for the cell
     trap_image: 2d array
     """
-    return bn.nanmean(trap_image[cell_mask])
+    return np.mean(trap_image[cell_mask])
 
 
 def median(cell_mask, trap_image) -> int:
@@ -60,7 +66,7 @@ def median(cell_mask, trap_image) -> int:
         Segmentation mask for the cell
     trap_image: 2d array
     """
-    return bn.nanmedian(trap_image[cell_mask])
+    return bn.median(trap_image[cell_mask])
 
 
 def max2p5pc(cell_mask, trap_image) -> float:
@@ -74,14 +80,14 @@ def max2p5pc(cell_mask, trap_image) -> float:
     trap_image: 2d array
     """
     # number of pixels in mask
-    npixels = bn.nansum(cell_mask)
+    npixels = np.sum(cell_mask)
     n_top = int(np.ceil(npixels * 0.025))
     # sort pixels in cell and find highest 2.5%
     pixels = trap_image[cell_mask]
     top_values = bn.partition(pixels, len(pixels) - n_top)[-n_top:]
 
     # find mean of these highest pixels
-    return bn.nanmean(top_values)
+    return np.mean(top_values)
 
 
 def max5px(cell_mask, trap_image) -> float:
@@ -98,7 +104,7 @@ def max5px(cell_mask, trap_image) -> float:
     pixels = trap_image[cell_mask]
     top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
     # find mean of five brightest pixels
-    max5px = bn.nanmean(top_values)
+    max5px = np.mean(top_values)
     return max5px
 
 
@@ -112,7 +118,7 @@ def std(cell_mask, trap_image):
         Segmentation mask for the cell
     trap_image: 2d array
     """
-    return bn.nanstd(trap_image[cell_mask])
+    return np.std(trap_image[cell_mask])
 
 
 def k2_major_median(cell_mask, trap_image):
@@ -137,12 +143,12 @@ def k2_major_median(cell_mask, trap_image):
     indices = faiss.IndexFlatL2(X.shape[1])
     # (n_clusters=2, random_state=0).fit(X)
     _, indices = indices.search(X, k=2)
-    high_indices = bn.nanargmax(indices, axis=1).astype(bool)
+    high_indices = np.argmax(indices, axis=1).astype(bool)
     # find the median of pixels in the largest cluster
     # high_masks = np.logical_xor(  # Use casting to obtain masks
     #     high_indices.reshape(-1, 1), np.tile((0, 1), X.shape[0]).reshape(-1, 2)
     # )
-    major_median = bn.nanmedian(X[high_indices])
+    major_median = bn.median(X[high_indices])
     return major_median
 
 
@@ -172,7 +178,7 @@ def conical_volume(cell_mask):
     nearest_neighbor = (
         ndimage.morphology.distance_transform_edt(padded == 1) * padded
     )
-    return 4 * (nearest_neighbor.sum())
+    return 4 * np.sum(nearest_neighbor)
 
 
 def spherical_volume(cell_mask):
@@ -207,8 +213,8 @@ def min_maj_approximation(cell_mask) -> t.Tuple[int]:
     # get the size of the top of the cone (points that are equally maximal)
     cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
     # minor axis = largest distance from the edge of the ellipse
-    min_ax = np.round(bn.nanmax(nn))
+    min_ax = np.round(np.max(nn))
     # major axis = largest distance from the cone top
     # + distance from the center of cone top to edge of cone top
-    maj_ax = np.round(bn.nanmax(dn) + bn.nansum(cone_top) / 2)
+    maj_ax = np.round(np.max(dn) + np.sum(cone_top) / 2)
     return min_ax, maj_ax
