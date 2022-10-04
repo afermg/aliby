@@ -26,27 +26,6 @@ class LineageProcess(PostProcessABC):
     def __init__(self, parameters: LineageProcessParameters):
         super().__init__(parameters)
 
-    def filter_signal_cells(
-        self, signal: pd.DataFrame, lineage: np.ndarray = None
-    ):
-        """
-        Use casting to filter cell ids in signal and lineage
-        """
-        if lineage is None:
-            lineage = self.lineage
-
-        sig_ind = np.array(list(signal.index)).T[:, None, :]
-        mo_av = (
-            (lineage[:, :2].T[:, :, None] == sig_ind).all(axis=0).any(axis=1)
-        )
-        da_av = (
-            (lineage[:, [0, 2]].T[:, :, None] == sig_ind)
-            .all(axis=0)
-            .any(axis=1)
-        )
-
-        return lineage[mo_av & da_av]
-
     @abstractmethod
     def run(
         self,
