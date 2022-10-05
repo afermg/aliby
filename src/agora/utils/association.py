@@ -71,7 +71,7 @@ def validate_association(
     if association.ndim < 3:
         # Reshape into 3-D array for broadcasting if neded
         association = np.stack(
-            (association[:, [0, 1]], association[:, [0, 2]]), axis=2
+            (association[:, [0, 1]], association[:, [0, 2]]), axis=1
         )
 
     # Compare existing association with available indices
