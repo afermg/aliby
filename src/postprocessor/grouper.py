@@ -103,8 +103,8 @@ class Grouper(ABC):
         --------
         FIXME: Add docs.
         """
-        if not path.startswith("/"):
-            path = "/" + path
+        if path.startswith("/"):
+            path = path.strip("/")
 
         # Check the path is in a given signal
         sitems = {k: v for k, v in self.signals.items() if path in v.available}
