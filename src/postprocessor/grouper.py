@@ -53,17 +53,17 @@ class Grouper(ABC):
         return max(tintervals)
 
     @property
-    def siglist(self) -> None:
-        return self.fsignal.siglist
+    def available(self) -> None:
+        return self.fsignal.available
 
     @property
-    def siglist_grouped(self) -> None:
-        if not hasattr(self, "_siglist_grouped"):
-            self._siglist_grouped = Counter(
-                [x for s in self.signals.values() for x in s.siglist]
+    def available_grouped(self) -> None:
+        if not hasattr(self, "_available_grouped"):
+            self._available_grouped = Counter(
+                [x for s in self.signals.values() for x in s.available]
             )
 
-        for s, n in self._siglist_grouped.items():
+        for s, n in self._available_grouped.items():
             print(f"{s} - {n}")
 
     @property
@@ -107,7 +107,7 @@ class Grouper(ABC):
             path = "/" + path
 
         # Check the path is in a given signal
-        sitems = {k: v for k, v in self.signals.items() if path in v.siglist}
+        sitems = {k: v for k, v in self.signals.items() if path in v.available}
         nsignals_dif = len(self.signals) - len(sitems)
         if nsignals_dif:
             print(
@@ -180,7 +180,7 @@ class Grouper(ABC):
         return tuple(sorted(set(self.positions_groups.keys())))
 
     def ncells(
-        self, path="/extraction/general/None/area", mode="retained", **kwargs
+        self, path="extraction/general/None/area", mode="retained", **kwargs
     ) -> t.Dict[str, int]:
         """
         Returns number of cells retained per position in base channel
@@ -388,9 +388,9 @@ class MultiGrouper:
             group.load_signals()
 
     @property
-    def siglist(self) -> None:
+    def available(self) -> None:
         for gpr in self.groupers:
-            print(gpr.siglist_grouped)
+            print(gpr.available_grouped)
 
     @property
     def sigtable(self) -> pd.DataFrame:
@@ -398,31 +398,31 @@ class MultiGrouper:
         and experiment."""
 
         def regex_cleanup(x):
-            x = re.sub(r"\/extraction\/", "", x)
-            x = re.sub(r"\/postprocessing\/", "", x)
-            x = re.sub(r"\/np_max", "", x)
+            x = re.sub(r"extraction\/", "", x)
+            x = re.sub(r"postprocessing\/", "", x)
+            x = re.sub(r"\/max", "", x)
 
             return x
 
         if not hasattr(self, "_sigtable"):
             raw_mat = [
-                [s.siglist for s in gpr.signals.values()]
+                [s.available for s in gpr.signals.values()]
                 for gpr in self.groupers
             ]
-            siglist_grouped = [
+            available_grouped = [
                 Counter([x for y in grp for x in y]) for grp in raw_mat
             ]
 
-            nexps = len(siglist_grouped)
+            nexps = len(available_grouped)
             sigs_idx = list(
-                set([y for x in siglist_grouped for y in x.keys()])
+                set([y for x in available_grouped for y in x.keys()])
             )
             sigs_idx = [regex_cleanup(x) for x in sigs_idx]
 
             nsigs = len(sigs_idx)
 
             sig_matrix = np.zeros((nsigs, nexps))
-            for i, c in enumerate(siglist_grouped):
+            for i, c in enumerate(available_grouped):
                 for k, v in c.items():
                     sig_matrix[sigs_idx.index(regex_cleanup(k)), i] = v
 

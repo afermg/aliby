@@ -193,38 +193,39 @@ class Signal(BridgeH5):
                     merged = pd.DataFrame([], index=index)
         return merged
 
-    @cached_property
+    @property
     def datasets(self):
-        if not hasattr(self, "_siglist"):
-            self._siglist = []
+        if not hasattr(self, "_available"):
+            self._available = []
 
             with h5py.File(self.filename, "r") as f:
-                f.visititems(self.get_siglist)
+                f.visititems(self.store_signal_url)
 
         for sig in self.siglist:
             print(sig)
 
     @cached_property
-    def p_siglist(self):
+    def p_available(self):
         """Print signal list"""
         self.datasets
 
     @cached_property
-    def siglist(self):
-        """Return list of signals"""
+    def available(self):
+        """Return list of available signals"""
         try:
-            if not hasattr(self, "_siglist"):
-                self._siglist = []
-                with h5py.File(self.filename, "r") as f:
-                    f.visititems(self.get_siglist)
+            if not hasattr(self, "_available"):
+                self._available = []
+
+            with h5py.File(self.filename, "r") as f:
+                f.visititems(self.store_signal_url)
+
         except Exception as e:
             print("Error visiting h5: {}".format(e))
-            self._siglist = []
 
-        return self._siglist
+        return self._available
 
     def get_merged(self, dataset):
-        return self.apply_prepost(dataset, skip_picks=True)
+        return self.apply_prepost(dataset, picks=False)
 
     @cached_property
     def merges(self):
@@ -327,18 +328,21 @@ class Signal(BridgeH5):
     #         columns=f[path + "/timepoint"][()],
     #     )
 
-    def get_siglist(self, node):
-        fullname = node.name
+    def store_signal_url(
+        self, fullname: str, node: t.Union[h5py.Dataset, h5py.Group]
+    ):
+        """
+        Store the name of a signal it is a leaf node (a group with no more groups inside)
+        and starts with extraction
+        """
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):
-            self._if_ext_or_post(fullname, self._siglist)
+            self._if_ext_or_post(fullname, self._available)
 
     @staticmethod
     def _if_ext_or_post(name: str, siglist: list):
-        if name.startswith("/extraction") or name.startswith(
-            "/postprocessing"
-        ):
+        if name.startswith("extraction") or name.startswith("postprocessing"):
             siglist.append(name)
 
     @staticmethod
