@@ -33,6 +33,10 @@ class Signal(BridgeH5):
             "mother_label",
         )
 
+        equivalences = {
+            "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
+        }
+
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
 
         if isinstance(dsets, str) and dsets.endswith("imBackground"):
@@ -88,10 +92,16 @@ class Signal(BridgeH5):
     def get_retained(df, cutoff):
         return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
-    @lru_cache(30)
+    @property
+    def channels(self):
+        with h5py.File(self.filename, "r") as f:
+            return f.attrs["channels/channel"]
+
+    @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
 
-        df = self[signal]
+        df = signal
+        # df = self[signal]
         if isinstance(df, pd.DataFrame):
             return self.get_retained(df, cutoff)
 
