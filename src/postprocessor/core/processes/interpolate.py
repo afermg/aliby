@@ -23,4 +23,6 @@ class interpolate(PostProcessABC):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
-        return signal.interpolate(limit_area="inside", axis=1)
+        if len(signal):
+            signal = signal.interpolate(limit_area="inside", axis=1)
+        return signal
