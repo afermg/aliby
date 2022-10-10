@@ -154,7 +154,9 @@ class Grouper(ABC):
                 f" channel {path}"
             )
 
-        assert len(sitems), "No valid dataset to use"
+        assert len(
+            sitems
+        ), f"No valid dataset to use. Valid datasets are {self.available}"
 
         return sitems
 
