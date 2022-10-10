@@ -60,6 +60,7 @@ class Chainer(Signal):
         dataset: str,
         chain: t.Collection[str] = ("standard", "interpolate", "savgol"),
         in_minutes: bool = True,
+        stages: bool = True,
         retain: t.Optional[float] = None,
         **kwargs,
     ):
@@ -72,6 +73,20 @@ class Chainer(Signal):
 
         if retain:
             data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
+
+        if (
+            stages and "stage" not in data.columns.names
+        ):  # Return stages as additional column level
+
+            stages_index = [
+                x
+                for i, (name, span) in enumerate(self.stages_span)
+                for x in (f"{i} { name }",) * span
+            ]
+            data.columns = pd.MultiIndex.from_tuples(
+                zip(stages_index, data.columns),
+                names=("stage", "time"),
+            )
 
         return data
 
