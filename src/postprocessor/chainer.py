@@ -28,7 +28,7 @@ class Chainer(Signal):
         channel = [ch for ch in self.channels if re.match("GFP", ch)][0]
         if (
             channel == "GFPFast" and "mCherry" in self.channels
-        ):  # Use mCherry for Batman
+        ):  # Use mCherry for Batman if available
             channel = "mCherry"
 
         equivalences = {
