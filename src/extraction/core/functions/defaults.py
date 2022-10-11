@@ -17,7 +17,7 @@ def exparams_from_meta(
         "multichannel_ops": {},
     }
 
-    av_channels = {
+    candidate_channels = {
         "Citrine",
         "GFP",
         "GFPFast",
@@ -41,9 +41,9 @@ def exparams_from_meta(
     default_rm = {r: default_metrics for r in default_reductions}
     # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
 
-    av_flch = av_channels.intersection(meta["channels/channel"]).difference(
-        {"Brightfield", "DIC", "BrightfieldGFP"}
-    )
+    av_flch = candidate_channels.intersection(
+        meta["channels/channel"]
+    ).difference({"Brightfield", "DIC", "BrightfieldGFP"})
 
     for ch in av_flch:
         base["tree"][ch] = default_rm
