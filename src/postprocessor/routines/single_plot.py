@@ -17,6 +17,7 @@ class _SinglePlotter(BasePlotter):
         trace_color,
         trace_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     ):
         super().__init__(trace_name, unit_scaling, xlabel, plot_title)
@@ -27,7 +28,7 @@ class _SinglePlotter(BasePlotter):
         self.trace_linestyle = trace_linestyle
 
         # Define some labels
-        self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
+        self.ylabel = ylabel
 
     def plot(self, ax):
         """Draw the line plot on the provided Axes."""
@@ -37,7 +38,7 @@ class _SinglePlotter(BasePlotter):
             self.trace_values,
             color=self.trace_color,
             linestyle=self.trace_linestyle,
-            label=self.trace_name + " fluorescence",
+            label=self.trace_name,
         )
 
 
@@ -49,6 +50,7 @@ def single_plot(
     trace_color="b",
     trace_linestyle="-",
     xlabel="Time (min)",
+    ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
     ax=None,
 ):
@@ -70,6 +72,8 @@ def single_plot(
         matplotlib linestyle argument.
     xlabel : string
         x axis label.
+    ylabel : string
+        y axis label.
     plot_title : string
         Plot title.
     ax : matplotlib Axes
@@ -93,6 +97,7 @@ def single_plot(
         trace_color,
         trace_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     )
     if ax is None:

@@ -22,6 +22,8 @@ class _HeatmapPlotter(BasePlotter):
         scale,
         robust,
         xlabel,
+        ylabel,
+        cbarlabel,
         plot_title,
     ):
         super().__init__(trace_name, unit_scaling, xlabel, plot_title)
@@ -34,10 +36,8 @@ class _HeatmapPlotter(BasePlotter):
         self.robust = robust
 
         # Define some labels
-        self.colorbarlabel = (
-            "Normalised " + self.trace_name + " fluorescence (AU)"
-        )
-        self.ylabel = "Cell"
+        self.cbarlabel = cbarlabel
+        self.ylabel = ylabel
 
         # Scale
         if self.scale:
@@ -97,7 +97,7 @@ class _HeatmapPlotter(BasePlotter):
             )
         # Draw colour bar
         ax.figure.colorbar(
-            mappable=trace_heatmap, cax=cax, ax=ax, label=self.colorbarlabel
+            mappable=trace_heatmap, cax=cax, ax=ax, label=self.cbarlabel
         )
 
 
@@ -111,6 +111,8 @@ def heatmap(
     scale=True,
     robust=True,
     xlabel="Time (min)",
+    ylabel="Cell",
+    cbarlabel="Normalised fluorescence (AU)",
     plot_title="",
     ax=None,
     cbar_ax=None,
@@ -139,6 +141,10 @@ def heatmap(
         of the extreme values.
     xlabel : string
         x axis label.
+    ylabel : string
+        y axis label.
+    cbarlabel : string
+        Colour bar label.
     plot_title : string
         Plot title.
     ax : matplotlib Axes
@@ -167,6 +173,8 @@ def heatmap(
         scale,
         robust,
         xlabel,
+        ylabel,
+        cbarlabel,
         plot_title,
     )
     if ax is None:

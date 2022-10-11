@@ -18,6 +18,7 @@ class _MedianPlotter(BasePlotter):
         median_color,
         error_color,
         median_linestyle,
+        median_marker,
         xlabel,
         ylabel,
         plot_title,
@@ -29,9 +30,9 @@ class _MedianPlotter(BasePlotter):
         self.median_color = median_color
         self.error_color = error_color
         self.median_linestyle = median_linestyle
+        self.median_marker = median_marker
 
         # Define some labels
-        # self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
         self.ylabel = ylabel
 
         # Median and interquartile range
@@ -51,6 +52,7 @@ class _MedianPlotter(BasePlotter):
             color=self.median_color,
             alpha=0.75,
             linestyle=self.median_linestyle,
+            marker=self.median_marker,
             label="Median, " + self.label,
         )
         ax.fill_between(
@@ -72,6 +74,7 @@ def median_plot(
     median_color="b",
     error_color="lightblue",
     median_linestyle="-",
+    median_marker="",
     xlabel="Time (min)",
     ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
@@ -96,6 +99,8 @@ def median_plot(
         matplotlib colour string for the interquartile range shading.
     median_linestyle : string
         matplotlib linestyle argument for the median trace.
+    median_marker : string
+        matplotlib marker argument for the median trace.
     xlabel : string
         x axis label.
     ylabel : string
@@ -117,6 +122,7 @@ def median_plot(
         median_color,
         error_color,
         median_linestyle,
+        median_marker,
         xlabel,
         ylabel,
         plot_title,

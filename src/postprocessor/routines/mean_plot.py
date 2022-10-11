@@ -18,6 +18,7 @@ class _MeanPlotter(BasePlotter):
         mean_color,
         error_color,
         mean_linestyle,
+        mean_marker,
         xlabel,
         ylabel,
         plot_title,
@@ -29,9 +30,9 @@ class _MeanPlotter(BasePlotter):
         self.mean_color = mean_color
         self.error_color = error_color
         self.mean_linestyle = mean_linestyle
+        self.mean_marker = mean_marker
 
         # Define some labels
-        # self.ylabel = "Normalised " + self.trace_name + " fluorescence (AU)"
         self.ylabel = ylabel
 
         # Mean and standard error
@@ -50,6 +51,7 @@ class _MeanPlotter(BasePlotter):
             color=self.mean_color,
             alpha=0.75,
             linestyle=self.mean_linestyle,
+            marker=self.mean_marker,
             label="Mean, " + self.label,
         )
         ax.fill_between(
@@ -71,6 +73,7 @@ def mean_plot(
     mean_color="b",
     error_color="lightblue",
     mean_linestyle="-",
+    mean_marker="",
     xlabel="Time (min)",
     ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
@@ -94,6 +97,8 @@ def mean_plot(
         matplotlib colour string for the standard error shading.
     mean_linestyle : string
         matplotlib linestyle argument for the mean trace.
+    mean_marker : string
+        matplotlib marker argument for the mean trace.
     xlabel : string
         x axis label.
     ylabel : string
@@ -116,6 +121,7 @@ def mean_plot(
         mean_color,
         error_color,
         mean_linestyle,
+        mean_marker,
         xlabel,
         ylabel,
         plot_title,

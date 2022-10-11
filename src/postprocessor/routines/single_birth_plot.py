@@ -20,6 +20,7 @@ class _SingleBirthPlotter(_SinglePlotter):
         trace_linestyle,
         birth_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     ):
         # Define attributes from arguments
@@ -31,6 +32,7 @@ class _SingleBirthPlotter(_SinglePlotter):
             trace_color,
             trace_linestyle,
             xlabel,
+            ylabel,
             plot_title,
         )
         # Add some more attributes useful for buddings
@@ -68,6 +70,7 @@ def single_birth_plot(
     trace_linestyle="-",
     birth_linestyle="--",
     xlabel="Time (min)",
+    ylabel="Normalised flavin fluorescence (AU)",
     plot_title="",
     ax=None,
 ):
@@ -96,6 +99,8 @@ def single_birth_plot(
         matplotlib linestyle argument for the vertical lines indicating buddings
     xlabel : string
         x axis label.
+    ylabel : string
+        y axis label.
     plot_title : string
         Plot title.
     ax : matplotlib Axes
@@ -122,6 +127,7 @@ def single_birth_plot(
         trace_linestyle,
         birth_linestyle,
         xlabel,
+        ylabel,
         plot_title,
     )
     if ax is None:
