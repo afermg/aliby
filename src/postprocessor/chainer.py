@@ -22,46 +22,38 @@ class Chainer(Signal):
     """
 
     process_types = ("multisignal", "processes", "reshapers")
-    common_chains = {}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for channel in self.candidate_channels:
-            try:
-                channel = [
-                    ch for ch in self.channels if re.match("channel", ch)
-                ][0]
-                break
-            except:
-                pass
+        channel = [ch for ch in self.channels if re.match("GFP", ch)][0]
+        if (
+            channel == "GFPFast" and "mCherry" in self.channels
+        ):  # Use mCherry for Batman if available
+            channel = "mCherry"
 
-        try:
-            equivalences = {
-                "m5m": (
-                    f"extraction/{channel}/max/max5px",
-                    f"extraction/{channel}/max/median",
-                ),
-            }
+        equivalences = {
+            "m5m": (
+                f"extraction/{channel}/max/max5px",
+                f"extraction/{channel}/max/median",
+            )
+        }
 
-            def replace_url(url: str, bgsub: str = ""):
-                # return pattern with bgsub
-                channel = url.split("/")[1]
-                if "bgsub" in bgsub:
-                    url = re.sub(channel, f"{channel}_bgsub", url)
-                return url
+        def replace_url(url: str, bgsub: str = ""):
+            # return pattern with bgsub
+            channel = url.split("/")[1]
+            if "bgsub" in bgsub:
+                url = re.sub(channel, f"{channel}_bgsub", url)
+            return url
 
-            self.common_chains = {
-                alias
-                + bgsub: lambda **kwargs: self.get(
-                    replace_url(denominator, alias + bgsub), **kwargs
-                )
-                / self.get(replace_url(numerator, alias + bgsub), **kwargs)
-                for alias, (denominator, numerator) in equivalences.items()
-                for bgsub in ("", "_bgsub")
-            }
-
-        except:
-            pass
+        self.common_chains = {
+            alias
+            + bgsub: lambda **kwargs: self.get(
+                replace_url(denominator, alias + bgsub), **kwargs
+            )
+            / self.get(replace_url(numerator, alias + bgsub), **kwargs)
+            for alias, (denominator, numerator) in equivalences.items()
+            for bgsub in ("", "_bgsub")
+        }
 
     def get(
         self,

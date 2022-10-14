@@ -33,17 +33,6 @@ class Signal(BridgeH5):
             "mother_label",
         )
 
-        self.candidate_channels = (
-            "GFP",
-            "GFPFast",
-            "mCherry",
-            "Flavin",
-            "Citrine",
-            "mKO2",
-            "Cy5",
-            "pHluorin405",
-        )
-
         equivalences = {
             "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
         }
