@@ -381,31 +381,51 @@ class Signal(BridgeH5):
         """
         flowrate_name = "pumpinit/flowrate"
         pumprate_name = "pumprate"
+        switchtimes_name = "switchtimes"
+
         main_pump_id = np.concatenate(
             (
                 (np.argmax(self.meta_h5[flowrate_name]),),
                 np.argmax(self.meta_h5[pumprate_name], axis=0),
             )
         )
+        if not self.meta_h5[switchtimes_name][0]:  # Cover for t0 switches
+            main_pump_id = main_pump_id[1:]
         return [self.meta_h5["pumpinit/contents"][i] for i in main_pump_id]
 
     @property
     def nstages(self) -> int:
-        switchtimes_name = "switchtimes"
-        return self.meta_h5[switchtimes_name] + 1
+        return len(self.switch_times) + 1
 
     @property
     def max_span(self) -> int:
         return int(self.tinterval * self.ntps / 60)
 
     @property
+    def switch_frames(self) -> t.List[int]:
+        switchtimes_name = "switchtimes"
+        switch_frames = self.meta_h5[switchtimes_name]
+
+        return [
+            tp for tp in switch_frames if tp and tp < self.max_span
+        ]  # Cover for t0 switches
+
+    @property
     def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
         # Return consecutive stages and their corresponding number of time-points
-        switchtimes_name = "switchtimes"
-        transition_tps = (0, *self.meta_h5[switchtimes_name])
+        transition_tps = (0, *self.switch_frames, self.max_span)
         spans = [
             end - start
             for start, end in zip(transition_tps[:-1], transition_tps[1:])
             if end <= self.max_span
         ]
         return tuple((stage, ntps) for stage, ntps in zip(self.stages, spans))
+
+    @property
+    def stages_span_tp(self) -> t.Tuple[t.Tuple[str, int], ...]:
+        return tuple(
+            [
+                (name, t_min // self.tinterval * 60)
+                for name, t_min in self.stages_span
+            ]
+        )

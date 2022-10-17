@@ -80,7 +80,7 @@ class Chainer(Signal):
 
             stages_index = [
                 x
-                for i, (name, span) in enumerate(self.stages_span)
+                for i, (name, span) in enumerate(self.stages_span_tp)
                 for x in (f"{i} { name }",) * span
             ]
             data.columns = pd.MultiIndex.from_tuples(
