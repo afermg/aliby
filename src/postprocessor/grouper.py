@@ -131,13 +131,17 @@ class Grouper(ABC):
 
         assert len(kymographs), "All datasets contain errors"
 
-        concat_sorted = (
-            pd.concat(kymographs, axis=0)
-            .reorder_levels(
+        concat = pd.concat(kymographs, axis=0)
+
+        if (
+            len(concat.index.names) > 4
+        ):  # Reorder levels when mother_label is present
+            concat = concat.reorder_levels(
                 ("group", "position", "trap", "cell_label", "mother_label")
             )
-            .sort_index()
-        )
+
+        concat_sorted = concat.sort_index()
+
         return concat_sorted
 
     def filter_path(self, path: str) -> t.Dict[str, Chainer]:
@@ -396,10 +400,12 @@ def concat_signal_ind(
         combined = chainer.get_raw(path, **kwargs)
     elif mode == "families":
         combined = chainer[path]
-    combined["position"] = position
-    combined["group"] = group
-    combined.set_index(["group", "position"], inplace=True, append=True)
-    combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
+
+    if combined is not None:
+        combined["position"] = position
+        combined["group"] = group
+        combined.set_index(["group", "position"], inplace=True, append=True)
+        combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
 
     return combined
 
