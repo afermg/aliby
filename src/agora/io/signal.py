@@ -402,18 +402,20 @@ class Signal(BridgeH5):
         return int(self.tinterval * self.ntps / 60)
 
     @property
-    def switch_frames(self) -> t.List[int]:
+    def switch_times(self) -> t.List[int]:
         switchtimes_name = "switchtimes"
-        switch_frames = self.meta_h5[switchtimes_name]
+        switches_minutes = self.meta_h5[switchtimes_name]
 
         return [
-            tp for tp in switch_frames if tp and tp < self.max_span
+            t_min
+            for t_min in switches_minutes
+            if t_min and t_min < self.max_span
         ]  # Cover for t0 switches
 
     @property
     def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
         # Return consecutive stages and their corresponding number of time-points
-        transition_tps = (0, *self.switch_frames, self.max_span)
+        transition_tps = (0, *self.switch_times, self.max_span)
         spans = [
             end - start
             for start, end in zip(transition_tps[:-1], transition_tps[1:])
@@ -425,7 +427,7 @@ class Signal(BridgeH5):
     def stages_span_tp(self) -> t.Tuple[t.Tuple[str, int], ...]:
         return tuple(
             [
-                (name, t_min // self.tinterval * 60)
+                (name, (t_min * 60) // self.tinterval)
                 for name, t_min in self.stages_span
             ]
         )
