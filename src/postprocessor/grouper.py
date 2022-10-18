@@ -85,22 +85,22 @@ class Grouper(ABC):
     ):
         """Concate
 
-        Parameters
-        ----------
-        path : str
-            signal address within h5py file.
-        reduce_cols : bool
-            Whether or not to collapse columns into a single one.
+               Parameters
+               ----------
+               path : str
+                   signal address within h5py file.
+               reduce_cols : bool
+                   Whether or not to collapse columns into a single one.
         axis : int
-            Concatenation axis.
-        pool : int
-            Number of threads used. If 0 or None only one core is used.
-        **kwargs : key, value pairings
-            Named arguments to pass to concat_ind_function.
+                   Concatenation axis.
+               pool : int
+                   Number of threads used. If 0 or None only one core is used.
+               **kwargs : key, value pairings
+                   Named arguments to pass to concat_ind_function.
 
-        Examples
-        --------
-        FIXME: Add docs.
+               Examples
+               --------
+               FIXME: Add docs.
         """
         if path.startswith("/"):
             path = path.strip("/")
@@ -131,13 +131,7 @@ class Grouper(ABC):
 
         assert len(kymographs), "All datasets contain errors"
 
-        concat_sorted = (
-            pd.concat(kymographs, axis=0)
-            .reorder_levels(
-                ("group", "position", "trap", "cell_label", "mother_label")
-            )
-            .sort_index()
-        )
+        concat_sorted = pd.concat(kymographs, axis=0).sort_index()
         return concat_sorted
 
     def filter_path(self, path: str) -> t.Dict[str, Chainer]:
@@ -371,7 +365,9 @@ def concat_standard(
     combined["position"] = position
     combined["group"] = group
     combined.set_index(["group", "position"], inplace=True, append=True)
-    combined.index = combined.index.copy().swaplevel(-2, 0).swaplevel(-1, 1)
+    combined.index = combined.index.reorder_levels(
+        ("group", "position", "trap", "cell_label", "mother_label")
+    )
 
     return combined
 
