@@ -21,6 +21,7 @@ class _SingleBirthPlotter(_SinglePlotter):
         birth_linestyle,
         xlabel,
         ylabel,
+        birth_label,
         plot_title,
     ):
         # Define attributes from arguments
@@ -39,6 +40,7 @@ class _SingleBirthPlotter(_SinglePlotter):
         self.birth_mask = birth_mask
         self.birth_color = birth_color
         self.birth_linestyle = birth_linestyle
+        self.birth_label = birth_label
 
     def plot(self, ax):
         """Draw the line plots on the provided Axes."""
@@ -47,7 +49,7 @@ class _SingleBirthPlotter(_SinglePlotter):
         birth_mask_bool = self.birth_mask.astype(bool)
         for occurence, birth_time in enumerate(trace_time[birth_mask_bool]):
             if occurence == 0:
-                label = "birth event"
+                label = self.birth_label
             else:
                 label = None
             ax.axvline(
@@ -71,6 +73,7 @@ def single_birth_plot(
     birth_linestyle="--",
     xlabel="Time (min)",
     ylabel="Normalised flavin fluorescence (AU)",
+    birth_label="budding event",
     plot_title="",
     ax=None,
 ):
@@ -101,6 +104,8 @@ def single_birth_plot(
         x axis label.
     ylabel : string
         y axis label.
+    birth_label : string
+        label for budding event, 'budding event' by default.
     plot_title : string
         Plot title.
     ax : matplotlib Axes
@@ -128,6 +133,7 @@ def single_birth_plot(
         birth_linestyle,
         xlabel,
         ylabel,
+        birth_label,
         plot_title,
     )
     if ax is None:
