@@ -11,6 +11,8 @@ import pandas as pd
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_df
 from agora.utils.merge import apply_merges
+from agora.utils.association import validate_association
+from agora.utils.kymograph import add_index_levels
 
 
 class Signal(BridgeH5):
@@ -253,16 +255,29 @@ class Signal(BridgeH5):
             dsets = f.visititems(self._if_picks)
         return dsets
 
-    def get_raw(self, dataset: str, in_minutes: bool = True):
+    def get_raw(
+        self, dataset: str, in_minutes: bool = True, lineage: bool = True
+    ):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
                     df = self.dataset_to_df(f, dataset)
                     if in_minutes:
                         df = self.cols_in_mins(df)
-                    return df
             elif isinstance(dataset, list):
                 return [self.get_raw(dset) for dset in dataset]
+
+            if lineage:
+                mother_label = np.zeros(len(df), dtype=int)
+                lineage = self.lineage()
+                a, b = validate_association(
+                    lineage, np.array(df.index.to_list()), match_column=1
+                )
+                mother_label[b] = lineage[a, 1]
+                df = add_index_levels(df, {"mother_label": mother_label})
+
+            return df
+
         except Exception as e:
             print(f"Could not fetch dataset {dataset}")
             print(e)
