@@ -426,7 +426,6 @@ def concat_signal_ind(
     combined["position"] = position
     combined["group"] = group
     combined.set_index(["group", "position"], inplace=True, append=True)
-    # combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
     combined.index = combined.index.reorder_levels(
         ("group", "position", "trap", "cell_label", "mother_label")
     )
