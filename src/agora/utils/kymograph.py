@@ -58,3 +58,66 @@ def intersection_matrix(
         index2 = np.array(index2.to_list())
 
     return (index1[..., None] == index2.T).all(axis=1)
+
+
+def get_mother_ilocs_from_daughters(df: pd.DataFrame) -> np.ndarray:
+    """
+    Fetch mother locations in the index of df for all daughters in df.
+    """
+    daughter_ids = df.index[df.index.get_level_values("mother_label") > 0]
+    mother_ilocs = intersection_matrix(
+        daughter_ids.droplevel("cell_label"),
+        drop_level(df, "mother_label", as_list=False),
+    ).any(axis=0)
+    return mother_ilocs
+
+
+def get_mothers_from_another_df(whole_df: pd.DataFrame, da_df: pd.DataFrame):
+    daughter_ids = da_df.index[
+        da_df.index.get_level_values("mother_label") > 0
+    ]
+    mother_ilocs = intersection_matrix(
+        daughter_ids.droplevel("cell_label"),
+        drop_level(whole_df, "mother_label", as_list=False),
+    ).any(axis=0)
+    return mother_ilocs
+
+
+def bidirectional_retainment_filter(
+    df: pd.DataFrame, mothers_thresh: float = 0.8, daughters_thresh: int = 7
+):
+    """
+    Retrieve families where mothers are present for more than a fraction of the experiment, and daughters for longer than some number of time-points.
+    """
+    all_daughters = df.loc[df.index.get_level_values("mother_label") > 0]
+
+    # Filter daughters
+    retained_daughters = all_daughters.loc[
+        all_daughters.notna().sum(axis=1) > daughters_thresh
+    ]
+
+    # Fectch mother using existing daughters
+    mothers = df.loc[get_mothers_from_another_df(df, retained_daughters)]
+
+    # Get mothers
+    retained_mothers = mothers.loc[
+        mothers.notna().sum(axis=1) > mothers.shape[1] * mothers_thresh
+    ]
+
+    # Filter-out daughters with no valid mothers
+    final_da_mask = intersection_matrix(
+        drop_level(retained_daughters, "cell_label", as_list=False),
+        drop_level(retained_mothers, "mother_label", as_list=False),
+    )
+
+    final_daughters = retained_daughters.loc[final_da_mask.any(axis=1)]
+
+    # Join mothers and daughters and sort index
+    #
+    return pd.concat((final_daughters, retained_mothers), axis=0).sort_index()
+
+
+def melt_reset(df: pd.DataFrame, additional_ids: t.Dict[str, pd.Series] = {}):
+    new_df = add_index_levels(df, additional_ids)
+
+    return new_df.melt(ignore_index=False).reset_index()
