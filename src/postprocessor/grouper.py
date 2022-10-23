@@ -13,8 +13,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from postprocessor.chainer import Chainer
 from pathos.multiprocessing import Pool
+
+from agora.utils.kymograph import drop_level, intersection_matrix
+from postprocessor.chainer import Chainer
 
 
 class Grouper(ABC):
@@ -83,7 +85,7 @@ class Grouper(ABC):
         standard: t.Optional[bool] = False,
         **kwargs,
     ):
-        """Concate
+        """Concatenate multiple signals
 
                Parameters
                ----------
@@ -390,12 +392,31 @@ def concat_signal_ind(
         raise (NotImplementedError)
     elif mode == "raw":
         combined = chainer.get_raw(path, **kwargs)
+    elif mode == "daughters":
+        combined = chainer.get_raw(path, **kwargs)
+        combined = combined.loc[
+            combined.index.get_level_values("mother_label") > 0
+        ]
     elif mode == "families":
-        combined = chainer[path]
+        combined = chainer.get_raw(path, **kwargs)
+        daughter_ids = combined.index[
+            combined.index.get_level_values("mother_label") > 0
+        ]
+        mother_id_mask = intersection_matrix(
+            daughter_ids.droplevel("cell_label"),
+            drop_level(combined, "mother_label", as_list=False),
+        ).any(axis=0)
+        combined = combined.loc[
+            combined.index[mother_id_mask].union(daughter_ids)
+        ]
+
     combined["position"] = position
     combined["group"] = group
     combined.set_index(["group", "position"], inplace=True, append=True)
-    combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
+    # combined.index = combined.index.swaplevel(-2, 0).swaplevel(-1, 1)
+    combined.index = combined.index.reorder_levels(
+        ("group", "position", "trap", "cell_label", "mother_label")
+    )
 
     return combined
 

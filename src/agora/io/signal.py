@@ -41,11 +41,13 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
 
-        if isinstance(dsets, str) and dsets.endswith("imBackground"):
+        if isinstance(
+            dsets, str
+        ):  # or  isinstance(Dsets,dsets.endswith("imBackground"):
             df = self.get_raw(dsets)
 
-        elif isinstance(dsets, str):
-            df = self.apply_prepost(dsets)
+        # elif isinstance(dsets, str):
+        #     df = self.apply_prepost(dsets)
 
         elif isinstance(dsets, list):
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
