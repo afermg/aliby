@@ -269,7 +269,7 @@ class Signal(BridgeH5):
             elif isinstance(dataset, list):
                 return [self.get_raw(dset) for dset in dataset]
 
-            if lineage:
+            if lineage:  # This assumes that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
