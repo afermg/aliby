@@ -402,6 +402,7 @@ def concat_signal_ind(
 
     elif mode == "families":
         combined = chainer.get_raw(path, **kwargs)
+
         daughter_ids = combined.index[
             combined.index.get_level_values("mother_label") > 0
         ]

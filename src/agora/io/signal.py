@@ -263,7 +263,7 @@ class Signal(BridgeH5):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    df = self.dataset_to_df(f, dataset)
+                    df = self.dataset_to_df(f, dataset).sort_index()
                     if in_minutes:
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
@@ -273,7 +273,9 @@ class Signal(BridgeH5):
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
-                    lineage, np.array(df.index.to_list()), match_column=1
+                    lineage,
+                    np.array(df.index.to_list()),
+                    match_column=1,
                 )
                 mother_label[b] = lineage[a, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
