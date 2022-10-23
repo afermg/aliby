@@ -384,19 +384,22 @@ def concat_signal_ind(
 ) -> pd.DataFrame:
     """Core function that handles retrieval of an individual signal, applies
     filtering if requested and adjusts indices."""
+
     if position is None:
         position = chainer.stem
+
     if mode == "retained":
         combined = chainer.retained(path, **kwargs)
-    if mode == "mothers":
-        raise (NotImplementedError)
+
     elif mode == "raw":
         combined = chainer.get_raw(path, **kwargs)
+
     elif mode == "daughters":
         combined = chainer.get_raw(path, **kwargs)
         combined = combined.loc[
             combined.index.get_level_values("mother_label") > 0
         ]
+
     elif mode == "families":
         combined = chainer.get_raw(path, **kwargs)
         daughter_ids = combined.index[
@@ -409,6 +412,17 @@ def concat_signal_ind(
         combined = combined.loc[
             combined.index[mother_id_mask].union(daughter_ids)
         ]
+
+    if mode == "mothers":  # TODO refactor to avoid repeated code
+        combined = chainer.get_raw(path, **kwargs)
+        daughter_ids = combined.index[
+            combined.index.get_level_values("mother_label") > 0
+        ]
+        mother_id_mask = intersection_matrix(
+            daughter_ids.droplevel("cell_label"),
+            drop_level(combined, "mother_label", as_list=False),
+        ).any(axis=0)
+        combined = combined.loc[combined.index[mother_id_mask]]
 
     combined["position"] = position
     combined["group"] = group
