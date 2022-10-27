@@ -4,6 +4,7 @@ from copy import copy
 
 import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
 
 index_row = t.Tuple[str, str, int, int]
 
@@ -52,12 +53,13 @@ def intersection_matrix(
     """
     Use casting to obtain the boolean mask of the intersection of two multiindices
     """
-    if not isinstance(index1, np.ndarray):
-        index1 = np.array(index1.to_list())
-    if not isinstance(index2, np.ndarray):
-        index2 = np.array(index2.to_list())
+    indices = [index1, index2]
+    for i in range(2):
+        if hasattr(indices[i], "to_list"):
+            indices[i]: t.List = indices[i].to_list()
+        indices[i]: np.ndarray = np.array(indices[i])
 
-    return (index1[..., None] == index2.T).all(axis=1)
+    return (indices[0][..., None] == indices[1].T).all(axis=1)
 
 
 def get_mother_ilocs_from_daughters(df: pd.DataFrame) -> np.ndarray:
@@ -121,3 +123,45 @@ def melt_reset(df: pd.DataFrame, additional_ids: t.Dict[str, pd.Series] = {}):
     new_df = add_index_levels(df, additional_ids)
 
     return new_df.melt(ignore_index=False).reset_index()
+
+
+# Drop cells that if used would reduce info the most
+def filt_cluster(
+    kymograph: pd.DataFrame,
+    n: int = 2,
+):
+    mask = ~kymograph.iloc[:, kymograph.shape[1] // 2 :].isna().any(axis=1)
+    informative = kymograph.loc[mask]
+
+    clusters = cluster_kymograph(informative, n)
+
+    return informative, clusters
+
+
+def cluster_kymograph(kymograph: pd.DataFrame, n: int = 2):
+    import bottleneck as bn
+    from sklearn.cluster import KMeans
+
+    # Normalise according to mean value of signal
+    X = (
+        kymograph.divide(bn.nanmean(kymograph, axis=1), axis=0)
+        .dropna(axis=1)
+        .values
+    )
+    km = KMeans(n, random_state=42).fit(X)
+    clusters = km.predict(X)
+    return clusters
+
+
+def split_df(df, slices):
+    return [df.iloc(axis=1)[slc] for slc in slices]
+
+
+def slices_from_spans(spans: t.Tuple[int], df: pd.DataFrame) -> t.List[slice]:
+    cumsum = np.cumsum(spans)
+
+    slices = [
+        slice(start, min(end, df.columns.get_level_values("time")[-1]))
+        for start, end in zip(cumsum[:-1], cumsum[1:])
+    ]
+    return slices
