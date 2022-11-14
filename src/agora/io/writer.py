@@ -17,33 +17,77 @@ from agora.io.utils import timed
 
 
 def load_attributes(file: str, group="/"):
+    '''
+    Load the metadata from an h5 file and convert to a dictionary, including the "parameters" field which is stored as YAML.
+
+    Parameters
+    ----------
+    file: str
+        Name of the h5 file
+    group: str, optional
+        The group in the h5 file from which to read the data
+    '''
+    # load the metadata, stored as attributes, from the h5 file and return as a dictionary
     with h5py.File(file, "r") as f:
         meta = dict(f[group].attrs.items())
     if "parameters" in meta:
+        # convert from yaml format into dict
         meta["parameters"] = yaml.safe_load(meta["parameters"])
     return meta
 
 
 class DynamicWriter:
+    '''
+    A parent class for all writers
+    '''
+    # a dict giving a tuple of the maximum size, as a 2D tuple, and the type for each dataset
     data_types = {}
+    # the group in the h5 file to write to
     group = ""
+    # compression info
     compression = "gzip"
     compression_opts = 9
 
     def __init__(self, file: str):
         self.file = file
+        # the metadata is stored as attributes in the h5 file
         self.metadata = load_attributes(file)
 
     def _append(self, data, key, hgroup):
-        """Append data to existing dataset."""
+        """
+        Append data to existing dataset in the h5 file otherwise create a new one
+
+        Parameters
+        ----------
+        data
+            Data to be written, typically a numpy array
+        key: str
+            Name of dataset
+        hgroup: str
+            Destination group in the h5 file
+        """
         try:
             n = len(data)
         except Exception as e:
             logging.debug(
-                "DynamicWriter:Attributes have no length: {}".format(e)
+                "DynamicWriter: Attributes have no length: {}".format(e)
             )
             n = 1
-        if key not in hgroup:
+        if key in hgroup:
+            # append to existing dataset
+            try:
+                # FIXME This is broken by bugged mother-bud assignment
+                dset = hgroup[key]
+                dset.resize(dset.shape[0] + n, axis=0)
+                dset[-n:] = data
+            except Exception as e:
+                logging.debug(
+                    "DynamicWriter: Inconsistency between dataset shape and new empty data: {}".format(
+                        e
+                    )
+                )
+        else:
+            # create new dataset
             # TODO Include sparsity check
             max_shape, dtype = self.datatypes[key]
             shape = (n,) + max_shape[1:]
@@ -57,62 +101,79 @@ class DynamicWriter:
                 if self.compression is not None
                 else None,
             )
+            # write all data, signified by the empty tuple
             hgroup[key][()] = data
-        else:
-            # The dataset already exists, expand it
 
-            try:  # FIXME This is broken by bugged mother-bud assignment
-                dset = hgroup[key]
-                dset.resize(dset.shape[0] + n, axis=0)
-                dset[-n:] = data
-            except Exception as e:
-                logging.debug(
-                    "DynamicWriter:Inconsistency between dataset shape and new empty data: {}".format(
-                        e
-                    )
-                )
-        return
 
     def _overwrite(self, data, key, hgroup):
-        """Overwrite existing dataset with new data"""
+        """
+        Delete and then replace existing dataset in h5 file
+
+        Parameters
+        ----------
+        data
+            Data to be written, typically a numpy array
+        key: str
+            Name of dataset
+        hgroup: str
+            Destination group in the h5 file
+        """
         # We do not append to mother_assign; raise error if already saved
         data_shape = np.shape(data)
         max_shape, dtype = self.datatypes[key]
+        # delete existing data
         if key in hgroup:
             del hgroup[key]
+        # write new data
         hgroup.require_dataset(
-            key, shape=data_shape, dtype=dtype, compression=self.compression
+            key, shape=data_shape, dtype=dtype, compression=self.compression,
         )
+        # write all data, signified by the empty tuple
         hgroup[key][()] = data
 
-    def _check_key(self, key):
-        if key not in self.datatypes:
-            raise KeyError(f"No defined data type for key {key}")
+    # def _check_key(self, key):
+    #     if key not in self.datatypes:
+    #         raise KeyError(f"No defined data type for key {key}")
 
-    def write(self, data, overwrite: list, meta={}):
-        # Data is a dictionary, if not, make it one
-        # Overwrite data is a list
+    def write(self, data: dict, overwrite: list, meta={}):
+        '''
+        Write data and metadata to h5 file
+
+         Parameters
+        ----------
+        data: dict
+            A dict of datasets and data
+        overwrite: list of str
+            A list of datasets to overwrite
+        meta: dict, optional
+            Metadata to be written as attributes of the h5 file
+        '''
         with h5py.File(self.file, "a") as store:
+            # open group, creating if necessary
             hgroup = store.require_group(self.group)
-
+            # write data
             for key, value in data.items():
-                # We're only saving data that has a pre-defined data-type
-                self._check_key(key)
-                try:
-                    if key.startswith("attrs/"):  # metadata
-                        key = key.split("/")[1]  # First thing after attrs
-                        hgroup.attrs[key] = value
-                    elif key in overwrite:
-                        self._overwrite(value, key, hgroup)
-                    else:
-                        self._append(value, key, hgroup)
-                except Exception as e:
-                    print(key, value)
-                    raise (e)
+                # only save data with a pre-defined data-type
+                 if key not in self.datatypes:
+                     raise KeyError(f"No defined data type for key {key}")
+                 else:
+                    try:
+                        if key.startswith("attrs/"):
+                            # metadata
+                            key = key.split("/")[1]
+                            hgroup.attrs[key] = value
+                        elif key in overwrite:
+                            # delete and replace existing dataset
+                            self._overwrite(value, key, hgroup)
+                        else:
+                            # append or create new dataset
+                            self._append(value, key, hgroup)
+                    except Exception as e:
+                        print(key, value)
+                        raise (e)
+            # write metadata
             for key, value in meta.items():
                 hgroup.attrs[key] = value
-
-        return
 
 
 ##################### Special instances #####################
@@ -127,28 +188,29 @@ class TilerWriter(DynamicWriter):
 
     def write(self, data, overwrite: list, tp: int, meta={}):
         """
-        Skips writing data if it were to overwrite it,using drift as a marker
+        Custom function to avoid writing over any data that already exists at time point tp
         """
-
         skip = False
+        # append to h5 file
         with h5py.File(self.file, "a") as store:
+            # open group, creating if necessary
             hgroup = store.require_group(self.group)
-
+            # find xy drift for each time point as proof that it has already been processed
             nprev = hgroup.get("drifts", None)
             if nprev and tp < nprev.shape[0]:
+                # data already exists
                 print(f"Tiler: Skipping timepoint {tp}")
                 skip = True
-
         if not skip:
             super().write(data=data, overwrite=overwrite, meta=meta)
 
-
+# Alan: why's this here?
 tile_size = 117
 
 
 @timed()
 def save_complex(array, dataset):
-    # Dataset needs to be 2D
+    # dataset needs to be 2D
     n = len(array)
     if n > 0:
         dataset.resize(dataset.shape[0] + n, axis=0)
@@ -164,9 +226,10 @@ def load_complex(dataset):
 
 class BabyWriter(DynamicWriter):
     compression = "gzip"
-    max_ncells = 2e5  # Could just make this None
+    max_ncells = 2e5  # Alan: Could just make this None
     max_tps = 1e3  # Could just make this None
-    chunk_cells = 25  # The number of cells in a chunk for edge masks
+    # the number of cells in a chunk for edge masks
+    chunk_cells = 25
     default_tile_size = 117
     datatypes = {
         "centres": ((None, 2), np.uint16),
@@ -186,11 +249,10 @@ class BabyWriter(DynamicWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Get max_tps and trap info
         self._traps_initialised = False
 
     def __init_trap_info(self):
-        # Should only be run after the traps have been initialised
+        # requires traps to have been initialised
         trap_metadata = load_attributes(self.file, "trap_info")
         tile_size = trap_metadata.get("tile_size", self.default_tile_size)
         max_tps = self.metadata["time_settings/ntimepoints"][0]
@@ -266,9 +328,9 @@ class BabyWriter(DynamicWriter):
         save_complex(missing, ix_dset)
 
     def write_edgemasks(self, data, keys, hgroup):
+        # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
         if not self._traps_initialised:
             self.__init_trap_info()
-        # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
         key = "edgemasks"
         val_key = "values"
         # idx_key = "indices"
@@ -285,41 +347,40 @@ class BabyWriter(DynamicWriter):
     def write(self, data, overwrite: list, tp: int = None, meta={}):
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
-
             for key, value in data.items():
-                # We're only saving data that has a pre-defined data-type
-                self._check_key(key)
-                try:
-                    if key.startswith("attrs/"):  # metadata
-                        key = key.split("/")[1]  # First thing after attrs
-                        hgroup.attrs[key] = value
-                    elif key in overwrite:
-                        self._overwrite(value, key, hgroup)
-                    elif key == "edgemasks":
-                        keys = ["trap", "cell_label", "edgemasks"]
-                        value = [data[x] for x in keys]
-
-                        edgemask_dset = hgroup.get(key + "/values", None)
-                        if (
-                            # tp > 0
-                            edgemask_dset
-                            and tp < edgemask_dset[()].shape[1]
-                        ):
-                            print(f"BabyWriter: Skipping edgemasks in tp {tp}")
+                if key not in self.datatypes:
+                     raise KeyError(f"No defined data type for key {key}")
+                else:
+                    try:
+                        if key.startswith("attrs/"):
+                            # metadata
+                            key = key.split("/")[1]
+                            hgroup.attrs[key] = value
+                        elif key in overwrite:
+                            # delete and replace existing dataset
+                            self._overwrite(value, key, hgroup)
+                        elif key == "edgemasks":
+                            keys = ["trap", "cell_label", "edgemasks"]
+                            value = [data[x] for x in keys]
+                            edgemask_dset = hgroup.get(key + "/values", None)
+                            if (
+                                edgemask_dset
+                                and tp < edgemask_dset[()].shape[1]
+                            ):
+                                # data already exists
+                                print(f"BabyWriter: Skipping edgemasks in tp {tp}")
+                            else:
+                                self.write_edgemasks(value, keys, hgroup)
                         else:
-                            # print(f"BabyWriter: Writing edgemasks in tp {tp}")
-                            self.write_edgemasks(value, keys, hgroup)
-                    else:
-                        self._append(value, key, hgroup)
-                except Exception as e:
-                    print(key, value)
-                    raise (e)
+                            # append or create new dataset
+                            self._append(value, key, hgroup)
+                    except Exception as e:
+                        print(key, value)
+                        raise (e)
 
-        # Meta
+        # write metadata
         for key, value in meta.items():
             hgroup.attrs[key] = value
-
-        return
 
 
 class LinearBabyWriter(DynamicWriter):
