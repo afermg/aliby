@@ -207,10 +207,10 @@ class TilerWriter(DynamicWriter):
 # Alan: why's this here?
 tile_size = 117
 
-
+# Alan: we use complex numbers because...
 @timed()
 def save_complex(array, dataset):
-    # dataset needs to be 2D
+    # append array, an 1D array of complex numbers, onto dataset, a 2D array of real numbers
     n = len(array)
     if n > 0:
         dataset.resize(dataset.shape[0] + n, axis=0)
@@ -220,6 +220,7 @@ def save_complex(array, dataset):
 
 @timed()
 def load_complex(dataset):
+    # convert 2D dataset into a 1D array of complex numbers
     array = dataset[:, 0] + 1j * dataset[:, 1]
     return array
 
@@ -263,9 +264,8 @@ class BabyWriter(DynamicWriter):
         self._traps_initialised = True
 
     def __init_edgemasks(self, hgroup, edgemasks, current_indices, n_cells):
-        # Create values dataset
-        # This holds the edge masks directly and
-        # Is of shape (n_tps, n_cells, tile_size, tile_size)
+        # create the values dataset in the h5 file
+        # holds the edge masks and has shape (n_tps, n_cells, tile_size, tile_size)
         key = "edgemasks"
         max_shape, dtype = self.datatypes[key]
         shape = (n_cells, 1) + max_shape[2:]
@@ -279,9 +279,8 @@ class BabyWriter(DynamicWriter):
             compression=self.compression,
         )
         val_dset[:, 0] = edgemasks
-        # Create index dataset
-        # Holds the (trap, cell_id) description used to index into the
-        # values and is of shape (n_cells, 2)
+        # create index dataset in the h5 file:
+        # the (trap, cell_id) description used to index into the values and has shape (n_cells, 2)
         ix_max_shape = (max_shape[0], 2)
         ix_shape = (0, 2)
         ix_dtype = np.uint16
@@ -295,25 +294,22 @@ class BabyWriter(DynamicWriter):
         save_complex(current_indices, ix_dset)
 
     def __append_edgemasks(self, hgroup, edgemasks, current_indices):
-        # key = "edgemasks"
         val_dset = hgroup["values"]
         ix_dset = hgroup["indices"]
         existing_indices = load_complex(ix_dset)
-        # Check if there are any new labels
+        # check if there are any new labels
         available = np.in1d(current_indices, existing_indices)
         missing = current_indices[~available]
         all_indices = np.concatenate([existing_indices, missing])
-        # Resizing
-        t = perf_counter()
+        # resizing
+        debug_t = perf_counter()  # for timing code for debugging
         n_tps = val_dset.shape[1] + 1
         n_add_cells = len(missing)
-        # RESIZE DATASET FOR TIME and Cells
-        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[
-            2:
-        ]
+        # resize dataset for Time and Cells
+        new_shape = (val_dset.shape[0] + n_add_cells, n_tps) + val_dset.shape[2:]
         val_dset.resize(new_shape)
-        logging.debug(f"Timing:resizing:{perf_counter() - t}")
-        # Writing data
+        logging.debug(f"Timing:resizing:{perf_counter() - debug_t}")
+        # write data
         cell_indices = np.where(np.in1d(all_indices, current_indices))[0]
         for ix, mask in zip(cell_indices, edgemasks):
             try:
@@ -324,20 +320,19 @@ class BabyWriter(DynamicWriter):
                         e, ix, n_tps, val_dset.shape
                     )
                 )
-        # Save the index values
+        # save the index values
         save_complex(missing, ix_dset)
 
     def write_edgemasks(self, data, keys, hgroup):
-        # DATA is TRAP_IDS, CELL_LABELS, EDGEMASKS in a structured array
+        # data has shape (trap_ids, cell_labels, edgemasks) and is a structured array
         if not self._traps_initialised:
             self.__init_trap_info()
         key = "edgemasks"
         val_key = "values"
-        # idx_key = "indices"
-        # Length of edgemasks
         traps, cell_labels, edgemasks = data
         n_cells = len(cell_labels)
         hgroup = hgroup.require_group(key)
+        # create complex indices with traps as real part and cell_labels as imaginary part
         current_indices = np.array(traps) + 1j * np.array(cell_labels)
         if val_key not in hgroup:
             self.__init_edgemasks(hgroup, edgemasks, current_indices, n_cells)
@@ -349,7 +344,7 @@ class BabyWriter(DynamicWriter):
             hgroup = store.require_group(self.group)
             for key, value in data.items():
                 if key not in self.datatypes:
-                     raise KeyError(f"No defined data type for key {key}")
+                     raise KeyError(f"BabyWriter: No defined data type for key {key}")
                 else:
                     try:
                         if key.startswith("attrs/"):
@@ -377,7 +372,6 @@ class BabyWriter(DynamicWriter):
                     except Exception as e:
                         print(key, value)
                         raise (e)
-
         # write metadata
         for key, value in meta.items():
             hgroup.attrs[key] = value
