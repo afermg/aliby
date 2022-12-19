@@ -407,7 +407,11 @@ def concat_signal_ind(
     elif mode == "families":
         combined = chainer.get_raw(path, **kwargs)
 
-        mother_id_mask = get_mother_ilocs_from_daughters(df)
+        daughter_ids = combined.index[
+            combined.index.get_level_values("mother_label") > 0
+        ]
+
+        mother_id_mask = get_mother_ilocs_from_daughters(combined)
         combined = combined.loc[
             combined.index[mother_id_mask].union(daughter_ids)
         ]
