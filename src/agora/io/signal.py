@@ -215,7 +215,7 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_url)
 
-        for sig in self.siglist:
+        for sig in self._available:
             print(sig)
 
     @cached_property
@@ -258,7 +258,7 @@ class Signal(BridgeH5):
         return dsets
 
     def get_raw(
-        self, dataset: str, in_minutes: bool = True, lineage: bool = True
+        self, dataset: str, in_minutes: bool = True, lineage: bool = False
     ):
         try:
             if isinstance(dataset, str):
@@ -284,7 +284,7 @@ class Signal(BridgeH5):
 
         except Exception as e:
             print(f"Could not fetch dataset {dataset}")
-            print(e)
+            raise e
 
     def get_merges(self):
         # fetch merge events going up to the first level
