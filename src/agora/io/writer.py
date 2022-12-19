@@ -613,6 +613,9 @@ class Writer(BridgeH5):
             dset = f[values_path]
             dset[()] = df.values
 
+            if not len(df):  # Only write more if not empty
+                return None
+
             for name in df.index.names:
                 indices_path = "/".join((path, name))
                 f.create_dataset(
