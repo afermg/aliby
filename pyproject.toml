@@ -65,6 +65,7 @@ flake8 = "^4.0.1"
 pyright = "^1.1.258"
 pre-commit = "^2.20.0"
 seaborn = "^0.11.2"
+debugpy = "^1.6.3"
 
 # [tool.poetry.group.gui.dependencies]
 # napari = ">=0.4.16"

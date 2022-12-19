@@ -17,6 +17,7 @@ The image-processing is performed by traps/segment_traps.
 
 The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, Y, X).
 """
+import re
 import typing as t
 import warnings
 from functools import lru_cache
@@ -25,10 +26,10 @@ from pathlib import PosixPath
 import dask.array as da
 import h5py
 import numpy as np
-from agora.abc import ParametersABC, ProcessABC
-from agora.io.writer import BridgeH5
 from skimage.registration import phase_cross_correlation
 
+from agora.abc import ParametersABC, ProcessABC
+from agora.io.writer import BridgeH5
 from aliby.io.image import Image, ImageLocal
 from aliby.tile.traps import segment_traps
 
@@ -228,10 +229,8 @@ class Tiler(ProcessABC):
         self.image = image
         self._metadata = metadata
         self.channels = metadata["channels"]
-        assert (
-            parameters.ref_channel in self.channels
-        ), "Reference channel not in the available channels"
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
+
         self.trap_locs = trap_locs
         try:
             self.z_perchannel = {
@@ -498,7 +497,7 @@ class Tiler(ProcessABC):
 
     # The next set of functions are necessary for the extraction object
     def get_tiles_timepoint(
-        self, tp, tile_shape=None, channels=None, z=None
+        self, tp, tile_shape=None, channels=None, z: int = 0
     ) -> np.ndarray:
         """
         Get a multidimensional array with all tiles for a set of channels
@@ -551,16 +550,25 @@ class Tiler(ProcessABC):
 
     def get_channel_index(self, item):
         """
-        Find index for channel
+        Find index for channel using regex. Returns the first matched string.
 
         Parameters
         ----------
         item: string
             The channel
         """
+
+        # pattern = re.compile(f"*{item}*", re.IGNORECASE)
         for i, ch in enumerate(self.channels):
-            if item in ch:
+            found = re.match(item, ch, re.IGNORECASE)
+            if found:
+                if len(found.string) - (found.endpos - found.start()):
+                    print(f"WARNING: channel {item} matched {ch} using regex")
                 return i
+
+        raise Warning(
+            f"Reference channel {item} not in the available channels: {self.channels}"
+        )
 
     @staticmethod
     def ifoob_pad(full, slices):

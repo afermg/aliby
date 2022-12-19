@@ -298,7 +298,7 @@ class PostProcessor(ProcessABC):
 
         self.run_prepost()
 
-        for process, datasets in tqdm(enumerate(self.targets["processes"])):
+        for process, datasets in tqdm(self.targets["processes"]):
             if process in self.parameters["param_sets"].get(
                 "processes", {}
             ):  # If we assigned parameters

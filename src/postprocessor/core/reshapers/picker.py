@@ -81,7 +81,8 @@ class picker(LineageProcess):
         idx = idx[valid_indices]
         mothers_daughters = mothers_daughters[valid_lineage]
 
-        return mothers_daughters, idx
+        # return mothers_daughters, idx
+        return idx
 
     def loc_lineage(self, kymo: pd.DataFrame, how: str, lineage=None):
         _, valid_indices = self.pick_by_lineage(
@@ -96,26 +97,33 @@ class picker(LineageProcess):
     def run(self, signals):
         self.orig_signals = signals
         indices = set(signals.index)
-        self.mothers, self.daughters = self.cells.mothers_daughters
-        for alg, op, *params in self.sequence:
-            new_indices = tuple()
-            if indices:
-                if alg == "lineage":
-                    param1 = params[0]
-                    new_indices = getattr(self, "pick_by_" + alg)(
-                        signals.loc[list(indices)], param1
-                    )
-                else:
-                    param1, *param2 = params
-                    new_indices = getattr(self, "pick_by_" + alg)(
-                        signals.loc[list(indices)], param1, param2
-                    )
+        lineage = self.cells.mothers_daughters
+        if lineage.any():
+            self.mothers = lineage[:, :2]
+            self.daughters = lineage[:, [0, 2]]
 
-            if op == "union":
-                # new_indices = new_indices.intersection(set(signals.index))
-                new_indices = indices.union(new_indices)
+            for alg, op, *params in self.sequence:
+                new_indices = tuple()
+                if indices:
+                    if alg == "lineage":
+                        param1 = params[0]
+                        new_indices = getattr(self, "pick_by_" + alg)(
+                            signals.loc[list(indices)], param1
+                        )
+                    else:
+                        param1, *param2 = params
+                        new_indices = getattr(self, "pick_by_" + alg)(
+                            signals.loc[list(indices)], param1, param2
+                        )
+                    new_indices = [tuple(x) for x in new_indices]
 
-            indices = indices.intersection(new_indices)
+                if op == "union":
+                    new_indices = indices.union(new_indices)
+
+                indices = indices.intersection(new_indices)
+        else:
+            print("WARNING:Picker: No lineage assignment")
+            indices = np.array([])
 
         return np.array(list(indices))
 

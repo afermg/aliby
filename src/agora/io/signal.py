@@ -11,6 +11,8 @@ import pandas as pd
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_df
 from agora.utils.merge import apply_merges
+from agora.utils.association import validate_association
+from agora.utils.kymograph import add_index_levels
 
 
 class Signal(BridgeH5):
@@ -39,11 +41,13 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
 
-        if isinstance(dsets, str) and dsets.endswith("imBackground"):
+        if isinstance(
+            dsets, str
+        ):  # or  isinstance(Dsets,dsets.endswith("imBackground"):
             df = self.get_raw(dsets)
 
-        elif isinstance(dsets, str):
-            df = self.apply_prepost(dsets)
+        # elif isinstance(dsets, str):
+        #     df = self.apply_prepost(dsets)
 
         elif isinstance(dsets, list):
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
@@ -211,7 +215,7 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_url)
 
-        for sig in self.siglist:
+        for sig in self._available:
             print(sig)
 
     @cached_property
@@ -253,19 +257,34 @@ class Signal(BridgeH5):
             dsets = f.visititems(self._if_picks)
         return dsets
 
-    def get_raw(self, dataset: str, in_minutes: bool = True):
+    def get_raw(
+        self, dataset: str, in_minutes: bool = True, lineage: bool = False
+    ):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    df = self.dataset_to_df(f, dataset)
+                    df = self.dataset_to_df(f, dataset).sort_index()
                     if in_minutes:
                         df = self.cols_in_mins(df)
-                    return df
             elif isinstance(dataset, list):
                 return [self.get_raw(dset) for dset in dataset]
+
+            if lineage:  # This assumes that df is sorted
+                mother_label = np.zeros(len(df), dtype=int)
+                lineage = self.lineage()
+                a, b = validate_association(
+                    lineage,
+                    np.array(df.index.to_list()),
+                    match_column=1,
+                )
+                mother_label[b] = lineage[a, 1]
+                df = add_index_levels(df, {"mother_label": mother_label})
+
+            return df
+
         except Exception as e:
             print(f"Could not fetch dataset {dataset}")
-            print(e)
+            raise e
 
     def get_merges(self):
         # fetch merge events going up to the first level
@@ -381,31 +400,53 @@ class Signal(BridgeH5):
         """
         flowrate_name = "pumpinit/flowrate"
         pumprate_name = "pumprate"
+        switchtimes_name = "switchtimes"
+
         main_pump_id = np.concatenate(
             (
                 (np.argmax(self.meta_h5[flowrate_name]),),
                 np.argmax(self.meta_h5[pumprate_name], axis=0),
             )
         )
+        if not self.meta_h5[switchtimes_name][0]:  # Cover for t0 switches
+            main_pump_id = main_pump_id[1:]
         return [self.meta_h5["pumpinit/contents"][i] for i in main_pump_id]
 
     @property
     def nstages(self) -> int:
-        switchtimes_name = "switchtimes"
-        return self.meta_h5[switchtimes_name] + 1
+        return len(self.switch_times) + 1
 
     @property
     def max_span(self) -> int:
         return int(self.tinterval * self.ntps / 60)
 
     @property
+    def switch_times(self) -> t.List[int]:
+        switchtimes_name = "switchtimes"
+        switches_minutes = self.meta_h5[switchtimes_name]
+
+        return [
+            t_min
+            for t_min in switches_minutes
+            if t_min and t_min < self.max_span
+        ]  # Cover for t0 switches
+
+    @property
     def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
         # Return consecutive stages and their corresponding number of time-points
-        switchtimes_name = "switchtimes"
-        transition_tps = (0, *self.meta_h5[switchtimes_name])
+        transition_tps = (0, *self.switch_times, self.max_span)
         spans = [
             end - start
             for start, end in zip(transition_tps[:-1], transition_tps[1:])
             if end <= self.max_span
         ]
         return tuple((stage, ntps) for stage, ntps in zip(self.stages, spans))
+
+    @property
+    def stages_span_tp(self) -> t.Tuple[t.Tuple[str, int], ...]:
+        return tuple(
+            [
+                (name, (t_min * 60) // self.tinterval)
+                for name, t_min in self.stages_span
+            ]
+        )

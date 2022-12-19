@@ -41,7 +41,7 @@ class savgol(PostProcessABC):
             print(e)
 
             def savgol_on_srs(x):
-                return self.non_uniform_savgol(
+                return non_uniform_savgol(
                     x.index,
                     x.values,
                     self.parameters.window,
