@@ -72,5 +72,6 @@ class bud_metric(LineageProcess):
             mothers_mat[i] = buds_metric
 
         df = pd.DataFrame(mothers_mat, index=md.keys(), columns=signal.columns)
-        df.index.names = signal.index.names
+        if len(df):
+            df.index.names = signal.index.names
         return df
