@@ -23,16 +23,19 @@ class dsignal(PostProcessABC):
         super().__init__(parameters)
 
     def run(self, signal: pd.DataFrame):
-        matrix = np.diff(
-            bn.move_mean(
-                signal,
-                window=self.parameters.window,
-                min_count=self.parameters.min_count,
+        if signal.shape[1] > self.parameters.window:
+            matrix = np.diff(
+                bn.move_mean(
+                    signal,
+                    window=self.parameters.window,
+                    min_count=self.parameters.min_count,
+                    axis=1,
+                ),
                 axis=1,
-            ),
-            axis=1,
-        )
+            )
+            # Pad values to keep the same signal shape
+            matrix = np.pad(matrix, ((0, 0), (0, 1)), constant_values=np.nan)
+        else:
+            matrix = np.full_like(signal, np.nan)
 
-        # Pad values to keep the same signal shape
-        matrix = np.pad(matrix, ((0, 0), (0, 1)), constant_values=np.nan)
         return pd.DataFrame(matrix, index=signal.index, columns=signal.columns)
