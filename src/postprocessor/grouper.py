@@ -13,8 +13,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from postprocessor.chainer import Chainer
 from pathos.multiprocessing import Pool
+
+from agora.utils.kymograph import (
+    drop_level,
+    get_mother_ilocs_from_daughters,
+    intersection_matrix,
+)
+from postprocessor.chainer import Chainer
 
 
 class Grouper(ABC):
@@ -83,24 +89,24 @@ class Grouper(ABC):
         standard: t.Optional[bool] = False,
         **kwargs,
     ):
-        """Concate
+        """Concatenate multiple signals
 
-        Parameters
-        ----------
-        path : str
-            signal address within h5py file.
-        reduce_cols : bool
-            Whether or not to collapse columns into a single one.
+               Parameters
+               ----------
+               path : str
+                   signal address within h5py file.
+               reduce_cols : bool
+                   Whether or not to collapse columns into a single one.
         axis : int
-            Concatenation axis.
-        pool : int
-            Number of threads used. If 0 or None only one core is used.
-        **kwargs : key, value pairings
-            Named arguments to pass to concat_ind_function.
+                   Concatenation axis.
+               pool : int
+                   Number of threads used. If 0 or None only one core is used.
+               **kwargs : key, value pairings
+                   Named arguments to pass to concat_ind_function.
 
-        Examples
-        --------
-        FIXME: Add docs.
+               Examples
+               --------
+               FIXME: Add docs.
         """
         if path.startswith("/"):
             path = path.strip("/")
@@ -375,7 +381,9 @@ def concat_standard(
     combined["position"] = position
     combined["group"] = group
     combined.set_index(["group", "position"], inplace=True, append=True)
-    combined.index = combined.index.copy().swaplevel(-2, 0).swaplevel(-1, 1)
+    combined.index = combined.index.reorder_levels(
+        ("group", "position", "trap", "cell_label", "mother_label")
+    )
 
     return combined
 
@@ -390,14 +398,22 @@ def concat_signal_ind(
 ) -> pd.DataFrame:
     """Core function that handles retrieval of an individual signal, applies
     filtering if requested and adjusts indices."""
+
     if position is None:
         position = chainer.stem
+
     if mode == "retained":
         combined = chainer.retained(path, **kwargs)
-    if mode == "mothers":
-        raise (NotImplementedError)
+
     elif mode == "raw":
         combined = chainer.get_raw(path, **kwargs)
+
+    elif mode == "daughters":
+        combined = chainer.get_raw(path, **kwargs)
+        combined = combined.loc[
+            combined.index.get_level_values("mother_label") > 0
+        ]
+
     elif mode == "families":
         combined = chainer[path]
 

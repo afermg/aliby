@@ -2815,7 +2815,7 @@ omero = ["omero-py"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8, <3.11"
-content-hash = "8ad7c71775623d47d8924e97925402bac8aa03eb9e21cd3abb624ee7da29bc3c"
+content-hash = "b563a2b38038b7b1e8f8931507bacc29ecc915a452e45c7d4113ca0d9bdac454"
 
 [metadata.files]
 absl-py = [
