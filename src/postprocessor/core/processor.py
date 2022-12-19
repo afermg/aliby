@@ -201,16 +201,20 @@ class PostProcessor(ProcessABC):
             self._signal[self.targets["prepost"]["picker"][0]]
         )
 
-        mothers, daughters = np.array(self.picker.mothers), np.array(
-            self.picker.daughters
-        )
+        combined_idx = ([], [], [])
+        trap, mother, daughter = combined_idx
+
+        lineage = self.picker.cells.mothers_daughters
+
+        if lineage.any():
+            trap, mother, daughter = lineage.T
+            combined_idx = np.vstack((trap, mother, daughter))
+
+        trap_mother = np.vstack((trap, mother)).T
+        trap_daughter = np.vstack((trap, daughter)).T
 
         multii = pd.MultiIndex.from_arrays(
-            (
-                np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1).T
-                if daughters.any()
-                else [[], [], []]
-            ),
+            combined_idx,
             names=["trap", "mother_label", "daughter_label"],
         )
         self._writer.write(
@@ -219,9 +223,9 @@ class PostProcessor(ProcessABC):
             overwrite="overwrite",
         )
 
-        # apply merge to mother-daughter
-        moset = set([tuple(x) for x in mothers])
-        daset = set([tuple(x) for x in daughters])
+        # apply merge to mother-trap_daughter
+        moset = set([tuple(x) for x in trap_mother])
+        daset = set([tuple(x) for x in trap_daughter])
         picked_set = set([tuple(x) for x in indices])
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
@@ -231,6 +235,7 @@ class PostProcessor(ProcessABC):
             names=["trap", "mother_label", "daughter_label"],
         )
         self.lineage_merged = multii
+
         if merge_events.any():
 
             def search(a, b):
@@ -245,19 +250,25 @@ class PostProcessor(ProcessABC):
                 if (
                     tuple(source) in moset
                 ):  # update mother to lowest positive index among the two
-                    mother_ids = search(mothers, source)
-                    mothers[mother_ids] = (
+                    mother_ids = search(trap_mother, source)
+                    trap_mother[mother_ids] = (
                         target[0],
-                        self.pick_mother(mothers[mother_ids][0][1], target[1]),
+                        self.pick_mother(
+                            trap_mother[mother_ids][0][1], target[1]
+                        ),
                     )
                 if tuple(source) in daset:
-                    daughters[search(daughters, source)] = target
+                    trap_daughter[search(trap_daughter, source)] = target
                 if tuple(source) in picked_set:
                     indices[search(indices, source)] = target
 
             self.lineage_merged = pd.MultiIndex.from_arrays(
                 np.unique(
-                    np.append(mothers, daughters[:, 1].reshape(-1, 1), axis=1),
+                    np.append(
+                        trap_mother,
+                        trap_daughter[:, 1].reshape(-1, 1),
+                        axis=1,
+                    ),
                     axis=0,
                 ).T,
                 names=["trap", "mother_label", "daughter_label"],
