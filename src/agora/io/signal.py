@@ -329,19 +329,25 @@ class Signal(BridgeH5):
         assert path in f, f"{path} not in {f}"
 
         dset = f[path]
+
+        values, index, columns = ([], [], [])
+
         index_names = copy(self.index_names)
-
         valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
-        index = pd.MultiIndex.from_arrays(
-            [dset[lbl] for lbl in valid_names], names=valid_names
-        )
+        if valid_names:
 
-        columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
-        if "timepoint" in dset:
-            columns = f[path + "/timepoint"][()]
+            index = pd.MultiIndex.from_arrays(
+                [dset[lbl] for lbl in valid_names], names=valid_names
+            )
+
+            columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
+            if "timepoint" in dset:
+                columns = f[path + "/timepoint"][()]
+
+            values = f[path + "/values"][()]
 
         return pd.DataFrame(
-            f[path + "/values"][()],
+            values,
             index=index,
             columns=columns,
         )
