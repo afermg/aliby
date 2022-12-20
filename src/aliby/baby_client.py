@@ -143,7 +143,7 @@ class BabyRunner:
         )
         self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
-        self.bf_channel = self.tiler.get_channel_index("Brightfield")
+        self.bf_channel = self.tiler.ref_channel_index
 
     @classmethod
     def from_tiler(cls, parameters: BabyParameters, tiler):

@@ -548,6 +548,10 @@ class Tiler(ProcessABC):
             )
         return np.stack(res, axis=1)
 
+    @property
+    def ref_channel_index(self):
+        return self.get_channel_index(self.parameters.ref_channel)
+
     def get_channel_index(self, item):
         """
         Find index for channel using regex. Returns the first matched string.
