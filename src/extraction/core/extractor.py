@@ -579,7 +579,7 @@ class Extractor(ProcessABC):
         """
         if channels is None:
             channels = (*self.params.tree,)
-        if channel in channels:
+        if channel in channels:  # TODO start here to fetch channel using regex
             return traps[:, channels.index(channel), 0]
         elif channel in self.img_bgsub:
             return self.img_bgsub[channel]

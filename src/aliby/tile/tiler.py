@@ -557,18 +557,12 @@ class Tiler(ProcessABC):
         item: string
             The channel
         """
-
-        # pattern = re.compile(f"*{item}*", re.IGNORECASE)
-        for i, ch in enumerate(self.channels):
-            found = re.match(item, ch, re.IGNORECASE)
-            if found:
-                if len(found.string) - (found.endpos - found.start()):
-                    print(f"WARNING: channel {item} matched {ch} using regex")
-                return i
-
-        raise Warning(
-            f"Reference channel {item} not in the available channels: {self.channels}"
-        )
+        channel = find_channel_index(self.channels, item)
+        if channel is None:
+            raise Warning(
+                f"Reference channel {channel} not in the available channels: {self.channels}"
+            )
+        return channel
 
     @staticmethod
     def ifoob_pad(full, slices):
@@ -610,3 +604,24 @@ class Tiler(ProcessABC):
                 # pad tile with median value of trap image
                 trap = np.pad(trap, [[0, 0]] + padding.tolist(), "median")
         return trap
+
+
+def find_channel_index(image_channels: t.List[str], channel: str):
+    """
+    Access
+    """
+    for i, ch in enumerate(image_channels):
+        found = re.match(channel, ch, re.IGNORECASE)
+        if found:
+            if len(found.string) - (found.endpos - found.start()):
+                print(f"WARNING: channel {channel} matched {ch} using regex")
+            return i
+
+
+def find_channel_name(image_channels: t.List[str], channel: str):
+    """
+    Find the name of the channel according to a given channel regex.
+    """
+    index = find_channel_index(image_channels, channel)
+    if index is not None:
+        return image_channels[index]
