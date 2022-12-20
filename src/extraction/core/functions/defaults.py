@@ -55,7 +55,7 @@ def exparams_from_meta(
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
         # Find channels in metadata whose names match
-        found_channel = find_channel_name(meta["channels/channel"], av_channel)
+        found_channel = find_channel_name(meta["channels"], av_channel)
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
 

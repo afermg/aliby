@@ -118,9 +118,13 @@ class Dataset(BridgeOmero):
         return self._tags
 
     def cache_logs(self, root_dir):
+        valid_suffixes = ("txt", "log")
         for name, annotation in self.files.items():
             filepath = root_dir / annotation.getFileName().replace("/", "_")
-            if str(filepath).endswith("txt") and not filepath.exists():
+            if (
+                any([str(filepath).endswith(suff) for suff in valid_suffixes])
+                and not filepath.exists()
+            ):
                 # save only the text files
                 with open(str(filepath), "wb") as fd:
                     for chunk in annotation.getFileInChunks():

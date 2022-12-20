@@ -97,14 +97,15 @@ class PipelineParameters(ParametersABC):
         try:
             meta_d = MetaData(directory, None).load_logs()
         except Exception as e:
-            print("WARNING: Metadata could not be loaded: {}".format(e))
-            # Set minimal metadata
-            meta_d = {
-                "channels/channel": "Brightfield",
-                "time_settings/ntimepoints": [200],
+            minimal_default_meta = {
+                "channels": ["Brightfield"],
+                "ntps": [2000],
             }
+            print(f"WARNING:Metadata: error when uploading: {e}")
+            # Set minimal metadata
+            meta_d = minimal_default_meta
 
-        tps = meta_d["time_settings/ntimepoints"][0]
+        tps = meta_d.get("ntps", 2000)
         defaults = {
             "general": dict(
                 id=expt_id,

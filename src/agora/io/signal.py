@@ -84,12 +84,7 @@ class Signal(BridgeH5):
         try:
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
-            print(
-                """
-                Warning:Can't convert columns to minutes. Signal {}.{}""".format(
-                    df.name, e
-                )
-            )
+            print(f"Warning:Signal: Unable to convert columns to minutes: {e}")
         return df
 
     @cached_property
@@ -110,7 +105,7 @@ class Signal(BridgeH5):
     @property
     def channels(self):
         with h5py.File(self.filename, "r") as f:
-            return f.attrs["channels/channel"]
+            return f.attrs["channels"]
 
     @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):

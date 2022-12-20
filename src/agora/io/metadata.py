@@ -1,12 +1,15 @@
 import glob
 import os
+import typing as t
 from datetime import datetime
+from pathlib import Path, PosixPath
 
 import pandas as pd
 from pytz import timezone
 
 from agora.io.writer import Writer
 from logfile_parser import Parser
+from logfile_parser.swainlab_parser import parse_from_swainlab_grammar
 
 
 class MetaData:
@@ -21,7 +24,8 @@ class MetaData:
         return self.load_logs()[item]
 
     def load_logs(self):
-        parsed_flattened = parse_logfiles(self.log_dir)
+        # parsed_flattened = parse_logfiles(self.log_dir)
+        parsed_flattened = dispatch_metadata_parser(self.log_dir)
         return parsed_flattened
 
     def run(self, overwrite=False):
@@ -65,10 +69,16 @@ def datetime_to_timestamp(time, locale="Europe/London"):
 
 def find_file(root_dir, regex):
     file = glob.glob(os.path.join(str(root_dir), regex))
-    if len(file) != 1:
-        return None
+    if len(file) > 1:
+        print(
+            "Warning:Metadata: More than one logfile found. Defaulting to first option."
+        )
+        file = [file[0]]
+    if len(file) == 0:
+        print("Warning:Metadata: No valid logfile found.")
     else:
         return file[0]
+    return None
 
 
 # TODO: re-write this as a class if appropriate
@@ -114,3 +124,64 @@ def parse_logfiles(
             parsed_flattened[k] = [0 if el is None else el for el in v]
 
     return parsed_flattened
+
+
+def get_meta_swainlab(parsed_metadata: dict):
+    """
+    Convert raw parsing of Swainlab logfile to the metadata interface.
+
+    Input:
+    --------
+    parsed_metadata: Dict[str, str or int or DataFrame or Dict]
+    default['general', 'image_config', 'device_properties', 'group_position', 'group_time', 'group_config']
+
+    Returns:
+    --------
+    Dictionary with metadata following the standard
+
+    """
+    channels = parsed_metadata["image_config"]["Image config"].values.tolist()
+    # nframes = int(parsed_metadata["group_time"]["frames"].max())
+
+    # return {"channels": channels, "nframes": nframes}
+    return {"channels": channels}
+
+
+def get_meta_from_legacy(parsed_metadata: dict):
+    channels = parsed_metadata["channels"]["channel"]
+    return {"channels": channels}
+
+
+def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
+    """
+    Dispatcher function that determines which parser to use based on the file ending.
+
+    Input:
+    --------
+    filedir: Directory where the logfile is located.
+
+    Returns:
+    --------
+    Dictionary with minimal metadata
+    """
+    filedir = Path(filedir)
+
+    filepath = find_file(filedir, "*.log")
+    if filepath:
+        raw_parse = parse_from_swainlab_grammar(filepath)
+        minimal_meta = get_meta_swainlab(raw_parse)
+    else:
+        if filedir.is_file():
+            filedir = filedir.parent
+        legacy_parse = parse_logfiles(filedir.parent)
+        minimal_meta = get_meta_from_legacy(legacy_parse)
+
+    return minimal_meta
+
+
+def dispatch_metadata_parser(filepath: t.Union[str, PosixPath]):
+    """
+    Function to dispatch different metadata parsers that convert logfiles into a
+    basic metadata dictionary. Currently only contains the swainlab log parsers.
+    """
+    return parse_swainlab_metadata(filepath)
