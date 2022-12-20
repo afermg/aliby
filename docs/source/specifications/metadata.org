@@ -1,0 +1,36 @@
+#+title: Aliby metadata specification
+
+Draft for recommended metadata for images to provide a standard interface for aliby. I attempt to follow OMERO metadata structures.
+
+* Essential data
+- DimensionOrder: str
+  Order of dimensions (e.g., CTZYX for Channel, Time, Z,Y,X)
+- PixelSize: float
+  Size of pixel, useful for segmentation.
+- Channels: List[str]
+  Channel names, used to refer to as parameters.
+* Optional but useful data
+- ntps: int
+  Number of time-points
+- Date
+  Date of experiment
+- interval: float
+  Time interval when the experiment has a constant acquisition time. If it changes depending on the position or it is a dynamic experiment, this is the maximum number that can divide all different conditions.
+- Channel conditions: DataFrame
+  Dataframe with acquisition features for each image as a function of a minimal time interval unit.
+- Group config: DataFrame
+  If multiple groups are used, it indicates the time-points at which the corresponding channel was acquired.
+- LED: List[str]
+  Led names. Useful when images are acquired with the same LED and filter but multiple voltage conditions.
+- Filter: List[str]
+  Filter names. Useful when images are acquired with the same LED and filter but multiple voltage conditions.
+- tags : List[str]
+  Tags associated with the experiment. Useful for semi-automated experiment exploration.
+
+* Optional
+- hardware information : Dict[str, str]
+  Name of all hardware used to acquire images.
+- Acquisition software and version: Tuple[str,str]
+- Experiment start: date
+- Experiment end: date
+- Experiment-wide groups: List[int]
