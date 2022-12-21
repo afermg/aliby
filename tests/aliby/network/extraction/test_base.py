@@ -45,9 +45,7 @@ def test_extractor(imgs, masks, tree):
     Tests reduce-extract
     """
     extractor = Extractor(
-        ExtractorParameters.from_meta(
-            {"channels/channel": ["Brightfield", "GFP"]}
-        )
+        ExtractorParameters.from_meta({"channels": ["Brightfield", "GFP"]})
     )
     # Load all available functions
     extractor.load_funs()
