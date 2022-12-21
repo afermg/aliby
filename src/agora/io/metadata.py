@@ -148,7 +148,7 @@ def get_meta_swainlab(parsed_metadata: dict):
 
 
 def get_meta_from_legacy(parsed_metadata: dict):
-    channels = parsed_metadata["channels"]["channel"]
+    channels = parsed_metadata["channels/channel"]
     return {"channels": channels}
 
 
@@ -173,7 +173,7 @@ def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
     else:
         if filedir.is_file():
             filedir = filedir.parent
-        legacy_parse = parse_logfiles(filedir.parent)
+        legacy_parse = parse_logfiles(filedir)
         minimal_meta = get_meta_from_legacy(legacy_parse)
 
     return minimal_meta
