@@ -3,7 +3,7 @@ import numpy as np
 from extraction.core.extractor import Extractor, ExtractorParameters
 
 params = ExtractorParameters.from_meta(
-    {"channels/channel": ["Brightfield", "GFPFast", "pHluorin405", "mCherry"]}
+    {"channels": ["Brightfield", "GFPFast", "pHluorin405", "mCherry"]}
 )
 ext = Extractor(params)
 ext.load_funs()
