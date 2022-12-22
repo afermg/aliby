@@ -50,7 +50,7 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
 class ImageLocal:
     def __init__(self, path: str, dimorder=None):
         self.path = path
-        self.image_id = str(path)
+        self._id = str(path)
 
         meta = dict()
         try:
@@ -125,7 +125,7 @@ class ImageLocal:
         return self._meta
 
     def get_data_lazy_local(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+        """Return 5D dask array. For lazy-loading  multidimensional tiff files"""
 
         if not hasattr(self, "formatted_img"):
             if not hasattr(self, "ids"):  # Standard dimension order
@@ -161,45 +161,69 @@ class ImageLocal:
         return self._formatted_img
 
 
-class ImageDirectory(ImageLocal):
+class ImageDir(ImageLocal):
     """
     Image class for case where all images are split in one or multiple folders with time-points and channels as independent files.
     It inherits from Imagelocal so we only override methods that are critical.
 
     Assumptions:
-    - Assumes individual folders for individual channels. If only one path provided it assumes it to be brightfield.
-    - Assumes that images are flat.
+    - One folders per position.
+    - Images are flat.
+    - Channel, Time, z-stack and the others are determined by filenames.
     - Provides Dimorder as TCZYX
     """
 
-    def __init__(self, path: t.Union[str, t.Dict[str, str]]):
-        if isinstance(path, str):
-            path = {"Brightfield": path}
+    def __init__(self, path: t.Union[str, PosixPath]):
 
-        self.path = path
-        self.image_id = str(path)
-        self._meta = dict(channels=path.keys(), name=list(path.values())[0])
+        # Assume they are naturally sorted
+        self.path = Path(path)
+        self.image_id = str(self.path.stem)
 
-        # Parse name if necessary
-        # Build lazy-loading array using dask?
+        filenames = list(self.path.glob("*.tiff"))
 
-    def get_data_lazy_local(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+        # Deduct order from filenames
+        self.dimorder = "".join(
+            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
+        )
 
-        img = da.stack([imread(v) for v in self.path.values()])
-        if (
-            img.ndim < 5
-        ):  # Files do not include z-stack: Add and swap with time dimension.
-            img = da.stack((img,)).swapaxes(0, 2)
+        dim_value = list(
+            map(
+                lambda f: filename_to_dict_indices(f.stem),
+                self.path.glob("*.tiff"),
+            )
+        )
+        maxes = [
+            max(map(lambda x: x[dim], dim_value)) for dim in self.dimorder
+        ]
+        mins = [min(map(lambda x: x[dim], dim_value)) for dim in self.dimorder]
+        self._dim_shapes = [
+            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
+        ]
 
-            # TODO check whether x and y swap is necessary
+        # Set internal metadata from shape and channel order
+        self.dimorder += "xy"
 
         # Use images to redefine axes
-        for i, dim in enumerate(("t", "c", "z", "y", "x")):
-            self._meta["size_" + dim] = img.shape[i]
+
+        self._meta = {
+            "size_" + dim: shape
+            for dim, shape in zip(self.dimorder, self._dim_shapes)
+        }
+
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
+
+        img = imread(str(self.path / "*.tiff"))
+
+        # If extra channels, pick the first stack of the last dimensions
+        while len(img.shape) > 3:
+            img = img[..., 0]
+        self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
+
+        reshaped = da.reshape(img, (*self._dim_shapes, *img.shape[1:]))
 
         self._formatted_img = da.rechunk(
-            img,
+            reshaped,
             chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
         )
         return self._formatted_img
@@ -338,3 +362,10 @@ def get_data_lazy(image) -> da.Array:
         t_stacks.append(da.stack(c_stacks))
 
     return da.stack(t_stacks)
+
+
+def filename_to_dict_indices(stem: str):
+    return {
+        dim_number[0]: int(dim_number[1:])
+        for dim_number in stem.split("_")[1:]
+    }
