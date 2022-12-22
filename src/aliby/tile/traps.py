@@ -28,12 +28,13 @@ def segment_traps(
     disk_radius_frac=0.01,
     square_size=3,
     min_frac_tilesize=0.3,
-    max_frac_tilesize=0.8,
     **identify_traps_kwargs,
 ):
     """
     Uses an entropy filter and Otsu thresholding to find a trap template,
     which is then passed to identify_trap_locations.
+
+    To obtain candidate traps it the major axis length of a tile must be smaller than tilesize.
 
     The hyperparameters have not been optimised.
 
@@ -65,7 +66,6 @@ def segment_traps(
     img = image
     # bounds on major axis length of traps
     min_mal = min_frac_tilesize * tile_size
-    max_mal = max_frac_tilesize * tile_size
 
     # shrink image
     if downscale != 1:
@@ -90,7 +90,7 @@ def segment_traps(
     idx_valid_region = [
         (i, region)
         for i, region in enumerate(regionprops(label_image))
-        if min_mal < region.major_axis_length < max_mal
+        if min_mal < region.major_axis_length < tile_size
         and tile_size // 2
         < region.centroid[0]
         < half_floor(image.shape[0], tile_size) - 1
@@ -98,6 +98,9 @@ def segment_traps(
         < region.centroid[1]
         < half_floor(image.shape[1], tile_size) - 1
     ]
+
+    assert idx_valid_region, "No valid tiling regions found"
+
     _, valid_region = zip(*idx_valid_region)
 
     # find centroids and minor axes lengths of valid regions
