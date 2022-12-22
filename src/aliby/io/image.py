@@ -97,7 +97,7 @@ class ImageLocal:
 
     @property
     def data(self):
-        return self.get_data_lazy_local()
+        return self.get_data_lazy()
 
     @property
     def date(self):
@@ -124,7 +124,7 @@ class ImageLocal:
     def metadata(self):
         return self._meta
 
-    def get_data_lazy_local(self) -> da.Array:
+    def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading  multidimensional tiff files"""
 
         if not hasattr(self, "formatted_img"):
