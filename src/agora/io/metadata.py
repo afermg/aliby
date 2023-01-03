@@ -9,6 +9,7 @@ ALIBY decides on using different metadata parsers based on two elements:
 If parameters is a string pointing to a metadata file, ALIBY picks a parser based on the file format.
 If parameters is True (as a boolean), ALIBY searches for any available file and uses the first valid one.
 If there are no metadata files, ALIBY requires indicating indices for tiler, segmentation and extraction.
+
 """
 import glob
 import os
@@ -67,7 +68,9 @@ def flatten_dict(nested_dict, separator="/"):
     Flattens nested dictionary
     """
     df = pd.json_normalize(nested_dict, sep=separator)
-    return df.to_dict(orient="records")[0]
+
+    flattened = df.to_dict(orient="records") or {}
+    return flattened
 
 
 # Needed because HDF5 attributes do not support datetime objects
@@ -109,22 +112,20 @@ def parse_logfiles(
     # ACQ_FILE = 'flavin_htb2_glucose_long_ramp_DelftAcq.txt'
     # LOG_FILE = 'flavin_htb2_glucose_long_ramp_Delftlog.txt'
     log_parser = Parser(log_grammar)
-    try:
-        log_file = find_file(root_dir, "*log.txt")
-    except FileNotFoundError:
-        raise ValueError("Experiment log file not found.")
-    with open(log_file, "r") as f:
-        log_parsed = log_parser.parse(f)
-
     acq_parser = Parser(acq_grammar)
-    try:
-        acq_file = find_file(root_dir, "*[Aa]cq.txt")
-    except FileNotFoundError:
-        raise ValueError("Experiment acq file not found.")
-    with open(acq_file, "r") as f:
-        acq_parsed = acq_parser.parse(f)
 
-    parsed = {**acq_parsed, **log_parsed}
+    log_file = find_file(root_dir, "*log.txt")
+    acq_file = find_file(root_dir, "*[Aa]cq.txt")
+
+    parsed = {}
+    if log_file and acq_file:
+        with open(log_file, "r") as f:
+            log_parsed = log_parser.parse(f)
+
+        with open(acq_file, "r") as f:
+            acq_parsed = acq_parser.parse(f)
+
+        parsed = {**acq_parsed, **log_parsed}
 
     for key, value in parsed.items():
         if isinstance(value, datetime):
@@ -186,7 +187,9 @@ def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
         if filedir.is_file():
             filedir = filedir.parent
         legacy_parse = parse_logfiles(filedir)
-        minimal_meta = get_meta_from_legacy(legacy_parse)
+        minimal_meta = (
+            get_meta_from_legacy(legacy_parse) if legacy_parse else {}
+        )
 
     return minimal_meta
 
@@ -195,5 +198,11 @@ def dispatch_metadata_parser(filepath: t.Union[str, PosixPath]):
     """
     Function to dispatch different metadata parsers that convert logfiles into a
     basic metadata dictionary. Currently only contains the swainlab log parsers.
+
+    Input:
+    --------
+    filepath: str existing file containing metadata, or folder containing naming conventions
     """
-    return parse_swainlab_metadata(filepath)
+    parsed_meta = parse_swainlab_metadata(filepath)
+
+    return parsed_meta
