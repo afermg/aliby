@@ -85,7 +85,7 @@ def find_file(root_dir, regex):
         print(
             "Warning:Metadata: More than one logfile found. Defaulting to first option."
         )
-        file = [file[0]]
+        file = [sorted(file)[0]]
     if len(file) == 0:
         print("Warning:Metadata: No valid logfile found.")
     else:
