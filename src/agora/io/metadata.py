@@ -205,4 +205,47 @@ def dispatch_metadata_parser(filepath: t.Union[str, PosixPath]):
     """
     parsed_meta = parse_swainlab_metadata(filepath)
 
+    if parsed_meta is None:
+        parsed_meta = dir_to_meta
+
     return parsed_meta
+
+
+def dir_to_meta(path: PosixPath, suffix="tiff"):
+    filenames = list(path.glob(f"*.{suffix}"))
+
+    try:
+        # Deduct order from filenames
+        dimorder = "".join(
+            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
+        )
+
+        dim_value = list(
+            map(
+                lambda f: filename_to_dict_indices(f.stem),
+                path.glob("*.tiff"),
+            )
+        )
+        maxes = [max(map(lambda x: x[dim], dim_value)) for dim in dimorder]
+        mins = [min(map(lambda x: x[dim], dim_value)) for dim in dimorder]
+        _dim_shapes = [
+            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
+        ]
+
+        meta = {
+            "size_" + dim: shape for dim, shape in zip(dimorder, _dim_shapes)
+        }
+    except Exception as e:
+        print(
+            f"Warning:Metadata: Cannot extract dimensions from filenames. Empty meta set {e}"
+        )
+        meta = {}
+
+    return meta
+
+
+def filename_to_dict_indices(stem: str):
+    return {
+        dim_number[0]: int(dim_number[1:])
+        for dim_number in stem.split("_")[1:]
+    }

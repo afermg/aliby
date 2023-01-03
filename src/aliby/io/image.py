@@ -14,6 +14,7 @@ from omero.model import enums as omero_enums
 from tifffile import TiffFile
 from yaml import safe_load
 
+from agora.io.metadata import dir_to_meta
 from aliby.io.omero import BridgeOmero
 
 # convert OMERO definitions into numpy types
@@ -59,6 +60,23 @@ class BaseLocalImage:
     def __enter__(self):
         return self
 
+    def format_data(self, img):
+
+        self._formatted_img = da.rechunk(
+            img,
+            chunks=(
+                1,
+                1,
+                1,
+                *[self._meta[f"size_{n}"] for n in self.dimorder[-2:]],
+            ),
+        )
+        return self._formatted_img
+
+    @property
+    def data(self):
+        return self.get_data_lazy()
+
 
 class ImageLocal(BaseLocalImage):
     def __init__(self, path: str, dimorder=None):
@@ -80,14 +98,13 @@ class ImageLocal(BaseLocalImage):
                 meta["name"] = self.meta["Image"]["@Name"]
                 meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
 
-        except Exception as e:
-            print("Metadata not found: {}".format(e))
-            assert (
-                self.dimorder or self.meta.get("dims") is not None
-            ), "No dimensional info provided."
+        except Exception as e:  # Images not in OMEXML
+            base = "TCZXY"
+
+            print("Warning:Metadata not found: {}".format(e))
+            print(f"Warning: No dimensional info provided. Assuming {base}")
 
             # Mark non-existent dimensions for padding
-            base = "TCZXY"
             self.base = base
             self.ids = [base.index(i) for i in dimorder]
 
@@ -169,21 +186,10 @@ class ImageLocal(BaseLocalImage):
 
         return self.format_data(img)
 
-    def format_data(self, img):
-
-        self._formatted_img = da.rechunk(
-            img,
-            chunks=(
-                1,
-                1,
-                1,
-                *[self._meta[f"size_{n}"] for n in self.dimorder[-2:]],
-            ),
-        )
-        return self._formatted_img
+    # TODO continue here. Ensure _dim_values are generated, or called from _meta
 
 
-class ImageDir(ImageLocal):
+class ImageDir(BaseLocalImage):
     """
     Image class for the case in which all images are split in one or
     multiple folders with time-points and channels as independent files.
@@ -200,36 +206,7 @@ class ImageDir(ImageLocal):
         super().__init__(path)
         self.image_id = str(self.path.stem)
 
-        filenames = list(self.path.glob("*.tiff"))
-
-        # Deduct order from filenames
-        self.dimorder = "".join(
-            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
-        )
-
-        dim_value = list(
-            map(
-                lambda f: filename_to_dict_indices(f.stem),
-                self.path.glob("*.tiff"),
-            )
-        )
-        maxes = [
-            max(map(lambda x: x[dim], dim_value)) for dim in self.dimorder
-        ]
-        mins = [min(map(lambda x: x[dim], dim_value)) for dim in self.dimorder]
-        self._dim_shapes = [
-            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
-        ]
-
-        # Set internal metadata from shape and channel order
-        self.dimorder += "xy"
-
-        # Use images to redefine axes
-
-        self._meta = {
-            "size_" + dim: shape
-            for dim, shape in zip(self.dimorder, self._dim_shapes)
-        }
+        self._meta = dir_to_meta(self.path)
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
@@ -237,12 +214,16 @@ class ImageDir(ImageLocal):
         img = imread(str(self.path / "*.tiff"))
 
         # If extra channels, pick the first stack of the last dimensions
+
+        pixels = img
         while len(img.shape) > 3:
             img = img[..., 0]
-        self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
+        if self._meta:
+            self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
 
-        img = da.reshape(img, (*self._dim_shapes, *img.shape[1:]))
-        return self.format_data(img)
+            img = da.reshape(img, (*self._dim_values(), *img.shape[1:]))
+            pixels = self.format_data(img)
+        return pixels
 
 
 class Image(BridgeOmero):
@@ -351,37 +332,3 @@ class UnsafeImage(Image):
         except Exception as e:
             print(f"ERROR: Failed fetching image from server: {e}")
             self.conn.connect(False)
-
-
-def get_data_lazy(image) -> da.Array:
-    """
-    Get 5D dask array, with delayed reading from OMERO image.
-    """
-    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
-    pixels = image.getPrimaryPixels()
-    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
-    # using dask
-    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
-
-    def get_lazy_plane(zct):
-        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
-
-    # 5D stack: TCZXY
-    t_stacks = []
-    for t in range(nt):
-        c_stacks = []
-        for c in range(nc):
-            z_stack = []
-            for z in range(nz):
-                z_stack.append(get_lazy_plane((z, c, t)))
-            c_stacks.append(da.stack(z_stack))
-        t_stacks.append(da.stack(c_stacks))
-
-    return da.stack(t_stacks)
-
-
-def filename_to_dict_indices(stem: str):
-    return {
-        dim_number[0]: int(dim_number[1:])
-        for dim_number in stem.split("_")[1:]
-    }
