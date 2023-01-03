@@ -1,3 +1,15 @@
+"""
+Anthology of interfaces for different parsers and lack of them.
+
+ALIBY decides on using different metadata parsers based on two elements:
+
+1. The parameter given by PipelineParameters (Either True/False, or a string pointing to the metadata file)
+2. The available files in the root folder where images are found (remote or locally)
+
+If parameters is a string pointing to a metadata file, ALIBY picks a parser based on the file format.
+If parameters is True (as a boolean), ALIBY searches for any available file and uses the first valid one.
+If there are no metadata files, ALIBY requires indicating indices for tiler, segmentation and extraction.
+"""
 import glob
 import os
 import typing as t
