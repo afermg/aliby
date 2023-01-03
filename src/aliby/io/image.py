@@ -47,9 +47,22 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     return instatiator
 
 
-class ImageLocal:
+class BaseLocalImage:
+    """
+    Base class to set path and provide context management method.
+    """
+
+    def __init__(self, path: t.Union[str, PosixPath]):
+        # If directory, assume contents are naturally sorted
+        self.path = Path(path)
+
+    def __enter__(self):
+        return self
+
+
+class ImageLocal(BaseLocalImage):
     def __init__(self, path: str, dimorder=None):
-        self.path = path
+        super().__init__(path)
         self._id = str(path)
 
         meta = dict()
@@ -154,16 +167,26 @@ class ImageLocal:
                     reshaped, range(len(reshaped.shape)), target_order
                 )
 
-            self._formatted_img = da.rechunk(
-                img,
-                chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
-            )
+        return self.format_data(img)
+
+    def format_data(self, img):
+
+        self._formatted_img = da.rechunk(
+            img,
+            chunks=(
+                1,
+                1,
+                1,
+                *[self._meta[f"size_{n}"] for n in self.dimorder[-2:]],
+            ),
+        )
         return self._formatted_img
 
 
 class ImageDir(ImageLocal):
     """
-    Image class for case where all images are split in one or multiple folders with time-points and channels as independent files.
+    Image class for the case in which all images are split in one or
+    multiple folders with time-points and channels as independent files.
     It inherits from Imagelocal so we only override methods that are critical.
 
     Assumptions:
@@ -174,9 +197,7 @@ class ImageDir(ImageLocal):
     """
 
     def __init__(self, path: t.Union[str, PosixPath]):
-
-        # Assume they are naturally sorted
-        self.path = Path(path)
+        super().__init__(path)
         self.image_id = str(self.path.stem)
 
         filenames = list(self.path.glob("*.tiff"))
@@ -220,13 +241,8 @@ class ImageDir(ImageLocal):
             img = img[..., 0]
         self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
 
-        reshaped = da.reshape(img, (*self._dim_shapes, *img.shape[1:]))
-
-        self._formatted_img = da.rechunk(
-            reshaped,
-            chunks=(1, 1, 1, self._meta["size_y"], self._meta["size_x"]),
-        )
-        return self._formatted_img
+        img = da.reshape(img, (*self._dim_shapes, *img.shape[1:]))
+        return self.format_data(img)
 
 
 class Image(BridgeOmero):
