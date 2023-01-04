@@ -332,3 +332,30 @@ class UnsafeImage(Image):
         except Exception as e:
             print(f"ERROR: Failed fetching image from server: {e}")
             self.conn.connect(False)
+
+
+def get_data_lazy(image) -> da.Array:
+    """
+    Get 5D dask array, with delayed reading from OMERO image.
+    """
+    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
+    pixels = image.getPrimaryPixels()
+    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
+    # using dask
+    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
+
+    def get_lazy_plane(zct):
+        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
+
+    # 5D stack: TCZXY
+    t_stacks = []
+    for t in range(nt):
+        c_stacks = []
+        for c in range(nc):
+            z_stack = []
+            for z in range(nz):
+                z_stack.append(get_lazy_plane((z, c, t)))
+            c_stacks.append(da.stack(z_stack))
+        t_stacks.append(da.stack(c_stacks))
+
+    return da.stack(t_stacks)
