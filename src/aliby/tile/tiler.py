@@ -30,7 +30,7 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import Image, ImageLocal
+from aliby.io.image import Image, ImageLocal, ImageDir
 from aliby.tile.traps import segment_traps
 
 
@@ -206,6 +206,9 @@ class Tiler(ProcessABC):
 
     Finds traps and re-registers images if there is any drifting.
     Fetches images from a server.
+
+    Uses an Image instance, which lazily provides the data on pixels, and, as
+    an independent argument, metadata.
     """
 
     def __init__(
@@ -259,7 +262,7 @@ class Tiler(ProcessABC):
     @classmethod
     def from_h5(
         cls,
-        image: t.Union[Image, ImageLocal],
+        image: t.Union[Image, ImageLocal, ImageDir],
         filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
