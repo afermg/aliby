@@ -81,7 +81,7 @@ def exparams_from_meta(
                         denominator_channel = found_channel2
                         break
 
-        # If two compatible pHluorin channels are available
+        # If two compatible ratiometric channels are available
         if numerator_channel is not None and denominator_channel is not None:
             sets = {
                 b + a: (x, y)
