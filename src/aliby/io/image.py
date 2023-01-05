@@ -224,15 +224,27 @@ class ImageDir(BaseLocalImage):
 
         # If extra channels, pick the first stack of the last dimensions
 
-        pixels = img
         while len(img.shape) > 3:
             img = img[..., 0]
+
         if self._meta:
             self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
 
-            img = da.reshape(img, (*self._dim_values(), *img.shape[1:]))
+            # img = da.reshape(img, (*self._meta, *img.shape[1:]))
+            img = da.reshape(img, self._meta.values())
             pixels = self.format_data(img)
         return pixels
+
+    @property
+    def name(self):
+        return self.path.stem
+
+    @property
+    def dimorder(self):
+        # Assumes only dimensions start with "size"
+        return [
+            k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
+        ]
 
 
 class Image(BridgeOmero):
