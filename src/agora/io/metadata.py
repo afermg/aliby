@@ -69,7 +69,7 @@ def flatten_dict(nested_dict, separator="/"):
     """
     df = pd.json_normalize(nested_dict, sep=separator)
 
-    flattened = df.to_dict(orient="records") or {}
+    flattened = df.to_dict(orient="records")[0] or {}
     return flattened
 
 
