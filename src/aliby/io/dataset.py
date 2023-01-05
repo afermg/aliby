@@ -7,7 +7,7 @@ from typing import Union
 import omero
 from agora.io.bridge import BridgeH5
 
-from aliby.io.image import ImageLocal
+from aliby.io.image import ImageLocalOME
 from aliby.io.omero import BridgeOmero
 
 
@@ -42,7 +42,7 @@ class DatasetLocal:
 
     @property
     def date(self):
-        return ImageLocal(list(self.get_images().values())[0]).date
+        return ImageLocalOME(list(self.get_images().values())[0]).date
 
     def get_images(self):
         return {f.name: str(f) for f in self.fpath.glob("*.tif")}

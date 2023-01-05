@@ -62,6 +62,7 @@ class BaseLocalImage(ABC):
         return self
 
     def format_data(self, img):
+        # Format image using x and y size from metadata.
 
         self._formatted_img = da.rechunk(
             img,
@@ -207,7 +208,7 @@ class ImageDir(BaseLocalImage):
     - One folders per position.
     - Images are flat.
     - Channel, Time, z-stack and the others are determined by filenames.
-    - Provides Dimorder as TCZYX
+    - Provides Dimorder as it is set in the filenames, or expects order during instatiation
     """
 
     def __init__(self, path: t.Union[str, PosixPath]):
