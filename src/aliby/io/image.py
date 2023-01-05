@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 
 import typing as t
+from abc import ABC, abstractproperty
 from datetime import datetime
 from pathlib import Path, PosixPath
 
 import dask.array as da
 import numpy as np
 import xmltodict
-from agora.io.bridge import BridgeH5
 from dask import delayed
 from dask.array.image import imread
 from omero.model import enums as omero_enums
 from tifffile import TiffFile
 from yaml import safe_load
 
+from agora.io.bridge import BridgeH5
 from agora.io.metadata import dir_to_meta
 from aliby.io.omero import BridgeOmero
 
@@ -41,14 +42,14 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     ):
         instatiator = ImageDirectory
     elif isinstance(source, str) and Path(source).is_file():
-        instatiator = ImageLocal
+        instatiator = ImageLocalOME
     else:
         raise Exception(f"Invalid data source at {source}")
 
     return instatiator
 
 
-class BaseLocalImage:
+class BaseLocalImage(ABC):
     """
     Base class to set path and provide context management method.
     """
@@ -68,17 +69,30 @@ class BaseLocalImage:
                 1,
                 1,
                 1,
-                *[self._meta[f"size_{n}"] for n in self.dimorder[-2:]],
+                self._meta["size_x"],
+                self._meta["size_y"],
             ),
         )
         return self._formatted_img
+
+    @abstractproperty
+    def name(self):
+        pass
+
+    @abstractproperty
+    def dimorder(self):
+        pass
 
     @property
     def data(self):
         return self.get_data_lazy()
 
 
-class ImageLocal(BaseLocalImage):
+class ImageLocalOME(BaseLocalImage):
+    """
+    Fetch image from OMEXML data format, in which a multidimensional tiff image contains the metadata.
+    """
+
     def __init__(self, path: str, dimorder=None):
         super().__init__(path)
         self._id = str(path)
@@ -124,10 +138,6 @@ class ImageLocal(BaseLocalImage):
     @property
     def name(self):
         return self._meta["name"]
-
-    @property
-    def data(self):
-        return self.get_data_lazy()
 
     @property
     def date(self):
@@ -185,8 +195,6 @@ class ImageLocal(BaseLocalImage):
                 )
 
         return self.format_data(img)
-
-    # TODO continue here. Ensure _dim_values are generated, or called from _meta
 
 
 class ImageDir(BaseLocalImage):
