@@ -20,6 +20,30 @@ from aliby.io.image import ImageLocalOME
 from aliby.io.omero import BridgeOmero
 
 
+def dispatch_dataset(expt_id: int or str, **kwargs):
+    """
+    Choose a subtype of dataset based on the identifier.
+
+    Input:
+    --------
+    expt_id: int or string serving as dataset identifier.
+
+    Returns:
+    --------
+    Callable Dataset instance, either network-dependent or local.
+    """
+    if isinstance(expt_id, int):  # Is an experiment online
+        return Dataset(x, **kwargs["general"].get("server_info"))
+    elif isinstance(expt_id, str):  # Files or Dir
+        expt_path = Path(expt_id)
+        if expt_path.is_dir():
+            return DatasetLocalDir(expt_path)
+        else:
+            return DatasetLocalOME(expt_path)
+    else:
+        raise Warning("Invalid expt_id")
+
+
 class DatasetLocalABC(ABC):
     """
     Abstract Base class to fetch local files, either OME-XML or raw images.
@@ -74,7 +98,7 @@ class DatasetLocalABC(ABC):
 
     @abstractmethod
     def get_images(self):
-        # Return location of images and their unique names
+        # Return a dictionary with the name of images and their unique identifiers
         pass
 
 
@@ -95,15 +119,15 @@ class DatasetLocalDir(DatasetLocalABC):
         )
 
     def get_images(self):
-        return [
-            folder
+        return {
+            folder.name: folder
             for folder in self.path.glob("*/")
             if any(
                 path
-                for suffix in self._valid_meta_suffixes
+                for suffix in self._valid_suffixes
                 for path in folder.glob(f"*.{suffix}")
             )
-        ]
+        }
 
 
 class DatasetLocalOME(DatasetLocalABC):
