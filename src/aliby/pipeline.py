@@ -29,7 +29,7 @@ from agora.io.writer import (  # BabyWriter,
 )
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
-from aliby.io.dataset import Dataset, DatasetLocalOME, DatasetLocalDir
+from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import get_image_class
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
@@ -83,12 +83,8 @@ class PipelineParameters(ParametersABC):
             general["expt_id"] = expt_id
 
         directory = Path(general.get("directory", "../data"))
-        dataset_wrapper = (
-            lambda x: DatasetLocal(x)
-            if isinstance(expt_id, str)
-            else Dataset(int(x), **general.get("server_info"))
-        )
-        with dataset_wrapper(expt_id) as conn:
+
+        with dispatch_dataset(expt_id) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -101,7 +97,7 @@ class PipelineParameters(ParametersABC):
                 "channels": ["Brightfield"],
                 "ntps": [2000],
             }
-            print(f"WARNING:Metadata: error when uploading: {e}")
+            print(f"WARNING:Metadata: error when loading: {e}")
             # Set minimal metadata
             meta_d = minimal_default_meta
 
@@ -273,8 +269,7 @@ class Pipeline(ProcessABC):
         print("Searching OMERO")
         # Do all all initialisations
 
-        dataset_wrapper = DatasetLocal if isinstance(expt_id, str) else Dataset
-        with dataset_wrapper(
+        with dispatch_dataset(
             expt_id, **self.general.get("server_info", {})
         ) as conn:
             image_ids = conn.get_images()

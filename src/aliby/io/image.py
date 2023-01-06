@@ -40,7 +40,7 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     elif isinstance(source, dict) or (
         isinstance(source, (str, PosixPath)) and Path(source).is_dir()
     ):
-        instatiator = ImageDirectory
+        instatiator = ImageDir
     elif isinstance(source, str) and Path(source).is_file():
         instatiator = ImageLocalOME
     else:
@@ -88,6 +88,15 @@ class BaseLocalImage(ABC):
     def data(self):
         return self.get_data_lazy()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        for e in exc:
+            if e is not None:
+                print(e)
+        return False
+
 
 class ImageLocalOME(BaseLocalImage):
     """
@@ -126,15 +135,6 @@ class ImageLocalOME(BaseLocalImage):
             self._dimorder = dimorder
 
         self._meta = meta
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        for e in exc:
-            if e is not None:
-                print(e)
-        return False
 
     @property
     def name(self):
@@ -211,7 +211,7 @@ class ImageDir(BaseLocalImage):
     - Provides Dimorder as it is set in the filenames, or expects order during instatiation
     """
 
-    def __init__(self, path: t.Union[str, PosixPath]):
+    def __init__(self, path: t.Union[str, PosixPath], **kwargs):
         super().__init__(path)
         self.image_id = str(self.path.stem)
 
