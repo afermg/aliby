@@ -65,11 +65,13 @@ class MetaData:
 # Needed because HDF5 attributes do not support dictionaries
 def flatten_dict(nested_dict, separator="/"):
     """
-    Flattens nested dictionary
+    Flattens nested dictionary. If empty return as-is.
     """
-    df = pd.json_normalize(nested_dict, sep=separator)
+    flattened = {}
+    if nested_dict:
+        df = pd.json_normalize(nested_dict, sep=separator)
+        flattened = df.to_dict(orient="records")[0] or {}
 
-    flattened = df.to_dict(orient="records")[0] or {}
     return flattened
 
 
