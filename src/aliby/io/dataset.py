@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
+"""
+Dataset is a group of classes to manage multiple types of experiments:
+ - Remote experiments on an OMERO server
+ - Local experiments in a multidimensional OME-TIFF image containing the metadata
+ - Local experiments in a directory containing multiple positions in independent images with or without metadata
+"""
 import shutil
 import typing as t
+from abc import ABC, abstractproperty
 from pathlib import Path, PosixPath
 from typing import Union
 
 import omero
-from agora.io.bridge import BridgeH5
 
+from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
 from aliby.io.omero import BridgeOmero
 
 
-class DatasetLocal:
-    """Load a dataset from a folder
-
-    We use a given image of a dataset to obtain the metadata, for we cannot expect folders to contain it straight away.
-
+class DatasetLocalABC(ABC):
     """
+    Abstract Base class to fetch local files, either OME-XML or raw images.
+    """
+
+    _valid_suffixes = ("tiff", "png")
+    _valid_meta_suffixes = ("txt", "log")
 
     def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
         self.fpath = Path(dpath)
-        assert len(self.get_images()), "No tif files found"
 
     def __enter__(self):
         return self
@@ -40,25 +47,60 @@ class DatasetLocal:
     def unique_name(self):
         return self.fpath.name
 
-    @property
+    @abstractproperty
     def date(self):
-        return ImageLocalOME(list(self.get_images().values())[0]).date
+        pass
 
     def get_images(self):
-        return {f.name: str(f) for f in self.fpath.glob("*.tif")}
+        # Fetches all valid formats and overwrites if duplicates with different suffix
+        return {
+            f.name: str(f)
+            for suffix in self._valid_suffixes
+            for f in self.fpath.glob(f"*.{suffix}")
+        }
 
     @property
     def files(self):
         if not hasattr(self, "_files"):
             self._files = {
-                f: f for f in self.fpath.rglob("*") if str(f).endswith(".txt")
+                f: f
+                for f in self.fpath.rglob("*")
+                if any(
+                    str(f).endswith(suffix)
+                    for suffix in self._valid_meta_suffixes
+                )
             }
         return self._files
 
     def cache_logs(self, root_dir):
+        # Copy metadata files to results folder
         for name, annotation in self.files.items():
             shutil.copy(annotation, root_dir / name.name)
         return True
+
+
+class DatasetLocalDir(DatasetLocalABC):
+    def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
+        super().__init__(dpath)
+
+
+class DatasetLocalOME(DatasetLocalABC):
+    """Load a dataset from a folder
+
+    We use a given image of a dataset to obtain the metadata,
+    as we cannot expect folders to contain this information.
+
+    It uses the standard OME-TIFF file format.
+    """
+
+    def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
+        super().__init__(dpath)
+        assert len(self.get_images()), "No .tiff files found"
+
+    @property
+    def date(self):
+        # Access the date from the metadata of the first position
+        return ImageLocalOME(list(self.get_images().values())[0]).date
 
 
 class Dataset(BridgeOmero):
