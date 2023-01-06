@@ -29,7 +29,7 @@ from agora.io.writer import (  # BabyWriter,
 )
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
-from aliby.io.dataset import Dataset, DatasetLocal
+from aliby.io.dataset import Dataset, DatasetLocalOME, DatasetLocalDir
 from aliby.io.image import get_image_class
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters

@@ -1,6 +1,6 @@
 import argparse
 
-from aliby.io.image import ImageLocal
+from aliby.io.image import ImageLocalOME
 
 # from aliby.experiment import ExperimentLocal
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -20,7 +20,7 @@ def define_parser():
 
 
 def initialise_objects(data_path, template=None):
-    image = ImageLocal(data_path)
+    image = ImageLocalOME(data_path)
     tiler = Tiler.from_image(image, TilerParameters.default())
     return tiler
 

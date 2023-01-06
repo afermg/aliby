@@ -69,7 +69,7 @@ def flatten_dict(nested_dict, separator="/"):
     """
     df = pd.json_normalize(nested_dict, sep=separator)
 
-    flattened = df.to_dict(orient="records") or {}
+    flattened = df.to_dict(orient="records")[0] or {}
     return flattened
 
 
@@ -90,7 +90,7 @@ def find_file(root_dir, regex):
         )
         file = [sorted(file)[0]]
     if len(file) == 0:
-        print("Warning:Metadata: No valid logfile found.")
+        print("Warning:Metadata: No valid swainlab .log found.")
     else:
         return file[0]
     return None
