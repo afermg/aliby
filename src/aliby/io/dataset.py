@@ -5,9 +5,11 @@ Dataset is a group of classes to manage multiple types of experiments:
  - Local experiments in a multidimensional OME-TIFF image containing the metadata
  - Local experiments in a directory containing multiple positions in independent images with or without metadata
 """
+import os
 import shutil
+import time
 import typing as t
-from abc import ABC, abstractproperty
+from abc import ABC, abstractproperty, abstractmethod
 from pathlib import Path, PosixPath
 from typing import Union
 
@@ -27,7 +29,7 @@ class DatasetLocalABC(ABC):
     _valid_meta_suffixes = ("txt", "log")
 
     def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
-        self.fpath = Path(dpath)
+        self.path = Path(dpath)
 
     def __enter__(self):
         return self
@@ -37,34 +39,26 @@ class DatasetLocalABC(ABC):
 
     @property
     def dataset(self):
-        return self.fpath
+        return self.path
 
     @property
     def name(self):
-        return self.fpath.name
+        return self.path.name
 
     @property
     def unique_name(self):
-        return self.fpath.name
+        return self.path.name
 
     @abstractproperty
     def date(self):
         pass
-
-    def get_images(self):
-        # Fetches all valid formats and overwrites if duplicates with different suffix
-        return {
-            f.name: str(f)
-            for suffix in self._valid_suffixes
-            for f in self.fpath.glob(f"*.{suffix}")
-        }
 
     @property
     def files(self):
         if not hasattr(self, "_files"):
             self._files = {
                 f: f
-                for f in self.fpath.rglob("*")
+                for f in self.path.rglob("*")
                 if any(
                     str(f).endswith(suffix)
                     for suffix in self._valid_meta_suffixes
@@ -78,10 +72,38 @@ class DatasetLocalABC(ABC):
             shutil.copy(annotation, root_dir / name.name)
         return True
 
+    @abstractmethod
+    def get_images(self):
+        # Return location of images and their unique names
+        pass
+
 
 class DatasetLocalDir(DatasetLocalABC):
+    """
+    Organise an entire dataset, composed of multiple images, as a directory containing directories with individual files.
+    It relies on ImageDir to manage images.
+    """
+
     def __init__(self, dpath: Union[str, PosixPath], *args, **kwargs):
         super().__init__(dpath)
+
+    @property
+    def date(self):
+        # Use folder creation date, for cases where metadata is minimal
+        return time.strftime(
+            "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
+        )
+
+    def get_images(self):
+        return [
+            folder
+            for folder in self.path.glob("*/")
+            if any(
+                path
+                for suffix in self._valid_meta_suffixes
+                for path in folder.glob(f"*.{suffix}")
+            )
+        ]
 
 
 class DatasetLocalOME(DatasetLocalABC):
@@ -101,6 +123,14 @@ class DatasetLocalOME(DatasetLocalABC):
     def date(self):
         # Access the date from the metadata of the first position
         return ImageLocalOME(list(self.get_images().values())[0]).date
+
+    def get_images(self):
+        # Fetches all valid formats and overwrites if duplicates with different suffix
+        return {
+            f.name: str(f)
+            for suffix in self._valid_suffixes
+            for f in self.path.glob(f"*.{suffix}")
+        }
 
 
 class Dataset(BridgeOmero):
