@@ -114,17 +114,18 @@ class ImageLocalOME(BaseLocalImage):
         meta = dict()
         try:
             with TiffFile(path) as f:
-                self.meta = xmltodict.parse(f.ome_metadata)["OME"]
+                self._meta = xmltodict.parse(f.ome_metadata)["OME"]
 
             for dim in self.dimorder:
                 meta["size_" + dim.lower()] = int(
-                    self.meta["Image"]["Pixels"]["@Size" + dim]
+                    self._meta["Image"]["Pixels"]["@Size" + dim]
                 )
                 meta["channels"] = [
-                    x["@Name"] for x in self.meta["Image"]["Pixels"]["Channel"]
+                    x["@Name"]
+                    for x in self._meta["Image"]["Pixels"]["Channel"]
                 ]
-                meta["name"] = self.meta["Image"]["@Name"]
-                meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
+                meta["name"] = self._meta["Image"]["@Name"]
+                meta["type"] = self._meta["Image"]["Pixels"]["@Type"]
 
         except Exception as e:  # Images not in OMEXML
             base = "TCZXY"
@@ -148,7 +149,7 @@ class ImageLocalOME(BaseLocalImage):
     def date(self):
         date_str = [
             x
-            for x in self.meta["StructuredAnnotations"]["TagAnnotation"]
+            for x in self._meta["StructuredAnnotations"]["TagAnnotation"]
             if x["Description"] == "Date"
         ][0]["Value"]
         return datetime.strptime(date_str, "%d-%b-%Y")
@@ -157,7 +158,7 @@ class ImageLocalOME(BaseLocalImage):
     def dimorder(self):
         """Order of dimensions in image"""
         if not hasattr(self, "_dimorder"):
-            self._dimorder = self.meta["Image"]["Pixels"]["@DimensionOrder"]
+            self._dimorder = self._meta["Image"]["Pixels"]["@DimensionOrder"]
         return self._dimorder
 
     @dimorder.setter
