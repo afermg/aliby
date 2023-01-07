@@ -1,6 +1,7 @@
 import itertools
 import logging
 from collections.abc import Iterable
+from pathlib import Path
 from time import perf_counter
 from typing import Dict
 
@@ -29,10 +30,12 @@ class DynamicWriter:
     group = ""
     compression = "gzip"
     compression_opts = 9
+    metadata = None
 
     def __init__(self, file: str):
         self.file = file
-        self.metadata = load_attributes(file)
+        if Path(file).exists():
+            self.metadata = load_attributes(file)
 
     def _append(self, data, key, hgroup):
         """Append data to existing dataset."""
