@@ -97,6 +97,10 @@ class BaseLocalImage(ABC):
                 print(e)
         return False
 
+    @property
+    def metadata(self):
+        return self._meta
+
 
 class ImageLocalOME(BaseLocalImage):
     """
@@ -160,10 +164,6 @@ class ImageLocalOME(BaseLocalImage):
     def dimorder(self, order: str):
         self._dimorder = order
         return self._dimorder
-
-    @property
-    def metadata(self):
-        return self._meta
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading  multidimensional tiff files"""
