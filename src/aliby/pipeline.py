@@ -84,7 +84,9 @@ class PipelineParameters(ParametersABC):
 
         directory = Path(general.get("directory", "../data"))
 
-        with dispatch_dataset(expt_id) as conn:
+        with dispatch_dataset(
+            expt_id, **general.get("server_info", {})
+        ) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -685,39 +687,39 @@ class Pipeline(ProcessABC):
 
                 # Delete datasets to overwrite and update pipeline data
                 # Use existing parameters
-                with h5py.File(filename, "a") as f:
-                    pparams = PipelineParameters.from_yaml(
-                        f.attrs["parameters"]
-                    ).to_dict()
+                # with h5py.File(filename, "a") as f:
+                #     pparams = PipelineParameters.from_yaml(
+                #         f.attrs["parameters"]
+                #     ).to_dict()
 
-                    for k, v in ow.items():
-                        if v:
-                            for gname in self.writer_groups[k]:
-                                if gname in f:
-                                    del f[gname]
+                #     for k, v in ow.items():
+                #         if v:
+                #             for gname in self.writer_groups[k]:
+                #                 if gname in f:
+                #                     del f[gname]
 
-                        pparams[k] = config[k]
-                meta.add_fields(
-                    {
-                        "parameters": PipelineParameters.from_dict(
-                            pparams
-                        ).to_yaml()
-                    },
-                    overwrite=True,
-                )
+                #         pparams[k] = config[k]
+                # meta.add_fields(
+                #     {
+                #         "parameters": PipelineParameters.from_dict(
+                #             pparams
+                #         ).to_yaml()
+                #     },
+                #     overwrite=True,
+                # )
 
-                meta.run()
-                meta.add_fields(  # Add non-logfile metadata
-                    {
-                        "aliby_version": version("aliby"),
-                        "baby_version": version("aliby-baby"),
-                        "omero_id": config["general"]["id"],
-                        "image_id": image_id,
-                        "parameters": PipelineParameters.from_dict(
-                            pparams
-                        ).to_yaml(),
-                    }
-                )
+            meta.run()
+            meta.add_fields(  # Add non-logfile metadata
+                {
+                    "aliby_version": version("aliby"),
+                    "baby_version": version("aliby-baby"),
+                    "omero_id": config["general"]["id"],
+                    "image_id": image_id,
+                    "parameters": PipelineParameters.from_dict(
+                        pparams
+                    ).to_yaml(),
+                }
+            )
 
             tps = min(general_config["tps"], image.data.shape[0])
 
