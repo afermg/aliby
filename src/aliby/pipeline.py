@@ -714,7 +714,9 @@ class Pipeline(ProcessABC):
                     "aliby_version": version("aliby"),
                     "baby_version": version("aliby-baby"),
                     "omero_id": config["general"]["id"],
-                    "image_id": image_id,
+                    "image_id": image_id
+                    if isinstance(image_id, int)
+                    else str(image_id),
                     "parameters": PipelineParameters.from_dict(
                         pparams
                     ).to_yaml(),
