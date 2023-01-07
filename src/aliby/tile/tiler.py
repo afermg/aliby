@@ -231,16 +231,16 @@ class Tiler(ProcessABC):
         super().__init__(parameters)
         self.image = image
         self._metadata = metadata
-        self.channels = metadata["channels"]
+        self.channels = metadata.get(
+            "channels", list(range(metadata["size_c"]))
+        )
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
 
         self.trap_locs = trap_locs
         try:
             self.z_perchannel = {
-                ch: metadata["zsectioning/nsections"] if zsect else 1
-                for zsect, ch in zip(
-                    metadata["channels"], metadata["channels/zsect"]
-                )
+                ch: zsect
+                for ch, zsect in zip(self.channels, metadata["zsections"])
             }
         except Exception as e:
             print(f"Warning:Tiler: No z_perchannel data: {e}")
@@ -555,20 +555,21 @@ class Tiler(ProcessABC):
     def ref_channel_index(self):
         return self.get_channel_index(self.parameters.ref_channel)
 
-    def get_channel_index(self, item):
+    def get_channel_index(self, channel: str or int):
         """
         Find index for channel using regex. Returns the first matched string.
 
         Parameters
         ----------
-        item: string
-            The channel
+        channel: string or int
+            The channel or index to be used
         """
-        channel = find_channel_index(self.channels, item)
-        if channel is None:
-            raise Warning(
-                f"Reference channel {channel} not in the available channels: {self.channels}"
-            )
+        if isinstance(channel, str):
+            channel = find_channel_index(self.channels, channel)
+            if channel is None:
+                raise Warning(
+                    f"Reference channel {channel} not in the available channels: {self.channels}"
+                )
         return channel
 
     @staticmethod
