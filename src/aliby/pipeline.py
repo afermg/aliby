@@ -648,6 +648,18 @@ class Pipeline(ProcessABC):
             meta = MetaData(directory, filename)
 
             from_start = True if np.any(ow.values()) else False
+
+            # New experiment or overwriting
+            if (
+                from_start
+                and (
+                    config.get("overwrite", False) == True
+                    or np.all(list(ow.values()))
+                )
+                and filename.exists()
+            ):
+                os.remove(filename)
+
             # If no previous segmentation and keep tiler
             if filename.exists():
                 if not ow["tiler"]:
@@ -693,13 +705,6 @@ class Pipeline(ProcessABC):
                     },
                     overwrite=True,
                 )
-
-            if from_start:  # New experiment or overwriting
-                if (
-                    config.get("overwrite", False) is True
-                    or np.all(list(ow.values()))
-                ) and filename.exists():
-                    os.remove(filename)
 
                 meta.run()
                 meta.add_fields(  # Add non-logfile metadata
