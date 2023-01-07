@@ -302,7 +302,7 @@ class Tiler(ProcessABC):
             no of channels
             no of z stacks
             no of pixels in y direction
-            no of pixels in z direction
+            no of pixels in x direction
 
         Parameters
         ----------

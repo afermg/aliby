@@ -54,6 +54,8 @@ class BaseLocalImage(ABC):
     Base class to set path and provide context management method.
     """
 
+    _default_dimorder = "tczxy"
+
     def __init__(self, path: t.Union[str, PosixPath]):
         # If directory, assume contents are naturally sorted
         self.path = Path(path)
@@ -61,10 +63,10 @@ class BaseLocalImage(ABC):
     def __enter__(self):
         return self
 
-    def format_data(self, img):
+    def rechunk_data(self, img):
         # Format image using x and y size from metadata.
 
-        self._formatted_img = da.rechunk(
+        self._rechunked_img = da.rechunk(
             img,
             chunks=(
                 1,
@@ -74,7 +76,7 @@ class BaseLocalImage(ABC):
                 self._meta["size_y"],
             ),
         )
-        return self._formatted_img
+        return self._rechunked_img
 
     @abstractproperty
     def name(self):
@@ -128,18 +130,19 @@ class ImageLocalOME(BaseLocalImage):
                 meta["type"] = self._meta["Image"]["Pixels"]["@Type"]
 
         except Exception as e:  # Images not in OMEXML
-            base = "TCZXY"
 
             print("Warning:Metadata not found: {}".format(e))
-            print(f"Warning: No dimensional info provided. Assuming {base}")
+            print(
+                f"Warning: No dimensional info provided. Assuming {self._default_dimorder}"
+            )
 
             # Mark non-existent dimensions for padding
-            self.base = base
-            self.ids = [base.index(i) for i in dimorder]
+            self.base = self._default_dimorder
+            # self.ids = [self.index(i) for i in dimorder]
 
-            self._dimorder = dimorder
+            self._dimorder = base
 
-        self._meta = meta
+            self._meta = meta
 
     @property
     def name(self):
@@ -196,7 +199,7 @@ class ImageLocalOME(BaseLocalImage):
                     reshaped, range(len(reshaped.shape)), target_order
                 )
 
-        return self.format_data(img)
+        return self.rechunk_data(img)
 
 
 class ImageDir(BaseLocalImage):
@@ -231,9 +234,22 @@ class ImageDir(BaseLocalImage):
         if self._meta:
             self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
 
+            # Reshape using metadata
             # img = da.reshape(img, (*self._meta, *img.shape[1:]))
             img = da.reshape(img, self._meta.values())
-            pixels = self.format_data(img)
+            original_order = [
+                i[-1] for i in self._meta.keys() if i.startswith("size")
+            ]
+            # Swap axis to conform with normal order
+            target_order = [
+                self._default_dimorder.index(x) for x in original_order
+            ]
+            img = da.moveaxis(
+                img,
+                list(range(len(original_order))),
+                target_order,
+            )
+            pixels = self.rechunk_data(img)
         return pixels
 
     @property
