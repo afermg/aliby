@@ -33,7 +33,7 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     Callable Dataset instance, either network-dependent or local.
     """
     if isinstance(expt_id, int):  # Is an experiment online
-        return Dataset(x, **kwargs["general"].get("server_info"))
+        return Dataset(expt_id, **kwargs)
     elif isinstance(expt_id, str):  # Files or Dir
         expt_path = Path(expt_id)
         if expt_path.is_dir():
