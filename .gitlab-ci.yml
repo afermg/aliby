@@ -46,10 +46,10 @@ Local Integration Tests:
     # - poetry install -vv
     - poetry run pytest ./tests --ignore ./tests/aliby/network
     - DIRNAME="test_datasets"
-    - curl https://zenodo.org/record/7513194/files/test_datasets.tar.gz\?download\=1 -o "example.tar.gz"
+    - curl https://zenodo.org/record/7513194/files/test_datasets.tar.gz\?download\=1 -o "test_datasets.tar.gz"
     - mkdir -p $DIRNAME
     - tar xvf example.tar.gz -C $DIRNAME
-    - pytest -s tests/aliby/pipeline --file $DIRNAME
+    - pytest -s tests/aliby/pipeline --file $DIRNAME/560_2022_11_30_pypipeline_unit_test_reconstituted_00
 
 Network Tools Tests:
   stage: tests
