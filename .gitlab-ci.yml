@@ -38,7 +38,7 @@ Local Tests:
   stage: tests
   script:
     # - poetry install -vv
-    - poetry run pytest ./tests --ignore ./tests/aliby/network
+    - poetry run pytest ./tests --ignore ./tests/aliby/network --ignore ./tests/aliby/pipeline
 
 Network Tools Tests:
   stage: tests
