@@ -40,12 +40,6 @@ Local Tests:
     # - poetry install -vv
     - poetry run pytest ./tests --ignore ./tests/aliby/network
 
-Local Integration Tests:
-  stage: tests
-  script:
-    # - poetry install -vv
-    - poetry run pytest ./tests --ignore ./tests/aliby/network
-
 Network Tools Tests:
   stage: tests
   script:
