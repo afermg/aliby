@@ -39,6 +39,14 @@ Local Tests:
   script:
     # - poetry install -vv
     - poetry run pytest ./tests --ignore ./tests/aliby/network --ignore ./tests/aliby/pipeline
+    - poetry run coverage run -m pytest
+    - poetry run coverage report -m
+    - poetry run coverage xml
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+# Legacy because we use GitLab 14.2.6
+  artifacts:
+    reports:
+      cobertura: coverage.xml
 
 Network Tools Tests:
   stage: tests
