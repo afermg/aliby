@@ -248,7 +248,7 @@ class Tiler(ProcessABC):
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     @classmethod
-    def from_image(cls, image: Image, parameters: TilerParameters):
+    def from_image(cls, image, parameters: TilerParameters):
         """
         Instantiate Tiler from an Image instance
 
