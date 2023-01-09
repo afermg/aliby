@@ -30,7 +30,7 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import Image, ImageLocalOME, ImageDir
+from aliby.io.image import ImageLocalOME, ImageDir
 from aliby.tile.traps import segment_traps
 
 
@@ -262,7 +262,9 @@ class Tiler(ProcessABC):
     @classmethod
     def from_h5(
         cls,
-        image: t.Union[Image, ImageLocalOME, ImageDir],
+        image: t.Union[
+            ImageLocalOME, ImageDir
+        ],  # TODO provide baseclass instead
         filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
