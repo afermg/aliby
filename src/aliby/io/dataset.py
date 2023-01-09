@@ -11,13 +11,9 @@ import time
 import typing as t
 from abc import ABC, abstractproperty, abstractmethod
 from pathlib import Path, PosixPath
-from typing import Union
 
-import omero
 
-from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
-from aliby.io.omero import BridgeOmero
 
 
 def dispatch_dataset(expt_id: int or str, **kwargs):

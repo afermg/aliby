@@ -1,11 +1,13 @@
+import re
 import typing as t
 from abc import abstractmethod
 from pathlib import PosixPath
-import re
 
-from agora.io.bridge import BridgeH5
+import omero
 from omero.gateway import BlitzGateway
 from yaml import safe_load
+
+from agora.io.bridge import BridgeH5
 
 
 class BridgeOmero:
