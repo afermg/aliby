@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Dataset is a group of classes to manage multiple types of experiments:
- - Remote experiments on an OMERO server
+ - Remote experiments on an OMERO server (located in src/aliby/io/omero.py)
  - Local experiments in a multidimensional OME-TIFF image containing the metadata
  - Local experiments in a directory containing multiple positions in independent images with or without metadata
 """
