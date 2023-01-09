@@ -13,7 +13,6 @@ import math
 import typing as t
 
 import bottleneck as bn
-import faiss
 import numpy as np
 from scipy import ndimage
 
@@ -119,37 +118,6 @@ def std(cell_mask, trap_image):
     trap_image: 2d array
     """
     return np.std(trap_image[cell_mask])
-
-
-def k2_major_median(cell_mask, trap_image):
-    """
-    Finds the medians of the major cluster after clustering the pixels in the cell into two clusters.
-
-    Parameters
-    ----------
-    cell_mask: 2d array
-        Segmentation mask for the cell
-    trap_image: 2d array
-
-    Returns
-    -------
-    median: float
-        The median of the major cluster of two clusters
-    """
-    if bn.anynan(trap_image):
-        cell_mask[np.isnan(trap_image)] = False
-    X = trap_image[cell_mask].reshape(-1, 1).astype(np.float32)
-    # cluster pixels in cell into two clusters
-    indices = faiss.IndexFlatL2(X.shape[1])
-    # (n_clusters=2, random_state=0).fit(X)
-    _, indices = indices.search(X, k=2)
-    high_indices = np.argmax(indices, axis=1).astype(bool)
-    # find the median of pixels in the largest cluster
-    # high_masks = np.logical_xor(  # Use casting to obtain masks
-    #     high_indices.reshape(-1, 1), np.tile((0, 1), X.shape[0]).reshape(-1, 2)
-    # )
-    major_median = bn.median(X[high_indices])
-    return major_median
 
 
 def volume(cell_mask) -> float:
