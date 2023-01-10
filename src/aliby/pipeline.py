@@ -9,8 +9,6 @@ import typing as t
 from copy import copy
 from importlib.metadata import version
 from pathlib import Path, PosixPath
-from time import perf_counter
-from typing import Union
 
 import h5py
 import numpy as np
@@ -113,6 +111,8 @@ class PipelineParameters(ParametersABC):
                     thresh_trap_area=0.9,
                     ntps_to_eval=5,
                 ),
+                logfile_level="INFO",
+                logstream_level="WARNING",
             )
         }
 
@@ -182,21 +182,28 @@ class Pipeline(ProcessABC):
             store = Path(store)
         self.store = store
 
-    def setLogger(self, folder, level: str = "WARNING"):
+    @staticmethod
+    def setLogger(
+        folder, file_level: str = "INFO", stream_level: str = "WARNING"
+    ):
         # create logger for aliby 'spam_application'
         logger = logging.getLogger("aliby")
-        logger.setLevel(logging.DEBUG)
-
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "%(asctime)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
+
+        ch = logging.StreamHandler()
+        ch.setLevel(getattr(logging, stream_level))
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
 
         # create file handler which logs even debug messages
         fh = logging.FileHandler(Path(folder) / "aliby.log")
         fh.setFormatter(formatter)
-        fh.setLevel(getattr(logging, level))
+        fh.setLevel(getattr(logging, file_level))
         logger.addHandler(fh)
+        logger.warn("test message")
 
     @classmethod
     def from_yaml(cls, fpath):
@@ -268,6 +275,10 @@ class Pipeline(ProcessABC):
 
         return cls(pipeline_parameters, store=directory)
 
+    @property
+    def _logger(self):
+        return logging.getLogger("aliby")
+
     def run(self):
         # Config holds the general information, use in main
         # Steps holds the description of tasks with their parameters
@@ -308,7 +319,7 @@ class Pipeline(ProcessABC):
         def filt_str(image_ids: dict, filt: str):
             return {k: v for k, v in image_ids.items() if re.search(filt, k)}
 
-        def pick_filter(image_ids: dict, filt: Union[int, str]):
+        def pick_filter(image_ids: dict, filt: int or str):
             if isinstance(filt, str):
                 image_ids = filt_str(image_ids, filt)
             elif isinstance(filt, int):
@@ -345,7 +356,7 @@ class Pipeline(ProcessABC):
 
     def create_pipeline(
         self,
-        image_id: t.Tuple[str, t.Union[str, PosixPath, int]],
+        image_id: t.Tuple[str, str or PosixPath or int],
         index: t.Optional[int] = None,
     ):
         """ """
@@ -445,15 +456,10 @@ class Pipeline(ProcessABC):
 
                             for step in self.iterative_steps:
                                 if i >= process_from[step]:
-                                    t = perf_counter()
                                     result = steps[step].run_tp(
                                         i, **run_kwargs.get(step, {})
                                     )
-                                    logging.debug(
-                                        f"Timing:{step}:{perf_counter() - t}s"
-                                    )
                                     if step in loaded_writers:
-                                        t = perf_counter()
                                         loaded_writers[step].write(
                                             data=result,
                                             overwrite=writer_ow_kwargs.get(
@@ -461,9 +467,6 @@ class Pipeline(ProcessABC):
                                             ),
                                             tp=i,
                                             meta={"last_processed": i},
-                                        )
-                                        logging.debug(
-                                            f"Timing:Writing-{step}:{perf_counter() - t}s"
                                         )
 
                                     # Step-specific actions
@@ -495,18 +498,15 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            logging.debug(
-                                f"Quality:Clogged_traps:{frac_clogged_traps}"
+                            logging.warn(
+                                f"{name}:Clogged_traps:{frac_clogged_traps}"
                             )
 
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
                         else:  # Stop if more than X% traps are clogged
-                            logging.debug(
-                                f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
-                            )
-                            print(
-                                f"Stopping analysis at time {i} with {frac_clogged_traps} clogged traps"
+                            self._logger.warn(
+                                f"{name}:Analysis stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             meta.add_fields({"end_status": "Clogged"})
                             break
@@ -520,15 +520,14 @@ class Pipeline(ProcessABC):
                     )
                     PostProcessor(filename, post_proc_params).run()
 
-                    logging.getLogger("aliby").info("Analysis finished.")
+                    self._logger.info("Analysis finished successfully.")
                     return 1
 
         except Exception as e:  # bug during setup or runtime
             logging.exception(
-                f"Caught exception in worker thread (x = {name}):",
+                f"{name}: Exception caught.",
                 exc_info=True,
             )
-            print(f"Caught exception in worker thread (x = {name}):")
             # This prints the type, value, and stack trace of the
             # current exception being handled.
             traceback.print_exc()
@@ -678,6 +677,7 @@ class Pipeline(ProcessABC):
 
             # If no previous segmentation and keep tiler
             if filename.exists():
+                self._logger.warn("IO: Result file exists.")
                 if not ow["tiler"]:
                     steps["tiler"] = Tiler.from_hdf5(image, filename)
                     try:
