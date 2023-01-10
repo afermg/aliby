@@ -1,8 +1,10 @@
+import logging
 import typing as t
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import copy
 from pathlib import Path, PosixPath
+from time import perf_counter
 from typing import Union
 
 from flatten_dict import flatten
@@ -217,3 +219,40 @@ def check_type_recursive(val1, val2):
         for k in val2.keys():
             same_types = same_types and check_type_recursive(val1[k], val2[k])
     return same_types
+
+
+class StepABC(ProcessABC):
+    """
+    Base class that expands on ProcessABC to include tools used by Aliby steps.
+    It adds a setup step, logging and benchmarking for time benchmarks.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @property
+    def _logger(self):
+        return logging.getLogger("aliby")
+
+    @abstractmethod
+    def _run_tp(self):
+        pass
+
+    def run_tp(self, tp: int, log: bool = True, **kwargs):
+        """
+        Time and log the timing of a step.
+        """
+        if log:
+            t = perf_counter()
+            result = self._run_tp(tp, **kwargs)
+            self._logger.debug(
+                f"Timing:{self.__class__.__name__}:{perf_counter()-t}s"
+            )
+        else:
+            result = self._run_tp(tp, **kwargs)
+
+        return result
+
+    def run(self):
+        # Replace run withn run_tp
+        raise Warning("Steps use run_tp instead of run")
