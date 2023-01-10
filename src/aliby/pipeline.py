@@ -40,8 +40,9 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 logging.basicConfig(
     filename="aliby.log",
-    filemode="w",
-    format="%(name)s - %(levelname)s - %(message)s",
+    filemode="a",
+    format="%(asctime)s, %(levelname)s %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
     level=logging.DEBUG,
 )
 
