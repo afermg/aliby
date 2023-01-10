@@ -19,14 +19,11 @@ class Signal(BridgeH5):
     """
     Class that fetches data from the hdf5 storage for post-processing
 
-    Signal is works under the assumption that metadata and data are
-    accessible, to perform time-adjustments and apply previously-recorded
-    postprocesses.
+    Signal assumes that the metadata and data are accessible to perform time-adjustments and apply previously-recorded postprocesses.
     """
 
     def __init__(self, file: t.Union[str, PosixPath]):
         super().__init__(file, flag=None)
-
         self.index_names = (
             "experiment",
             "position",
@@ -34,7 +31,6 @@ class Signal(BridgeH5):
             "cell_label",
             "mother_label",
         )
-
         self.candidate_channels = (
             "GFP",
             "GFPFast",
@@ -45,21 +41,14 @@ class Signal(BridgeH5):
             "Cy5",
             "pHluorin405",
         )
-
         equivalences = {
             "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
         }
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
-
-        if isinstance(
-            dsets, str
-        ):  # or  isinstance(Dsets,dsets.endswith("imBackground"):
+        if isinstance(dsets, str):
             df = self.get_raw(dsets)
-
-        # elif isinstance(dsets, str):
-        #     df = self.apply_prepost(dsets)
-
+            return self.add_name(df, dsets)
         elif isinstance(dsets, list):
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
@@ -70,9 +59,6 @@ class Signal(BridgeH5):
             ]
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
-
-        # return self.cols_in_mins(self.add_name(df, dsets))
-        return self.add_name(df, dsets)
 
     @staticmethod
     def add_name(df, name):
@@ -96,7 +82,11 @@ class Signal(BridgeH5):
     def tinterval(self) -> int:
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
-            return f.attrs[tinterval_location][0]
+            if tinterval_location in f:
+                return f.attrs[tinterval_location][0]
+            else:
+                print("Using default time interval of 5 minutes")
+                return 5.0
 
     @staticmethod
     def get_retained(df, cutoff):
@@ -109,14 +99,10 @@ class Signal(BridgeH5):
 
     @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
-
-        df = signal
-        # df = self[signal]
-        if isinstance(df, pd.DataFrame):
-            return self.get_retained(df, cutoff)
-
-        elif isinstance(df, list):
-            return [self.get_retained(d, cutoff=cutoff) for d in df]
+        if isinstance(signal, pd.DataFrame):
+            return self.get_retained(signal, cutoff)
+        elif isinstance(signal, list):
+            return [self.get_retained(d, cutoff=cutoff) for d in signal]
 
     @lru_cache(2)
     def lineage(
@@ -132,7 +118,6 @@ class Signal(BridgeH5):
             lineage_location = "postprocessing/lineage"
             if merged:
                 lineage_location += "_merged"
-
         with h5py.File(self.filename, "r") as f:
             trap_mo_da = f[lineage_location]
             lineage = np.array(
@@ -175,31 +160,26 @@ class Signal(BridgeH5):
         """
         if isinstance(merges, bool):
             merges: np.ndarray = self.get_merges() if merges else np.array([])
-
-        merged = copy(data)
-
         if merges.any():
             merged = apply_merges(data, merges)
-
+        else:
+            merged = copy(data)
         if isinstance(picks, bool):
             picks = (
                 self.get_picks(names=merged.index.names)
                 if picks
                 else set(merged.index)
             )
-
         with h5py.File(self.filename, "r") as f:
             if "modifiers/picks" in f and picks:
                 # missing_cells = [i for i in picks if tuple(i) not in
                 # set(merged.index)]
-
                 if picks:
                     return merged.loc[
                         set(picks).intersection(
                             [tuple(x) for x in merged.index]
                         )
                     ]
-
                 else:
                     if isinstance(merged.index, pd.MultiIndex):
                         empty_lvls = [[] for i in merged.index.names]
@@ -217,10 +197,8 @@ class Signal(BridgeH5):
     def datasets(self):
         if not hasattr(self, "_available"):
             self._available = []
-
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_url)
-
         for sig in self._available:
             print(sig)
 
@@ -238,10 +216,8 @@ class Signal(BridgeH5):
 
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_url)
-
         except Exception as e:
             print("Error visiting h5: {}".format(e))
-
         return self._available
 
     def get_merged(self, dataset):
@@ -266,6 +242,17 @@ class Signal(BridgeH5):
     def get_raw(
         self, dataset: str, in_minutes: bool = True, lineage: bool = False
     ):
+        """
+        Load data from a h5 file and return as a dataframe
+
+        Parameters
+        ----------
+        dataset: str or list of strs
+            The name of the h5 file or a list of h5 file names
+        in_minutes: boolean
+            If True,
+        lineage: boolean
+        """
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
@@ -274,8 +261,8 @@ class Signal(BridgeH5):
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
                 return [self.get_raw(dset) for dset in dataset]
-
-            if lineage:  # This assumes that df is sorted
+            if lineage:
+                # assumes that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
@@ -285,9 +272,7 @@ class Signal(BridgeH5):
                 )
                 mother_label[b] = lineage[a, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
-
             return df
-
         except Exception as e:
             print(f"Could not fetch dataset {dataset}")
             raise e
@@ -298,7 +283,6 @@ class Signal(BridgeH5):
             merges = f.get("modifiers/merges", np.array([]))
             if not isinstance(merges, np.ndarray):
                 merges = merges[()]
-
         return merges
 
     def get_picks(
@@ -313,34 +297,25 @@ class Signal(BridgeH5):
             picks = set()
             if path in f:
                 picks = set(zip(*[f[path + name] for name in names]))
-
             return picks
 
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
         """
         Fetch DataFrame from results storage file.
         """
-
         assert path in f, f"{path} not in {f}"
-
         dset = f[path]
-
-        values, index, columns = ([], [], [])
-
+        values, index, columns = [], [], []
         index_names = copy(self.index_names)
         valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
         if valid_names:
-
             index = pd.MultiIndex.from_arrays(
                 [dset[lbl] for lbl in valid_names], names=valid_names
             )
-
-            columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
+            columns = dset.attrs.get("columns", None)
             if "timepoint" in dset:
                 columns = f[path + "/timepoint"][()]
-
             values = f[path + "/values"][()]
-
         return pd.DataFrame(
             values,
             index=index,
@@ -350,24 +325,6 @@ class Signal(BridgeH5):
     @property
     def stem(self):
         return self.filename.stem
-
-    # def dataset_to_df(self, f: h5py.File, path: str):
-
-    #     all_indices = self.index_names
-
-    #     valid_indices = {
-    #         k: f[path][k][()] for k in all_indices if k in f[path].keys()
-    #     }
-
-    #     new_index = pd.MultiIndex.from_arrays(
-    #         list(valid_indices.values()), names=valid_indices.keys()
-    #     )
-
-    #     return pd.DataFrame(
-    #         f[path + "/values"][()],
-    #         index=new_index,
-    #         columns=f[path + "/timepoint"][()],
-    #     )
 
     def store_signal_url(
         self, fullname: str, node: t.Union[h5py.Dataset, h5py.Group]
@@ -413,7 +370,6 @@ class Signal(BridgeH5):
         flowrate_name = "pumpinit/flowrate"
         pumprate_name = "pumprate"
         switchtimes_name = "switchtimes"
-
         main_pump_id = np.concatenate(
             (
                 (np.argmax(self.meta_h5[flowrate_name]),),
@@ -436,7 +392,6 @@ class Signal(BridgeH5):
     def switch_times(self) -> t.List[int]:
         switchtimes_name = "switchtimes"
         switches_minutes = self.meta_h5[switchtimes_name]
-
         return [
             t_min
             for t_min in switches_minutes

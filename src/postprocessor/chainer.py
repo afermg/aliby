@@ -20,13 +20,15 @@ class Chainer(Signal):
     Instead of reading processes previously applied, it executes
     them when called.
     """
-
-    process_types = ("multisignal", "processes", "reshapers")
-    common_chains = {}
+    #process_types = ("multisignal", "processes", "reshapers")
+    #common_chains = {}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for channel in self.candidate_channels:
+            # find first channel in h5 file that corresponds to a candidate_channel
+            # but channel is redefined. why is there a loop over candidate channels?
+            # what about capitals?
             try:
                 channel = [
                     ch for ch in self.channels if re.match("channel", ch)
@@ -34,8 +36,9 @@ class Chainer(Signal):
                 break
             except:
                 pass
-
         try:
+            # what's this?
+            # composite statistic comprising the quotient of two others
             equivalences = {
                 "m5m": (
                     f"extraction/{channel}/max/max5px",
@@ -43,13 +46,15 @@ class Chainer(Signal):
                 ),
             }
 
+            # function to add bgsub to urls
             def replace_url(url: str, bgsub: str = ""):
-                # return pattern with bgsub
                 channel = url.split("/")[1]
                 if "bgsub" in bgsub:
+                    # add bgsub to url
                     url = re.sub(channel, f"{channel}_bgsub", url)
                 return url
 
+            # add chain with and without bgsub
             self.common_chains = {
                 alias
                 + bgsub: lambda **kwargs: self.get(
@@ -59,7 +64,6 @@ class Chainer(Signal):
                 for alias, (denominator, numerator) in equivalences.items()
                 for bgsub in ("", "_bgsub")
             }
-
         except:
             pass
 
@@ -72,20 +76,17 @@ class Chainer(Signal):
         retain: t.Optional[float] = None,
         **kwargs,
     ):
-        if dataset in self.common_chains:  # Produce dataset on the fly
+        if dataset in self.common_chains:
+            # produce dataset on the fly
             data = self.common_chains[dataset](**kwargs)
         else:
             data = self.get_raw(dataset, in_minutes=in_minutes)
             if chain:
                 data = self.apply_chain(data, chain, **kwargs)
-
         if retain:
             data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
-
-        if (
-            stages and "stage" not in data.columns.names
-        ):  # Return stages as additional column level
-
+        if (stages and "stage" not in data.columns.names):
+            # return stages as additional column level
             stages_index = [
                 x
                 for i, (name, span) in enumerate(self.stages_span_tp)
@@ -95,13 +96,13 @@ class Chainer(Signal):
                 zip(stages_index, data.columns),
                 names=("stage", "time"),
             )
-
         return data
 
     def apply_chain(
         self, input_data: pd.DataFrame, chain: t.Tuple[str, ...], **kwargs
     ):
-        """Apply a series of processes to a dataset.
+        """
+        Apply a series of processes to a dataset.
 
         In a similar fashion to how postprocessing works, Chainer allows the
         consecutive application of processes to a dataset. Parameters can be

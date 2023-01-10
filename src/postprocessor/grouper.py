@@ -26,8 +26,6 @@ from postprocessor.chainer import Chainer
 class Grouper(ABC):
     """Base grouper class."""
 
-    files = []
-
     def __init__(self, dir: Union[str, PosixPath]):
         path = Path(dir)
         self.name = path.name
@@ -37,12 +35,11 @@ class Grouper(ABC):
         self.load_chains()
 
     def load_chains(self) -> None:
-        # Sets self.chainers
         self.chainers = {f.name[:-3]: Chainer(f) for f in self.files}
 
     @property
     def fsignal(self) -> Chainer:
-        # Returns first signal
+        # returns first signal
         return list(self.chainers.values())[0]
 
     @property
@@ -110,14 +107,12 @@ class Grouper(ABC):
         """
         if path.startswith("/"):
             path = path.strip("/")
-
         sitems = self.filter_path(path)
         if standard:
             fn_pos = concat_standard
         else:
             fn_pos = concat_signal_ind
             kwargs["mode"] = mode
-
         kymographs = self.pool_function(
             path=path,
             f=fn_pos,
@@ -125,7 +120,6 @@ class Grouper(ABC):
             chainers=sitems,
             **kwargs,
         )
-
         errors = [
             k
             for kymo, k in zip(kymographs, self.chainers.keys())
@@ -134,20 +128,15 @@ class Grouper(ABC):
         kymographs = [kymo for kymo in kymographs if kymo is not None]
         if len(errors):
             print("Warning: Positions contain errors {errors}")
-
         assert len(kymographs), "All datasets contain errors"
-
         concat = pd.concat(kymographs, axis=0)
-
         if (
             len(concat.index.names) > 4
         ):  # Reorder levels when mother_label is present
             concat = concat.reorder_levels(
                 ("group", "position", "trap", "cell_label", "mother_label")
             )
-
         concat_sorted = concat.sort_index()
-
         return concat_sorted
 
     def filter_path(self, path: str) -> t.Dict[str, Chainer]:
@@ -163,11 +152,9 @@ class Grouper(ABC):
                 f"Grouper:Warning: {nchains_dif} chains do not contain"
                 f" channel {path}"
             )
-
         assert len(
             sitems
         ), f"No valid dataset to use. Valid datasets are {self.available}"
-
         return sitems
 
     @property
