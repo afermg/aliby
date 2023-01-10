@@ -1,4 +1,3 @@
-import logging
 import typing as t
 from time import perf_counter
 from typing import List
@@ -6,7 +5,7 @@ from typing import List
 import h5py
 import numpy as np
 import pandas as pd
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_attributes
 
@@ -89,7 +88,7 @@ class ExtractorParameters(ParametersABC):
         return cls(**exparams_from_meta(meta))
 
 
-class Extractor(ProcessABC):
+class Extractor(StepABC):
     """
     The Extractor applies a metric, such as area or median, to cells identified in the image tiles using the cell masks.
 
@@ -584,28 +583,22 @@ class Extractor(ProcessABC):
         elif channel in self.img_bgsub:
             return self.img_bgsub[channel]
 
-    def run_tp(self, tp, **kwargs):
-        """
-        Wrapper to add compatiblibility with other steps of the pipeline.
-        """
-        return self.run(tps=[tp], **kwargs)
-
-    def run(
+    def _run_tp(
         self,
-        tree=None,
         tps: List[int] = None,
+        tree=None,
         save=True,
         **kwargs,
     ) -> dict:
         """
         Parameters
         ----------
-        tree: dict
+        tps: list of int (optional)
+            Time points to include.
+        tree: dict (optional)
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
             For example: {'general': {'None': ['area', 'volume', 'eccentricity']}}
-        tps: list of int (optional)
-            Time points to include.
         save: boolean (optional)
             If True, save results to h5 file.
         kwargs: keyword arguments (optional)
@@ -620,6 +613,9 @@ class Extractor(ProcessABC):
             tree = self.params.tree
         if tps is None:
             tps = list(range(self.meta["time_settings/ntimepoints"][0]))
+        elif isinstance(tps, int):
+            tps = [tps]
+
         # store results in dict
         d = {}
         for tp in tps:

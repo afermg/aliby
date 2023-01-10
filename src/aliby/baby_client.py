@@ -13,7 +13,7 @@ import baby.errors
 import h5py
 import numpy as np
 import requests
-from agora.abc import ParametersABC
+from agora.abc import ParametersABC, StepABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
@@ -128,7 +128,7 @@ class BabyParameters(ParametersABC):
         self.update("model_config", weights_flattener)
 
 
-class BabyRunner:
+class BabyRunner(StepABC):
     """A BabyRunner object for cell segmentation.
 
     Does segmentation one time point at a time."""
@@ -157,20 +157,17 @@ class BabyRunner:
             .swapaxes(1, 2)
         )
 
-    def run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
+    def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
         # Access the image
         t = perf_counter()
         img = self.get_data(tp)
-        logging.debug(f"Timing:BF_fetch:{perf_counter()-t}s")
-        t = perf_counter()
         segmentation = self.crawler.step(
             img,
             with_edgemasks=with_edgemasks,
             assign_mothers=assign_mothers,
             **kwargs,
         )
-        logging.debug(f"Timing:crawler_step:{perf_counter()-t}s")
         return format_segmentation(segmentation, tp)
 
 
