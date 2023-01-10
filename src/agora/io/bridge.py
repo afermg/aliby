@@ -2,9 +2,10 @@
 Tools to interact with h5 files and handle data consistently.
 """
 import collections
+import logging
+import typing as t
 from itertools import chain, groupby, product
 from typing import Union
-import typing as t
 
 import h5py
 import numpy as np
@@ -24,6 +25,10 @@ class BridgeH5:
         if flag is not None:
             self._hdf = h5py.File(filename, flag)
             self._filecheck
+
+    @property
+    def _logger(self):
+        return logging.getLogger("aliby")
 
     def _filecheck(self):
         assert "cell_info" in self._hdf, "Invalid file. No 'cell_info' found."
