@@ -16,7 +16,6 @@ from omero.model import enums as omero_enums
 from yaml import safe_load
 
 from agora.io.bridge import BridgeH5
-from aliby.io.omero import BridgeOmero
 
 # convert OMERO definitions into numpy types
 PIXEL_TYPES = {
