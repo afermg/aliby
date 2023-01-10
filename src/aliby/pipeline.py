@@ -38,14 +38,6 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 # from postprocessor.compiler import ExperimentCompiler, PageOrganiser
 
-logging.basicConfig(
-    filename="aliby.log",
-    filemode="a",
-    format="%(asctime)s, %(levelname)s %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S%z",
-    level=logging.DEBUG,
-)
-
 
 class PipelineParameters(ParametersABC):
     _pool_index = None
@@ -96,11 +88,13 @@ class PipelineParameters(ParametersABC):
         try:
             meta_d = MetaData(directory, None).load_logs()
         except Exception as e:
+            logging.getLogger("aliby").warn(
+                f"WARNING:Metadata: error when loading: {e}"
+            )
             minimal_default_meta = {
                 "channels": ["Brightfield"],
                 "ntps": [2000],
             }
-            print(f"WARNING:Metadata: error when loading: {e}")
             # Set minimal metadata
             meta_d = minimal_default_meta
 
@@ -187,6 +181,22 @@ class Pipeline(ProcessABC):
         if store is not None:
             store = Path(store)
         self.store = store
+
+    def setLogger(self, folder, level: str = "WARNING"):
+        # create logger for aliby 'spam_application'
+        logger = logging.getLogger("aliby")
+        logger.setLevel(logging.DEBUG)
+
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
+
+        # create file handler which logs even debug messages
+        fh = logging.FileHandler(Path(folder) / "aliby.log")
+        fh.setFormatter(formatter)
+        fh.setLevel(getattr(logging, level))
+        logger.addHandler(fh)
 
     @classmethod
     def from_yaml(cls, fpath):
@@ -288,6 +298,8 @@ class Pipeline(ProcessABC):
         # Modify to the configuration
         self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
+
+        self.setLogger(directory)
 
         # Filter TODO integrate filter onto class and add regex
         def filt_int(d: dict, filt: int):
@@ -508,6 +520,7 @@ class Pipeline(ProcessABC):
                     )
                     PostProcessor(filename, post_proc_params).run()
 
+                    logging.getLogger("aliby").info("Analysis finished.")
                     return 1
 
         except Exception as e:  # bug during setup or runtime
