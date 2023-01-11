@@ -186,8 +186,10 @@ class Pipeline(ProcessABC):
     def setLogger(
         folder, file_level: str = "INFO", stream_level: str = "WARNING"
     ):
+
         # create logger for aliby 'spam_application'
         logger = logging.getLogger("aliby")
+        logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
@@ -199,11 +201,10 @@ class Pipeline(ProcessABC):
         logger.addHandler(ch)
 
         # create file handler which logs even debug messages
-        fh = logging.FileHandler(Path(folder) / "aliby.log")
-        fh.setFormatter(formatter)
+        fh = logging.FileHandler(Path(folder) / "aliby.log", "w+")
         fh.setLevel(getattr(logging, file_level))
+        fh.setFormatter(formatter)
         logger.addHandler(fh)
-        logger.warn("test message")
 
     @classmethod
     def from_yaml(cls, fpath):
