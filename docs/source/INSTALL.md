@@ -53,8 +53,8 @@ NOTE: Support for OMERO servers in GNU/Linux computers requires building ZeroC-I
 ### FAQ
 - Installation fails during zeroc-ice compilation (Windows and MacOS).
 
-  - Windows
-  The simplest way to install it is using conda (or mamba). You can install the (OMERO) network components separately:
+
+For Windows, the simplest way to install it is using conda (or mamba). You can install the (OMERO) network components separately:
 
     $ conda create -n aliby -c conda-forge python=3.8 omero-py
     $ conda activate aliby
