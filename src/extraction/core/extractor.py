@@ -301,7 +301,7 @@ class Extractor(StepABC):
             A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
         """
         if labels is None:
-            print("Warning: No labels given. Sorting cells using index.")
+            self._log("No labels given. Sorting cells using index.")
 
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []

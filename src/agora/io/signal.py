@@ -84,9 +84,7 @@ class Signal(BridgeH5):
         try:
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
-            self._logger.warn(
-                f"{self.__class__.__name__}: Unable to convert columns to minutes: {e}"
-            )
+            self._log(f"Unable to convert columns to minutes: {e}")
         return df
 
     @cached_property

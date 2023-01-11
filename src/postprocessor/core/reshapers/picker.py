@@ -122,7 +122,7 @@ class picker(LineageProcess):
 
                 indices = indices.intersection(new_indices)
         else:
-            print("WARNING:Picker: No lineage assignment")
+            self._log(f"No lineage assignment")
             indices = np.array([])
 
         return np.array(list(indices))

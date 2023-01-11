@@ -26,9 +26,10 @@ class BridgeH5:
             self._hdf = h5py.File(filename, flag)
             self._filecheck
 
-    @property
-    def _logger(self):
-        return logging.getLogger("aliby")
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
     def _filecheck(self):
         assert "cell_info" in self._hdf, "Invalid file. No 'cell_info' found."

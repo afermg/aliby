@@ -191,7 +191,7 @@ class Pipeline(ProcessABC):
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
+            "%(asctime)s - %(levelname)s:%(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
 

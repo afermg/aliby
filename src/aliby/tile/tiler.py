@@ -243,7 +243,7 @@ class Tiler(StepABC):
                 for ch, zsect in zip(self.channels, metadata["zsections"])
             }
         except Exception as e:
-            print(f"Warning:Tiler: No z_perchannel data: {e}")
+            self._log(f"No z_perchannel data: {e}")
 
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
@@ -624,7 +624,7 @@ def find_channel_index(image_channels: t.List[str], channel: str):
         found = re.match(channel, ch, re.IGNORECASE)
         if found:
             if len(found.string) - (found.endpos - found.start()):
-                print(f"WARNING: channel {channel} matched {ch} using regex")
+                self._log(f"Channel {channel} matched {ch} using regex")
             return i
 
 
