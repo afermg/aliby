@@ -85,7 +85,12 @@ def datetime_to_timestamp(time, locale="Europe/London"):
 
 
 def find_file(root_dir, regex):
-    file = glob.glob(os.path.join(str(root_dir), regex))
+    file = [
+        f
+        for f in glob.glob(os.path.join(str(root_dir), regex))
+        if Path(f).name != "aliby.log"  # Skip filename reserved for aliby
+    ]
+
     if len(file) > 1:
         print(
             "Warning:Metadata: More than one logfile found. Defaulting to first option."

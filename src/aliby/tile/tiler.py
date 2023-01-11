@@ -28,7 +28,7 @@ import h5py
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
 from aliby.io.image import ImageLocalOME, ImageDir
 from aliby.tile.traps import segment_traps
@@ -200,7 +200,7 @@ class TilerParameters(ParametersABC):
     _defaults = {"tile_size": 117, "ref_channel": "Brightfield", "ref_z": 0}
 
 
-class Tiler(ProcessABC):
+class Tiler(StepABC):
     """
     Remote Timelapse Tiler.
 
@@ -455,7 +455,7 @@ class Tiler(ProcessABC):
         ndtrap = self.ifoob_pad(full, trap.as_range(tp))
         return ndtrap
 
-    def run_tp(self, tp):
+    def _run_tp(self, tp):
         """
         Find traps if they have not yet been found.
         Determine any translational drift of the current image from the
