@@ -200,6 +200,11 @@ class ProcessABC(ABC):
     def run(self):
         pass
 
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
+
 
 def check_type_recursive(val1, val2):
     same_types = True
@@ -230,10 +235,6 @@ class StepABC(ProcessABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @property
-    def _logger(self):
-        return logging.getLogger("aliby")
-
     @abstractmethod
     def _run_tp(self):
         pass
@@ -245,8 +246,9 @@ class StepABC(ProcessABC):
         if log:
             t = perf_counter()
             result = self._run_tp(tp, **kwargs)
-            self._logger.debug(
-                f"Timing:{self.__class__.__name__}:{perf_counter()-t}s"
+            self._log(
+                f"Timing:{self.__class__.__name__}:{perf_counter()-t}s",
+                "debug",
             )
         else:
             result = self._run_tp(tp, **kwargs)

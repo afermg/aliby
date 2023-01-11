@@ -499,14 +499,14 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            logging.warn(
+                            self._log(
                                 f"{name}:Clogged_traps:{frac_clogged_traps}"
                             )
 
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
                         else:  # Stop if more than X% traps are clogged
-                            self._logger.warn(
+                            self._log(
                                 f"{name}:Analysis stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             meta.add_fields({"end_status": "Clogged"})
@@ -521,7 +521,7 @@ class Pipeline(ProcessABC):
                     )
                     PostProcessor(filename, post_proc_params).run()
 
-                    self._logger.info("Analysis finished successfully.")
+                    self._log("Analysis finished successfully.", "info")
                     return 1
 
         except Exception as e:  # bug during setup or runtime
@@ -678,7 +678,7 @@ class Pipeline(ProcessABC):
 
             # If no previous segmentation and keep tiler
             if filename.exists():
-                self._logger.warn("IO: Result file exists.")
+                self._log("Result file exists.", "info")
                 if not ow["tiler"]:
                     steps["tiler"] = Tiler.from_hdf5(image, filename)
                     try:
