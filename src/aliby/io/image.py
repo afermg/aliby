@@ -47,6 +47,12 @@ class BaseLocalImage(ABC):
     def __enter__(self):
         return self
 
+    def __exit__(self, *exc):
+        for e in exc:
+            if e is not None:
+                print(e)
+        return False
+
     def rechunk_data(self, img):
         # Format image using x and y size from metadata.
 
@@ -73,15 +79,6 @@ class BaseLocalImage(ABC):
     @property
     def data(self):
         return self.get_data_lazy()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        for e in exc:
-            if e is not None:
-                print(e)
-        return False
 
     @property
     def metadata(self):
