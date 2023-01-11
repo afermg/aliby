@@ -106,7 +106,7 @@ class Grouper(ABC):
 
         Examples
         --------
-        FIXME: Add docs.
+        >>> record = grouper.concat_signal("extraction/GFP/max/median")
         """
         if path.startswith("/"):
             path = path.strip("/")
@@ -125,9 +125,7 @@ class Grouper(ABC):
         )
         # check for errors
         errors = [
-            k
-            for kymo, k in zip(records, self.chainers.keys())
-            if kymo is None
+            k for kymo, k in zip(records, self.chainers.keys()) if kymo is None
         ]
         records = [record for record in records if record is not None]
         if len(errors):
@@ -156,7 +154,9 @@ class Grouper(ABC):
                 f"Grouper:Warning: {nchains_dif} chains do not contain"
                 f" channel {path}"
             )
-        assert len(good_chains), f"No valid dataset to use. Valid datasets are {self.available}"
+        assert len(
+            good_chains
+        ), f"No valid dataset to use. Valid datasets are {self.available}"
         return good_chains
 
     def pool_function(
@@ -170,7 +170,7 @@ class Grouper(ABC):
         """Enable different threads for independent chains, particularly useful when aggregating multiple elements."""
         if pool is None:
             # Alan: why is None changed to 8
-            #pool = 8
+            # pool = 8
             pass
         chainers = chainers or self.chainers
         if pool:
@@ -198,33 +198,33 @@ class Grouper(ABC):
             ]
         return records
 
-
     @property
     def nmembers(self) -> t.Dict[str, int]:
-        # Return the number of positions belonging to each group
+        """Get the number of positions belonging to each group."""
         return Counter(self.positions_groups.values())
 
     @property
     def ntraps(self):
+        """Get total number of traps per position (h5 file)."""
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
                 print(pos, f["/trap_info/trap_locations"].shape[0])
 
     @property
-    def ntraps_by_pos(self) -> t.Dict[str, int]:
-        # Return total number of traps grouped
+    def ntraps_by_group(self) -> t.Dict[str, int]:
+        """Get total number of traps per group."""
         ntraps = {}
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
                 ntraps[pos] = f["/trap_info/trap_locations"].shape[0]
-
-        ntraps_by_pos = {k: 0 for k in self.groups}
+        ntraps_by_group = {k: 0 for k in self.groups}
         for posname, vals in ntraps.items():
-            ntraps_by_pos[self.positions_groups[posname]] += vals
+            ntraps_by_group[self.positions_groups[posname]] += vals
+        return ntraps_by_group
 
-        return ntraps_by_pos
-
-    def traplocs(self):
+    @property
+    def traplocs(self) -> t.Dict[str, np.ndarray]:
+        """Get the locations of the traps for each position as a dictionary."""
         d = {}
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
@@ -233,20 +233,21 @@ class Grouper(ABC):
 
     @property
     def groups(self) -> t.Tuple[str]:
-        # Return groups sorted alphabetically
+        """Get groups, sorted alphabetically."""
         return tuple(sorted(set(self.positions_groups.values())))
 
     @property
     def positions(self) -> t.Tuple[str]:
-        # Return positions sorted alphabetically
+        """Get positions, sorted alphabetically."""
         return tuple(sorted(set(self.positions_groups.keys())))
 
     def ncells(
-        self, path="extraction/general/None/area", mode="retained", **kwargs
+        self,
+        path="extraction/general/None/area",
+        mode="retained",
+        **kwargs,
     ) -> t.Dict[str, int]:
-        """
-        Returns number of cells retained per position in base channel
-        """
+        """Get number of cells retained per position in base channel as a dictionary."""
         return (
             self.concat_signal(path=path, mode=mode, **kwargs)
             .groupby("group")
@@ -256,11 +257,12 @@ class Grouper(ABC):
 
     @property
     def nretained(self) -> t.Dict[str, int]:
+        """Get number of cells retained per position in base channel as a dictionary."""
         return self.ncells()
-
 
     @property
     def channels(self):
+        """Get unique channels for all chains as a set."""
         return set(
             [
                 channel
@@ -271,19 +273,23 @@ class Grouper(ABC):
 
     @property
     def stages_span(self):
+        # FAILS on my example
         return self.fsignal.stages_span
 
     @property
     def max_span(self):
+        # FAILS on my example
         return self.fsignal.max_span
 
     @property
-    def tinterval(self):
-        return self.fsignal.tinterval
+    def stages(self):
+        # FAILS on my example
+        return self.fsignal.stages
 
     @property
-    def stages(self):
-        return self.fsignal.stages
+    def tinterval(self):
+        """Get interval between time points."""
+        return self.fsignal.tinterval
 
 
 class MetaGrouper(Grouper):
@@ -293,22 +299,21 @@ class MetaGrouper(Grouper):
 
 
 class NameGrouper(Grouper):
-    """Group a set of positions using a subsection of the name."""
+    """Group a set of positions with a shorter version of the group's name."""
 
-    def __init__(self, dir, criteria=None):
+    def __init__(self, dir, name_inds=(0, -4)):
+        """Define the indices to slice names."""
         super().__init__(dir=dir)
-        # what does criteria do?
-        if criteria is None:
-            criteria = (0, -4)
-        self.criteria = criteria
+        self.name_inds = name_inds
 
     @property
     def positions_groups(self) -> t.Dict[str, str]:
+        """Get a dictionary with the positions as keys and groups as items."""
         if not hasattr(self, "_positions_groups"):
             self._positions_groups = {}
             for name in self.chainers.keys():
                 self._positions_groups[name] = name[
-                    self.criteria[0] : self.criteria[1]
+                    self.name_inds[0] : self.name_inds[1]
                 ]
         return self._positions_groups
 
@@ -316,8 +321,9 @@ class NameGrouper(Grouper):
 class phGrouper(NameGrouper):
     """Grouper for pH calibration experiments where all surveyed media pH values are within a single experiment."""
 
-    def __init__(self, dir, criteria=(3, 7)):
-        super().__init__(dir=dir, criteria=criteria)
+    def __init__(self, dir, name_inds=(3, 7)):
+        """Initialise via NameGrouper."""
+        super().__init__(dir=dir, name_inds=name_inds)
 
     def get_ph(self) -> None:
         self.ph = {gn: self.ph_from_group(gn) for gn in self.positions_groups}
@@ -350,6 +356,7 @@ class phGrouper(NameGrouper):
         aggregated = pd.concat((aggregated, ph), axis=1)
         return aggregated
 
+
 # Alan: why are these separate functions?
 def concat_standard(
     path: str,
@@ -366,6 +373,7 @@ def concat_standard(
         ("group", "position", "trap", "cell_label", "mother_label")
     )
     return combined
+
 
 # why _ind ?
 def concat_signal_ind(

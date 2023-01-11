@@ -16,10 +16,13 @@ from postprocessor.core.lineageprocess import LineageProcessParameters
 
 class Chainer(Signal):
     """
-    Extend Signal by applying postprocesses.
+    Extend Signal by applying post-processes and allowing composite signals that combine basic signals.
+
     Instead of reading processes previously applied, it executes
     them when called.
     """
+
+    # these no longer seem to be used
     #process_types = ("multisignal", "processes", "reshapers")
     #common_chains = {}
 
@@ -46,7 +49,7 @@ class Chainer(Signal):
                     f"extraction/{channel}/max/median",
                 ),
             }
-
+            # Alan: can we change url to address?
             # function to add bgsub to urls
             def replace_url(url: str, bgsub: str = ""):
                 channel = url.split("/")[1]
@@ -79,6 +82,7 @@ class Chainer(Signal):
         retain: t.Optional[float] = None,
         **kwargs,
     ):
+        """Load data from an h5 file."""
         if dataset in self.common_chains:
             # get dataset for composite chains
             data = self.common_chains[dataset](**kwargs)
@@ -88,8 +92,9 @@ class Chainer(Signal):
             if chain:
                 data = self.apply_chain(data, chain, **kwargs)
         if retain:
-            # keep only early time points (?)
-            data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
+            # keep data only from early time points
+            data = self.get_retained(data, retain)
+            # data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
         if (stages and "stage" not in data.columns.names):
             # return stages as additional column level
             stages_index = [
@@ -145,6 +150,5 @@ class Chainer(Signal):
                         raise (NotImplementedError)
                         merges = process.as_function(result, **params)
                         result = self.apply_merges(result, merges)
-
             self._intermediate_steps.append(result)
         return result

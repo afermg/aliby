@@ -107,7 +107,7 @@ class Signal(BridgeH5):
 
     @staticmethod
     def get_retained(df, cutoff):
-        """Return a percentage of the df without later time points."""
+        """Return a fraction of the df, one without later time points."""
         return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
@@ -118,7 +118,7 @@ class Signal(BridgeH5):
 
     @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
-        """Reduce a dataframe or a list of dataframes by a percentage, losing late time points."""
+        """Reduce a dataframe, or a list of dataframes, to a fraction of its former size, losing late time points."""
         if isinstance(signal, pd.DataFrame):
             return self.get_retained(signal, cutoff)
         elif isinstance(signal, list):
