@@ -16,7 +16,7 @@ from postprocessor.core.lineageprocess import LineageProcessParameters
 
 class Chainer(Signal):
     """
-    Class that extends signal by applying postprocesess.
+    Extend Signal by applying postprocesses.
     Instead of reading processes previously applied, it executes
     them when called.
     """
@@ -35,6 +35,7 @@ class Chainer(Signal):
                 ][0]
                 break
             except:
+                # is this still a good idea?
                 pass
         try:
             # what's this?
@@ -54,6 +55,7 @@ class Chainer(Signal):
                     url = re.sub(channel, f"{channel}_bgsub", url)
                 return url
 
+            # for composite statistics
             # add chain with and without bgsub
             self.common_chains = {
                 alias
@@ -65,6 +67,7 @@ class Chainer(Signal):
                 for bgsub in ("", "_bgsub")
             }
         except:
+            # Is this still a good idea?
             pass
 
     def get(
@@ -77,13 +80,15 @@ class Chainer(Signal):
         **kwargs,
     ):
         if dataset in self.common_chains:
-            # produce dataset on the fly
+            # get dataset for composite chains
             data = self.common_chains[dataset](**kwargs)
         else:
+            # use Signal's get_raw
             data = self.get_raw(dataset, in_minutes=in_minutes)
             if chain:
                 data = self.apply_chain(data, chain, **kwargs)
         if retain:
+            # keep only early time points (?)
             data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
         if (stages and "stage" not in data.columns.names):
             # return stages as additional column level
@@ -102,19 +107,20 @@ class Chainer(Signal):
         self, input_data: pd.DataFrame, chain: t.Tuple[str, ...], **kwargs
     ):
         """
-        Apply a series of processes to a dataset.
+        Apply a series of processes to a data set.
 
-        In a similar fashion to how postprocessing works, Chainer allows the
-        consecutive application of processes to a dataset. Parameters can be
-        passed as kwargs. It does not support the same process multiple times
-        with different parameters.
+        Like postprocessing, Chainer consecutively applies processes.
+
+        Parameters can be passed as kwargs.
+
+        Chainer does not support applying the same process multiple times with different parameters.
 
         Parameters
         ----------
         input_data : pd.DataFrame
-            Input data to iteratively process.
+            Input data to process.
         chain : t.Tuple[str, ...]
-            Tuple of strings with the name of processes.
+            Tuple of strings with the names of the processes
         **kwargs : kwargs
             Arguments passed on to Process.as_function() method to modify the parameters.
 
