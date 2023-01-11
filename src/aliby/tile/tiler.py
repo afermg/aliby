@@ -493,9 +493,8 @@ class Tiler(StepABC):
         return None
 
     def get_traps_timepoint(self, *args, **kwargs):
-        #
-        print(
-            DeprecationWarning("Deprecated:Use get_tiles_timepoint instead.")
+        self._log(
+            "get_trap_timepoints is deprecated; get_tiles_timepoint instead."
         )
 
         return self.get_tiles_timepoint(*args, **kwargs)

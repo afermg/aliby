@@ -32,6 +32,7 @@ New grammar
 - Tables are assumed to end with an empty line.
 """
 
+import logging
 import typing as t
 from pathlib import PosixPath
 
@@ -229,7 +230,9 @@ def parse_from_grammar(filepath: str, grammar: t.Dict):
                     subkey = "_".join((key, subkey))
                     d[subkey] = parse_x(header, **subvalues)
         except Exception as e:
-            print(f"Parsing failed for key {key}")
+            logging.getLogger("aliby").critical(
+                f"Parsing failed for key {key}"
+            )
             raise (e)
     return d
 

@@ -240,7 +240,7 @@ class Signal(BridgeH5):
                 f.visititems(self.store_signal_url)
 
         except Exception as e:
-            print("Error visiting h5: {}".format(e))
+            self._log("Exception when visiting h5: {}".format(e), "exception")
 
         return self._available
 
@@ -289,7 +289,7 @@ class Signal(BridgeH5):
             return df
 
         except Exception as e:
-            print(f"Could not fetch dataset {dataset}")
+            self._log(f"Could not fetch dataset {dataset}", "error")
             raise e
 
     def get_merges(self):
