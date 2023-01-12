@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import typing as t
-from abc import ABC, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
+from importlib_resources import files
 from pathlib import Path, PosixPath
 
 import dask.array as da
@@ -11,6 +12,11 @@ from dask.array.image import imread
 from tifffile import TiffFile
 
 from agora.io.metadata import dir_to_meta
+
+
+def get_examples_dir():
+    """Get examples directory which stores dummy image for tiler"""
+    return files("aliby").parent.parent / "examples" / "tiler"
 
 
 def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
@@ -67,6 +73,21 @@ class BaseLocalImage(ABC):
             ),
         )
         return self._rechunked_img
+
+    @abstractmethod
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
+        examples_dir = get_examples_dir()
+        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
+        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
+        # naming scheme.  The aim is to create a multidimensional dask array that stores
+        # the z-stacks.
+        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
+        img_path = examples_dir / img_filename
+        # img has two dimensions: x, y
+        # This line assumes that the image being imported is of shape (1, *, *).
+        img = imread(str(img_path))[0]
+        return img
 
     @abstractproperty
     def name(self):
