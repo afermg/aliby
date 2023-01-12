@@ -127,7 +127,7 @@ class BridgeOmero:
 
     @abstractmethod
     def init_interface(self):
-        ...
+        pass
 
     @property
     def file_annotations(self):
@@ -302,9 +302,6 @@ class Image(BridgeOmero):
         # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
         image_id = bridge.meta_h5["image_id"]
-        # server_info = safe_load(bridge.meta_h5["parameters"])["general"][
-        #     "server_info"
-        # ]
         return cls(image_id, **cls.server_info_from_h5(filepath))
 
     @property

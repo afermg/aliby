@@ -35,29 +35,6 @@ def imread(path):
     return cv2.imread(str(path), -1)
 
 
-class ImageCache:
-    """HDF5-based image cache for faster loading of the images once they've
-    been read.
-    """
-
-    def __init__(self, file, name, shape, remote_fn):
-        self.store = h5py.File(file, "a")
-        # Create a dataset
-        self.dataset = self.store.create_dataset(
-            name, shape, dtype=np.float, fill_value=np.nan
-        )
-        self.remote_fn = remote_fn
-
-    def __getitem__(self, item):
-        cached = self.dataset[item]
-        if np.any(np.isnan(cached)):
-            full = self.remote_fn(item)
-            self.dataset[item] = full
-            return full
-        else:
-            return cached
-
-
 class Cache:
     """
     Fixed-length mapping to use as a cache.

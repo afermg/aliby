@@ -140,9 +140,6 @@ def segment_traps(
         return traps_retry
 
 
-###
-
-
 def identify_trap_locations(
     image, trap_template, optimize_scale=True, downscale=0.35, trap_size=None
 ):
@@ -240,103 +237,10 @@ def identify_trap_locations(
 
 
 def stretch_image(image):
+    # FIXME Used in aliby.utils.imageViewer
     image = ((image - image.min()) / (image.max() - image.min())) * 255
     minval = np.percentile(image, 2)
     maxval = np.percentile(image, 98)
     image = np.clip(image, minval, maxval)
     image = (image - minval) / (maxval - minval)
     return image
-
-
-def get_tile_shapes(x, tile_size):
-    half_size = tile_size // 2
-    xmin = int(x[0] - half_size)
-    ymin = max(0, int(x[1] - half_size))
-
-    return xmin, xmin + tile_size, ymin, ymin + tile_size
-
-
-def in_image(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3):
-    if xmin >= 0 and ymin >= 0:
-        if xmax < img.shape[xidx] and ymax < img.shape[yidx]:
-            return True
-    else:
-        return False
-
-
-def get_xy_tile(img, xmin, xmax, ymin, ymax, xidx=2, yidx=3, pad_val=None):
-    if pad_val is None:
-        pad_val = np.median(img)
-    # Get the tile from the image
-    idx = [slice(None)] * len(img.shape)
-    idx[xidx] = slice(max(0, xmin), min(xmax, img.shape[xidx]))
-    idx[yidx] = slice(max(0, ymin), min(ymax, img.shape[yidx]))
-    tile = img[tuple(idx)]
-    # Check if the tile is in the image
-    if in_image(img, xmin, xmax, ymin, ymax, xidx, yidx):
-        return tile
-    else:
-        # Add padding
-        pad_shape = [(0, 0)] * len(img.shape)
-        pad_shape[xidx] = (max(-xmin, 0), max(xmax - img.shape[xidx], 0))
-        pad_shape[yidx] = (max(-ymin, 0), max(ymax - img.shape[yidx], 0))
-        tile = np.pad(tile, pad_shape, constant_values=pad_val)
-    return tile
-
-
-def tile_where(centre, x, y, MAX_X, MAX_Y):
-    # Find the position of the tile
-    xmin = int(centre[1] - x // 2)
-    ymin = int(centre[0] - y // 2)
-    xmax = xmin + x
-    ymax = ymin + y
-    # What do we actually have available?
-    r_xmin = max(0, xmin)
-    r_xmax = min(MAX_X, xmax)
-    r_ymin = max(0, ymin)
-    r_ymax = min(MAX_Y, ymax)
-    return xmin, ymin, xmax, ymax, r_xmin, r_ymin, r_xmax, r_ymax
-
-
-def get_tile(shape, center, raw_expt, ch, t, z):
-    """Returns a tile from the raw experiment with a given shape.
-
-    :param shape: The shape of the tile in (C, T, Z, Y, X) order.
-    :param center: The x,y position of the centre of the tile
-    :param
-    """
-    _, _, x, y, _ = shape
-    _, _, MAX_X, MAX_Y, _ = raw_expt.shape
-    tile = np.full(shape, np.nan)
-
-    # Find the position of the tile
-    xmin = int(center[1] - x // 2)
-    ymin = int(center[0] - y // 2)
-    xmax = xmin + x
-    ymax = ymin + y
-    # What do we actually have available?
-    r_xmin = max(0, xmin)
-    r_xmax = min(MAX_X, xmax)
-    r_ymin = max(0, ymin)
-    r_ymax = min(MAX_Y, ymax)
-
-    # Fill values
-    tile[
-        :,
-        :,
-        (r_xmin - xmin) : (r_xmax - xmin),
-        (r_ymin - ymin) : (r_ymax - ymin),
-        :,
-    ] = raw_expt[ch, t, r_xmin:r_xmax, r_ymin:r_ymax, z]
-    # fill_val = np.nanmedian(tile)
-    # np.nan_to_num(tile, nan=fill_val, copy=False)
-    return tile
-
-
-def centre(img, percentage=0.3):
-    y, x = img.shape
-    cropx = int(np.ceil(x * percentage))
-    cropy = int(np.ceil(y * percentage))
-    startx = int(x // 2 - (cropx // 2))
-    starty = int(y // 2 - (cropy // 2))
-    return img[starty : starty + cropy, startx : startx + cropx]

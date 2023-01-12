@@ -25,16 +25,17 @@ class buddingsParameters(LineageProcessParameters):
     FIXME: Add docs.
 
     """
-
     _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
 
+# TODO Why not capitalized?
 class buddings(LineageProcess):
     """
     Calculate buddings in a trap assuming one mother per trap
 
     returns a pandas series with the buddings
     """
+    # TODO might want to define "buddings" more scientifically
 
     def __init__(self, parameters: buddingsParameters):
         super().__init__(parameters)

@@ -1,5 +1,5 @@
 #!/usr/bin/env jupyter
-
+# TODO should this be merged to the regular logfile_parser structure?
 """
 Description of new logfile:
 
@@ -298,18 +298,3 @@ def parse_x(string: str, type: str, **kwargs):
 
 def parse_from_swainlab_grammar(filepath: t.Union[str, PosixPath]):
     return parse_from_grammar(filepath, grammar)
-
-
-# test_file = "/home/alan/Documents/dev/skeletons/scripts/dev/C1_60x.log"
-# test_file = "/home/alan/Documents/dev/skeletons/scripts/dev/bak"
-# test_file = "/home/alan/Documents/dev/skeletons/scripts/dev/two_tables.log"
-# test_file = "/home/alan/Downloads/pH_med_to_low 1.log"
-# test_file = "/home/alan/Documents/dev/skeletons/scripts/data/577_2022_12_20_pHCalibrate6_7_00/pHCalibrate6_7.log"
-
-
-# d = parse_from_grammar(test_file, grammar)
-# print(d)
-
-# from logfile_parser.legacy import get_legacy_log_example_interface
-
-# original = get_legacy_log_example_interface()

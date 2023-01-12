@@ -281,8 +281,6 @@ class Tiler(ProcessABC):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = BridgeH5(filepath).meta_h5
         metadata["channels"] = image.metadata["channels"]
-        # metadata["zsectioning/nsections"] = image.metadata["zsectioning/nsections"]
-        # metadata["channels/zsect"] = image.metadata["channels/zsect"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(

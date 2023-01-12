@@ -16,6 +16,7 @@ class PostProcessABC(ProcessABC):
 
     @classmethod
     def as_function(cls, data, *extra_data, **kwargs):
+        # FIXME can this be a __call__ method instead?
         # Find the parameter's default
         parameters = cls.default_parameters(**kwargs)
         return cls(parameters=parameters).run(data, *extra_data)
