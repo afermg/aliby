@@ -49,14 +49,14 @@ class Chainer(Signal):
                     f"extraction/{channel}/max/median",
                 ),
             }
-            # Alan: can we change url to address?
-            # function to add bgsub to urls
-            def replace_url(url: str, bgsub: str = ""):
-                channel = url.split("/")[1]
+
+            # function to add bgsub to paths
+            def replace_path(path: str, bgsub: str = ""):
+                channel = path.split("/")[1]
                 if "bgsub" in bgsub:
-                    # add bgsub to url
-                    url = re.sub(channel, f"{channel}_bgsub", url)
-                return url
+                    # add bgsub to path
+                    path = re.sub(channel, f"{channel}_bgsub", path)
+                return path
 
             # for composite statistics
             # add chain with and without bgsub
@@ -65,7 +65,7 @@ class Chainer(Signal):
                 + bgsub: lambda **kwargs: self.get(
                     replace_url(denominator, alias + bgsub), **kwargs
                 )
-                / self.get(replace_url(numerator, alias + bgsub), **kwargs)
+                / self.get(replace_path(numerator, alias + bgsub), **kwargs)
                 for alias, (denominator, numerator) in equivalences.items()
                 for bgsub in ("", "_bgsub")
             }

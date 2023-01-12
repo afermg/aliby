@@ -10,9 +10,9 @@ import pandas as pd
 
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_df
-from agora.utils.merge import apply_merges
 from agora.utils.association import validate_association
 from agora.utils.kymograph import add_index_levels
+from agora.utils.merge import apply_merges
 
 
 class Signal(BridgeH5):
@@ -59,7 +59,7 @@ class Signal(BridgeH5):
             # Alan: what does this error message mean?
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
-            ), "Trap data and cell data can't be mixed"
+            ), "Tile data and cell data can't be mixed"
             return [
                 self.add_name(self.apply_prepost(dset), dset) for dset in dsets
             ]
@@ -88,7 +88,7 @@ class Signal(BridgeH5):
 
     @cached_property
     def ntimepoints(self):
-        """Find the number of time points for one h5 file."""
+        """Find the number of time points for one position, or one h5 file."""
         with h5py.File(self.filename, "r") as f:
             return f["extraction/general/None/area/timepoint"][-1] + 1
 
@@ -131,19 +131,19 @@ class Signal(BridgeH5):
         """
         Get lineage data from a given location in the h5 file.
 
-        Returns an array with three columns: the trap id, the mother label, and the daughter label.
+        Returns an array with three columns: the tile id, the mother label, and the daughter label.
         """
         if lineage_location is None:
             lineage_location = "postprocessing/lineage"
             if merged:
                 lineage_location += "_merged"
         with h5py.File(self.filename, "r") as f:
-            trap_mo_da = f[lineage_location]
+            tile_mo_da = f[lineage_location]
             lineage = np.array(
                 (
-                    trap_mo_da["trap"],
-                    trap_mo_da["mother_label"],
-                    trap_mo_da["daughter_label"],
+                    tile_mo_da["trap"],
+                    tile_mo_da["mother_label"],
+                    tile_mo_da["daughter_label"],
                 )
             ).T
         return lineage
@@ -163,10 +163,10 @@ class Signal(BridgeH5):
         data : t.Union[str, pd.DataFrame]
             DataFrame or url to one.
         merges : t.Union[np.ndarray, bool]
-            (optional) 2-D array with three columns: the trap id, the mother label, and the daughter id.
+            (optional) 2-D array with three columns: the tile id, the mother label, and the daughter id.
             If True, fetch merges from file.
         picks : t.Union[np.ndarray, bool]
-            (optional) 2-D array with two columns: the traps and
+            (optional) 2-D array with two columns: the tiles and
             the cell labels.
             If True, fetch picks from file.
 

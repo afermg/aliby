@@ -36,7 +36,7 @@ class Grouper(ABC):
         self.load_chains()
 
     def load_chains(self) -> None:
-        """Load a chain for each h5 file."""
+        """Load a chain for each position, or h5 file."""
         self.chainers = {f.name[:-3]: Chainer(f) for f in self.files}
 
     @property
@@ -91,7 +91,7 @@ class Grouper(ABC):
         **kwargs,
     ):
         """
-        Concatenate data for one signal from different h5 files into a dataframe.
+        Concatenate data for one signal from different h5 files, with one h5 file per position, into a dataframe.
 
         Parameters
         ----------
@@ -204,27 +204,27 @@ class Grouper(ABC):
         return Counter(self.positions_groups.values())
 
     @property
-    def ntraps(self):
-        """Get total number of traps per position (h5 file)."""
+    def ntiles(self):
+        """Get total number of tiles per position (h5 file)."""
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
                 print(pos, f["/trap_info/trap_locations"].shape[0])
 
     @property
-    def ntraps_by_group(self) -> t.Dict[str, int]:
-        """Get total number of traps per group."""
-        ntraps = {}
+    def ntiles_by_group(self) -> t.Dict[str, int]:
+        """Get total number of tiles per group."""
+        ntiles = {}
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
-                ntraps[pos] = f["/trap_info/trap_locations"].shape[0]
-        ntraps_by_group = {k: 0 for k in self.groups}
-        for posname, vals in ntraps.items():
-            ntraps_by_group[self.positions_groups[posname]] += vals
-        return ntraps_by_group
+                ntiles[pos] = f["/trap_info/trap_locations"].shape[0]
+        ntiles_by_group = {k: 0 for k in self.groups}
+        for posname, vals in ntiles.items():
+            ntiles_by_group[self.positions_groups[posname]] += vals
+        return ntiles_by_group
 
     @property
-    def traplocs(self) -> t.Dict[str, np.ndarray]:
-        """Get the locations of the traps for each position as a dictionary."""
+    def tilelocs(self) -> t.Dict[str, np.ndarray]:
+        """Get the locations of the tiles for each position as a dictionary."""
         d = {}
         for pos, s in self.chainers.items():
             with h5py.File(s.filename, "r") as f:
@@ -326,20 +326,22 @@ class phGrouper(NameGrouper):
         super().__init__(dir=dir, name_inds=name_inds)
 
     def get_ph(self) -> None:
+        """Find the pH from the group names and store as a dictionary."""
         self.ph = {gn: self.ph_from_group(gn) for gn in self.positions_groups}
 
     @staticmethod
-    def ph_from_group(group_name: int) -> float:
-        if group_name.startswith("ph_"):
+    def ph_from_group(group_name: str) -> float:
+        """Find the pH from the name of a group."""
+        if group_name.startswith("ph_") or group_name.startswith("pH_"):
             group_name = group_name[3:]
         return float(group_name.replace("_", "."))
 
-    def aggregate_multichains(self, paths: list) -> pd.DataFrame:
-        """Accumulate multiple chains."""
+    def aggregate_multichains(self, signals: list) -> pd.DataFrame:
+        """Get data from a list of signals and combine into one multi-index dataframe with 'media-pH' included."""
         aggregated = pd.concat(
             [
-                self.concat_signal(path, reduce_cols=np.nanmean)
-                for path in paths
+                self.concat_signal(signal, reduce_cols=np.nanmean)
+                for signal in signals
             ],
             axis=1,
         )
@@ -420,6 +422,14 @@ class MultiGrouper:
     folder."""
 
     def __init__(self, source: Union[str, list]):
+        """
+        Create NameGroupers for each experiment.
+
+        Parameters
+        ----------
+        source: list of str
+            List of folders, one per experiment, containing h5 files.
+        """
         if isinstance(source, str):
             source = Path(source)
             self.exp_dirs = list(source.glob("*"))
@@ -431,43 +441,38 @@ class MultiGrouper:
 
     @property
     def available(self) -> None:
+        """Print available signals and number of chains, one per position, for each Grouper."""
         for gpr in self.groupers:
             print(gpr.available_grouped)
 
     @property
     def sigtable(self) -> pd.DataFrame:
-        """Generate a matrix containing the number of datasets for each signal
-        and experiment."""
+        """Generate a table showing the number of positions, or h5 files, available for each signal with one column per experiment."""
 
         def regex_cleanup(x):
             x = re.sub(r"extraction\/", "", x)
             x = re.sub(r"postprocessing\/", "", x)
             x = re.sub(r"\/max", "", x)
-
             return x
 
         if not hasattr(self, "_sigtable"):
             raw_mat = [
-                [s.available for s in gpr.chains.values()]
+                [s.available for s in gpr.chainers.values()]
                 for gpr in self.groupers
             ]
             available_grouped = [
                 Counter([x for y in grp for x in y]) for grp in raw_mat
             ]
-
             nexps = len(available_grouped)
             sigs_idx = list(
                 set([y for x in available_grouped for y in x.keys()])
             )
             sigs_idx = [regex_cleanup(x) for x in sigs_idx]
-
             nsigs = len(sigs_idx)
-
             sig_matrix = np.zeros((nsigs, nexps))
             for i, c in enumerate(available_grouped):
                 for k, v in c.items():
                     sig_matrix[sigs_idx.index(regex_cleanup(k)), i] = v
-
             sig_matrix[sig_matrix == 0] = np.nan
             self._sigtable = pd.DataFrame(
                 sig_matrix,
@@ -476,8 +481,10 @@ class MultiGrouper:
             )
         return self._sigtable
 
+    # Alan: function seems out of place
     def sigtable_plot(self) -> None:
-        """Plot number of chains for all available experiments.
+        """
+        Plot number of chains for all available experiments.
 
         Examples
         --------
@@ -497,27 +504,30 @@ class MultiGrouper:
         path: Union[str, list],
         **kwargs,
     ) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
-        """Aggregate chains from multiple Groupers (and thus experiments)
+        """
+        Aggregate chains, one per position, from multiple Groupers, one per experiment.
 
         Parameters
         ----------
-        chains : Union[str, list]
-            string or list of strings indicating the signal(s) to fetch.
-        **kwargs : keyword arguments to pass to Grouper.concat_signal
-            Customise the filters and format to fetch chains.
+        path : Union[str, list]
+            String or list of strings indicating the signal(s) to fetch.
+        **kwargs :
+            Passed to Grouper.concat_signal.
 
         Returns
         -------
-        Union[pd.DataFrame, Dict[str, pd.DataFrame]]
-            DataFrame or list of DataFrames
+        concatenated: Union[pd.DataFrame, Dict[str, pd.DataFrame]]
+            A multi-index dataFrame or a dictionary of multi-index dataframes, one per signal
 
         Examples
         --------
-        FIXME: Add docs.
+        >>> mg = MultiGrouper(["pHCalibrate7_24", "pHCalibrate6_7"])
+        >>> p405 = mg.aggregate_signal("extraction/pHluorin405_0_4/max/median")
+        >>> p588 = mg.aggregate_signal("extraction/pHluorin488_0_4/max/median")
+        >>> ratio = p405 / p488
         """
         if isinstance(path, str):
             path = [path]
-
         sigs = {s: [] for s in path}
         for s in path:
             for grp in self.groupers:
@@ -527,18 +537,14 @@ class MultiGrouper:
                         [(grp.name, *x) for x in sigset.index],
                         names=("experiment", *sigset.index.names),
                     )
-
                     sigset.index = new_idx
                     sigs[s].append(sigset)
                 except Exception as e:
                     print("Grouper {} failed: {}".format(grp.name, e))
-                    # raise (e)
-
-        concated = {
+        concatenated = {
             name: pd.concat(multiexp_sig)
             for name, multiexp_sig in sigs.items()
         }
-        if len(concated) == 1:
-            concated = list(concated.values())[0]
-
-        return concated
+        if len(concatenated) == 1:
+            concatenated = list(concatenated.values())[0]
+        return concatenated
