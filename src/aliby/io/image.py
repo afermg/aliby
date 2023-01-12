@@ -75,6 +75,7 @@ class BaseLocalImage(ABC):
         return self._rechunked_img
 
     @abstractmethod
+    # Should this function take Tiler parameters as an argument?
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
         examples_dir = get_examples_dir()
