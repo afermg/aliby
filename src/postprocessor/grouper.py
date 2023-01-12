@@ -385,7 +385,7 @@ def concat_signal_ind(
     **kwargs,
 ) -> pd.DataFrame:
     """
-    Core function that handles retrieval of an individual signal.
+    Core function that retrieves an individual signal.
 
     Applies filtering if requested and adjusts indices.
     """
@@ -406,6 +406,7 @@ def concat_signal_ind(
     else:
         raise Exception(f"{mode} not recognised.")
     if combined is not None:
+        # adjust indices
         combined["position"] = position
         combined["group"] = group
         combined.set_index(["group", "position"], inplace=True, append=True)
