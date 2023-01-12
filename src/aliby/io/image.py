@@ -75,20 +75,8 @@ class BaseLocalImage(ABC):
         return self._rechunked_img
 
     @abstractmethod
-    # Should this function take Tiler parameters as an argument?
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
-        examples_dir = get_examples_dir()
-        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
-        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
-        # naming scheme.  The aim is to create a multidimensional dask array that stores
-        # the z-stacks.
-        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
-        img_path = examples_dir / img_filename
-        # img has two dimensions: x, y
-        # This line assumes that the image being imported is of shape (1, *, *).
-        img = imread(str(img_path))[0]
-        return img
+        pass
 
     @abstractproperty
     def name(self):
@@ -105,6 +93,63 @@ class BaseLocalImage(ABC):
     @property
     def metadata(self):
         return self._meta
+
+
+class ImageDummy(BaseLocalImage):
+    # def __init__(self, path: t.Union[str, PosixPath]):
+    #     super().__init__(path)
+
+    # ImageDummy simulates the case that we already know tiler parameters (which is
+    # the case if we run a typical pipeline) before a pipeline is run.
+    # So the purpose of this class is to make sure that if something goes wrong,
+    # we know whether it is because of the parameters or the input data.
+    def __init__(self, tiler_parameters: dict):
+        # Build image instance with this class method.
+        # self.ref_channel = ...
+        # self.ref_z = ...
+        pass
+
+    @staticmethod
+    def pad_array(image_array: da.Array, n_empty_slices: int, dim: int):
+        """
+        i: size of the new dimension
+        dim: indicates which dimension within t,c,z,x,y
+
+        tmp = result
+        for _ in range(dim+1):
+           tmp = tmp[-1]
+        tmp[n_empty_slices] == image_array
+
+        result.shape[dim]==i+1
+        """
+        # Add new dimensions.
+        # i.e. combine zero-filled arrays to a normal image,
+        # so that whatever parameters you give it will return a valid image.
+        # Goal: make Tiler happy.
+        pass
+
+    # Logic: We want to return a image instance
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
+        examples_dir = get_examples_dir()
+        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
+        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
+        # naming scheme.  The aim is to create a multidimensional dask array that stores
+        # the z-stacks.
+        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
+        img_path = examples_dir / img_filename
+        # img has two dimensions: x, y
+        # This line assumes that the image being imported is of shape (1, *, *).
+        img = imread(str(img_path))[0]
+        # (Add loop to pad all 5 dimensions)
+        # output = pad_array(img, self.ref_channel, self.ref_z)
+        return img  # return output --> this should be a 5d dask array
+
+    def name(self):
+        pass
+
+    def dimorder(self):
+        pass
 
 
 class ImageLocalOME(BaseLocalImage):
