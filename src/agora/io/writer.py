@@ -1,4 +1,3 @@
-import itertools
 import logging
 from collections.abc import Iterable
 from pathlib import Path
@@ -54,6 +53,11 @@ class DynamicWriter:
         # the metadata is stored as attributes in the h5 file
         if Path(file).exists():
             self.metadata = load_attributes(file)
+
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
     def _append(self, data, key, hgroup):
         """
@@ -174,7 +178,9 @@ class DynamicWriter:
                             self._append(value, key, hgroup)
                     except Exception as e:
                         print(key, value)
-                        raise (e)
+                        self._log(
+                            f"{key}:{value} could not be written: {e}", "error"
+                        )
             # write metadata
             for key, value in meta.items():
                 hgroup.attrs[key] = value
@@ -828,9 +834,7 @@ class Writer(BridgeH5):
                 )
                 # split indices in existing and additional
                 new = df.index.tolist()
-                if (
-                    df.index.nlevels == 1
-                ):
+                if df.index.nlevels == 1:
                     # cover cases with a single index
                     new = [(x,) for x in df.index.tolist()]
                 (
@@ -929,8 +933,6 @@ class Writer(BridgeH5):
         existing_cells = np.array(list(set_existing.intersection(new)))
         new_cells = np.array(list(set(new).difference(set_existing)))
         return existing_cells, new_cells
-
-
 
 
 def locate_indices(existing, new):

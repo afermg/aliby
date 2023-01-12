@@ -475,7 +475,7 @@ class Pipeline(ProcessABC):
                                         step == "tiler"
                                         and i == min_process_from
                                     ):
-                                        print(
+                                        logging.getLogger("aliby").info(
                                             f"Found {steps['tiler'].n_traps} traps in {image.name}"
                                         )
                                     elif (
