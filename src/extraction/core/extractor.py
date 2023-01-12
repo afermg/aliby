@@ -450,6 +450,7 @@ class Extractor(StepABC):
             An example is d["GFP"]["np_max"]["mean"][0], which gives a tuple of the calculated mean GFP fluorescence for all cells.
 
         """
+        # TODO Can we split the different extraction types into sub-methods to make this easier to read?
         if tree is None:
             # use default
             tree: extraction_tree = self.params.tree
