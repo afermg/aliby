@@ -1,3 +1,4 @@
+# TODO Module docstring
 import typing as t
 from abc import abstractmethod
 
@@ -6,8 +7,6 @@ import pandas as pd
 
 from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
-
-# from agora.utils.lineage import group_matrix
 
 
 class LineageProcessParameters(ParametersABC):
@@ -47,18 +46,14 @@ class LineageProcess(PostProcessABC):
         Overrides PostProcess.as_function classmethod.
         Lineage functions require lineage information to be passed if run as function.
         """
-        # if isinstance(lineage, np.ndarray):
-        #     lineage = group_matrix(lineage, n_keys=2)
-
         parameters = cls.default_parameters(**kwargs)
         return cls(parameters=parameters).run(
             data, lineage=lineage, *extra_data
         )
-        # super().as_function(data, *extra_data, lineage=lineage, **kwargs)
 
     def load_lineage(self, lineage):
         """
         Reshape the lineage information if needed
         """
-
+        # TODO does this need to be a function?
         self.lineage = lineage

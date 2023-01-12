@@ -351,24 +351,6 @@ class Signal(BridgeH5):
     def stem(self):
         return self.filename.stem
 
-    # def dataset_to_df(self, f: h5py.File, path: str):
-
-    #     all_indices = self.index_names
-
-    #     valid_indices = {
-    #         k: f[path][k][()] for k in all_indices if k in f[path].keys()
-    #     }
-
-    #     new_index = pd.MultiIndex.from_arrays(
-    #         list(valid_indices.values()), names=valid_indices.keys()
-    #     )
-
-    #     return pd.DataFrame(
-    #         f[path + "/values"][()],
-    #         index=new_index,
-    #         columns=f[path + "/timepoint"][()],
-    #     )
-
     def store_signal_url(
         self, fullname: str, node: t.Union[h5py.Dataset, h5py.Group]
     ):
