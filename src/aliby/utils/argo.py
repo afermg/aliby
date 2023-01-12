@@ -282,10 +282,6 @@ class OmeroExplorer:
             for k, v in self.cache.items()
         }
 
-    # @staticfunction
-    # def number_of_X(logfile: str):
-    #     return re.findall("X", logfile)
-
     def dset_count(
         self,
         dset: t.Union[int, _DatasetWrapper],
@@ -351,17 +347,6 @@ class Argo(OmeroExplorer):
         super().__init__(*args, **kwargs)
 
 
-def get_creds():
-    return (
-        "upload",
-        "***REMOVED***",  # OMERO Password
-    )
-
-
-def list_files(dset):
-    return {x for x in dset.listAnnotations() if hasattr(x, "getFileName")}
-
-
 def annot_from_dset(dset, kind):
     v = [x for x in dset.listAnnotations() if hasattr(x, "getFileName")]
     infname = kind if kind == "log" else kind.title()
@@ -374,7 +359,6 @@ def annot_from_dset(dset, kind):
     except Exception as e:
         print(f"Conversion from acquisition file failed: {e}")
         return {}
-
     return acq
 
 
@@ -393,6 +377,7 @@ def check_channels(acq, channels, _all=True):
 
 
 def get_chs(exptype):
+    # TODO Documentation
     exptypes = {
         "dual_ph": ("GFP", "pHluorin405", "mCherry"),
         "ph": ("GFP", "pHluorin405"),
@@ -403,6 +388,7 @@ def get_chs(exptype):
 
 
 def load_annot_from_cache(exp_id, cache_dir="cache/"):
+    # TODO Documentation
     if type(cache_dir) is not PosixPath:
         cache_dir = Path(cache_dir)
 
@@ -428,16 +414,6 @@ def parse_annot(str_io, fmt):
     return parser.parse(io.StringIO(str_io))
 
 
-def get_log_date(annot_sets):
-    log = get_annot(annot_sets, "log")
-    return log.get("date", None)
-
-
-def get_log_microscope(annot_sets):
-    log = get_annot(annot_sets, "log")
-    return log.get("microscope", None)
-
-
 def get_annotsets(dset):
     annot_files = [
         annot.getFile()
@@ -457,12 +433,8 @@ def get_annotsets(dset):
     return annot_sets
 
 
-# def has_tags(d, tags):
-#     if set(tags).intersection(annot_from_dset(d, "log").get("omero_tags", [])):
-#         return True
-
-
 def load_acq(dset):
+    # TODO Documentation
     try:
         acq = annot_from_dset(dset, kind="acq")
         return acq
@@ -472,6 +444,7 @@ def load_acq(dset):
 
 
 def has_channels(dset, exptype):
+    # TODO Documentation
     acq = load_acq(dset)
     if acq:
         return check_channels(acq, get_chs(exptype))
@@ -479,26 +452,8 @@ def has_channels(dset, exptype):
         return
 
 
-# Custom functions
-def compare_dsets_voltages_exp(dsets):
-    a = {}
-    for d in dsets:
-        try:
-            acq = annot_from_dset(d, kind="acq")["channels"]
-            a[d.getId()] = {
-                k: (v, e)
-                for k, v, e in zip(
-                    acq["channel"], acq["voltage"], acq["exposure"]
-                )
-            }
-
-        except Exception as e:
-            print(d, f"Data set voltage comparison did not work:{e}")
-
-    return a
-
-
 def get_logfile(dset):
+    # TODO Documentation
     annot_file = [
         annot.getFile()
         for annot in dset.listAnnotations()

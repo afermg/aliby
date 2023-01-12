@@ -191,7 +191,7 @@ class Pipeline(ProcessABC):
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
+            "%(asctime)s - %(levelname)s:%(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
 
@@ -499,14 +499,14 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            logging.warn(
+                            self._log(
                                 f"{name}:Clogged_traps:{frac_clogged_traps}"
                             )
 
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
                         else:  # Stop if more than X% traps are clogged
-                            self._logger.warn(
+                            self._log(
                                 f"{name}:Analysis stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             meta.add_fields({"end_status": "Clogged"})
@@ -521,7 +521,7 @@ class Pipeline(ProcessABC):
                     )
                     PostProcessor(filename, post_proc_params).run()
 
-                    self._logger.info("Analysis finished successfully.")
+                    self._log("Analysis finished successfully.", "info")
                     return 1
 
         except Exception as e:  # bug during setup or runtime
@@ -535,15 +535,6 @@ class Pipeline(ProcessABC):
             raise e
         finally:
             _close_session(session)
-
-        # try:
-        #     compiler = ExperimentCompiler(None, filepath)
-        #     tmp = compiler.run()
-        #     po = PageOrganiser(tmp, grid_spec=(3, 2))
-        #     po.plot()
-        #     po.save(fullpath / f"{directory}report.pdf")
-        # except Exception as e:
-        #     print("Report failed: {}".format(e))
 
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
@@ -678,7 +669,7 @@ class Pipeline(ProcessABC):
 
             # If no previous segmentation and keep tiler
             if filename.exists():
-                self._logger.warn("IO: Result file exists.")
+                self._log("Result file exists.", "info")
                 if not ow["tiler"]:
                     steps["tiler"] = Tiler.from_hdf5(image, filename)
                     try:
@@ -699,29 +690,6 @@ class Pipeline(ProcessABC):
                         config["tiler"] = steps["tiler"].parameters.to_dict()
                     except Exception:
                         pass
-
-                # Delete datasets to overwrite and update pipeline data
-                # Use existing parameters
-                # with h5py.File(filename, "a") as f:
-                #     pparams = PipelineParameters.from_yaml(
-                #         f.attrs["parameters"]
-                #     ).to_dict()
-
-                #     for k, v in ow.items():
-                #         if v:
-                #             for gname in self.writer_groups[k]:
-                #                 if gname in f:
-                #                     del f[gname]
-
-                #         pparams[k] = config[k]
-                # meta.add_fields(
-                #     {
-                #         "parameters": PipelineParameters.from_dict(
-                #             pparams
-                #         ).to_yaml()
-                #     },
-                #     overwrite=True,
-                # )
 
             meta.run()
             meta.add_fields(  # Add non-logfile metadata

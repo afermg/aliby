@@ -36,6 +36,11 @@ class Cells:
     def from_source(cls, source: t.Union[PosixPath, str]):
         return cls(Path(source))
 
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
+
     @staticmethod
     def _asdense(array: np.ndarray):
         if not isdense(array):
@@ -300,7 +305,7 @@ class Cells:
             )
         else:
             mothers_daughters = np.array([])
-            # print("Warning:Cells: No mother-daughters assigned")
+            self._log("No mother-daughters assigned")
 
         return mothers_daughters
 

@@ -1,34 +1,20 @@
-# from abc import ABC, abstractmethod
-
-# from copy import copy
-# from itertools import groupby
-# from typing import List, Tuple, Union
 import typing as t
-from typing import Union
 
-# import igraph as ig
 import numpy as np
 import pandas as pd
 
 from agora.abc import ParametersABC
 from agora.io.cells import Cells
 
-# from postprocessor.core.functions.tracks import max_nonstop_ntps, max_ntps
 from agora.utils.association import validate_association
 from postprocessor.core.lineageprocess import LineageProcess
-
-# from utils_find_1st import cmp_equal, find_1st
 
 
 class pickerParameters(ParametersABC):
     _defaults = {
         "sequence": [
             ["lineage", "intersection", "families"],
-            # ["condition", "intersection", "any_present", 0.7],
-            # ["condition", "intersection", "growing", 80],
             ["condition", "intersection", "present", 7],
-            # ["condition", "intersection", "mb_guess", 3, 0.7],
-            # ("lineage", "intersection", "full_families"),
         ],
     }
 
@@ -80,15 +66,7 @@ class picker(LineageProcess):
 
         idx = idx[valid_indices]
         mothers_daughters = mothers_daughters[valid_lineage]
-
-        # return mothers_daughters, idx
         return idx
-
-    def loc_lineage(self, kymo: pd.DataFrame, how: str, lineage=None):
-        _, valid_indices = self.pick_by_lineage(
-            kymo, how, mothers_daughters=lineage
-        )
-        return kymo.loc[[tuple(x) for x in valid_indices]]
 
     def pick_by_condition(self, signals, condition, thresh):
         idx = self.switch_case(signals, condition, thresh)
@@ -122,7 +100,7 @@ class picker(LineageProcess):
 
                 indices = indices.intersection(new_indices)
         else:
-            print("WARNING:Picker: No lineage assignment")
+            self._log(f"No lineage assignment")
             indices = np.array([])
 
         return np.array(list(indices))
@@ -131,7 +109,7 @@ class picker(LineageProcess):
         self,
         signals: pd.DataFrame,
         condition: str,
-        threshold: Union[float, int, list],
+        threshold: t.Union[float, int, list],
     ):
         if len(threshold) == 1:
             threshold = [_as_int(*threshold, signals.shape[1])]
@@ -145,7 +123,7 @@ class picker(LineageProcess):
         return set(signals.index[case_mgr[condition](signals, *threshold)])
 
 
-def _as_int(threshold: Union[float, int], ntps: int):
+def _as_int(threshold: t.Union[float, int], ntps: int):
     if type(threshold) is float:
         threshold = ntps * threshold
     return threshold

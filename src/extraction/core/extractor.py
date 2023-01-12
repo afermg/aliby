@@ -301,7 +301,7 @@ class Extractor(StepABC):
             A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
         """
         if labels is None:
-            print("Warning: No labels given. Sorting cells using index.")
+            self._log("No labels given. Sorting cells using index.")
 
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []
@@ -450,6 +450,7 @@ class Extractor(StepABC):
             An example is d["GFP"]["np_max"]["mean"][0], which gives a tuple of the calculated mean GFP fluorescence for all cells.
 
         """
+        # TODO Can we split the different extraction types into sub-methods to make this easier to read?
         if tree is None:
             # use default
             tree: extraction_tree = self.params.tree

@@ -84,9 +84,7 @@ class Signal(BridgeH5):
         try:
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
-            self._logger.warn(
-                f"{self.__class__.__name__}: Unable to convert columns to minutes: {e}"
-            )
+            self._log(f"Unable to convert columns to minutes: {e}")
         return df
 
     @cached_property
@@ -242,7 +240,7 @@ class Signal(BridgeH5):
                 f.visititems(self.store_signal_url)
 
         except Exception as e:
-            print("Error visiting h5: {}".format(e))
+            self._log("Exception when visiting h5: {}".format(e), "exception")
 
         return self._available
 
@@ -291,7 +289,7 @@ class Signal(BridgeH5):
             return df
 
         except Exception as e:
-            print(f"Could not fetch dataset {dataset}")
+            self._log(f"Could not fetch dataset {dataset}", "error")
             raise e
 
     def get_merges(self):
@@ -352,24 +350,6 @@ class Signal(BridgeH5):
     @property
     def stem(self):
         return self.filename.stem
-
-    # def dataset_to_df(self, f: h5py.File, path: str):
-
-    #     all_indices = self.index_names
-
-    #     valid_indices = {
-    #         k: f[path][k][()] for k in all_indices if k in f[path].keys()
-    #     }
-
-    #     new_index = pd.MultiIndex.from_arrays(
-    #         list(valid_indices.values()), names=valid_indices.keys()
-    #     )
-
-    #     return pd.DataFrame(
-    #         f[path + "/values"][()],
-    #         index=new_index,
-    #         columns=f[path + "/timepoint"][()],
-    #     )
 
     def store_signal_url(
         self, fullname: str, node: t.Union[h5py.Dataset, h5py.Group]

@@ -40,19 +40,33 @@ Or using [pyenv](https://github.com/pyenv/pyenv) with pyenv-virtualenv:
 ### Pip version
 Once you have created and activated your virtual environment, run:
 
-If you are analysing data locally:
+If you are not using an OMERO server setup:
 
     $ pip install aliby
 
-If you are contacting an OMERO server:
+Otherwise, if you are contacting an OMERO server:
 
     $ pip install aliby[network]
 
 NOTE: Support for OMERO servers in GNU/Linux computers requires building ZeroC-Ice, thus it requires build tools. The versions for Windows and MacOS are provided as Python wheels and thus installation is faster.
 
+### FAQ
+- Installation fails during zeroc-ice compilation (Windows and MacOS).
+
+
+For Windows, the simplest way to install it is using conda (or mamba). You can install the (OMERO) network components separately:
+
+    $ conda create -n aliby -c conda-forge python=3.8 omero-py
+    $ conda activate aliby
+    $ cd c:/Users/Public/Repos/aliby
+    $ \PATH\TO\POETRY\LOCATION\poetry install
+
+  - MacOS
+  Under work (See issue https://github.com/ome/omero-py/issues/317)
+
 ### Git version
 
-We use [ poetry ](https://python-poetry.org/docs/#installation) for dependency management.
+Install [ poetry ](https://python-poetry.org/docs/#installation) for dependency management.
 
 In case you want to have local version:
 
