@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# TODO: Add documentation that covers all Image instances defined here.
+# And improve docstrings for existing classes to make it explicit that they
+# are all variations of the same idea.
+
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
@@ -96,36 +100,61 @@ class BaseLocalImage(ABC):
 
 
 class ImageDummy(BaseLocalImage):
-    # def __init__(self, path: t.Union[str, PosixPath]):
-    #     super().__init__(path)
+    """
+    Dummy Image class.
 
-    # ImageDummy simulates the case that we already know tiler parameters (which is
-    # the case if we run a typical pipeline) before a pipeline is run.
-    # So the purpose of this class is to make sure that if something goes wrong,
-    # we know whether it is because of the parameters or the input data.
+    ImageDummy mimics the other Image classes in such a way that it is accepted
+    by Tiler.  The purpose of this class is for testing, in particular,
+    identifying silent failures.  If something goes wrong, we should be able to
+    know whether it is because of bad parameters or bad input data.
+
+    For the purposes of testing parameters, ImageDummy assumes that we already
+    know the tiler parameters before Image instances are instantiated.  This is
+    true for a typical pipeline run.
+    """
+
     def __init__(self, tiler_parameters: dict):
-        # Build image instance with this class method.
+        """Bulids image instance"""
         # self.ref_channel = ...
         # self.ref_z = ...
         pass
 
+    # Goal: make Tiler happy.
     @staticmethod
-    def pad_array(image_array: da.Array, n_empty_slices: int, dim: int):
-        """
-        i: size of the new dimension
-        dim: indicates which dimension within t,c,z,x,y
+    def pad_array(image_array: da.Array, dim: int, n_empty_slices: int):
+        """Extends a dimension in a dask array and pads with zeros
 
-        tmp = result
-        for _ in range(dim+1):
-           tmp = tmp[-1]
-        tmp[n_empty_slices] == image_array
+        Extends a dimension in a dask array with existing content, then pads
+        with zeros. The dimensions can be one of five: T(imepoint), C(hannel),
+        Z(-stack), X, Y.
 
-        result.shape[dim]==i+1
+        Parameters
+        ----------
+        image_array : da.Array
+            Input dask array
+        dim : int
+            Dimension in which to extend the dask array. This takes values from
+            0 to 4, corresponding to one of five (tczxy) dimensions.
+        n_empty_slices : int
+            Number of empty slices to extend the dask array by, in the specified
+            dimension/axis.
+
+        Examples
+        --------
+        Let my_da_array be a 1200x1200 dask Array.
+        To extend this array in the z-dimension so that it has 5 z-stacks:
+            extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
+        The additional 4 slices will be filled with zeros.
         """
-        # Add new dimensions.
-        # i.e. combine zero-filled arrays to a normal image,
-        # so that whatever parameters you give it will return a valid image.
-        # Goal: make Tiler happy.
+        # i: size of the new dimension
+        # dim: indicates which dimension within t,c,z,x,y
+
+        # tmp = result
+        # for _ in range(dim+1):
+        #    tmp = tmp[-1]
+        # tmp[n_empty_slices] == image_array
+
+        # result.shape[dim]==i+1
         pass
 
     # Logic: We want to return a image instance
