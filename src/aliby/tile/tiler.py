@@ -30,7 +30,7 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import ImageLocalOME, ImageDir
+from aliby.io.image import ImageLocalOME, ImageDir, ImageDummy
 from aliby.tile.traps import segment_traps
 
 
@@ -256,8 +256,7 @@ class Tiler(StepABC):
         ----------
         parameters: dictionary output of an instance of TilerParameters
         """
-        pass
-        # return cls(ImageDummy(parameters), parameters)
+        return cls(ImageDummy(parameters), parameters)
 
     @classmethod
     def from_image(cls, image, parameters: TilerParameters):
