@@ -14,9 +14,9 @@ sample_da = da.reshape(
 )
 
 
-@pytest.mark.parametrize("sample_da", sample_da)
-@pytest.mark.parametrize("dim", 2)
-@pytest.mark.parametrize("n_empty_slices", 4)
+@pytest.mark.parametrize("sample_da", [sample_da])
+@pytest.mark.parametrize("dim", [2])
+@pytest.mark.parametrize("n_empty_slices", [4])
 def test_pad_array(sample_da, dim, n_empty_slices):
     """Test ImageDummy.pad_array() method"""
     # create object
