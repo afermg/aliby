@@ -15,7 +15,7 @@ One key method is Tiler.run.
 
 The image-processing is performed by traps/segment_traps.
 
-The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, Y, X).
+The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, X, Y).
 """
 import re
 import typing as t
