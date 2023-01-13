@@ -36,4 +36,4 @@ def test_pad_array(sample_da, dim, n_empty_slices):
     # Checks that original image array is there and is at the last index
     assert np.array_equal(padded_da.compute()[ix], sample_da.compute()[0])
     # Checks that the additional axis is extended correctly
-    assert padded_da.compute.shape[dim] == n_empty_slices + 1
+    assert padded_da.compute().shape[dim] == n_empty_slices + 1
