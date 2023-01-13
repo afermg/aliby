@@ -125,48 +125,55 @@ class ImageDummy(BaseLocalImage):
     """
 
     def __init__(self, tiler_parameters: dict):
-        """Bulids image instance"""
-        # self.ref_channel = ...
-        # self.ref_z = ...
-        pass
+        """Builds image instance
+
+        Parameters
+        ----------
+        tiler_parameters : dict
+            Tiler parameters, in dict form. Following
+            aliby.tile.tiler.TilerParameters, the keys are: "tile_size" (size of
+            tile), "ref_channel" (reference channel for tiling), and "ref_z"
+            (reference z-stack, 0 to choose a default).
+        """
+        self.ref_channel = tiler_parameters["ref_channel"]
+        self.ref_z = tiler_parameters["ref_z"]
 
     # Goal: make Tiler happy.
     @staticmethod
     def pad_array(image_array: da.Array, dim: int, n_empty_slices: int):
         """Extends a dimension in a dask array and pads with zeros
 
-        Extends a dimension in a dask array with existing content, then pads
-        with zeros. The dimensions can be one of five: T(imepoint), C(hannel),
-        Z(-stack), X, Y.
+        Extends a dimension in a dask array that has existing content, then pads
+        with zeros.
 
         Parameters
         ----------
         image_array : da.Array
             Input dask array
         dim : int
-            Dimension in which to extend the dask array. This takes values from
-            0 to 4, corresponding to one of five (tczxy) dimensions.
+            Dimension in which to extend the dask array.
         n_empty_slices : int
             Number of empty slices to extend the dask array by, in the specified
             dimension/axis.
 
         Examples
         --------
-        Let my_da_array be a 1200x1200 dask Array.
+        Let my_da_array be a 1 x 1 x 1200 x 1200 dask Array, with dimensions
+        corresponding to t, c, z, x, y.
         To extend this array in the z-dimension so that it has 5 z-stacks:
             extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
         The additional 4 slices will be filled with zeros.
         """
-        # i: size of the new dimension
-        # dim: indicates which dimension within t,c,z,x,y
-
-        # tmp = result
-        # for _ in range(dim+1):
-        #    tmp = tmp[-1]
+        # (If done correctly, these should be true)
         # tmp[n_empty_slices] == image_array
+        # result.shape[dim] == i+1
 
-        # result.shape[dim]==i+1
-        pass
+        # Concats zero arrays with same dimensions as image_array, and puts
+        # image_array as last element in list of arrays to be concatenated
+        return da.concatenate(
+            [*([da.zeros_like(image_array)] * n_empty_slices), image_array],
+            axis=dim,
+        )
 
     # Logic: We want to return a image instance
     def get_data_lazy(self) -> da.Array:
@@ -178,12 +185,15 @@ class ImageDummy(BaseLocalImage):
         # the z-stacks.
         img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
         img_path = examples_dir / img_filename
-        # img has two dimensions: x, y
-        # This line assumes that the image being imported is of shape (1, *, *).
-        img = imread(str(img_path))[0]
-        # (Add loop to pad all 5 dimensions)
-        # output = pad_array(img, self.ref_channel, self.ref_z)
-        return img  # return output --> this should be a 5d dask array
+        # img is a dask array has three dimensions: z, x, y
+        # TODO: Write a test to confirm this: If everything worked well,
+        # z = 1, x = 1200, y = 1200
+        img = imread(str(img_path))
+        # Adds t & c dimensions
+        img = da.reshape(img, (1, 1, img.shape[-2], img.shape[-1]))
+        # Pads t, c, and z dimensions
+        # ....
+        return img
 
     def name(self):
         pass
