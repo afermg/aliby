@@ -91,7 +91,8 @@ class Grouper(ABC):
         **kwargs,
     ):
         """
-        Concatenate data for one signal from different h5 files, with one h5 file per position, into a dataframe.
+        Concatenate data for one signal from different h5 files, with
+        one h5 file per position, into a dataframe.
 
         Parameters
         ----------
@@ -387,7 +388,7 @@ def concat_signal_ind(
     **kwargs,
 ) -> pd.DataFrame:
     """
-    Core function that retrieves an individual signal.
+    Retrieve an individual signal.
 
     Applies filtering if requested and adjusts indices.
     """
@@ -482,6 +483,7 @@ class MultiGrouper:
         return self._sigtable
 
     # Alan: function seems out of place
+    # seaborn is not in pyproject.toml
     def sigtable_plot(self) -> None:
         """
         Plot number of chains for all available experiments.

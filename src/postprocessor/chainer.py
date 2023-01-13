@@ -83,6 +83,7 @@ class Chainer(Signal):
         **kwargs,
     ):
         """Load data from an h5 file."""
+        1/0
         if dataset in self.common_chains:
             # get dataset for composite chains
             data = self.common_chains[dataset](**kwargs)

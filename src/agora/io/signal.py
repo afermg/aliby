@@ -42,7 +42,7 @@ class Signal(BridgeH5):
             "Cy5",
             "pHluorin405",
         )
-        # Alan: why  "equivalences"?
+        # Alan: why  "equivalences"? this variable is unused.
         equivalences = {
             "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
         }
@@ -118,7 +118,13 @@ class Signal(BridgeH5):
 
     @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
-        """Reduce a dataframe, or a list of dataframes, to a fraction of its former size, losing late time points."""
+        """
+        Load data (via decorator) and reduce the resulting dataframe.
+
+        Load data for a signal or a list of signals and reduce the resulting
+        dataframes to a fraction of their original size, losing late time
+        points.
+        """
         if isinstance(signal, pd.DataFrame):
             return self.get_retained(signal, cutoff)
         elif isinstance(signal, list):
@@ -144,6 +150,7 @@ class Signal(BridgeH5):
                     tile_mo_da["trap"],
                     tile_mo_da["mother_label"],
                     tile_mo_da["daughter_label"],
+                    a
                 )
             ).T
         return lineage
@@ -161,7 +168,7 @@ class Signal(BridgeH5):
         Parameters
         ----------
         data : t.Union[str, pd.DataFrame]
-            DataFrame or url to one.
+            DataFrame or path to one.
         merges : t.Union[np.ndarray, bool]
             (optional) 2-D array with three columns: the tile id, the mother label, and the daughter id.
             If True, fetch merges from file.
@@ -215,7 +222,7 @@ class Signal(BridgeH5):
         if not hasattr(self, "_available"):
             self._available = []
             with h5py.File(self.filename, "r") as f:
-                f.visititems(self.store_signal_url)
+                f.visititems(self.store_signal_path)
         for sig in self._available:
             print(sig)
 
@@ -231,7 +238,7 @@ class Signal(BridgeH5):
             if not hasattr(self, "_available"):
                 self._available = []
             with h5py.File(self.filename, "r") as f:
-                f.visititems(self.store_signal_url)
+                f.visititems(self.store_signal_path)
         except Exception as e:
             print("Error visiting h5: {}".format(e))
         return self._available
@@ -344,7 +351,7 @@ class Signal(BridgeH5):
         """Get name of h5 file."""
         return self.filename.stem
 
-    def store_signal_url(
+    def store_signal_path(
         self,
         fullname: str,
         node: t.Union[h5py.Dataset, h5py.Group],
