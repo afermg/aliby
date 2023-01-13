@@ -164,10 +164,6 @@ class ImageDummy(BaseLocalImage):
             extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
         The additional 4 slices will be filled with zeros.
         """
-        # (If done correctly, these should be true)
-        # tmp[n_empty_slices] == image_array
-        # result.shape[dim] == i+1
-
         # Concats zero arrays with same dimensions as image_array, and puts
         # image_array as last element in list of arrays to be concatenated
         return da.concatenate(
