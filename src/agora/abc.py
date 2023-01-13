@@ -10,6 +10,8 @@ from typing import Union
 from flatten_dict import flatten
 from yaml import dump, safe_load
 
+from agora.logging import timer
+
 atomic = t.Union[int, float, str, bool]
 
 
@@ -239,21 +241,12 @@ class StepABC(ProcessABC):
     def _run_tp(self):
         pass
 
-    def run_tp(self, tp: int, log: bool = True, **kwargs):
+    @timer
+    def run_tp(self, tp: int, **kwargs):
         """
         Time and log the timing of a step.
         """
-        if log:
-            t = perf_counter()
-            result = self._run_tp(tp, **kwargs)
-            self._log(
-                f"Timing:{self.__class__.__name__}:{perf_counter()-t}s",
-                "debug",
-            )
-        else:
-            result = self._run_tp(tp, **kwargs)
-
-        return result
+        return self._run_tp(tp, **kwargs)
 
     def run(self):
         # Replace run withn run_tp
