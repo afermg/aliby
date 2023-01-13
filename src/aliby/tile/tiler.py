@@ -256,18 +256,20 @@ class Tiler(StepABC):
         ----------
         parameters: dictionary output of an instance of TilerParameters
         """
+        imgdmy_obj = ImageDummy(parameters)
+        dummy_image = imgdmy_obj.get_data_lazy()
         dummy_omero_metadata = {
-            "size_x": 1,
-            "size_y": 1,
-            "size_z": 1,
-            "size_c": 1,
-            "size_t": 1,
-            "channels": ["Brightfield"],
+            "size_x": dummy_image.shape[3],
+            "size_y": dummy_image.shape[4],
+            "size_z": dummy_image.shape[2],
+            "size_c": dummy_image.shape[1],
+            "size_t": dummy_image.shape[0],
+            "channels": [parameters["ref_channel"]],
             "name": " ",
         }
 
         return cls(
-            ImageDummy(parameters),
+            imgdmy_obj,
             dummy_omero_metadata,
             TilerParameters.from_dict(parameters),
         )
