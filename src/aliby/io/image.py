@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
+# FIXME: Check if this description of the module is accurate.
 
-# TODO: Add documentation that covers all Image instances defined here.
-# And improve docstrings for existing classes to make it explicit that they
-# are all variations of the same idea.
+"""
+Image: Loads images and registers them.
+
+Image instances loads images from a specified directory into an object that
+also contains image properties such as name and metadata.  Pixels from images
+are stored in dask arrays; the standard way is to store them in 5-dimensional
+arrays: T(ime point), C(channel), Z(-stack), X, Y.
+
+This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
+handles local OMERO images.  ImageDir handles cases in which images are split
+into directories, with each time point and channel having its own image file.
+ImageDummy is a dummy class for silent failure testing.
+"""
 
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
@@ -45,7 +56,7 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
 
 class BaseLocalImage(ABC):
     """
-    Base class to set path and provide context management method.
+    Base Image class to set path and provide context management method.
     """
 
     _default_dimorder = "tczxy"
@@ -183,7 +194,10 @@ class ImageDummy(BaseLocalImage):
 
 class ImageLocalOME(BaseLocalImage):
     """
-    Fetch image from OMEXML data format, in which a multidimensional tiff image contains the metadata.
+    Local OMERO Image class.
+
+    This is a derivative Image class. It fetches an image from OMEXML data format,
+    in which a multidimensional tiff image contains the metadata.
     """
 
     def __init__(self, path: str, dimorder=None):
@@ -283,7 +297,7 @@ class ImageDir(BaseLocalImage):
     """
     Image class for the case in which all images are split in one or
     multiple folders with time-points and channels as independent files.
-    It inherits from Imagelocal so we only override methods that are critical.
+    It inherits from BaseLocalImage so we only override methods that are critical.
 
     Assumptions:
     - One folders per position.
