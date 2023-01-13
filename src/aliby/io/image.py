@@ -186,7 +186,9 @@ class ImageDummy(BaseLocalImage):
         # z = 1, x = 1200, y = 1200
         img = imread(str(img_path))
         # Adds t & c dimensions
-        img = da.reshape(img, (1, 1, img.shape[-2], img.shape[-1]))
+        img = da.reshape(
+            img, (1, 1, img.shape[-3], img.shape[-2], img.shape[-1])
+        )
         # Pads t, c, and z dimensions
         # ....
         return img
