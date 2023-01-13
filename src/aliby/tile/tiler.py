@@ -256,7 +256,21 @@ class Tiler(StepABC):
         ----------
         parameters: dictionary output of an instance of TilerParameters
         """
-        return cls(ImageDummy(parameters), parameters)
+        dummy_omero_metadata = {
+            "size_x": 1,
+            "size_y": 1,
+            "size_z": 1,
+            "size_c": 1,
+            "size_t": 1,
+            "channels": ["Brightfield"],
+            "name": " ",
+        }
+
+        return cls(
+            ImageDummy(parameters),
+            dummy_omero_metadata,
+            TilerParameters.from_dict(parameters),
+        )
 
     @classmethod
     def from_image(cls, image, parameters: TilerParameters):
