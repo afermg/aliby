@@ -19,6 +19,12 @@ def define_parser():
     return parser
 
 
+def initialise_dummy():
+    tiler_parameters = TilerParameters.default().to_dict()
+    dummy_tiler = Tiler.dummy(tiler_parameters)
+    return dummy_tiler
+
+
 def initialise_objects(data_path, template=None):
     image = ImageLocalOME(data_path)
     tiler = Tiler.from_image(image, TilerParameters.default())
@@ -52,6 +58,8 @@ def timepoint_traps(tiler, tp_idx, channel, z, tile_size):
 if __name__ == "__main__":
     parser = define_parser()
     args = parser.parse_args()
+
+    dummy_tiler = initialise_dummy()
 
     tiler = initialise_objects(args.root_dir, template=args.template)
 
