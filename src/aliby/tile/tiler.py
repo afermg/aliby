@@ -248,13 +248,13 @@ class Tiler(StepABC):
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     @classmethod
-    def dummy(cls, parameters):
+    def dummy(cls, parameters: dict):
         """
         Instantiate dummy Tiler from dummy image
 
         Parameters
         ----------
-
+        parameters: dictionary output of an instance of TilerParameters
         """
         pass
         # return cls(ImageDummy(parameters), parameters)
