@@ -150,7 +150,6 @@ class Signal(BridgeH5):
                     tile_mo_da["trap"],
                     tile_mo_da["mother_label"],
                     tile_mo_da["daughter_label"],
-                    a
                 )
             ).T
         return lineage
