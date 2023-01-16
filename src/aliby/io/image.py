@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# FIXME: Check if this description of the module is accurate.
-
 """
 Image: Loads images and registers them.
 
