@@ -188,7 +188,11 @@ class ImageDummy(BaseLocalImage):
             img, (1, 1, img.shape[-3], img.shape[-2], img.shape[-1])
         )
         # Pads t, c, and z dimensions
-        # ....
+        img = self.pad_array(
+            img, dim=0, n_empty_slices=199
+        )  # 200 timepoints total
+        img = self.pad_array(img, dim=1, n_empty_slices=2)  # 3 channels
+        img = self.pad_array(img, dim=2, n_empty_slices=4)  # 5 z-stacks
         return img
 
     def name(self):
