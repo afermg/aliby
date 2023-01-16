@@ -156,11 +156,11 @@ class ImageDummy(BaseLocalImage):
 
         Examples
         --------
-        Let my_da_array be a 1 x 1 x 1200 x 1200 dask Array, with dimensions
-        corresponding to t, c, z, x, y.
-        To extend this array in the z-dimension so that it has 5 z-stacks:
-            extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
-        The additional 4 slices will be filled with zeros.
+        ```
+        extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
+        ```
+        Extends a dask array called `my_da_array` in the 3rd dimension
+        (dimensions start from 0) by 4 slices, filled with zeros.
         """
         # Concats zero arrays with same dimensions as image_array, and puts
         # image_array as last element in list of arrays to be concatenated
