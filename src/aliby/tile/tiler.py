@@ -258,6 +258,7 @@ class Tiler(StepABC):
         """
         imgdmy_obj = ImageDummy(parameters)
         dummy_image = imgdmy_obj.get_data_lazy()
+        # FIXME: TECHNICAL DEBT: hard-coding dimension orders
         dummy_omero_metadata = {
             "size_x": dummy_image.shape[3],
             "size_y": dummy_image.shape[4],
@@ -265,8 +266,8 @@ class Tiler(StepABC):
             "size_c": dummy_image.shape[1],
             "size_t": dummy_image.shape[0],
             "channels": [
-                *(["nil"] * (dummy_image.shape[1] - 1)),
                 parameters["ref_channel"],
+                *(["nil"] * (dummy_image.shape[1] - 1)),
             ],
             "name": " ",
         }

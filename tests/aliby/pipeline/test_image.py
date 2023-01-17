@@ -17,23 +17,27 @@ sample_da = da.reshape(
 @pytest.mark.parametrize("sample_da", [sample_da])
 @pytest.mark.parametrize("dim", [2])
 @pytest.mark.parametrize("n_empty_slices", [4])
-def test_pad_array(sample_da, dim, n_empty_slices):
+@pytest.mark.parametrize("image_position", [1])
+def test_pad_array(sample_da, dim, n_empty_slices, image_position):
     """Test ImageDummy.pad_array() method"""
     # create object
     imgdmy = ImageDummy(tiler_parameters)
     # pads array
     padded_da = imgdmy.pad_array(
-        sample_da, dim=dim, n_empty_slices=n_empty_slices
+        sample_da,
+        dim=dim,
+        n_empty_slices=n_empty_slices,
+        image_position=image_position,
     )
 
     # select which dimension to index the multidimensional array
-    indices = {dim: 0}
+    indices = {dim: image_position}
     ix = [
         indices.get(dim, slice(None))
         for dim in range(padded_da.compute().ndim)
     ]
 
-    # Checks that original image array is there and is at the first index
+    # Checks that original image array is there and is at the correct index
     assert np.array_equal(padded_da.compute()[ix], sample_da.compute()[0])
     # Checks that the additional axis is extended correctly
     assert padded_da.compute().shape[dim] == n_empty_slices + 1

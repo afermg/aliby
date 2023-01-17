@@ -138,7 +138,12 @@ class ImageDummy(BaseLocalImage):
 
     # Goal: make Tiler happy.
     @staticmethod
-    def pad_array(image_array: da.Array, dim: int, n_empty_slices: int):
+    def pad_array(
+        image_array: da.Array,
+        dim: int,
+        n_empty_slices: int,
+        image_position: int = 0,
+    ):
         """Extends a dimension in a dask array and pads with zeros
 
         Extends a dimension in a dask array that has existing content, then pads
@@ -153,19 +158,29 @@ class ImageDummy(BaseLocalImage):
         n_empty_slices : int
             Number of empty slices to extend the dask array by, in the specified
             dimension/axis.
+        image_position : int
+            Position within the new dimension to place the input arary, default 0
+            (the beginning).
 
         Examples
         --------
         ```
-        extended_array = pad_array(my_da_array, dim = 2, n_empty_slices = 4)
+        extended_array = pad_array(
+            my_da_array, dim = 2, n_empty_slices = 4, image_position = 1)
         ```
         Extends a dask array called `my_da_array` in the 3rd dimension
-        (dimensions start from 0) by 4 slices, filled with zeros.
+        (dimensions start from 0) by 4 slices, filled with zeros.  And puts the
+        original content in slice 1 of the 3rd dimension
         """
         # Concats zero arrays with same dimensions as image_array, and puts
         # image_array as first element in list of arrays to be concatenated
+        zeros_array = da.zeros_like(image_array)
         return da.concatenate(
-            [image_array, *([da.zeros_like(image_array)] * n_empty_slices)],
+            [
+                *([zeros_array] * image_position),
+                image_array,
+                *([zeros_array] * (n_empty_slices - image_position)),
+            ],
             axis=dim,
         )
 
@@ -192,7 +207,9 @@ class ImageDummy(BaseLocalImage):
             img, dim=0, n_empty_slices=199
         )  # 200 timepoints total
         img = self.pad_array(img, dim=1, n_empty_slices=2)  # 3 channels
-        img = self.pad_array(img, dim=2, n_empty_slices=4)  # 5 z-stacks
+        img = self.pad_array(
+            img, dim=2, n_empty_slices=4, image_position=self.ref_z
+        )  # 5 z-stacks
         return img
 
     def name(self):
