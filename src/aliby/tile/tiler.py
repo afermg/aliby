@@ -358,7 +358,12 @@ class Tiler(StepABC):
             no of pixels in y direction
             no of pixels in z direction
         """
-        c, t, z, y, x = self.image.shape
+        # FIXME: TECHNICAL DEBT -- hard-coding dimension order.
+        # This is valid for dummy tiler and conforms to the default order
+        # in Image instances.  However, there is no guarantee that it will
+        # work with the other tiler instances.
+        # c, t, z, y, x = self.image.shape
+        t, c, z, y, x = self.image.shape
         return (c, t, x, y, z)
 
     @property
