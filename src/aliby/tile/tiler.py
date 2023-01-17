@@ -272,7 +272,7 @@ class Tiler(StepABC):
         }
 
         return cls(
-            imgdmy_obj,
+            imgdmy_obj.data,
             dummy_omero_metadata,
             TilerParameters.from_dict(parameters),
         )
