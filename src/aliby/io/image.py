@@ -163,9 +163,9 @@ class ImageDummy(BaseLocalImage):
         (dimensions start from 0) by 4 slices, filled with zeros.
         """
         # Concats zero arrays with same dimensions as image_array, and puts
-        # image_array as last element in list of arrays to be concatenated
+        # image_array as first element in list of arrays to be concatenated
         return da.concatenate(
-            [*([da.zeros_like(image_array)] * n_empty_slices), image_array],
+            [image_array, *([da.zeros_like(image_array)] * n_empty_slices)],
             axis=dim,
         )
 

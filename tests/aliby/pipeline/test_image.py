@@ -27,13 +27,13 @@ def test_pad_array(sample_da, dim, n_empty_slices):
     )
 
     # select which dimension to index the multidimensional array
-    indices = {dim: n_empty_slices}
+    indices = {dim: 0}
     ix = [
         indices.get(dim, slice(None))
         for dim in range(padded_da.compute().ndim)
     ]
 
-    # Checks that original image array is there and is at the last index
+    # Checks that original image array is there and is at the first index
     assert np.array_equal(padded_da.compute()[ix], sample_da.compute()[0])
     # Checks that the additional axis is extended correctly
     assert padded_da.compute().shape[dim] == n_empty_slices + 1
