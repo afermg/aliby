@@ -265,8 +265,8 @@ class Tiler(StepABC):
             "size_c": dummy_image.shape[1],
             "size_t": dummy_image.shape[0],
             "channels": [
-                parameters["ref_channel"],
                 *(["nil"] * (dummy_image.shape[1] - 1)),
+                parameters["ref_channel"],
             ],
             "name": " ",
         }
