@@ -57,7 +57,7 @@ class BaseLocalImage(ABC):
     Base Image class to set path and provide context management method.
     """
 
-    _default_dimorder = "tczxy"
+    _default_dimorder = "tczyx"
 
     def __init__(self, path: t.Union[str, PosixPath]):
         # If directory, assume contents are naturally sorted

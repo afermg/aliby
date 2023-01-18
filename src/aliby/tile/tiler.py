@@ -252,25 +252,32 @@ class Tiler(StepABC):
         """
         Instantiate dummy Tiler from dummy image
 
+        If image.dimorder exists dimensions are saved in that order.
+        Otherwise default to "tczyx".
+
         Parameters
         ----------
         parameters: dictionary output of an instance of TilerParameters
         """
         imgdmy_obj = ImageDummy(parameters)
         dummy_image = imgdmy_obj.get_data_lazy()
-        # FIXME: TECHNICAL DEBT: hard-coding dimension orders
-        dummy_omero_metadata = {
-            "size_x": dummy_image.shape[3],
-            "size_y": dummy_image.shape[4],
-            "size_z": dummy_image.shape[2],
-            "size_c": dummy_image.shape[1],
-            "size_t": dummy_image.shape[0],
-            "channels": [
-                parameters["ref_channel"],
-                *(["nil"] * (dummy_image.shape[1] - 1)),
-            ],
-            "name": " ",
-        }
+        dummy_omero_metadata = (  # Default to "tczyx" if image.dimorder is None
+            {
+                f"size_{dim}": dim_size
+                for dim, dim_size in zip(
+                    imgdmy_obj.dimorder or "tczyx", dummy_image.shape
+                )
+            },
+        )
+        dummy_omero_metadata.update(
+            {
+                "channels": [
+                    parameters["ref_channel"],
+                    *(["nil"] * (dummy_omero_metadata["size_c"] - 1)),
+                ],
+                "name": "",
+            }
+        )
 
         return cls(
             imgdmy_obj.data,
@@ -352,20 +359,10 @@ class Tiler(StepABC):
     @property
     def shape(self):
         """
-        Returns properties of the time-lapse experiment
-            no of channels
-            no of time points
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in z direction
+        Returns properties of the time-lapse as shown by self.image.shape
+
         """
-        # FIXME: TECHNICAL DEBT -- hard-coding dimension order.
-        # This is valid for dummy tiler and conforms to the default order
-        # in Image instances.  However, there is no guarantee that it will
-        # work with the other tiler instances.
-        # c, t, z, y, x = self.image.shape
-        t, c, z, y, x = self.image.shape
-        return (c, t, x, y, z)
+        return self.image.shape
 
     @property
     def n_processed(self):

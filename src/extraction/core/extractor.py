@@ -261,7 +261,7 @@ class Extractor(StepABC):
             channel_ids = None
         if z is None:
             # gets the tiles data via tiler
-            z: t.List[int] = list(range(self.tiler.shape[-1]))
+            z: t.List[int] = list(range(self.tiler.shape[-3]))
         tiles = (
             self.tiler.get_tiles_timepoint(
                 tp, channels=channel_ids, z=z, **kwargs
