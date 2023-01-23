@@ -16,18 +16,7 @@ param_values = {
     "filter": 0,
     "host": None,
     "username": None,
-    "password": None
-    # "overwrite": True,
-    # "earlystop": {
-    #     "min_tp": 100,
-    #     "thresh_pos_clogged": 0.4,
-    #     "thresh_trap_ncells": 8,
-    #     "thresh_trap_area": 0.9,
-    #     "ntps_to_eval": 5,
-    # },
-    # "logfile_level": "INFO",
-    # "use_explog": True,
-    # "use_logfile": False,
+    "password": None,
 }
 
 
