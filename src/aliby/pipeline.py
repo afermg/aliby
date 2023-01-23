@@ -75,9 +75,7 @@ class PipelineParameters(ParametersABC):
 
         directory = Path(general.get("directory", "../data"))
 
-        with dispatch_dataset(
-            expt_id, **general.get("server_info", {})
-        ) as conn:
+        with dispatch_dataset(expt_id, **get_server_info(general)) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -286,17 +284,16 @@ class Pipeline(ProcessABC):
         # Steps: all holds general tasks
         # steps: strain_name holds task for a given strain
         config = self.parameters.to_dict()
-        expt_id = config["general"]["id"]
-        distributed = config["general"]["distributed"]
-        pos_filter = config["general"]["filter"]
-        root_dir = Path(config["general"]["directory"])
+        general = config["general"]
+        expt_id = general["id"]
+        distributed = general["distributed"]
+        pos_filter = general["filter"]
+        root_dir = Path(general["directory"])
 
         print("Searching OMERO")
         # Do all all initialisations
 
-        with dispatch_dataset(
-            expt_id, **self.general.get("server_info", {})
-        ) as conn:
+        with dispatch_dataset(expt_id, **get_server_info(general)) as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
@@ -309,7 +306,7 @@ class Pipeline(ProcessABC):
 
         # Modify to the configuration
         self.parameters.general["directory"] = str(directory)
-        config["general"]["directory"] = directory
+        general["directory"] = directory
 
         self.setLogger(directory)
 
@@ -395,7 +392,7 @@ class Pipeline(ProcessABC):
             min_process_from = min(process_from.values())
 
             with get_image_class(image_id)(
-                image_id, **self.general.get("server_info", {})
+                image_id, **get_server_info(self.general)
             ) as image:
 
                 # Initialise Steps
@@ -649,7 +646,7 @@ class Pipeline(ProcessABC):
 
         trackers_state: t.List[np.ndarray] = []
         with get_image_class(image_id)(
-            image_id, **self.general.get("server_info", {})
+            image_id, **get_server_info(general_config)
         ) as image:
             filename = Path(f"{directory}/{image.name}.h5")
             meta = MetaData(directory, filename)
@@ -724,3 +721,11 @@ class Pipeline(ProcessABC):
 def _close_session(session):
     if session:
         session.close()
+
+
+def get_server_info(general: dict) -> t.Dict[str, int or str]:
+    return {
+        k: general[k]
+        for k in ("host", "username", "password")
+        if general.get(k)
+    }
