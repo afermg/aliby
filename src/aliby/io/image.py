@@ -5,7 +5,7 @@ Image: Loads images and registers them.
 Image instances loads images from a specified directory into an object that
 also contains image properties such as name and metadata.  Pixels from images
 are stored in dask arrays; the standard way is to store them in 5-dimensional
-arrays: T(ime point), C(channel), Z(-stack), X, Y.
+arrays: T(ime point), C(channel), Z(-stack), Y, X.
 
 This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
 handles local OMERO images.  ImageDir handles cases in which images are split

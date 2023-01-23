@@ -4,7 +4,7 @@ Draft for recommended metadata for images to provide a standard interface for al
 
 * Essential data
 - DimensionOrder: str
-  Order of dimensions (e.g., TCZYX for Channel, Time, Z,Y,X)
+  Order of dimensions (e.g., TCZYX for Time, Channel, Z, Y, X)
 - PixelSize: float
   Size of pixel, useful for segmentation.
 - Channels: List[str]
