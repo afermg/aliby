@@ -39,9 +39,9 @@ class BridgeOmero:
 
     def __init__(
         self,
-        host="islay.bio.ed.ac.uk",
-        username="upload",
-        password="***REMOVED***",
+        host=None,
+        username=None,
+        password=None,
     ):
         """
         Parameters
@@ -51,6 +51,11 @@ class BridgeOmero:
         username: string
         password : string
         """
+        # assert all((host, username, password)), str(f"Invalid credentials host:{host}, user:{username}, pass:{pass}")
+        assert all(
+            (host, username, password)
+        ), f"Invalid credentials. host: {host}, user: {username}, pwd: {password}"
+
         self.conn = None
         self.host = host
         self.username = username
