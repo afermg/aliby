@@ -112,7 +112,7 @@ class PipelineParameters(ParametersABC):
                     ntps_to_eval=5,
                 ),
                 logfile_level="INFO",
-                logstream_level="WARNING",
+                use_explog=True,
             )
         }
 
@@ -691,7 +691,9 @@ class Pipeline(ProcessABC):
                     except Exception:
                         pass
 
-            meta.run()
+            if config["general"]["use_explog"]:
+                meta.run()
+
             meta.add_fields(  # Add non-logfile metadata
                 {
                     "aliby_version": version("aliby"),
