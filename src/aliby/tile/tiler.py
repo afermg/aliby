@@ -15,7 +15,7 @@ One key method is Tiler.run.
 
 The image-processing is performed by traps/segment_traps.
 
-The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, Y, X).
+The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, X, Y).
 """
 import re
 import typing as t
@@ -30,7 +30,7 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import ImageLocalOME, ImageDir
+from aliby.io.image import ImageLocalOME, ImageDir, ImageDummy
 from aliby.tile.traps import segment_traps
 
 
@@ -248,6 +248,44 @@ class Tiler(StepABC):
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     @classmethod
+    def dummy(cls, parameters: dict):
+        """
+        Instantiate dummy Tiler from dummy image
+
+        If image.dimorder exists dimensions are saved in that order.
+        Otherwise default to "tczyx".
+
+        Parameters
+        ----------
+        parameters: dictionary output of an instance of TilerParameters
+        """
+        imgdmy_obj = ImageDummy(parameters)
+        dummy_image = imgdmy_obj.get_data_lazy()
+        dummy_omero_metadata = (  # Default to "tczyx" if image.dimorder is None
+            {
+                f"size_{dim}": dim_size
+                for dim, dim_size in zip(
+                    imgdmy_obj.dimorder or "tczyx", dummy_image.shape
+                )
+            },
+        )
+        dummy_omero_metadata.update(
+            {
+                "channels": [
+                    parameters["ref_channel"],
+                    *(["nil"] * (dummy_omero_metadata["size_c"] - 1)),
+                ],
+                "name": "",
+            }
+        )
+
+        return cls(
+            imgdmy_obj.data,
+            dummy_omero_metadata,
+            TilerParameters.from_dict(parameters),
+        )
+
+    @classmethod
     def from_image(cls, image, parameters: TilerParameters):
         """
         Instantiate Tiler from an Image instance
@@ -321,15 +359,10 @@ class Tiler(StepABC):
     @property
     def shape(self):
         """
-        Returns properties of the time-lapse experiment
-            no of channels
-            no of time points
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in z direction
+        Returns properties of the time-lapse as shown by self.image.shape
+
         """
-        c, t, z, y, x = self.image.shape
-        return (c, t, x, y, z)
+        return self.image.shape
 
     @property
     def n_processed(self):
