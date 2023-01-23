@@ -261,14 +261,13 @@ class Tiler(StepABC):
         """
         imgdmy_obj = ImageDummy(parameters)
         dummy_image = imgdmy_obj.get_data_lazy()
-        dummy_omero_metadata = (  # Default to "tczyx" if image.dimorder is None
-            {
-                f"size_{dim}": dim_size
-                for dim, dim_size in zip(
-                    imgdmy_obj.dimorder or "tczyx", dummy_image.shape
-                )
-            },
-        )
+        # Default to "tczyx" if image.dimorder is None
+        dummy_omero_metadata = {
+            f"size_{dim}": dim_size
+            for dim, dim_size in zip(
+                imgdmy_obj.dimorder() or "tczyx", dummy_image.shape
+            )
+        }
         dummy_omero_metadata.update(
             {
                 "channels": [
