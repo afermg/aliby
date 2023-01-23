@@ -81,8 +81,8 @@ class BaseLocalImage(ABC):
                 1,
                 1,
                 1,
-                self._meta["size_x"],
                 self._meta["size_y"],
+                self._meta["size_x"],
             ),
         )
         return self._rechunked_img
