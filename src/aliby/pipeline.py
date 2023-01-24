@@ -68,7 +68,6 @@ class PipelineParameters(ParametersABC):
         baby={},
         extraction={},
         postprocessing={},
-        # reporting={},
     ):
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
@@ -189,7 +188,6 @@ class Pipeline(ProcessABC):
         folder, file_level: str = "INFO", stream_level: str = "WARNING"
     ):
 
-        # create logger for aliby 'spam_application'
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
@@ -283,22 +281,27 @@ class Pipeline(ProcessABC):
         return logging.getLogger("aliby")
 
     def run(self):
-        # Config holds the general information, use in main
-        # Steps holds the description of tasks with their parameters
-        # Steps: all holds general tasks
-        # steps: strain_name holds task for a given strain
+        """
+        Config holds the general information, use in main
+        Steps: all holds general tasks
+        steps: strain_name holds task for a given strain
+        """
+
         config = self.parameters.to_dict()
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
         pos_filter = config["general"]["filter"]
         root_dir = Path(config["general"]["directory"])
 
-        print("Searching OMERO")
+        dispatcher = dispatch_dataset(
+            expt_id, **self.general.get("server_info", {})
+        )
+        logging.getLogger("aliby").INFO(
+            f"Fetching data using {dispatcher.__class__.__name__}"
+        )
         # Do all all initialisations
 
-        with dispatch_dataset(
-            expt_id, **self.general.get("server_info", {})
-        ) as conn:
+        with dispatcher as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
@@ -526,7 +529,7 @@ class Pipeline(ProcessABC):
                     self._log("Analysis finished successfully.", "info")
                     return 1
 
-        except Exception as e:  # bug during setup or runtime
+        except Exception as e:  # Catch bugs during setup or runtime
             logging.exception(
                 f"{name}: Exception caught.",
                 exc_info=True,
