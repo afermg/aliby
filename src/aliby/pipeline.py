@@ -36,6 +36,18 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 
 class PipelineParameters(ParametersABC):
+    """
+    Parameters that host what is run and how. It takes a list of dictionaries, one for
+    general in collection:
+    pass dictionary for each step
+    --------------------
+    expt_id: int or str Experiment id (if integer) or local path (if string).
+    directory: str Directory into which results are dumped. Default is "../data"
+
+    Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
+    timepoints and extraction parameters from there.
+    """
+
     _pool_index = None
 
     def __init__(
@@ -58,14 +70,6 @@ class PipelineParameters(ParametersABC):
         postprocessing={},
         # reporting={},
     ):
-        """
-        Load unit test experiment
-        :expt_id: Experiment id
-        :directory: Output directory
-
-        Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
-        timepoints and extraction parameters from there.
-        """
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
