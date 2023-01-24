@@ -278,7 +278,10 @@ class Signal(BridgeH5):
                     if in_minutes:
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
-                return [self.get_raw(dset) for dset in dataset]
+                return [
+                    self.get_raw(dset, in_minutes=in_minutes, lineage=lineage)
+                    for dset in dataset
+                ]
             if lineage:  # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
