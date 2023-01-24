@@ -42,21 +42,15 @@ class Signal(BridgeH5):
             "Cy5",
             "pHluorin405",
         )
-        # Alan: why  "equivalences"? this variable is unused.
-        equivalences = {
-            "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
-        }
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
-        if isinstance(dsets, str):
-            # no pre-processing
+        if isinstance(dsets, str):  # no pre-processing
             df = self.get_raw(dsets)
             return self.add_name(df, dsets)
-        elif isinstance(dsets, list):
-            # pre-processing
+        elif isinstance(dsets, list):  # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
-            # Alan: what does this error message mean?
+            # Check we are not comaring tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
             ), "Tile data and cell data can't be mixed"
@@ -71,14 +65,6 @@ class Signal(BridgeH5):
         """Add column of identical strings to a dataframe."""
         df.name = name
         return df
-
-    # def cols_in_mins_old(self, df: pd.DataFrame):
-    #     """Convert numerical columns in a dataframe to minutes."""
-    #     try:
-    #         df.columns = (df.columns * self.tinterval // 60).astype(int)
-    #     except Exception as e:
-    #         print(f"Warning:Signal: Unable to convert columns to minutes: {e}")
-    #     return df
 
     def cols_in_mins(self, df: pd.DataFrame):
         # Convert numerical columns in a dataframe to minutes
@@ -292,10 +278,8 @@ class Signal(BridgeH5):
                     if in_minutes:
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
-                # Alan: no mother_labels in this case?
                 return [self.get_raw(dset) for dset in dataset]
-            if lineage:
-                # assumes that df is sorted
+            if lineage:  # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
@@ -307,7 +291,7 @@ class Signal(BridgeH5):
                 df = add_index_levels(df, {"mother_label": mother_label})
             return df
         except Exception as e:
-            self._log(f"Could not fetch dataset {dataset}", "error")
+            self._log(f"Could not fetch dataset {dataset}: {e}", "error")
             raise e
 
     def get_merges(self):

@@ -22,9 +22,9 @@ class Chainer(Signal):
     them when called.
     """
 
-    # these no longer seem to be used
-    #process_types = ("multisignal", "processes", "reshapers")
-    #common_chains = {}
+    equivalences = {
+        "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -83,7 +83,7 @@ class Chainer(Signal):
         **kwargs,
     ):
         """Load data from an h5 file."""
-        1/0
+        1 / 0
         if dataset in self.common_chains:
             # get dataset for composite chains
             data = self.common_chains[dataset](**kwargs)
@@ -96,7 +96,7 @@ class Chainer(Signal):
             # keep data only from early time points
             data = self.get_retained(data, retain)
             # data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
-        if (stages and "stage" not in data.columns.names):
+        if stages and "stage" not in data.columns.names:
             # return stages as additional column level
             stages_index = [
                 x
