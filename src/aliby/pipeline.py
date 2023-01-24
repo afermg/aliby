@@ -296,7 +296,7 @@ class Pipeline(ProcessABC):
         dispatcher = dispatch_dataset(
             expt_id, **self.general.get("server_info", {})
         )
-        logging.getLogger("aliby").INFO(
+        logging.getLogger("aliby").info(
             f"Fetching data using {dispatcher.__class__.__name__}"
         )
         # Do all all initialisations
