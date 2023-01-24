@@ -4,7 +4,6 @@ import re
 import typing as t
 from copy import copy
 
-import numpy as np
 import pandas as pd
 
 from agora.io.signal import Signal
