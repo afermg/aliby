@@ -45,8 +45,9 @@ Local Tests:
 # Legacy because we use GitLab 14.2.6
   artifacts:
     reports:
+      coverage_report:
         coverage_format: cobertura
-        coverage_report: coverage.xml
+        path: coverage.xml
 
 Network Tools Tests:
   stage: tests
