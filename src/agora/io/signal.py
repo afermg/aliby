@@ -10,23 +10,21 @@ import pandas as pd
 
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_df
-from agora.utils.merge import apply_merges
 from agora.utils.association import validate_association
 from agora.utils.kymograph import add_index_levels
+from agora.utils.merge import apply_merges
 
 
 class Signal(BridgeH5):
     """
-    Class that fetches data from the hdf5 storage for post-processing
+    Fetch data from h5 files for post-processing.
 
-    Signal is works under the assumption that metadata and data are
-    accessible, to perform time-adjustments and apply previously-recorded
-    postprocesses.
+    Signal assumes that the metadata and data are accessible to perform time-adjustments and apply previously recorded post-processes.
     """
 
     def __init__(self, file: t.Union[str, PosixPath]):
+        """Define index_names for dataframes, candidate fluorescence channels, and composite statistics."""
         super().__init__(file, flag=None)
-
         self.index_names = (
             "experiment",
             "position",
@@ -34,7 +32,6 @@ class Signal(BridgeH5):
             "cell_label",
             "mother_label",
         )
-
         self.candidate_channels = (
             "GFP",
             "GFPFast",
@@ -45,39 +42,43 @@ class Signal(BridgeH5):
             "Cy5",
             "pHluorin405",
         )
-
+        # Alan: why  "equivalences"? this variable is unused.
         equivalences = {
             "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
         }
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
-
-        if isinstance(
-            dsets, str
-        ):  # or  isinstance(Dsets,dsets.endswith("imBackground"):
+        """Get and potentially pre-process data from h5 file and return as a dataframe."""
+        if isinstance(dsets, str):
+            # no pre-processing
             df = self.get_raw(dsets)
-
-        # elif isinstance(dsets, str):
-        #     df = self.apply_prepost(dsets)
-
+            return self.add_name(df, dsets)
         elif isinstance(dsets, list):
+            # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
+            # Alan: what does this error message mean?
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
-            ), "Trap data and cell data can't be mixed"
+            ), "Tile data and cell data can't be mixed"
             return [
                 self.add_name(self.apply_prepost(dset), dset) for dset in dsets
             ]
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
 
-        # return self.cols_in_mins(self.add_name(df, dsets))
-        return self.add_name(df, dsets)
-
     @staticmethod
     def add_name(df, name):
+        """Add column of identical strings to a dataframe."""
         df.name = name
         return df
+
+    # def cols_in_mins_old(self, df: pd.DataFrame):
+    #     """Convert numerical columns in a dataframe to minutes."""
+    #     try:
+    #         df.columns = (df.columns * self.tinterval // 60).astype(int)
+    #     except Exception as e:
+    #         print(f"Warning:Signal: Unable to convert columns to minutes: {e}")
+    #     return df
 
     def cols_in_mins(self, df: pd.DataFrame):
         # Convert numerical columns in a dataframe to minutes
@@ -89,57 +90,68 @@ class Signal(BridgeH5):
 
     @cached_property
     def ntimepoints(self):
+        """Find the number of time points for one position, or one h5 file."""
         with h5py.File(self.filename, "r") as f:
             return f["extraction/general/None/area/timepoint"][-1] + 1
 
     @cached_property
     def tinterval(self) -> int:
+        """Find the interval between time points (minutes)."""
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
-            return f.attrs[tinterval_location][0]
+            if tinterval_location in f:
+                return f.attrs[tinterval_location][0]
+            else:
+                print(
+                    f"{str(self.filename).split('/')[-1]}: using default time interval of 5 minutes"
+                )
+                return 5
 
     @staticmethod
     def get_retained(df, cutoff):
+        """Return a fraction of the df, one without later time points."""
         return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
-    def channels(self):
+    def channels(self) -> t.Collection[str]:
+        """Get channels as an array of strings."""
         with h5py.File(self.filename, "r") as f:
-            return f.attrs["channels"]
+            return list(f.attrs["channels"])
 
     @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
+        """
+        Load data (via decorator) and reduce the resulting dataframe.
 
-        df = signal
-        # df = self[signal]
-        if isinstance(df, pd.DataFrame):
-            return self.get_retained(df, cutoff)
-
-        elif isinstance(df, list):
-            return [self.get_retained(d, cutoff=cutoff) for d in df]
+        Load data for a signal or a list of signals and reduce the resulting
+        dataframes to a fraction of their original size, losing late time
+        points.
+        """
+        if isinstance(signal, pd.DataFrame):
+            return self.get_retained(signal, cutoff)
+        elif isinstance(signal, list):
+            return [self.get_retained(d, cutoff=cutoff) for d in signal]
 
     @lru_cache(2)
     def lineage(
         self, lineage_location: t.Optional[str] = None, merged: bool = False
     ) -> np.ndarray:
         """
-        Return lineage data from a given location as a matrix where
-        the first column is the trap id,
-        the second column is the mother label and
-        the third column is the daughter label.
+        Get lineage data from a given location in the h5 file.
+
+        Returns an array with three columns: the tile id, the mother label, and the daughter label.
         """
         if lineage_location is None:
             lineage_location = "postprocessing/lineage"
             if merged:
                 lineage_location += "_merged"
-
         with h5py.File(self.filename, "r") as f:
-            trap_mo_da = f[lineage_location]
+            tile_mo_da = f[lineage_location]
             lineage = np.array(
                 (
-                    trap_mo_da["trap"],
-                    trap_mo_da["mother_label"],
-                    trap_mo_da["daughter_label"],
+                    tile_mo_da["trap"],
+                    tile_mo_da["mother_label"],
+                    tile_mo_da["daughter_label"],
                 )
             ).T
         return lineage
@@ -151,22 +163,20 @@ class Signal(BridgeH5):
         merges: t.Union[np.ndarray, bool] = True,
         picks: t.Union[t.Collection, bool] = True,
     ):
-        """Apply modifier operations (picker, merger) to a given dataframe.
-
+        """
+        Apply modifier operations (picker or merger) to a dataframe.
 
         Parameters
         ----------
         data : t.Union[str, pd.DataFrame]
-            DataFrame or url to one.
+            DataFrame or path to one.
         merges : t.Union[np.ndarray, bool]
-            (optional) 2-D array with three columns and variable length. The
-            first column is the trap id, second is mother label and third one is
-            daughter id.
-            If it is True it fetches merges from file, if false it skips merging step.
+            (optional) 2-D array with three columns: the tile id, the mother label, and the daughter id.
+            If True, fetch merges from file.
         picks : t.Union[np.ndarray, bool]
-            (optional) 2-D ndarray where first column is traps and second column
-            is cell labels.
-            If it is True it fetches picks from file, if false it skips picking step.
+            (optional) 2-D array with two columns: the tiles and
+            the cell labels.
+            If True, fetch picks from file.
 
         Examples
         --------
@@ -175,31 +185,24 @@ class Signal(BridgeH5):
         """
         if isinstance(merges, bool):
             merges: np.ndarray = self.get_merges() if merges else np.array([])
-
-        merged = copy(data)
-
         if merges.any():
             merged = apply_merges(data, merges)
-
+        else:
+            merged = copy(data)
         if isinstance(picks, bool):
             picks = (
                 self.get_picks(names=merged.index.names)
                 if picks
                 else set(merged.index)
             )
-
         with h5py.File(self.filename, "r") as f:
             if "modifiers/picks" in f and picks:
-                # missing_cells = [i for i in picks if tuple(i) not in
-                # set(merged.index)]
-
                 if picks:
                     return merged.loc[
                         set(picks).intersection(
                             [tuple(x) for x in merged.index]
                         )
                     ]
-
                 else:
                     if isinstance(merged.index, pd.MultiIndex):
                         empty_lvls = [[] for i in merged.index.names]
@@ -213,59 +216,75 @@ class Signal(BridgeH5):
                     merged = pd.DataFrame([], index=index)
         return merged
 
+    # Alan: do we need two similar properties - see below?
     @property
     def datasets(self):
+        """Print data sets available in h5 file."""
         if not hasattr(self, "_available"):
             self._available = []
-
             with h5py.File(self.filename, "r") as f:
-                f.visititems(self.store_signal_url)
-
+                f.visititems(self.store_signal_path)
         for sig in self._available:
             print(sig)
 
     @cached_property
     def p_available(self):
-        """Print signal list"""
+        """Print data sets available in h5 file."""
         self.datasets
 
     @cached_property
     def available(self):
-        """Return list of available signals"""
+        """Get data sets available in h5 file."""
         try:
             if not hasattr(self, "_available"):
                 self._available = []
-
             with h5py.File(self.filename, "r") as f:
-                f.visititems(self.store_signal_url)
-
+                f.visititems(self.store_signal_path)
         except Exception as e:
             self._log("Exception when visiting h5: {}".format(e), "exception")
 
         return self._available
 
     def get_merged(self, dataset):
+        """Run preprocessing for merges."""
         return self.apply_prepost(dataset, picks=False)
 
     @cached_property
-    def merges(self):
+    def merges(self) -> np.ndarray:
+        """Get merges."""
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_merges)
         return dsets
 
     @cached_property
     def n_merges(self):
+        """Get number of merges."""
         return len(self.merges)
 
     @cached_property
-    def picks(self):
+    def picks(self) -> np.ndarray:
+        """Get picks."""
         with h5py.File(self.filename, "r") as f:
             dsets = f.visititems(self._if_picks)
         return dsets
 
     def get_raw(
-        self, dataset: str, in_minutes: bool = True, lineage: bool = False
-    ):
+        self,
+        dataset: str,
+        in_minutes: bool = True,
+        lineage: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Load data from a h5 file and return as a dataframe.
+
+        Parameters
+        ----------
+        dataset: str or list of strs
+            The name of the h5 file or a list of h5 file names
+        in_minutes: boolean
+            If True,
+        lineage: boolean
+        """
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
@@ -273,9 +292,10 @@ class Signal(BridgeH5):
                     if in_minutes:
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
+                # Alan: no mother_labels in this case?
                 return [self.get_raw(dset) for dset in dataset]
-
-            if lineage:  # This assumes that df is sorted
+            if lineage:
+                # assumes that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
@@ -285,20 +305,17 @@ class Signal(BridgeH5):
                 )
                 mother_label[b] = lineage[a, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
-
             return df
-
         except Exception as e:
             self._log(f"Could not fetch dataset {dataset}", "error")
             raise e
 
     def get_merges(self):
-        # fetch merge events going up to the first level
+        """Get merge events going up to the first level."""
         with h5py.File(self.filename, "r") as f:
             merges = f.get("modifiers/merges", np.array([]))
             if not isinstance(merges, np.ndarray):
                 merges = merges[()]
-
         return merges
 
     def get_picks(
@@ -306,58 +323,42 @@ class Signal(BridgeH5):
         names: t.Tuple[str, ...] = ("trap", "cell_label"),
         path: str = "modifiers/picks/",
     ) -> t.Set[t.Tuple[int, str]]:
-        """
-        Return the relevant picks based on names
-        """
+        """Get the relevant picks based on names."""
         with h5py.File(self.filename, "r") as f:
             picks = set()
             if path in f:
                 picks = set(zip(*[f[path + name] for name in names]))
-
             return picks
 
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
-        """
-        Fetch DataFrame from results storage file.
-        """
-
+        """Get data from h5 file as a dataframe."""
         assert path in f, f"{path} not in {f}"
-
         dset = f[path]
-
-        values, index, columns = ([], [], [])
-
+        values, index, columns = [], [], []
         index_names = copy(self.index_names)
         valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
         if valid_names:
-
             index = pd.MultiIndex.from_arrays(
                 [dset[lbl] for lbl in valid_names], names=valid_names
             )
-
-            columns = dset.attrs.get("columns", None)  # dset.attrs["columns"]
+            columns = dset.attrs.get("columns", None)
             if "timepoint" in dset:
                 columns = f[path + "/timepoint"][()]
-
             values = f[path + "/values"][()]
-
-        return pd.DataFrame(
-            values,
-            index=index,
-            columns=columns,
-        )
+        df = pd.DataFrame(values, index=index, columns=columns)
+        return df
 
     @property
     def stem(self):
+        """Get name of h5 file."""
         return self.filename.stem
 
-    def store_signal_url(
-        self, fullname: str, node: t.Union[h5py.Dataset, h5py.Group]
+    def store_signal_path(
+        self,
+        fullname: str,
+        node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """
-        Store the name of a signal it is a leaf node (a group with no more groups inside)
-        and starts with extraction
-        """
+        """Store the name of a signal if it is a leaf node (a group with no more groups inside) and if it starts with extraction."""
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):
@@ -383,19 +384,15 @@ class Signal(BridgeH5):
     # TODO FUTURE add stages support to fluigent system
     @property
     def ntps(self) -> int:
-        # Return number of time-points according to the metadata
+        """Get number of time points from the metadata."""
         return self.meta_h5["time_settings/ntimepoints"][0]
 
     @property
     def stages(self) -> t.List[str]:
-        """
-        Return the contents of the pump with highest flow rate
-        at each stage.
-        """
+        """Get the contents of the pump with highest flow rate at each stage."""
         flowrate_name = "pumpinit/flowrate"
         pumprate_name = "pumprate"
         switchtimes_name = "switchtimes"
-
         main_pump_id = np.concatenate(
             (
                 (np.argmax(self.meta_h5[flowrate_name]),),
@@ -418,7 +415,6 @@ class Signal(BridgeH5):
     def switch_times(self) -> t.List[int]:
         switchtimes_name = "switchtimes"
         switches_minutes = self.meta_h5[switchtimes_name]
-
         return [
             t_min
             for t_min in switches_minutes
@@ -427,7 +423,7 @@ class Signal(BridgeH5):
 
     @property
     def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
-        # Return consecutive stages and their corresponding number of time-points
+        """Get consecutive stages and their corresponding number of time points."""
         transition_tps = (0, *self.switch_times, self.max_span)
         spans = [
             end - start

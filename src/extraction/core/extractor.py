@@ -38,7 +38,7 @@ RED_FUNS = load_redfuns()
 
 class ExtractorParameters(ParametersABC):
     """
-    Base class to define parameters for extraction
+    Base class to define parameters for extraction.
     """
 
     def __init__(
@@ -54,7 +54,7 @@ class ExtractorParameters(ParametersABC):
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
             str channel -> U(function,None) reduction -> str metric
-            If not of depth three, tree will be filled with Nones.
+            If not of depth three, tree will be filled with None.
         sub_bg: set
         multichannel_ops: dict
         """
@@ -65,7 +65,7 @@ class ExtractorParameters(ParametersABC):
     @staticmethod
     def guess_from_meta(store_name: str, suffix="fast"):
         """
-        Find the microscope used from the h5 metadata
+        Find the microscope used from the h5 metadata.
 
         Parameters
         ----------
@@ -90,25 +90,28 @@ class ExtractorParameters(ParametersABC):
 
 class Extractor(StepABC):
     """
-    The Extractor applies a metric, such as area or median, to cells identified in the image tiles using the cell masks.
+    Apply a metric to cells identified in the tiles.
 
-    Its methods therefore require both tile images and masks.
+    Using the cell masks, the Extractor applies a metric, such as area or median, to cells identified in the image tiles.
 
-    Usually one metric is applied to the masked area in a tile, but there are metrics that depend on the whole tile.
+    Its methods require both tile images and masks.
 
-    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the second level is the reduction algorithm, such as maximum projection; the last level is the metric - the specific operation to apply to the cells in the image identified by the mask, such as median, which is the median value of the pixels in each cell.
+    Usually the metric is applied to only a tile's masked area, but some metrics depend on the whole tile.
+
+    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks is the third level.
 
     Parameters
     ----------
     parameters: core.extractor Parameters
-        Parameters that include with channels, reduction and
-        extraction functions to use.
+        Parameters that include the channels, and reduction and
+        extraction functions.
     store: str
-        Path to hdf5 storage file. Must contain cell outlines.
+        Path to the h5 file, which must contain the cell masks.
     tiler: pipeline-core.core.segmentation tiler
-        Class that contains or fetches the image to be used for segmentation.
+        Class that contains or fetches the images used for segmentation.
     """
 
+    # Alan: should this data be stored here or all such data in a separate file
     default_meta = {
         "pixel_size": 0.236,
         "z_size": 0.6,
@@ -149,7 +152,7 @@ class Extractor(StepABC):
         store: str,
         tiler: Tiler,
     ):
-        # initate from tiler
+        """Initiate from a tiler instance."""
         return cls(parameters, store=store, tiler=tiler)
 
     @classmethod
@@ -159,12 +162,12 @@ class Extractor(StepABC):
         store: str,
         img_meta: tuple,
     ):
-        # initiate from image
+        """Initiate from images."""
         return cls(parameters, store=store, tiler=Tiler(*img_meta))
 
     @property
     def channels(self):
-        # returns a tuple of strings of the available channels
+        """Get a tuple of the available channels."""
         if not hasattr(self, "_channels"):
             if type(self.params.tree) is dict:
                 self._channels = tuple(self.params.tree.keys())
@@ -225,7 +228,7 @@ class Extractor(StepABC):
         self._all_funs = {**self._custom_funs, **FUNS}
 
     def load_meta(self):
-        # load metadata from h5 file whose name is given by self.local
+        """Load metadata from h5 file."""
         self.meta = load_attributes(self.local)
 
     def get_tiles(
@@ -236,8 +239,9 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Optional[np.ndarray]:
         """
-        Finds traps for a given time point and given channels and z-stacks.
-        Returns None if no traps are found.
+        Find tiles for a given time point and given channels and z-stacks.
+
+        Returns None if no tiles are found.
 
         Any additional keyword arguments are passed to tiler.get_tiles_timepoint
 
@@ -377,7 +381,6 @@ class Extractor(StepABC):
                     self.reduce_dims(trap, method=RED_FUNS[red_fun])
                     for trap in traps
                 ]
-
         d = {
             red_fun: self.extract_funs(
                 metrics=metrics,
@@ -394,6 +397,7 @@ class Extractor(StepABC):
     ) -> np.ndarray:
         """
         Collapse a z-stack into 2d array using method.
+
         If method is None, return the original data.
 
         Parameters
@@ -418,7 +422,7 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, t.Dict[str, t.Dict[str, tuple]]]:
         """
-        Core extraction method for an individual time-point.
+        Extract for an individual time-point.
 
         Parameters
         ----------
@@ -561,7 +565,7 @@ class Extractor(StepABC):
 
     def get_imgs(self, channel: t.Optional[str], traps, channels=None):
         """
-        Returns the image from a correct source, either raw or bgsub
+        Return image from a correct source, either raw or bgsub.
 
         Parameters
         ----------
@@ -592,6 +596,8 @@ class Extractor(StepABC):
         **kwargs,
     ) -> dict:
         """
+        Wrapper to add compatibility with other steps of the pipeline.
+
         Parameters
         ----------
         tps: list of int (optional)
@@ -677,7 +683,7 @@ def flatten_nesteddict(
     nest: dict, to="series", tp: int = None
 ) -> t.Dict[str, pd.Series]:
     """
-    Converts a nested extraction dict into a dict of pd.Series
+    Convert a nested extraction dict into a dict of pd.Series.
 
     Parameters
     ----------
@@ -706,6 +712,7 @@ def flatten_nesteddict(
 class hollowExtractor(Extractor):
     """
     Extractor that only cares about receiving images and masks.
+
     Used for testing.
     """
 
