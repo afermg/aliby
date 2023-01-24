@@ -20,7 +20,7 @@ from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
-from agora.io.writer import (  # BabyWriter,
+from agora.io.writer import (
     LinearBabyWriter,
     StateWriter,
     TilerWriter,
@@ -33,8 +33,6 @@ from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
-
-# from postprocessor.compiler import ExperimentCompiler, PageOrganiser
 
 
 class PipelineParameters(ParametersABC):
@@ -536,15 +534,6 @@ class Pipeline(ProcessABC):
         finally:
             _close_session(session)
 
-        # try:
-        #     compiler = ExperimentCompiler(None, filepath)
-        #     tmp = compiler.run()
-        #     po = PageOrganiser(tmp, grid_spec=(3, 2))
-        #     po.plot()
-        #     po.save(fullpath / f"{directory}report.pdf")
-        # except Exception as e:
-        #     print("Report failed: {}".format(e))
-
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
@@ -699,29 +688,6 @@ class Pipeline(ProcessABC):
                         config["tiler"] = steps["tiler"].parameters.to_dict()
                     except Exception:
                         pass
-
-                # Delete datasets to overwrite and update pipeline data
-                # Use existing parameters
-                # with h5py.File(filename, "a") as f:
-                #     pparams = PipelineParameters.from_yaml(
-                #         f.attrs["parameters"]
-                #     ).to_dict()
-
-                #     for k, v in ow.items():
-                #         if v:
-                #             for gname in self.writer_groups[k]:
-                #                 if gname in f:
-                #                     del f[gname]
-
-                #         pparams[k] = config[k]
-                # meta.add_fields(
-                #     {
-                #         "parameters": PipelineParameters.from_dict(
-                #             pparams
-                #         ).to_yaml()
-                #     },
-                #     overwrite=True,
-                # )
 
             meta.run()
             meta.add_fields(  # Add non-logfile metadata
