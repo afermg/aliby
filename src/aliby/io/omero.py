@@ -39,9 +39,10 @@ class BridgeOmero:
 
     def __init__(
         self,
-        host="islay.bio.ed.ac.uk",
-        username="upload",
-        password="***REMOVED***",
+        host: str = None,
+        username: str = None,
+        password: str = None,
+        ome_id: int = None,
     ):
         """
         Parameters
@@ -50,22 +51,34 @@ class BridgeOmero:
             web address of OMERO host
         username: string
         password : string
+        ome_id: Optional int
+            Unique identifier on Omero database. Used to fetch specific objects.
         """
+        # assert all((host, username, password)), str(f"Invalid credentials host:{host}, user:{username}, pass:{pass}")
+        assert all(
+            (host, username, password)
+        ), f"Invalid credentials. host: {host}, user: {username}, pwd: {password}"
+
         self.conn = None
         self.host = host
         self.username = username
         self.password = password
+        self.ome_id = ome_id
 
     # standard method required for Python's with statement
     def __enter__(self):
         self.create_gate()
-        self.init_wrapper()
 
         return self
 
-    def init_wrapper(self):
+    @property
+    def ome_class(self):
         # Initialise Omero Object Wrapper for instances when applicable.
-        if hasattr(self, "ome_id"):
+        if not hasattr(self, "_ome_class"):
+            assert (
+                self.conn.isConnected() and self.ome_id is not None
+            ), "No Blitz connection or valid omero id"
+
             ome_type = [
                 valid_name
                 for valid_name in ("Dataset", "Image")
@@ -75,7 +88,11 @@ class BridgeOmero:
                     re.IGNORECASE,
                 )
             ][0]
-            self.ome_class = self.conn.getObject(ome_type, self.ome_id)
+            self._ome_class = self.conn.getObject(ome_type, self.ome_id)
+
+            assert self._ome_class, f"{ome_type} {self.ome_id} not found."
+
+        return self._ome_class
 
     def create_gate(self) -> bool:
         self.conn = BlitzGateway(
@@ -124,10 +141,6 @@ class BridgeOmero:
     def set_id(self, ome_id: int):
         self.ome_id = ome_id
 
-    @abstractmethod
-    def init_interface(self):
-        ...
-
     @property
     def file_annotations(self):
         valid_annotations = [
@@ -158,10 +171,8 @@ class BridgeOmero:
 
 
 class Dataset(BridgeOmero):
-    def __init__(self, expt_id, **server_info):
-        self.ome_id = expt_id
-
-        super().__init__(**server_info)
+    def __init__(self, expt_id: str or int, **server_info):
+        super().__init__(ome_id=expt_id, **server_info)
 
     @property
     def name(self):
@@ -272,12 +283,7 @@ class Image(BridgeOmero):
         server_info: dictionary
             Specifies the host, username, and password as strings
         """
-        self.ome_id = image_id
-        super().__init__(**server_info)
-
-    def init_interface(self, ome_id: int):
-        self.set_id(ome_id)
-        self.ome_class = self.conn.getObject("Image", ome_id)
+        super().__init__(ome_id=image_id, **server_info)
 
     @classmethod
     def from_h5(
@@ -301,9 +307,6 @@ class Image(BridgeOmero):
         # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
         image_id = bridge.meta_h5["image_id"]
-        # server_info = safe_load(bridge.meta_h5["parameters"])["general"][
-        #     "server_info"
-        # ]
         return cls(image_id, **cls.server_info_from_h5(filepath))
 
     @property
@@ -353,7 +356,6 @@ class UnsafeImage(Image):
         """
         super().__init__(image_id, **server_info)
         self.create_gate()
-        self.init_wrapper()
 
     @property
     def data(self):

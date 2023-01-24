@@ -157,12 +157,6 @@ def attrs_from_h5(fpath: str):
         return dict(f.attrs)
 
 
-def parameters_from_h5(fpath: str):
-    """Return parameters from an h5 file."""
-    attrs = attrs_from_h5(fpath)
-    return yaml.safe_load(attrs["parameters"])
-
-
 def image_creds_from_h5(fpath: str):
     """Return image id and server credentials from an h5."""
     attrs = attrs_from_h5(fpath)

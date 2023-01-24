@@ -114,7 +114,7 @@ class PipelineParameters(ParametersABC):
                     ntps_to_eval=5,
                 ),
                 logfile_level="INFO",
-                logstream_level="WARNING",
+                use_explog=True,
             )
         }
 
@@ -477,7 +477,7 @@ class Pipeline(ProcessABC):
                                         step == "tiler"
                                         and i == min_process_from
                                     ):
-                                        print(
+                                        logging.getLogger("aliby").info(
                                             f"Found {steps['tiler'].n_traps} traps in {image.name}"
                                         )
                                     elif (
@@ -693,7 +693,9 @@ class Pipeline(ProcessABC):
                     except Exception:
                         pass
 
-            meta.run()
+            if config["general"]["use_explog"]:
+                meta.run()
+
             meta.add_fields(  # Add non-logfile metadata
                 {
                     "aliby_version": version("aliby"),

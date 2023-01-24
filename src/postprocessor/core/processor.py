@@ -56,26 +56,16 @@ class PostProcessorParameters(ParametersABC):
                         "/extraction/general/None/volume",
                     ],
                 ],
-                # [
-                #     "savgol",
-                #     [
-                #         "/extraction/general/None/volume",
-                #     ],
-                # ],
                 [
                     "dsignal",
                     [
                         "/extraction/general/None/volume",
-                        # "/postprocessing/savgol/extraction_general_None_volume",
                     ],
                 ],
                 [
                     "bud_metric",
                     [
                         "/extraction/general/None/volume",
-                        # "/postprocessing/dsignal/postprocessing_savgol_extraction_general_None_volume",
-                        # "/postprocessing/savgol/extraction_general_None_volume",
-                        # "/postprocessing/dsignal/extraction_general_None_volume",
                     ],
                 ],
                 [
@@ -84,15 +74,6 @@ class PostProcessorParameters(ParametersABC):
                         "/postprocessing/bud_metric/extraction_general_None_volume",
                     ],
                 ],
-                # [
-                #     "aggregate",
-                #     [
-                #         [
-                #             "/extraction/general/None/volume",
-                #             "postprocessing/dsignal/extraction_general_None_volume",
-                #         ],
-                #     ],
-                # ],
             ],
         }
         param_sets = {
@@ -105,22 +86,12 @@ class PostProcessorParameters(ParametersABC):
         outpaths["aggregate"] = "/postprocessing/experiment_wide/aggregated/"
 
         if "ph_batman" in kind:
-            # targets["processes"]["bud_metric"].append(
-            #     [
-            #         [
-            #             "/extraction/em_ratio/np_max/mean",
-            #             "/extraction/em_ratio/np_max/median",
-            #         ],
-            #     ]
-            # )
             targets["processes"]["dsignal"].append(
                 [
                     "/extraction/em_ratio/np_max/mean",
                     "/extraction/em_ratio/np_max/median",
                     "/extraction/em_ratio_bgsub/np_max/mean",
                     "/extraction/em_ratio_bgsub/np_max/median",
-                    # "/postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                    # "/postprocessing/bud_metric/extraction_em_ratio_np_max_median",
                 ]
             )
             targets["processes"]["aggregate"].append(
@@ -132,10 +103,6 @@ class PostProcessorParameters(ParametersABC):
                         "/extraction/em_ratio_bgsub/np_max/median",
                         "/extraction/gsum/np_max/median",
                         "/extraction/gsum/np_max/mean",
-                        # "postprocessing/bud_metric/extraction_em_ratio_np_max_mean",
-                        # "postprocessing/bud_metric/extraction_em_ratio_np_max_median",
-                        # "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_median",
-                        # "postprocessing/dsignal/postprocessing_bud_metric_extraction_em_ratio_np_max_mean",
                     ]
                 ],
             )
@@ -178,6 +145,7 @@ class PostProcessor(ProcessABC):
         self.targets = parameters["targets"]
 
     def run_prepost(self):
+        # TODO Split function
         """Important processes run before normal post-processing ones"""
 
         merge_events = self.merger.run(
@@ -301,12 +269,7 @@ class PostProcessor(ProcessABC):
         return x
 
     def run(self):
-        # import cProfile
-        # import pstats
-
-        # profile = cProfile.Profile()
-        # profile.enable()
-
+        # TODO Documentation :) + Split
         self.run_prepost()
 
         for process, datasets in tqdm(self.targets["processes"]):

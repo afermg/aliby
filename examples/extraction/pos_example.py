@@ -14,5 +14,4 @@ params = Parameters(
 
 
 ext = Extractor(params, omero_id=19310)
-# ext.extract_exp(tile_size=117)
 d = ext.extract_tp(tp=1, tile_size=117)
