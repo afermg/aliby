@@ -12,13 +12,8 @@ End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentati
 Installation of [VS Studio](https://visualstudio.microsoft.com/downloads/#microsoft-visual-c-redistributable-for-visual-studio-2022) Native MacOS support for is under work, but you can use containers (e.g., Docker, Podman) in the meantime.
 
 For analysing local data
- ```python
-pip install aliby
- ```
-
-and if you want to use an OMERO server:
- ```python
-pip install aliby[network]
+ ```bash
+pip install aliby # aliby[network] if you want to access an OMERO server
  ```
 
 See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INSTALL.html ) for more details.
@@ -34,7 +29,11 @@ And to run Omero servers, the basic arguments are shown:
  aliby-run --expt_id XXX --host SERVER.ADDRESS --user USER --password PASSWORD 
  ```
 
-### Raw data access
+The output is a folder with the original logfiles and a set of hdf5 files, one with the results of each multidimensional inside.
+
+## Using specific components
+
+### Access raw data
 
 ALIBY's tooling can also be used as an interface to OMERO servers, taking care of fetching data when needed.
  ```python
