@@ -9,39 +9,30 @@
 End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentation, tracking, lineage predictions, post-processing and report production. It leverages the existing Python ecosystem and open-source scientific software available to produce seamless and standardised pipelines.
 
 ## Quickstart Documentation
+Installation of [VS Studio](https://visualstudio.microsoft.com/downloads/#microsoft-visual-c-redistributable-for-visual-studio-2022) Native MacOS support for is under work, but you can use containers (e.g., Docker, Podman) in the meantime.
 
-We use (and recommend) [OMERO](https://www.openmicroscopy.org/omero/) to manage our microscopy database, but ALIBY can process both locally-stored experiments and remote ones hosted on a server.
+For analysing local data
+ ```python
+pip install aliby
+ ```
 
-### Setting up a server
-For testing and development, the easiest way to set up an OMERO server is by
-using Docker images.
-[The software carpentry](https://software-carpentry.org/) and the [Open
- Microscopy Environment](https://www.openmicroscopy.org), have provided
-[instructions](https://ome.github.io/training-docker/) to do this.
-
-The `docker-compose.yml` file can be used to create an OMERO server with an
-accompanying PostgreSQL database, and an OMERO web server.
-It is described in detail
-[here](https://ome.github.io/training-docker/12-dockercompose/).
-
-Our version of the `docker-compose.yml` has been adapted from the above to
-use version 5.6 of OMERO.
-
-To start these containers (in background):
-```shell script
-cd pipeline-core
-docker-compose up -d
-```
-Omit the `-d` to run in foreground.
-
-To stop them, in the same directory, run:
-```shell script
-docker-compose stop
-```
-
-### Installation
+and if you want to use an OMERO server:
+ ```python
+pip install aliby[network]
+ ```
 
 See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INSTALL.html ) for more details.
+
+### CLI
+
+ ```bash
+aliby-run --expt_id EXPT_PATH --distributed 4 --tps None
+ ```
+
+And to run Omero servers, the basic arguments are shown:
+ ```bash
+ aliby-run --expt_id XXX --host SERVER.ADDRESS --user USER --password PASSWORD 
+ ```
 
 ### Raw data access
 
