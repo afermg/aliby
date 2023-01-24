@@ -256,10 +256,10 @@ class Signal(BridgeH5):
 
     def get_raw(
         self,
-        dataset: str,
+        dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Load data from a h5 file and return as a dataframe.
 
@@ -345,7 +345,10 @@ class Signal(BridgeH5):
         fullname: str,
         node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """Store the name of a signal if it is a leaf node (a group with no more groups inside) and if it starts with extraction."""
+        """
+        Store the name of a signal if it is a leaf node
+        (a group with no more groups inside) and if it starts with extraction.
+        """
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):
