@@ -13,8 +13,10 @@ from abc import ABC, abstractproperty, abstractmethod
 from pathlib import Path, PosixPath
 from typing import Union
 
-import omero
-
+try:
+    import omero
+except ModuleNotFoundError:
+    print("Warning: Cannot import omero.")
 from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
 from aliby.io.omero import BridgeOmero

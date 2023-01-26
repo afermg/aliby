@@ -10,25 +10,41 @@ import numpy as np
 import xmltodict
 from dask import delayed
 from dask.array.image import imread
-from omero.model import enums as omero_enums
+
+try:
+    from omero.model import enums as omero_enums
+except ModuleNotFoundError:
+    print("Warning: Cannot import omero_enums.")
 from tifffile import TiffFile
 from yaml import safe_load
 
 from agora.io.bridge import BridgeH5
 from agora.io.metadata import dir_to_meta
-from aliby.io.omero import BridgeOmero
+
+try:
+    from aliby.io.omero import BridgeOmero
+except ModuleNotFoundError:
+
+    class BridgeOmero:
+        # dummy class necessary when the omero module is not installed
+        pass
+
+    print("Warning: Cannot import BridgeOmero.")
 
 # convert OMERO definitions into numpy types
-PIXEL_TYPES = {
-    omero_enums.PixelsTypeint8: np.int8,
-    omero_enums.PixelsTypeuint8: np.uint8,
-    omero_enums.PixelsTypeint16: np.int16,
-    omero_enums.PixelsTypeuint16: np.uint16,
-    omero_enums.PixelsTypeint32: np.int32,
-    omero_enums.PixelsTypeuint32: np.uint32,
-    omero_enums.PixelsTypefloat: np.float32,
-    omero_enums.PixelsTypedouble: np.float64,
-}
+try:
+    PIXEL_TYPES = {
+        omero_enums.PixelsTypeint8: np.int8,
+        omero_enums.PixelsTypeuint8: np.uint8,
+        omero_enums.PixelsTypeint16: np.int16,
+        omero_enums.PixelsTypeuint16: np.uint16,
+        omero_enums.PixelsTypeint32: np.int32,
+        omero_enums.PixelsTypeuint32: np.uint32,
+        omero_enums.PixelsTypefloat: np.float32,
+        omero_enums.PixelsTypedouble: np.float64,
+    }
+except NameError:
+    print("Warning: PIXEL_TYPES are not defined.")
 
 
 def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
@@ -266,12 +282,12 @@ class ImageDir(BaseLocalImage):
 
 class Image(BridgeOmero):
     """
-    Loads images from OMERO and gives access to the data and metadata.
+    Load images from OMERO and gives access to the data and metadata.
     """
 
     def __init__(self, image_id: int, **server_info):
         """
-        Establishes the connection to the OMERO server via the Argo
+        Establish the connection to the OMERO server via the Argo
         base class.
 
         Parameters
@@ -292,7 +308,8 @@ class Image(BridgeOmero):
         cls,
         filepath: t.Union[str, PosixPath],
     ):
-        """Instatiate Image from a hdf5 file.
+        """
+        Instantiate Image from a hdf5 file.
 
         Parameters
         ----------

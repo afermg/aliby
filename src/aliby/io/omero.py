@@ -4,7 +4,11 @@ from pathlib import PosixPath
 import re
 
 from agora.io.bridge import BridgeH5
-from omero.gateway import BlitzGateway
+
+try:
+    from omero.gateway import BlitzGateway
+except ModuleNotFoundError:
+    print("Warning: Cannot import BlitzGateway.")
 from yaml import safe_load
 
 
