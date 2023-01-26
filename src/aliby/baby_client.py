@@ -13,7 +13,7 @@ import baby.errors
 import h5py
 import numpy as np
 import requests
-from agora.abc import ParametersABC
+from agora.abc import ParametersABC, StepABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
@@ -128,7 +128,7 @@ class BabyParameters(ParametersABC):
         self.update("model_config", weights_flattener)
 
 
-class BabyRunner:
+class BabyRunner(StepABC):
     """A BabyRunner object for cell segmentation.
 
     Does segmentation one time point at a time."""
@@ -157,90 +157,18 @@ class BabyRunner:
             .swapaxes(1, 2)
         )
 
-    def run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
+    def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
         # Access the image
         t = perf_counter()
         img = self.get_data(tp)
-        logging.debug(f"Timing:BF_fetch:{perf_counter()-t}s")
-        t = perf_counter()
         segmentation = self.crawler.step(
             img,
             with_edgemasks=with_edgemasks,
             assign_mothers=assign_mothers,
             **kwargs,
         )
-        logging.debug(f"Timing:crawler_step:{perf_counter()-t}s")
         return format_segmentation(segmentation, tp)
-
-
-class BabyClient:
-    """A dummy BabyClient object for Dask Demo.
-
-
-    Does segmentation one time point at a time.
-    Should work better with the parallelisation.
-    """
-
-    bf_channel = 0
-    model_name = "prime95b_brightfield_60x_5z"
-    url = "http://localhost:5101"
-    max_tries = 50
-    sleep_time = 0.1
-
-    def __init__(self, tiler):
-        self.tiler = tiler
-        self._session = None
-
-    @property
-    def session(self):
-        if self._session is None:
-            r_session = requests.get(self.url + f"/session/{self.model_name}")
-            r_session.raise_for_status()
-            self._session = r_session.json()["sessionid"]
-        return self._session
-
-    def get_data(self, tp):
-        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3)
-
-    # def queue_image(self, img, **kwargs):
-    #     bit_depth = img.dtype.itemsize * 8  # bit depth =  byte_size * 8
-    #     data = create_request(img.shape, bit_depth, img, **kwargs)
-    #     status = requests.post(
-    #         self.url + f"/segment?sessionid={self.session}",
-    #         data=data,
-    #         headers={"Content-Type": data.content_type},
-    #     )
-    #     status.raise_for_status()
-    #     return status
-
-    def get_segmentation(self):
-        try:
-            seg_response = requests.get(
-                self.url + f"/segment?sessionid={self.session}", timeout=120
-            )
-            seg_response.raise_for_status()
-            result = seg_response.json()
-        except Timeout as e:
-            raise e
-        except HTTPError as e:
-            raise e
-        return result
-
-    def run_tp(self, tp, **kwargs):
-        # Get data
-        img = self.get_data(tp)
-        # Queue image
-        _ = self.queue_image(img, **kwargs)
-        # Get segmentation
-        for _ in range(self.max_tries):
-            try:
-                seg = self.get_segmentation()
-                break
-            except (Timeout, HTTPError):
-                time.sleep(self.sleep_time)
-                continue
-        return format_segmentation(seg, tp)
 
 
 def choose_model_from_params(

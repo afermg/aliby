@@ -15,7 +15,7 @@ One key method is Tiler.run.
 
 The image-processing is performed by traps/segment_traps.
 
-The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, Y, X).
+The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, X, Y).
 """
 import re
 import typing as t
@@ -28,9 +28,9 @@ import h5py
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import Image, ImageLocalOME, ImageDir
+from aliby.io.image import ImageLocalOME, ImageDir, ImageDummy
 from aliby.tile.traps import segment_traps
 
 
@@ -200,7 +200,7 @@ class TilerParameters(ParametersABC):
     _defaults = {"tile_size": 117, "ref_channel": "Brightfield", "ref_z": 0}
 
 
-class Tiler(ProcessABC):
+class Tiler(StepABC):
     """
     Remote Timelapse Tiler.
 
@@ -243,12 +243,49 @@ class Tiler(ProcessABC):
                 for ch, zsect in zip(self.channels, metadata["zsections"])
             }
         except Exception as e:
-            print(f"Warning:Tiler: No z_perchannel data: {e}")
+            self._log(f"No z_perchannel data: {e}")
 
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     @classmethod
-    def from_image(cls, image: Image, parameters: TilerParameters):
+    def dummy(cls, parameters: dict):
+        """
+        Instantiate dummy Tiler from dummy image
+
+        If image.dimorder exists dimensions are saved in that order.
+        Otherwise default to "tczyx".
+
+        Parameters
+        ----------
+        parameters: dictionary output of an instance of TilerParameters
+        """
+        imgdmy_obj = ImageDummy(parameters)
+        dummy_image = imgdmy_obj.get_data_lazy()
+        # Default to "tczyx" if image.dimorder is None
+        dummy_omero_metadata = {
+            f"size_{dim}": dim_size
+            for dim, dim_size in zip(
+                imgdmy_obj.dimorder or "tczyx", dummy_image.shape
+            )
+        }
+        dummy_omero_metadata.update(
+            {
+                "channels": [
+                    parameters["ref_channel"],
+                    *(["nil"] * (dummy_omero_metadata["size_c"] - 1)),
+                ],
+                "name": "",
+            }
+        )
+
+        return cls(
+            imgdmy_obj.data,
+            dummy_omero_metadata,
+            TilerParameters.from_dict(parameters),
+        )
+
+    @classmethod
+    def from_image(cls, image, parameters: TilerParameters):
         """
         Instantiate Tiler from an Image instance
 
@@ -262,7 +299,9 @@ class Tiler(ProcessABC):
     @classmethod
     def from_h5(
         cls,
-        image: t.Union[Image, ImageLocalOME, ImageDir],
+        image: t.Union[
+            ImageLocalOME, ImageDir
+        ],  # TODO provide baseclass instead
         filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
@@ -279,8 +318,6 @@ class Tiler(ProcessABC):
         trap_locs = TrapLocations.read_hdf5(filepath)
         metadata = BridgeH5(filepath).meta_h5
         metadata["channels"] = image.metadata["channels"]
-        # metadata["zsectioning/nsections"] = image.metadata["zsectioning/nsections"]
-        # metadata["channels/zsect"] = image.metadata["channels/zsect"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(
@@ -321,15 +358,10 @@ class Tiler(ProcessABC):
     @property
     def shape(self):
         """
-        Returns properties of the time-lapse experiment
-            no of channels
-            no of time points
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in z direction
+        Returns properties of the time-lapse as shown by self.image.shape
+
         """
-        c, t, z, y, x = self.image.shape
-        return (c, t, x, y, z)
+        return self.image.shape
 
     @property
     def n_processed(self):
@@ -453,7 +485,7 @@ class Tiler(ProcessABC):
         ndtrap = self.ifoob_pad(full, trap.as_range(tp))
         return ndtrap
 
-    def run_tp(self, tp):
+    def _run_tp(self, tp):
         """
         Find traps if they have not yet been found.
         Determine any translational drift of the current image from the
@@ -491,9 +523,8 @@ class Tiler(ProcessABC):
         return None
 
     def get_traps_timepoint(self, *args, **kwargs):
-        #
-        print(
-            DeprecationWarning("Deprecated:Use get_tiles_timepoint instead.")
+        self._log(
+            "get_trap_timepoints is deprecated; get_tiles_timepoint instead."
         )
 
         return self.get_tiles_timepoint(*args, **kwargs)
@@ -622,7 +653,7 @@ def find_channel_index(image_channels: t.List[str], channel: str):
         found = re.match(channel, ch, re.IGNORECASE)
         if found:
             if len(found.string) - (found.endpos - found.start()):
-                print(f"WARNING: channel {channel} matched {ch} using regex")
+                self._log(f"Channel {channel} matched {ch} using regex")
             return i
 
 

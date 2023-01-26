@@ -42,21 +42,15 @@ class Signal(BridgeH5):
             "Cy5",
             "pHluorin405",
         )
-        # Alan: why  "equivalences"? this variable is unused.
-        equivalences = {
-            "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
-        }
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
-        if isinstance(dsets, str):
-            # no pre-processing
+        if isinstance(dsets, str):  # no pre-processing
             df = self.get_raw(dsets)
             return self.add_name(df, dsets)
-        elif isinstance(dsets, list):
-            # pre-processing
+        elif isinstance(dsets, list):  # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
-            # Alan: what does this error message mean?
+            # Check we are not comaring tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
             ), "Tile data and cell data can't be mixed"
@@ -72,18 +66,12 @@ class Signal(BridgeH5):
         df.name = name
         return df
 
-    # def cols_in_mins_old(self, df: pd.DataFrame):
-    #     """Convert numerical columns in a dataframe to minutes."""
-    #     try:
-    #         df.columns = (df.columns * self.tinterval // 60).astype(int)
-    #     except Exception as e:
-    #         print(f"Warning:Signal: Unable to convert columns to minutes: {e}")
-    #     return df
-
     def cols_in_mins(self, df: pd.DataFrame):
-        """Convert numerical columns in a dataframe to minutes."""
-        if type(self.tinterval) == int:
-            df.columns *= self.tinterval
+        # Convert numerical columns in a dataframe to minutes
+        try:
+            df.columns = (df.columns * self.tinterval // 60).astype(int)
+        except Exception as e:
+            self._log(f"Unable to convert columns to minutes: {e}", "debug")
         return df
 
     @cached_property
@@ -239,7 +227,8 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_path)
         except Exception as e:
-            print("Error visiting h5: {}".format(e))
+            self._log("Exception when visiting h5: {}".format(e), "exception")
+
         return self._available
 
     def get_merged(self, dataset):
@@ -267,10 +256,10 @@ class Signal(BridgeH5):
 
     def get_raw(
         self,
-        dataset: str,
+        dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Load data from a h5 file and return as a dataframe.
 
@@ -289,10 +278,11 @@ class Signal(BridgeH5):
                     if in_minutes:
                         df = self.cols_in_mins(df)
             elif isinstance(dataset, list):
-                # Alan: no mother_labels in this case?
-                return [self.get_raw(dset) for dset in dataset]
-            if lineage:
-                # assumes that df is sorted
+                return [
+                    self.get_raw(dset, in_minutes=in_minutes, lineage=lineage)
+                    for dset in dataset
+                ]
+            if lineage:  # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
                 a, b = validate_association(
@@ -304,7 +294,7 @@ class Signal(BridgeH5):
                 df = add_index_levels(df, {"mother_label": mother_label})
             return df
         except Exception as e:
-            print(f"Could not fetch data set {dataset}")
+            self._log(f"Could not fetch dataset {dataset}: {e}", "error")
             raise e
 
     def get_merges(self):
@@ -355,7 +345,10 @@ class Signal(BridgeH5):
         fullname: str,
         node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """Store the name of a signal if it is a leaf node (a group with no more groups inside) and if it starts with extraction."""
+        """
+        Store the name of a signal if it is a leaf node
+        (a group with no more groups inside) and if it starts with extraction.
+        """
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):

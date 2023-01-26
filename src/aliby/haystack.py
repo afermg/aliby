@@ -37,8 +37,6 @@ def timer(func, *args, **kwargs):
 
 
 ################## CUSTOM OBJECTS ##################################
-
-
 class ModelPredictor:
     """Generic object that takes a NN and returns the prediction.
 
@@ -77,32 +75,3 @@ class ModelPredictorWriter(DynamicWriter):
             "timepoint": ((None,), np.uint16),
         }
         self.group = f"{self.name}_info"
-
-
-class Saver:
-    channel_names = {0: "BrightField", 1: "GFP"}
-
-    def __init__(self, tiler, save_directory, pos_name):
-        """This class straight up saves the trap data for use with neural networks in the future."""
-        self.tiler = tiler
-        self.name = pos_name
-        self.save_dir = Path(save_directory)
-
-    def channel_dir(self, index):
-        ch_dir = self.save_dir / self.channel_names[index]
-        if not ch_dir.exists():
-            ch_dir.mkdir()
-        return ch_dir
-
-    def get_data(self, tp, ch):
-        return self.tiler.get_tp_data(tp, ch).swapaxes(1, 3).swapaxes(1, 2)
-
-    def cache(self, tp):
-        # Get a given time point
-        # split into channels
-        for ch in self.channel_names:
-            ch_dir = self.channel_dir(ch)
-            data = self.get_data(tp, ch)
-            for tid, trap in enumerate(data):
-                np.save(ch_dir / f"{self.name}_{tid}_{tp}.npy", trap)
-        return

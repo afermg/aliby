@@ -2,9 +2,10 @@
 Tools to interact with h5 files and handle data consistently.
 """
 import collections
+import logging
+import typing as t
 from itertools import chain, groupby, product
 from typing import Union
-import typing as t
 
 import h5py
 import numpy as np
@@ -24,6 +25,11 @@ class BridgeH5:
         if flag is not None:
             self._hdf = h5py.File(filename, flag)
             self._filecheck
+
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
     def _filecheck(self):
         assert "cell_info" in self._hdf, "Invalid file. No 'cell_info' found."
@@ -149,12 +155,6 @@ def attrs_from_h5(fpath: str):
     """Return attributes as dict from an h5 file."""
     with h5py.File(fpath, "r") as f:
         return dict(f.attrs)
-
-
-def parameters_from_h5(fpath: str):
-    """Return parameters from an h5 file."""
-    attrs = attrs_from_h5(fpath)
-    return yaml.safe_load(attrs["parameters"])
 
 
 def image_creds_from_h5(fpath: str):

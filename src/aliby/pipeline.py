@@ -9,8 +9,6 @@ import typing as t
 from copy import copy
 from importlib.metadata import version
 from pathlib import Path, PosixPath
-from time import perf_counter
-from typing import Union
 
 import h5py
 import numpy as np
@@ -22,7 +20,7 @@ from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
-from agora.io.writer import (  # BabyWriter,
+from agora.io.writer import (
     LinearBabyWriter,
     StateWriter,
     TilerWriter,
@@ -36,17 +34,20 @@ from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
-# from postprocessor.compiler import ExperimentCompiler, PageOrganiser
-
-logging.basicConfig(
-    filename="aliby.log",
-    filemode="w",
-    format="%(name)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG,
-)
-
 
 class PipelineParameters(ParametersABC):
+    """
+    Parameters that host what is run and how. It takes a list of dictionaries, one for
+    general in collection:
+    pass dictionary for each step
+    --------------------
+    expt_id: int or str Experiment id (if integer) or local path (if string).
+    directory: str Directory into which results are dumped. Default is "../data"
+
+    Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
+    timepoints and extraction parameters from there.
+    """
+
     _pool_index = None
 
     def __init__(
@@ -67,16 +68,7 @@ class PipelineParameters(ParametersABC):
         baby={},
         extraction={},
         postprocessing={},
-        # reporting={},
     ):
-        """
-        Load unit test experiment
-        :expt_id: Experiment id
-        :directory: Output directory
-
-        Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
-        timepoints and extraction parameters from there.
-        """
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
@@ -85,7 +77,8 @@ class PipelineParameters(ParametersABC):
         directory = Path(general.get("directory", "../data"))
 
         with dispatch_dataset(
-            expt_id, **general.get("server_info", {})
+            expt_id,
+            **{k: general.get(k) for k in ("host", "username", "password")},
         ) as conn:
             directory = directory / conn.unique_name
             if not directory.exists():
@@ -95,11 +88,13 @@ class PipelineParameters(ParametersABC):
         try:
             meta_d = MetaData(directory, None).load_logs()
         except Exception as e:
+            logging.getLogger("aliby").warn(
+                f"WARNING:Metadata: error when loading: {e}"
+            )
             minimal_default_meta = {
                 "channels": ["Brightfield"],
                 "ntps": [2000],
             }
-            print(f"WARNING:Metadata: error when loading: {e}")
             # Set minimal metadata
             meta_d = minimal_default_meta
 
@@ -118,6 +113,8 @@ class PipelineParameters(ParametersABC):
                     thresh_trap_area=0.9,
                     ntps_to_eval=5,
                 ),
+                logfile_level="INFO",
+                use_explog=True,
             )
         }
 
@@ -186,6 +183,29 @@ class Pipeline(ProcessABC):
         if store is not None:
             store = Path(store)
         self.store = store
+
+    @staticmethod
+    def setLogger(
+        folder, file_level: str = "INFO", stream_level: str = "WARNING"
+    ):
+
+        logger = logging.getLogger("aliby")
+        logger.setLevel(getattr(logging, file_level))
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s:%(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
+
+        ch = logging.StreamHandler()
+        ch.setLevel(getattr(logging, stream_level))
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+
+        # create file handler which logs even debug messages
+        fh = logging.FileHandler(Path(folder) / "aliby.log", "w+")
+        fh.setLevel(getattr(logging, file_level))
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
 
     @classmethod
     def from_yaml(cls, fpath):
@@ -257,23 +277,34 @@ class Pipeline(ProcessABC):
 
         return cls(pipeline_parameters, store=directory)
 
+    @property
+    def _logger(self):
+        return logging.getLogger("aliby")
+
     def run(self):
-        # Config holds the general information, use in main
-        # Steps holds the description of tasks with their parameters
-        # Steps: all holds general tasks
-        # steps: strain_name holds task for a given strain
+        """
+        Config holds the general information, use in main
+        Steps: all holds general tasks
+        steps: strain_name holds task for a given strain
+        """
+
         config = self.parameters.to_dict()
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
         pos_filter = config["general"]["filter"]
         root_dir = Path(config["general"]["directory"])
+        self.server_info = {
+            k: config["general"].get(k)
+            for k in ("host", "username", "password")
+        }
 
-        print("Searching OMERO")
+        dispatcher = dispatch_dataset(expt_id, **self.server_info)
+        logging.getLogger("aliby").info(
+            f"Fetching data using {dispatcher.__class__.__name__}"
+        )
         # Do all all initialisations
 
-        with dispatch_dataset(
-            expt_id, **self.general.get("server_info", {})
-        ) as conn:
+        with dispatcher as conn:
             image_ids = conn.get_images()
 
             directory = self.store or root_dir / conn.unique_name
@@ -288,6 +319,8 @@ class Pipeline(ProcessABC):
         self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
 
+        self.setLogger(directory)
+
         # Filter TODO integrate filter onto class and add regex
         def filt_int(d: dict, filt: int):
             return {k: v for i, (k, v) in enumerate(d.items()) if i == filt}
@@ -295,7 +328,7 @@ class Pipeline(ProcessABC):
         def filt_str(image_ids: dict, filt: str):
             return {k: v for k, v in image_ids.items() if re.search(filt, k)}
 
-        def pick_filter(image_ids: dict, filt: Union[int, str]):
+        def pick_filter(image_ids: dict, filt: int or str):
             if isinstance(filt, str):
                 image_ids = filt_str(image_ids, filt)
             elif isinstance(filt, int):
@@ -332,7 +365,7 @@ class Pipeline(ProcessABC):
 
     def create_pipeline(
         self,
-        image_id: t.Tuple[str, t.Union[str, PosixPath, int]],
+        image_id: t.Tuple[str, str or PosixPath or int],
         index: t.Optional[int] = None,
     ):
         """ """
@@ -370,7 +403,7 @@ class Pipeline(ProcessABC):
             min_process_from = min(process_from.values())
 
             with get_image_class(image_id)(
-                image_id, **self.general.get("server_info", {})
+                image_id, **self.server_info
             ) as image:
 
                 # Initialise Steps
@@ -432,15 +465,10 @@ class Pipeline(ProcessABC):
 
                             for step in self.iterative_steps:
                                 if i >= process_from[step]:
-                                    t = perf_counter()
                                     result = steps[step].run_tp(
                                         i, **run_kwargs.get(step, {})
                                     )
-                                    logging.debug(
-                                        f"Timing:{step}:{perf_counter() - t}s"
-                                    )
                                     if step in loaded_writers:
-                                        t = perf_counter()
                                         loaded_writers[step].write(
                                             data=result,
                                             overwrite=writer_ow_kwargs.get(
@@ -449,16 +477,13 @@ class Pipeline(ProcessABC):
                                             tp=i,
                                             meta={"last_processed": i},
                                         )
-                                        logging.debug(
-                                            f"Timing:Writing-{step}:{perf_counter() - t}s"
-                                        )
 
                                     # Step-specific actions
                                     if (
                                         step == "tiler"
                                         and i == min_process_from
                                     ):
-                                        print(
+                                        logging.getLogger("aliby").info(
                                             f"Found {steps['tiler'].n_traps} traps in {image.name}"
                                         )
                                     elif (
@@ -482,18 +507,15 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            logging.debug(
-                                f"Quality:Clogged_traps:{frac_clogged_traps}"
+                            self._log(
+                                f"{name}:Clogged_traps:{frac_clogged_traps}"
                             )
 
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
                         else:  # Stop if more than X% traps are clogged
-                            logging.debug(
-                                f"EarlyStop:{earlystop['thresh_pos_clogged']*100}% traps clogged at time point {i}"
-                            )
-                            print(
-                                f"Stopping analysis at time {i} with {frac_clogged_traps} clogged traps"
+                            self._log(
+                                f"{name}:Analysis stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             meta.add_fields({"end_status": "Clogged"})
                             break
@@ -507,29 +529,20 @@ class Pipeline(ProcessABC):
                     )
                     PostProcessor(filename, post_proc_params).run()
 
+                    self._log("Analysis finished successfully.", "info")
                     return 1
 
-        except Exception as e:  # bug during setup or runtime
+        except Exception as e:  # Catch bugs during setup or runtime
             logging.exception(
-                f"Caught exception in worker thread (x = {name}):",
+                f"{name}: Exception caught.",
                 exc_info=True,
             )
-            print(f"Caught exception in worker thread (x = {name}):")
             # This prints the type, value, and stack trace of the
             # current exception being handled.
             traceback.print_exc()
             raise e
         finally:
             _close_session(session)
-
-        # try:
-        #     compiler = ExperimentCompiler(None, filepath)
-        #     tmp = compiler.run()
-        #     po = PageOrganiser(tmp, grid_spec=(3, 2))
-        #     po.plot()
-        #     po.save(fullpath / f"{directory}report.pdf")
-        # except Exception as e:
-        #     print("Report failed: {}".format(e))
 
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
@@ -643,9 +656,7 @@ class Pipeline(ProcessABC):
         directory = general_config["directory"]
 
         trackers_state: t.List[np.ndarray] = []
-        with get_image_class(image_id)(
-            image_id, **self.general.get("server_info", {})
-        ) as image:
+        with get_image_class(image_id)(image_id, **self.server_info) as image:
             filename = Path(f"{directory}/{image.name}.h5")
             meta = MetaData(directory, filename)
 
@@ -664,6 +675,7 @@ class Pipeline(ProcessABC):
 
             # If no previous segmentation and keep tiler
             if filename.exists():
+                self._log("Result file exists.", "info")
                 if not ow["tiler"]:
                     steps["tiler"] = Tiler.from_hdf5(image, filename)
                     try:
@@ -685,30 +697,9 @@ class Pipeline(ProcessABC):
                     except Exception:
                         pass
 
-                # Delete datasets to overwrite and update pipeline data
-                # Use existing parameters
-                # with h5py.File(filename, "a") as f:
-                #     pparams = PipelineParameters.from_yaml(
-                #         f.attrs["parameters"]
-                #     ).to_dict()
+            if config["general"]["use_explog"]:
+                meta.run()
 
-                #     for k, v in ow.items():
-                #         if v:
-                #             for gname in self.writer_groups[k]:
-                #                 if gname in f:
-                #                     del f[gname]
-
-                #         pparams[k] = config[k]
-                # meta.add_fields(
-                #     {
-                #         "parameters": PipelineParameters.from_dict(
-                #             pparams
-                #         ).to_yaml()
-                #     },
-                #     overwrite=True,
-                # )
-
-            meta.run()
             meta.add_fields(  # Add non-logfile metadata
                 {
                     "aliby_version": version("aliby"),

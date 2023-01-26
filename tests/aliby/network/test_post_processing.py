@@ -7,14 +7,6 @@ import skimage.morphology as morph
 from scipy import ndimage
 from skimage import draw
 
-# from aliby.post_processing import (
-#     circle_outline,
-#     conical,
-#     ellipse_perimeter,
-#     union_of_spheres,
-#     volume_of_sphere,
-# )
-
 
 @pytest.mark.skip(
     reason="No longer usable, post_processing unused inside aliby. Kept temporarily"

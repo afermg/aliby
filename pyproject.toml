@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.51"
+version = "0.1.53"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -11,6 +11,13 @@ packages = [
     { include = "logfile_parser", from="src" },
 ]
 readme = "README.md"
+
+[tool.poetry.scripts]
+aliby-run = "aliby.bin.run:run"
+
+[build-system]
+requires = ["setuptools", "poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
 python = ">=3.8, <3.11"
@@ -26,7 +33,7 @@ py-find-1st = "^1.1.5" # Fast indexing
 scikit-learn = ">=1.0.2" # Used for an extraction metric
 scipy = ">=1.7.3"
 
-# [tool.poetry.group.pipeline.dependencies]
+# Pipeline + I/O
 aliby-baby = "^0.1.15"
 dask = "^2021.12.0"
 imageio = "2.8.0" # For image-visualisation utilities
@@ -35,13 +42,13 @@ scikit-image = ">=0.18.1"
 tqdm = "^4.62.3" # progress bars
 xmltodict = "^0.13.0" # read ome-tiff metadata
 
-# [tool.poetry.group.postprocessor.dependencies]
+# Postprocessing
 leidenalg = "^0.8.8"
 more-itertools = "^8.12.0"
 pathos = "^0.2.8" # Lambda-friendly multithreading
 pycatch22 = "^0.4.2"
 
-# [tool.poetry.group.network.dependencies]
+# Networking
 omero-py = { version = ">=5.6.2", optional = true } # contact omero server
 zeroc-ice = { version="3.6.5", optional = true } # networking interface, slow to build
 GitPython = "^3.1.27"
@@ -85,10 +92,6 @@ optional = true
 [tool.poetry.group.test.dependencies]
 pytest = "^6.2.5"
 
-
-[build-system]
-requires = ["setuptools", "poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 79

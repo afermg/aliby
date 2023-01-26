@@ -1,50 +1,35 @@
 #!/usr/bin/env python3
+"""
+Image: Loads images and registers them.
+
+Image instances loads images from a specified directory into an object that
+also contains image properties such as name and metadata.  Pixels from images
+are stored in dask arrays; the standard way is to store them in 5-dimensional
+arrays: T(ime point), C(channel), Z(-stack), Y, X.
+
+This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
+handles local OMERO images.  ImageDir handles cases in which images are split
+into directories, with each time point and channel having its own image file.
+ImageDummy is a dummy class for silent failure testing.
+"""
 
 import typing as t
-from abc import ABC, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
+from importlib_resources import files
 from pathlib import Path, PosixPath
 
 import dask.array as da
-import numpy as np
 import xmltodict
-from dask import delayed
 from dask.array.image import imread
-
-try:
-    from omero.model import enums as omero_enums
-except ModuleNotFoundError:
-    print("Warning: Cannot import omero_enums.")
 from tifffile import TiffFile
-from yaml import safe_load
 
-from agora.io.bridge import BridgeH5
 from agora.io.metadata import dir_to_meta
 
-try:
-    from aliby.io.omero import BridgeOmero
-except ModuleNotFoundError:
 
-    class BridgeOmero:
-        # dummy class necessary when the omero module is not installed
-        pass
-
-    print("Warning: Cannot import BridgeOmero.")
-
-# convert OMERO definitions into numpy types
-try:
-    PIXEL_TYPES = {
-        omero_enums.PixelsTypeint8: np.int8,
-        omero_enums.PixelsTypeuint8: np.uint8,
-        omero_enums.PixelsTypeint16: np.int16,
-        omero_enums.PixelsTypeuint16: np.uint16,
-        omero_enums.PixelsTypeint32: np.int32,
-        omero_enums.PixelsTypeuint32: np.uint32,
-        omero_enums.PixelsTypefloat: np.float32,
-        omero_enums.PixelsTypedouble: np.float64,
-    }
-except NameError:
-    print("Warning: PIXEL_TYPES are not defined.")
+def get_examples_dir():
+    """Get examples directory which stores dummy image for tiler"""
+    return files("aliby").parent.parent / "examples" / "tiler"
 
 
 def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
@@ -52,6 +37,8 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     Wrapper to pick the appropiate Image class depending on the source of data.
     """
     if isinstance(source, int):
+        from aliby.io.omero import Image
+
         instatiator = Image
     elif isinstance(source, dict) or (
         isinstance(source, (str, PosixPath)) and Path(source).is_dir()
@@ -67,10 +54,10 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
 
 class BaseLocalImage(ABC):
     """
-    Base class to set path and provide context management method.
+    Base Image class to set path and provide context management method.
     """
 
-    _default_dimorder = "tczxy"
+    _default_dimorder = "tczyx"
 
     def __init__(self, path: t.Union[str, PosixPath]):
         # If directory, assume contents are naturally sorted
@@ -78,6 +65,12 @@ class BaseLocalImage(ABC):
 
     def __enter__(self):
         return self
+
+    def __exit__(self, *exc):
+        for e in exc:
+            if e is not None:
+                print(e)
+        return False
 
     def rechunk_data(self, img):
         # Format image using x and y size from metadata.
@@ -88,11 +81,15 @@ class BaseLocalImage(ABC):
                 1,
                 1,
                 1,
-                self._meta["size_x"],
                 self._meta["size_y"],
+                self._meta["size_x"],
             ),
         )
         return self._rechunked_img
+
+    @abstractmethod
+    def get_data_lazy(self) -> da.Array:
+        pass
 
     @abstractproperty
     def name(self):
@@ -106,23 +103,130 @@ class BaseLocalImage(ABC):
     def data(self):
         return self.get_data_lazy()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        for e in exc:
-            if e is not None:
-                print(e)
-        return False
-
     @property
     def metadata(self):
         return self._meta
 
 
+class ImageDummy(BaseLocalImage):
+    """
+    Dummy Image class.
+
+    ImageDummy mimics the other Image classes in such a way that it is accepted
+    by Tiler.  The purpose of this class is for testing, in particular,
+    identifying silent failures.  If something goes wrong, we should be able to
+    know whether it is because of bad parameters or bad input data.
+
+    For the purposes of testing parameters, ImageDummy assumes that we already
+    know the tiler parameters before Image instances are instantiated.  This is
+    true for a typical pipeline run.
+    """
+
+    def __init__(self, tiler_parameters: dict):
+        """Builds image instance
+
+        Parameters
+        ----------
+        tiler_parameters : dict
+            Tiler parameters, in dict form. Following
+            aliby.tile.tiler.TilerParameters, the keys are: "tile_size" (size of
+            tile), "ref_channel" (reference channel for tiling), and "ref_z"
+            (reference z-stack, 0 to choose a default).
+        """
+        self.ref_channel = tiler_parameters["ref_channel"]
+        self.ref_z = tiler_parameters["ref_z"]
+
+    # Goal: make Tiler happy.
+    @staticmethod
+    def pad_array(
+        image_array: da.Array,
+        dim: int,
+        n_empty_slices: int,
+        image_position: int = 0,
+    ):
+        """Extends a dimension in a dask array and pads with zeros
+
+        Extends a dimension in a dask array that has existing content, then pads
+        with zeros.
+
+        Parameters
+        ----------
+        image_array : da.Array
+            Input dask array
+        dim : int
+            Dimension in which to extend the dask array.
+        n_empty_slices : int
+            Number of empty slices to extend the dask array by, in the specified
+            dimension/axis.
+        image_position : int
+            Position within the new dimension to place the input arary, default 0
+            (the beginning).
+
+        Examples
+        --------
+        ```
+        extended_array = pad_array(
+            my_da_array, dim = 2, n_empty_slices = 4, image_position = 1)
+        ```
+        Extends a dask array called `my_da_array` in the 3rd dimension
+        (dimensions start from 0) by 4 slices, filled with zeros.  And puts the
+        original content in slice 1 of the 3rd dimension
+        """
+        # Concats zero arrays with same dimensions as image_array, and puts
+        # image_array as first element in list of arrays to be concatenated
+        zeros_array = da.zeros_like(image_array)
+        return da.concatenate(
+            [
+                *([zeros_array] * image_position),
+                image_array,
+                *([zeros_array] * (n_empty_slices - image_position)),
+            ],
+            axis=dim,
+        )
+
+    # Logic: We want to return a image instance
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
+        examples_dir = get_examples_dir()
+        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
+        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
+        # naming scheme.  The aim is to create a multidimensional dask array that stores
+        # the z-stacks.
+        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
+        img_path = examples_dir / img_filename
+        # img is a dask array has three dimensions: z, x, y
+        # TODO: Write a test to confirm this: If everything worked well,
+        # z = 1, x = 1200, y = 1200
+        img = imread(str(img_path))
+        # Adds t & c dimensions
+        img = da.reshape(
+            img, (1, 1, img.shape[-3], img.shape[-2], img.shape[-1])
+        )
+        # Pads t, c, and z dimensions
+        img = self.pad_array(
+            img, dim=0, n_empty_slices=199
+        )  # 200 timepoints total
+        img = self.pad_array(img, dim=1, n_empty_slices=2)  # 3 channels
+        img = self.pad_array(
+            img, dim=2, n_empty_slices=4, image_position=self.ref_z
+        )  # 5 z-stacks
+        return img
+
+    @property
+    def name(self):
+        pass
+
+    @property
+    def dimorder(self):
+        pass
+
+
 class ImageLocalOME(BaseLocalImage):
     """
-    Fetch image from OMEXML data format, in which a multidimensional tiff image contains the metadata.
+    Local OMERO Image class.
+
+    This is a derivative Image class. It fetches an image from OMEXML data format,
+    in which a multidimensional tiff image contains the metadata.
     """
 
     def __init__(self, path: str, dimorder=None):
@@ -222,7 +326,7 @@ class ImageDir(BaseLocalImage):
     """
     Image class for the case in which all images are split in one or
     multiple folders with time-points and channels as independent files.
-    It inherits from Imagelocal so we only override methods that are critical.
+    It inherits from BaseLocalImage so we only override methods that are critical.
 
     Assumptions:
     - One folders per position.
@@ -278,139 +382,3 @@ class ImageDir(BaseLocalImage):
         return [
             k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
         ]
-
-
-class Image(BridgeOmero):
-    """
-    Load images from OMERO and gives access to the data and metadata.
-    """
-
-    def __init__(self, image_id: int, **server_info):
-        """
-        Establish the connection to the OMERO server via the Argo
-        base class.
-
-        Parameters
-        ----------
-        image_id: integer
-        server_info: dictionary
-            Specifies the host, username, and password as strings
-        """
-        self.ome_id = image_id
-        super().__init__(**server_info)
-
-    def init_interface(self, ome_id: int):
-        self.set_id(ome_id)
-        self.ome_class = self.conn.getObject("Image", ome_id)
-
-    @classmethod
-    def from_h5(
-        cls,
-        filepath: t.Union[str, PosixPath],
-    ):
-        """
-        Instantiate Image from a hdf5 file.
-
-        Parameters
-        ----------
-        cls : Image
-            Image class
-        filepath : t.Union[str, PosixPath]
-            Location of hdf5 file.
-
-        Examples
-        --------
-        FIXME: Add docs.
-
-        """
-        # metadata = load_attributes(filepath)
-        bridge = BridgeH5(filepath)
-        image_id = bridge.meta_h5["image_id"]
-        # server_info = safe_load(bridge.meta_h5["parameters"])["general"][
-        #     "server_info"
-        # ]
-        return cls(image_id, **cls.server_info_from_h5(filepath))
-
-    @property
-    def name(self):
-        return self.ome_class.getName()
-
-    @property
-    def data(self):
-        return get_data_lazy(self.ome_class)
-
-    @property
-    def metadata(self):
-        """
-        Store metadata saved in OMERO: image size, number of time points,
-        labels of channels, and image name.
-        """
-        meta = dict()
-        meta["size_x"] = self.ome_class.getSizeX()
-        meta["size_y"] = self.ome_class.getSizeY()
-        meta["size_z"] = self.ome_class.getSizeZ()
-        meta["size_c"] = self.ome_class.getSizeC()
-        meta["size_t"] = self.ome_class.getSizeT()
-        meta["channels"] = self.ome_class.getChannelLabels()
-        meta["name"] = self.ome_class.getName()
-        return meta
-
-
-class UnsafeImage(Image):
-    """
-    Loads images from OMERO and gives access to the data and metadata.
-    This class is a temporary solution while we find a way to use
-    context managers inside napari. It risks resulting in zombie connections
-    and producing freezes in an OMERO server.
-
-    """
-
-    def __init__(self, image_id, **server_info):
-        """
-        Establishes the connection to the OMERO server via the Argo
-        base class.
-
-        Parameters
-        ----------
-        image_id: integer
-        server_info: dictionary
-            Specifies the host, username, and password as strings
-        """
-        super().__init__(image_id, **server_info)
-        self.create_gate()
-        self.init_wrapper()
-
-    @property
-    def data(self):
-        try:
-            return get_data_lazy(self.ome_class)
-        except Exception as e:
-            print(f"ERROR: Failed fetching image from server: {e}")
-            self.conn.connect(False)
-
-
-def get_data_lazy(image) -> da.Array:
-    """
-    Get 5D dask array, with delayed reading from OMERO image.
-    """
-    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
-    pixels = image.getPrimaryPixels()
-    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
-    # using dask
-    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
-
-    def get_lazy_plane(zct):
-        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
-
-    # 5D stack: TCZXY
-    t_stacks = []
-    for t in range(nt):
-        c_stacks = []
-        for c in range(nc):
-            z_stack = []
-            for z in range(nz):
-                z_stack.append(get_lazy_plane((z, c, t)))
-            c_stacks.append(da.stack(z_stack))
-        t_stacks.append(da.stack(c_stacks))
-
-    return da.stack(t_stacks)

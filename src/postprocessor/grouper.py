@@ -15,11 +15,6 @@ import pandas as pd
 import seaborn as sns
 from pathos.multiprocessing import Pool
 
-from agora.utils.kymograph import (
-    drop_level,
-    get_mother_ilocs_from_daughters,
-    intersection_matrix,
-)
 from postprocessor.chainer import Chainer
 
 

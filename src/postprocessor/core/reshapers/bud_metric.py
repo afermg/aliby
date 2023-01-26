@@ -33,7 +33,6 @@ class bud_metric(LineageProcess):
         mother_bud_ids: Dict[pd.Index, Tuple[pd.Index]] = None,
     ):
         if mother_bud_ids is None:
-            # filtered_lineage = self.filter_signal_cells(signal)
             mother_bud_ids = mb_array_to_dict(self.lineage)
 
         return self.get_bud_metric(signal, mother_bud_ids)

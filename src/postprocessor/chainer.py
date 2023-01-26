@@ -4,7 +4,6 @@ import re
 import typing as t
 from copy import copy
 
-import numpy as np
 import pandas as pd
 
 from agora.io.signal import Signal
@@ -17,61 +16,36 @@ from postprocessor.core.lineageprocess import LineageProcessParameters
 class Chainer(Signal):
     """
     Extend Signal by applying post-processes and allowing composite signals that combine basic signals.
+    It "chains" multiple processes upon fetching a dataset to produce the desired datasets.
 
     Instead of reading processes previously applied, it executes
     them when called.
     """
 
-    # these no longer seem to be used
-    #process_types = ("multisignal", "processes", "reshapers")
-    #common_chains = {}
+    _synonyms = {
+        "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for channel in self.candidate_channels:
-            # find first channel in h5 file that corresponds to a candidate_channel
-            # but channel is redefined. why is there a loop over candidate channels?
-            # what about capitals?
-            try:
-                channel = [
-                    ch for ch in self.channels if re.match("channel", ch)
-                ][0]
-                break
-            except:
-                # is this still a good idea?
-                pass
-        try:
-            # what's this?
-            # composite statistic comprising the quotient of two others
-            equivalences = {
-                "m5m": (
-                    f"extraction/{channel}/max/max5px",
-                    f"extraction/{channel}/max/median",
-                ),
-            }
 
+        def replace_path(path: str, bgsub: bool = ""):
             # function to add bgsub to paths
-            def replace_path(path: str, bgsub: str = ""):
-                channel = path.split("/")[1]
-                if "bgsub" in bgsub:
-                    # add bgsub to path
-                    path = re.sub(channel, f"{channel}_bgsub", path)
-                return path
+            channel = path.split("/")[1]
+            suffix = "_bgsub" if bgsub else ""
+            path = re.sub(channel, f"{channel}{suffix}", path)
+            return path
 
-            # for composite statistics
-            # add chain with and without bgsub
-            self.common_chains = {
-                alias
-                + bgsub: lambda **kwargs: self.get(
-                    replace_url(denominator, alias + bgsub), **kwargs
-                )
-                / self.get(replace_path(numerator, alias + bgsub), **kwargs)
-                for alias, (denominator, numerator) in equivalences.items()
-                for bgsub in ("", "_bgsub")
-            }
-        except:
-            # Is this still a good idea?
-            pass
+        # Add chain with and without bgsub for composite statistics
+        self.common_chains = {
+            alias
+            + bgsub: lambda **kwargs: self.get(
+                replace_path(denominator, alias + bgsub), **kwargs
+            )
+            / self.get(replace_path(numerator, alias + bgsub), **kwargs)
+            for alias, (denominator, numerator) in self.synonyms.items()
+            for bgsub in ("", "_bgsub")
+        }
 
     def get(
         self,
@@ -83,7 +57,6 @@ class Chainer(Signal):
         **kwargs,
     ):
         """Load data from an h5 file."""
-        1/0
         if dataset in self.common_chains:
             # get dataset for composite chains
             data = self.common_chains[dataset](**kwargs)
@@ -96,7 +69,7 @@ class Chainer(Signal):
             # keep data only from early time points
             data = self.get_retained(data, retain)
             # data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
-        if (stages and "stage" not in data.columns.names):
+        if stages and "stage" not in data.columns.names:
             # return stages as additional column level
             stages_index = [
                 x
@@ -149,7 +122,5 @@ class Chainer(Signal):
                 if process_type == "reshapers":
                     if process == "merger":
                         raise (NotImplementedError)
-                        merges = process.as_function(result, **params)
-                        result = self.apply_merges(result, merges)
             self._intermediate_steps.append(result)
         return result

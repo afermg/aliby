@@ -1,12 +1,16 @@
+import logging
 import typing as t
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import copy
 from pathlib import Path, PosixPath
+from time import perf_counter
 from typing import Union
 
 from flatten_dict import flatten
 from yaml import dump, safe_load
+
+from agora.logging import timer
 
 atomic = t.Union[int, float, str, bool]
 
@@ -198,6 +202,11 @@ class ProcessABC(ABC):
     def run(self):
         pass
 
+    def _log(self, message: str, level: str = "warn"):
+        # Log messages in the corresponding level
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
+
 
 def check_type_recursive(val1, val2):
     same_types = True
@@ -217,3 +226,28 @@ def check_type_recursive(val1, val2):
         for k in val2.keys():
             same_types = same_types and check_type_recursive(val1[k], val2[k])
     return same_types
+
+
+class StepABC(ProcessABC):
+    """
+    Base class that expands on ProcessABC to include tools used by Aliby steps.
+    It adds a setup step, logging and benchmarking for time benchmarks.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    @abstractmethod
+    def _run_tp(self):
+        pass
+
+    @timer
+    def run_tp(self, tp: int, **kwargs):
+        """
+        Time and log the timing of a step.
+        """
+        return self._run_tp(tp, **kwargs)
+
+    def run(self):
+        # Replace run withn run_tp
+        raise Warning("Steps use run_tp instead of run")

@@ -1,4 +1,3 @@
-import logging
 import typing as t
 from time import perf_counter
 from typing import List
@@ -6,7 +5,7 @@ from typing import List
 import h5py
 import numpy as np
 import pandas as pd
-from agora.abc import ParametersABC, ProcessABC
+from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_attributes
 
@@ -89,7 +88,7 @@ class ExtractorParameters(ParametersABC):
         return cls(**exparams_from_meta(meta))
 
 
-class Extractor(ProcessABC):
+class Extractor(StepABC):
     """
     Apply a metric to cells identified in the tiles.
 
@@ -266,7 +265,7 @@ class Extractor(ProcessABC):
             channel_ids = None
         if z is None:
             # gets the tiles data via tiler
-            z: t.List[int] = list(range(self.tiler.shape[-1]))
+            z: t.List[int] = list(range(self.tiler.shape[-3]))
         tiles = (
             self.tiler.get_tiles_timepoint(
                 tp, channels=channel_ids, z=z, **kwargs
@@ -306,7 +305,7 @@ class Extractor(ProcessABC):
             A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
         """
         if labels is None:
-            print("Warning: No labels given. Sorting cells using index.")
+            self._log("No labels given. Sorting cells using index.")
 
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []
@@ -455,6 +454,7 @@ class Extractor(ProcessABC):
             An example is d["GFP"]["np_max"]["mean"][0], which gives a tuple of the calculated mean GFP fluorescence for all cells.
 
         """
+        # TODO Can we split the different extraction types into sub-methods to make this easier to read?
         if tree is None:
             # use default
             tree: extraction_tree = self.params.tree
@@ -588,28 +588,24 @@ class Extractor(ProcessABC):
         elif channel in self.img_bgsub:
             return self.img_bgsub[channel]
 
-    def run_tp(self, tp, **kwargs):
-        """
-        Wrapper to add compatibility with other steps of the pipeline.
-        """
-        return self.run(tps=[tp], **kwargs)
-
-    def run(
+    def _run_tp(
         self,
-        tree=None,
         tps: List[int] = None,
+        tree=None,
         save=True,
         **kwargs,
     ) -> dict:
         """
+        Wrapper to add compatibility with other steps of the pipeline.
+
         Parameters
         ----------
-        tree: dict
+        tps: list of int (optional)
+            Time points to include.
+        tree: dict (optional)
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
             For example: {'general': {'None': ['area', 'volume', 'eccentricity']}}
-        tps: list of int (optional)
-            Time points to include.
         save: boolean (optional)
             If True, save results to h5 file.
         kwargs: keyword arguments (optional)
@@ -624,6 +620,9 @@ class Extractor(ProcessABC):
             tree = self.params.tree
         if tps is None:
             tps = list(range(self.meta["time_settings/ntimepoints"][0]))
+        elif isinstance(tps, int):
+            tps = [tps]
+
         # store results in dict
         d = {}
         for tp in tps:
