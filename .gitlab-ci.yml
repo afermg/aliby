@@ -42,7 +42,6 @@ Local Tests:
     - poetry run coverage report -m
     - poetry run coverage xml
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
-# Legacy because we use GitLab 14.2.6
   artifacts:
     reports:
       coverage_report:

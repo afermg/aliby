@@ -70,10 +70,10 @@ Install [ poetry ](https://python-poetry.org/docs/#installation) for dependency 
 
 In case you want to have local version:
 
-    $ git clone git@git.ecdf.ed.ac.uk:swain-lab/aliby/aliby.git
+    $ git clone git@gitlab.com/aliby/aliby.git
     $ cd aliby && poetry install --all-extras
 
-This will automatically install the [ BABY ](https://git.ecdf.ed.ac.uk/swain-lab/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
+This will automatically install the [ BABY ](https://gitlab.com/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
 
 ## Omero Server
 
