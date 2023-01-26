@@ -43,7 +43,7 @@ class Chainer(Signal):
                 replace_path(denominator, alias + bgsub), **kwargs
             )
             / self.get(replace_path(numerator, alias + bgsub), **kwargs)
-            for alias, (denominator, numerator) in self.synonyms.items()
+            for alias, (denominator, numerator) in self._synonyms.items()
             for bgsub in ("", "_bgsub")
         }
 
