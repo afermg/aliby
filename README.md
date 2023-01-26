@@ -2,9 +2,9 @@
 
 [![docs](https://readthedocs.org/projects/aliby/badge/?version=master)](https://aliby.readthedocs.io/en/latest)
 [![PyPI version](https://badge.fury.io/py/aliby.svg)](https://badge.fury.io/py/aliby)
-[![pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/master/pipeline.svg?key_text=master)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/pipelines)
-[![dev pipeline](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/dev/pipeline.svg?key_text=dev)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/commits/dev)
-[![coverage](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/badges/dev/coverage.svg)](https://git.ecdf.ed.ac.uk/swain-lab/aliby/aliby/-/commits/dev)
+[![pipeline](https://gitlab.com/aliby/aliby/badges/master/pipeline.svg?key_text=master)](https://gitlab.com/aliby/aliby/-/pipelines)
+[![dev pipeline](https://gitlab.com/aliby/aliby/badges/dev/pipeline.svg?key_text=dev)](https://gitlab.com/aliby/aliby/-/commits/dev)
+[![coverage](https://gitlab.com/aliby/aliby/badges/dev/coverage.svg)](https://gitlab.com/aliby/aliby/-/commits/dev)
 
 End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentation, tracking, lineage predictions, post-processing and report production. It leverages the existing Python ecosystem and open-source scientific software available to produce seamless and standardised pipelines.
 
