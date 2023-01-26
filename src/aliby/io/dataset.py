@@ -12,10 +12,6 @@ import typing as t
 from abc import ABC, abstractproperty, abstractmethod
 from pathlib import Path, PosixPath
 
-try:
-    import omero
-except ModuleNotFoundError:
-    print("Warning: Cannot import omero.")
 from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
 
