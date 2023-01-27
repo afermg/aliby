@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.53"
+version = "0.1.54"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
