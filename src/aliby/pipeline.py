@@ -37,7 +37,9 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 class PipelineParameters(ParametersABC):
     """
-    Parameters that host what is run and how. It takes a list of dictionaries, one for
+    Define parameters for what processes are run and how.
+
+    Input is a a list of dictionaries, one for
     general in collection:
     pass dictionary for each step
     --------------------
@@ -53,6 +55,7 @@ class PipelineParameters(ParametersABC):
     def __init__(
         self, general, tiler, baby, extraction, postprocessing, reporting
     ):
+        """Initialise with general parameters and those for tiler, baby, extraction, postprocessing, and reporting."""
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -69,6 +72,7 @@ class PipelineParameters(ParametersABC):
         extraction={},
         postprocessing={},
     ):
+        # Alan: 19993 should be updated?
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
@@ -76,6 +80,7 @@ class PipelineParameters(ParametersABC):
 
         directory = Path(general.get("directory", "../data"))
 
+        # connect to OMERO
         with dispatch_dataset(
             expt_id,
             **{k: general.get(k) for k in ("host", "username", "password")},
@@ -83,7 +88,7 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-                # Download logs to use for metadata
+            # download logs for metadata
             conn.cache_logs(directory)
         try:
             meta_d = MetaData(directory, None).load_logs()
@@ -95,7 +100,7 @@ class PipelineParameters(ParametersABC):
                 "channels": ["Brightfield"],
                 "ntps": [2000],
             }
-            # Set minimal metadata
+            # set minimal metadata
             meta_d = minimal_default_meta
 
         tps = meta_d.get("ntps", 2000)
