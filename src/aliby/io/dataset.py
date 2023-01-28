@@ -18,35 +18,40 @@ from aliby.io.image import ImageLocalOME
 
 def dispatch_dataset(expt_id: int or str, **kwargs):
     """
-    Choose a subtype of dataset based on the identifier.
+    Find paths to the data.
 
-    Input:
-    --------
-    expt_id: int or string serving as dataset identifier.
+    Connects to OMERO if data is remotely available.
 
-    Returns:
-    --------
-    Callable Dataset instance, either network-dependent or local.
+    Parameters
+    ----------
+    expt_id: int or str
+        To identify the data, either an OMERO ID or an OME-TIFF file or a local directory.
+
+    Returns
+    -------
+    A callable Dataset instance, either network-dependent or local.
     """
-    if isinstance(expt_id, int):  # Is an experiment online
-
+    if isinstance(expt_id, int):
+        # data available online
         from aliby.io.omero import Dataset
 
         return Dataset(expt_id, **kwargs)
-
-    elif isinstance(expt_id, str):  # Files or Dir
+    elif isinstance(expt_id, str):
+        # data available locally
         expt_path = Path(expt_id)
         if expt_path.is_dir():
+            # data in multiple folders
             return DatasetLocalDir(expt_path)
         else:
+            # data in one folder as OME-TIFF files
             return DatasetLocalOME(expt_path)
     else:
-        raise Warning("Invalid expt_id")
+        raise Warning(f"{expt_id} is an invalid expt_id")
 
 
 class DatasetLocalABC(ABC):
     """
-    Abstract Base class to fetch local files, either OME-XML or raw images.
+    Abstract Base class to find local files, either OME-XML or raw images.
     """
 
     _valid_suffixes = ("tiff", "png")
@@ -73,12 +78,9 @@ class DatasetLocalABC(ABC):
     def unique_name(self):
         return self.path.name
 
-    @abstractproperty
-    def date(self):
-        pass
-
     @property
     def files(self):
+        """Return a dictionary with any available metadata files."""
         if not hasattr(self, "_files"):
             self._files = {
                 f: f
@@ -91,34 +93,35 @@ class DatasetLocalABC(ABC):
         return self._files
 
     def cache_logs(self, root_dir):
-        # Copy metadata files to results folder
+        """Copy metadata files to results folder."""
         for name, annotation in self.files.items():
             shutil.copy(annotation, root_dir / name.name)
         return True
 
+    @abstractproperty
+    def date(self):
+        pass
+
     @abstractmethod
     def get_images(self):
-        # Return a dictionary with the name of images and their unique identifiers
         pass
 
 
 class DatasetLocalDir(DatasetLocalABC):
-    """
-    Organise an entire dataset, composed of multiple images, as a directory containing directories with individual files.
-    It relies on ImageDir to manage images.
-    """
+    """Find paths to a data set, comprising multiple images in different folders."""
 
     def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
         super().__init__(dpath)
 
     @property
     def date(self):
-        # Use folder creation date, for cases where metadata is minimal
+        """Find date when a folder was created."""
         return time.strftime(
             "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
         )
 
     def get_images(self):
+        """Return a dictionary of folder names and their paths."""
         return {
             folder.name: folder
             for folder in self.path.glob("*/")
@@ -131,13 +134,7 @@ class DatasetLocalDir(DatasetLocalABC):
 
 
 class DatasetLocalOME(DatasetLocalABC):
-    """Load a dataset from a folder
-
-    We use a given image of a dataset to obtain the metadata,
-    as we cannot expect folders to contain this information.
-
-    It uses the standard OME-TIFF file format.
-    """
+    """Find names of images in a folder, assuming images in OME-TIFF format."""
 
     def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
         super().__init__(dpath)
@@ -145,11 +142,11 @@ class DatasetLocalOME(DatasetLocalABC):
 
     @property
     def date(self):
-        # Access the date from the metadata of the first position
+        """Get the date from the metadata of the first position."""
         return ImageLocalOME(list(self.get_images().values())[0]).date
 
     def get_images(self):
-        # Fetches all valid formats and overwrites if duplicates with different suffix
+        """Return a dictionary with the names of the image files."""
         return {
             f.name: str(f)
             for suffix in self._valid_suffixes
