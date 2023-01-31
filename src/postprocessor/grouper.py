@@ -165,8 +165,6 @@ class Grouper(ABC):
     ):
         """Enable different threads for independent chains, particularly useful when aggregating multiple elements."""
         if pool is None:
-            # Alan: why is None changed to 8
-            # pool = 8
             pass
         chainers = chainers or self.chainers
         if pool:
