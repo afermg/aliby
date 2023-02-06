@@ -16,15 +16,16 @@ ImageDummy is a dummy class for silent failure testing.
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
-from importlib_resources import files
 from pathlib import Path, PosixPath
 
 import dask.array as da
 import xmltodict
+import zarr
 from dask.array.image import imread
+from importlib_resources import files
 from tifffile import TiffFile
 
-from agora.io.metadata import dir_to_meta
+from agora.io.metadata import dir_to_meta, dispatch_metadata_parser
 
 
 def get_examples_dir():
@@ -32,7 +33,7 @@ def get_examples_dir():
     return files("aliby").parent.parent / "examples" / "tiler"
 
 
-def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     """
     Wrapper to pick the appropiate Image class depending on the source of data.
     """
@@ -43,7 +44,10 @@ def get_image_class(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     elif isinstance(source, dict) or (
         isinstance(source, (str, PosixPath)) and Path(source).is_dir()
     ):
-        instatiator = ImageDir
+        if Path(source).suffix == ".zarr":
+            instatiator = ImageZarr
+        else:
+            instatiator = ImageDir
     elif isinstance(source, str) and Path(source).is_file():
         instatiator = ImageLocalOME
     else:

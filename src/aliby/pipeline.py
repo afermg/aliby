@@ -28,7 +28,7 @@ from agora.io.writer import (
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
 from aliby.io.dataset import dispatch_dataset
-from aliby.io.image import get_image_class
+from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
@@ -399,10 +399,10 @@ class Pipeline(ProcessABC):
             }
 
             # START PIPELINE
-            frac_clogged_traps = 0
+            frac_clogged_traps = 0.0
             min_process_from = min(process_from.values())
 
-            with get_image_class(image_id)(
+            with dispatch_image(image_id)(
                 image_id, **self.server_info
             ) as image:
 
@@ -656,7 +656,7 @@ class Pipeline(ProcessABC):
         directory = general_config["directory"]
 
         trackers_state: t.List[np.ndarray] = []
-        with get_image_class(image_id)(image_id, **self.server_info) as image:
+        with dispatch_image(image_id)(image_id, **self.server_info) as image:
             filename = Path(f"{directory}/{image.name}.h5")
             meta = MetaData(directory, filename)
 
