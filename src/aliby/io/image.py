@@ -111,118 +111,9 @@ class BaseLocalImage(ABC):
     def metadata(self):
         return self._meta
 
-
-class ImageDummy(BaseLocalImage):
-    """
-    Dummy Image class.
-
-    ImageDummy mimics the other Image classes in such a way that it is accepted
-    by Tiler.  The purpose of this class is for testing, in particular,
-    identifying silent failures.  If something goes wrong, we should be able to
-    know whether it is because of bad parameters or bad input data.
-
-    For the purposes of testing parameters, ImageDummy assumes that we already
-    know the tiler parameters before Image instances are instantiated.  This is
-    true for a typical pipeline run.
-    """
-
-    def __init__(self, tiler_parameters: dict):
-        """Builds image instance
-
-        Parameters
-        ----------
-        tiler_parameters : dict
-            Tiler parameters, in dict form. Following
-            aliby.tile.tiler.TilerParameters, the keys are: "tile_size" (size of
-            tile), "ref_channel" (reference channel for tiling), and "ref_z"
-            (reference z-stack, 0 to choose a default).
-        """
-        self.ref_channel = tiler_parameters["ref_channel"]
-        self.ref_z = tiler_parameters["ref_z"]
-
-    # Goal: make Tiler happy.
-    @staticmethod
-    def pad_array(
-        image_array: da.Array,
-        dim: int,
-        n_empty_slices: int,
-        image_position: int = 0,
-    ):
-        """Extends a dimension in a dask array and pads with zeros
-
-        Extends a dimension in a dask array that has existing content, then pads
-        with zeros.
-
-        Parameters
-        ----------
-        image_array : da.Array
-            Input dask array
-        dim : int
-            Dimension in which to extend the dask array.
-        n_empty_slices : int
-            Number of empty slices to extend the dask array by, in the specified
-            dimension/axis.
-        image_position : int
-            Position within the new dimension to place the input arary, default 0
-            (the beginning).
-
-        Examples
-        --------
-        ```
-        extended_array = pad_array(
-            my_da_array, dim = 2, n_empty_slices = 4, image_position = 1)
-        ```
-        Extends a dask array called `my_da_array` in the 3rd dimension
-        (dimensions start from 0) by 4 slices, filled with zeros.  And puts the
-        original content in slice 1 of the 3rd dimension
-        """
-        # Concats zero arrays with same dimensions as image_array, and puts
-        # image_array as first element in list of arrays to be concatenated
-        zeros_array = da.zeros_like(image_array)
-        return da.concatenate(
-            [
-                *([zeros_array] * image_position),
-                image_array,
-                *([zeros_array] * (n_empty_slices - image_position)),
-            ],
-            axis=dim,
-        )
-
-    # Logic: We want to return a image instance
-    def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
-        examples_dir = get_examples_dir()
-        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
-        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
-        # naming scheme.  The aim is to create a multidimensional dask array that stores
-        # the z-stacks.
-        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
-        img_path = examples_dir / img_filename
-        # img is a dask array has three dimensions: z, x, y
-        # TODO: Write a test to confirm this: If everything worked well,
-        # z = 1, x = 1200, y = 1200
-        img = imread(str(img_path))
-        # Adds t & c dimensions
-        img = da.reshape(
-            img, (1, 1, img.shape[-3], img.shape[-2], img.shape[-1])
-        )
-        # Pads t, c, and z dimensions
-        img = self.pad_array(
-            img, dim=0, n_empty_slices=199
-        )  # 200 timepoints total
-        img = self.pad_array(img, dim=1, n_empty_slices=2)  # 3 channels
-        img = self.pad_array(
-            img, dim=2, n_empty_slices=4, image_position=self.ref_z
-        )  # 5 z-stacks
-        return img
-
-    @property
-    def name(self):
-        pass
-
-    @property
-    def dimorder(self):
-        pass
+    def set_meta(self):
+        """Load metadata using parser dispatch"""
+        self._meta = dispatch_metadata_parser(self.path)
 
 
 class ImageLocalOME(BaseLocalImage):
@@ -237,6 +128,7 @@ class ImageLocalOME(BaseLocalImage):
         super().__init__(path)
         self._id = str(path)
 
+    def set_meta(self):
         meta = dict()
         try:
             with TiffFile(path) as f:
@@ -386,3 +278,154 @@ class ImageDir(BaseLocalImage):
         return [
             k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
         ]
+
+
+class ImageZarr(BaseLocalImage):
+    """
+    Read zarr compressed files.
+    These are outputed by the script
+    skeletons/scripts/howto_omero/convert_clone_zarr_to_tiff.py
+    """
+
+    def __init__(self, path: t.Union[str, PosixPath], **kwargs):
+        super().__init__(path)
+        self.set_meta()
+
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading local multidimensional zarr files"""
+        self._img = zarr.open(self.path)
+        self.add_size_to_meta()
+
+        return self._img
+
+    def add_size_to_meta(self):
+        self._meta.update(
+            {
+                f"size_{dim}": shape
+                for dim, shape in zip(self.dimorder, self._img.shape)
+            }
+        )
+
+    @property
+    def name(self):
+        return self.path.stem
+
+    @property
+    def dimorder(self):
+        # Assumes only dimensions start with "size"
+        return [
+            k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
+        ]
+
+
+class ImageDummy(BaseLocalImage):
+    """
+    Dummy Image class.
+
+    ImageDummy mimics the other Image classes in such a way that it is accepted
+    by Tiler.  The purpose of this class is for testing, in particular,
+    identifying silent failures.  If something goes wrong, we should be able to
+    know whether it is because of bad parameters or bad input data.
+
+    For the purposes of testing parameters, ImageDummy assumes that we already
+    know the tiler parameters before Image instances are instantiated.  This is
+    true for a typical pipeline run.
+    """
+
+    def __init__(self, tiler_parameters: dict):
+        """Builds image instance
+
+        Parameters
+        ----------
+        tiler_parameters : dict
+            Tiler parameters, in dict form. Following
+            aliby.tile.tiler.TilerParameters, the keys are: "tile_size" (size of
+            tile), "ref_channel" (reference channel for tiling), and "ref_z"
+            (reference z-stack, 0 to choose a default).
+        """
+        self.ref_channel = tiler_parameters["ref_channel"]
+        self.ref_z = tiler_parameters["ref_z"]
+
+    # Goal: make Tiler happy.
+    @staticmethod
+    def pad_array(
+        image_array: da.Array,
+        dim: int,
+        n_empty_slices: int,
+        image_position: int = 0,
+    ):
+        """Extends a dimension in a dask array and pads with zeros
+
+        Extends a dimension in a dask array that has existing content, then pads
+        with zeros.
+
+        Parameters
+        ----------
+        image_array : da.Array
+            Input dask array
+        dim : int
+            Dimension in which to extend the dask array.
+        n_empty_slices : int
+            Number of empty slices to extend the dask array by, in the specified
+            dimension/axis.
+        image_position : int
+            Position within the new dimension to place the input arary, default 0
+            (the beginning).
+
+        Examples
+        --------
+        ```
+        extended_array = pad_array(
+            my_da_array, dim = 2, n_empty_slices = 4, image_position = 1)
+        ```
+        Extends a dask array called `my_da_array` in the 3rd dimension
+        (dimensions start from 0) by 4 slices, filled with zeros.  And puts the
+        original content in slice 1 of the 3rd dimension
+        """
+        # Concats zero arrays with same dimensions as image_array, and puts
+        # image_array as first element in list of arrays to be concatenated
+        zeros_array = da.zeros_like(image_array)
+        return da.concatenate(
+            [
+                *([zeros_array] * image_position),
+                image_array,
+                *([zeros_array] * (n_empty_slices - image_position)),
+            ],
+            axis=dim,
+        )
+
+    # Logic: We want to return a image instance
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array. For lazy-loading multidimensional tiff files. Dummy image."""
+        examples_dir = get_examples_dir()
+        # TODO: Make this robust to having multiple TIFF images, one for each z-section,
+        # all falling under the same "pypipeline_unit_test_00_000001_Brightfield_*.tif"
+        # naming scheme.  The aim is to create a multidimensional dask array that stores
+        # the z-stacks.
+        img_filename = "pypipeline_unit_test_00_000001_Brightfield_003.tif"
+        img_path = examples_dir / img_filename
+        # img is a dask array has three dimensions: z, x, y
+        # TODO: Write a test to confirm this: If everything worked well,
+        # z = 1, x = 1200, y = 1200
+        img = imread(str(img_path))
+        # Adds t & c dimensions
+        img = da.reshape(
+            img, (1, 1, img.shape[-3], img.shape[-2], img.shape[-1])
+        )
+        # Pads t, c, and z dimensions
+        img = self.pad_array(
+            img, dim=0, n_empty_slices=199
+        )  # 200 timepoints total
+        img = self.pad_array(img, dim=1, n_empty_slices=2)  # 3 channels
+        img = self.pad_array(
+            img, dim=2, n_empty_slices=4, image_position=self.ref_z
+        )  # 5 z-stacks
+        return img
+
+    @property
+    def name(self):
+        pass
+
+    @property
+    def dimorder(self):
+        pass

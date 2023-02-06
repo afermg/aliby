@@ -17,18 +17,18 @@ riv.plot_labelled_trap(trap_id, trange, [0], ncols=ncols)
 
 import re
 import typing as t
+from aliby.io.image import dispatch_image
 
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-import yaml
 from agora.io.cells import Cells
 from agora.io.writer import load_attributes
 from PIL import Image
 from skimage.morphology import dilation
 
-from aliby.io.image import Image as OImage
+from aliby.io.omero import Image as OImage
 from aliby.tile.tiler import Tiler
 from aliby.tile.traps import stretch_image
 
@@ -62,7 +62,7 @@ class localImageViewer:
     from image.h5 objects.
     """
 
-    def __init__(self, h5file):
+    def __init__(self, h5file, data_source=None):
         self._hdf = h5py.File(h5file)
         self.positions = list(self._hdf.keys())
         self.current_position = self.positions[0]
@@ -78,12 +78,12 @@ class localImageViewer:
         Image.fromarray(pixvals.astype(np.uint8))
 
 
-class remoteImageViewer:
-    """
-    This ImageViewer combines fetching remote images with tiling and outline display.
-    """
+from abc import ABC
 
-    def __init__(self, fpath, server_info=None):
+
+class BaseImageViewer(ABC):
+    def __init__(self, fpath):
+
         self._fpath = fpath
         attrs = load_attributes(fpath)
 
@@ -91,11 +91,32 @@ class remoteImageViewer:
 
         assert self.image_id is not None, "No valid image_id found in metadata"
 
+
+class LocalImageViewer(BaseImageViewer):
+    def __init__(self, results_path: str, data_path: str):
+        super().__init__(results_path)
+
+        with dispatch_image(data_path)(data_path) as image:
+            self.tiler = Tiler(image.data, self._meta)
+
+        self.cells = Cells.from_source(fpath)
+
+
+class remoteImageViewer(BaseImageViewer):
+    """
+    This ImageViewer combines fetching remote images with tiling and outline display.
+    """
+
+    def __init__(self, fpath, server_info=None):
+        self.super().__init__(fpath)
+
         if server_info is None:
             server_info = attrs["parameters"]["general"]["server_info"]
         self.server_info = server_info
 
-        with OImage(self.image_id, **self.server_info) as image:
+        with dispatch_image(self.image_id)(
+            self.image_id, **self.server_info
+        ) as image:
             self.tiler = Tiler.from_hdf5(image, fpath)
 
         self.cells = Cells.from_source(fpath)

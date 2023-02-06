@@ -192,7 +192,7 @@ def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
         raw_parse = parse_from_swainlab_grammar(filepath)
         minimal_meta = get_meta_swainlab(raw_parse)
     else:
-        if filedir.is_file():
+        if filedir.is_file() or str(filedir).endswith(".zarr"):
             filedir = filedir.parent
         legacy_parse = parse_logfiles(filedir)
         minimal_meta = (
