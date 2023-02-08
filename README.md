@@ -37,8 +37,7 @@ The output is a folder with the original logfiles and a set of hdf5 files, one w
 
 ALIBY's tooling can also be used as an interface to OMERO servers, taking care of fetching data when needed.
  ```python
-from aliby.io.dataset import Dataset
-from aliby.io.image import Image
+from aliby.io.omero import Dataset, Image
 
 server_info= {
             "host": "host_address",
