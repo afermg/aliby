@@ -50,7 +50,7 @@ class Signal(BridgeH5):
             return self.add_name(df, dsets)
         elif isinstance(dsets, list):  # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
-            # Check we are not comaring tile-indexed and cell-indexed data
+            # Check we are not comparing tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
             ), "Tile data and cell data can't be mixed"
