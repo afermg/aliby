@@ -62,7 +62,7 @@ class Chainer(Signal):
             data = self.common_chains[dataset](**kwargs)
         else:
             # use Signal's get_raw
-            data = self.get_raw(dataset, in_minutes=in_minutes)
+            data = self.get_raw(dataset, in_minutes=in_minutes, lineage=True)
             if chain:
                 data = self.apply_chain(data, chain, **kwargs)
         if retain:

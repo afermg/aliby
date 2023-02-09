@@ -1,3 +1,4 @@
+import logging
 import typing as t
 from copy import copy
 from functools import cached_property, lru_cache
@@ -85,10 +86,10 @@ class Signal(BridgeH5):
         """Find the interval between time points (minutes)."""
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
-            if tinterval_location in f:
+            if tinterval_location in f.attrs:
                 return f.attrs[tinterval_location][0]
             else:
-                print(
+                logging.getlogger("aliby").warn(
                     f"{str(self.filename).split('/')[-1]}: using default time interval of 5 minutes"
                 )
                 return 5
