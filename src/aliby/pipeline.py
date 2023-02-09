@@ -36,34 +36,12 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 
 class PipelineParameters(ParametersABC):
-<<<<<<< HEAD
     """Define parameters for the different steps of the pipeline."""
-=======
-    """
-    Define parameters for what processes are run and how.
-
-    Input is a a list of dictionaries, one for
-    general in collection:
-    pass dictionary for each step
-    --------------------
-    expt_id: int or str Experiment id (if integer) or local path (if string).
-    directory: str Directory into which results are dumped. Default is "../data"
-
-    Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
-    timepoints and extraction parameters from there.
-    """
->>>>>>> dev
 
     _pool_index = None
 
-    def __init__(
-        self, general, tiler, baby, extraction, postprocessing, reporting
-    ):
-<<<<<<< HEAD
+    def __init__(self, general, tiler, baby, extraction, postprocessing, reporting):
         """Initialise, but called by a class method not directly."""
-=======
-        """Initialise with general parameters and those for tiler, baby, extraction, postprocessing, and reporting."""
->>>>>>> dev
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -80,7 +58,6 @@ class PipelineParameters(ParametersABC):
         extraction={},
         postprocessing={},
     ):
-<<<<<<< HEAD
         """
         Initialise parameters for steps of the pipeline.
 
@@ -100,9 +77,6 @@ class PipelineParameters(ParametersABC):
             Parameters for post-processing.
         """
         # Alan: should 19993 be updated?
-=======
-        # Alan: 19993 should be updated?
->>>>>>> dev
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
@@ -111,11 +85,7 @@ class PipelineParameters(ParametersABC):
         # Alan: an error message rather than a default might be better
         directory = Path(general.get("directory", "../data"))
 
-<<<<<<< HEAD
         # get log files, either locally or via OMERO
-=======
-        # connect to OMERO
->>>>>>> dev
         with dispatch_dataset(
             expt_id,
             **{k: general.get(k) for k in ("host", "username", "password")},
@@ -173,8 +143,7 @@ class PipelineParameters(ParametersABC):
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
         defaults["extraction"] = (
-            exparams_from_meta(meta_d)
-            or BabyParameters.default(**extraction).to_dict()
+            exparams_from_meta(meta_d) or BabyParameters.default(**extraction).to_dict()
         )
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
@@ -224,9 +193,7 @@ class Pipeline(ProcessABC):
         self.store = store
 
     @staticmethod
-    def setLogger(
-        folder, file_level: str = "INFO", stream_level: str = "WARNING"
-    ):
+    def setLogger(folder, file_level: str = "INFO", stream_level: str = "WARNING"):
         """Initialise and format logger."""
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
@@ -270,19 +237,13 @@ class Pipeline(ProcessABC):
         fpath = files[0]
         # TODO add support for non-standard unique folder names
         with h5py.File(fpath, "r") as f:
-            pipeline_parameters = PipelineParameters.from_yaml(
-                f.attrs["parameters"]
-            )
+            pipeline_parameters = PipelineParameters.from_yaml(f.attrs["parameters"])
         pipeline_parameters.general["directory"] = dir_path.parent
         pipeline_parameters.general["filter"] = [fpath.stem for fpath in files]
         # fix legacy post-processing parameters
-        post_process_params = pipeline_parameters.postprocessing.get(
-            "parameters", None
-        )
+        post_process_params = pipeline_parameters.postprocessing.get("parameters", None)
         if post_process_params:
-            pipeline_parameters.postprocessing["param_sets"] = copy(
-                post_process_params
-            )
+            pipeline_parameters.postprocessing["param_sets"] = copy(post_process_params)
             del pipeline_parameters.postprocessing["parameters"]
         return cls(pipeline_parameters)
 
@@ -299,19 +260,13 @@ class Pipeline(ProcessABC):
             Name of file.
         """
         with h5py.File(fpath, "r") as f:
-            pipeline_parameters = PipelineParameters.from_yaml(
-                f.attrs["parameters"]
-            )
+            pipeline_parameters = PipelineParameters.from_yaml(f.attrs["parameters"])
         directory = Path(fpath).parent
         pipeline_parameters.general["directory"] = directory
         pipeline_parameters.general["filter"] = Path(fpath).stem
-        post_process_params = pipeline_parameters.postprocessing.get(
-            "parameters", None
-        )
+        post_process_params = pipeline_parameters.postprocessing.get("parameters", None)
         if post_process_params:
-            pipeline_parameters.postprocessing["param_sets"] = copy(
-                post_process_params
-            )
+            pipeline_parameters.postprocessing["param_sets"] = copy(post_process_params)
             del pipeline_parameters.postprocessing["parameters"]
         return cls(pipeline_parameters, store=directory)
 
@@ -331,8 +286,7 @@ class Pipeline(ProcessABC):
         pos_filter = config["general"]["filter"]
         root_dir = Path(config["general"]["directory"])
         self.server_info = {
-            k: config["general"].get(k)
-            for k in ("host", "username", "password")
+            k: config["general"].get(k) for k in ("host", "username", "password")
         }
         dispatcher = dispatch_dataset(expt_id, **self.server_info)
         logging.getLogger("aliby").info(
@@ -380,9 +334,7 @@ class Pipeline(ProcessABC):
         """Select images by picking a particular one or by using a regular expression to parse their file names."""
         if isinstance(filt, str):
             # pick images using a regular expression
-            image_ids = {
-                k: v for k, v in image_ids.items() if re.search(filt, k)
-            }
+            image_ids = {k: v for k, v in image_ids.items() if re.search(filt, k)}
         elif isinstance(filt, int):
             # pick the filt'th image
             image_ids = {
@@ -427,9 +379,7 @@ class Pipeline(ProcessABC):
             # START
             frac_clogged_traps = 0
             min_process_from = min(process_from.values())
-            with get_image_class(image_id)(
-                image_id, **self.server_info
-            ) as image:
+            with get_image_class(image_id)(image_id, **self.server_info) as image:
                 # initialise steps
                 if "tiler" not in steps:
                     steps["tiler"] = Tiler.from_image(
@@ -462,9 +412,7 @@ class Pipeline(ProcessABC):
                     for op, (input_ch, _, _) in tmp.items():
                         if not set(input_ch).issubset(av_channels_wsub):
                             del config["extraction"]["multichannel_ops"][op]
-                    exparams = ExtractorParameters.from_dict(
-                        config["extraction"]
-                    )
+                    exparams = ExtractorParameters.from_dict(config["extraction"])
                     steps["extraction"] = Extractor.from_tiler(
                         exparams, store=filename, tiler=steps["tiler"]
                     )
@@ -477,8 +425,7 @@ class Pipeline(ProcessABC):
                     )
                     for i in pbar:
                         if (
-                            frac_clogged_traps
-                            < earlystop["thresh_pos_clogged"]
+                            frac_clogged_traps < earlystop["thresh_pos_clogged"]
                             or i < earlystop["min_tp"]
                         ):
                             for step in self.pipeline_steps:
@@ -489,27 +436,20 @@ class Pipeline(ProcessABC):
                                     if step in loaded_writers:
                                         loaded_writers[step].write(
                                             data=result,
-                                            overwrite=writer_ow_kwargs.get(
-                                                step, []
-                                            ),
+                                            overwrite=writer_ow_kwargs.get(step, []),
                                             tp=i,
                                             meta={"last_processed": i},
                                         )
 
                                     # step-specific actions
-                                    if (
-                                        step == "tiler"
-                                        and i == min_process_from
-                                    ):
+                                    if step == "tiler" and i == min_process_from:
                                         logging.getLogger("aliby").info(
                                             f"Found {steps['tiler'].n_traps} traps in {image.name}"
                                         )
                                     elif step == "baby":
                                         # write state and pass info to ext
                                         loaded_writers["state"].write(
-                                            data=steps[
-                                                step
-                                            ].crawler.tracker_states,
+                                            data=steps[step].crawler.tracker_states,
                                             overwrite=loaded_writers[
                                                 "state"
                                             ].datatypes.keys(),
@@ -524,9 +464,7 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            self._log(
-                                f"{name}:Clogged_traps:{frac_clogged_traps}"
-                            )
+                            self._log(f"{name}:Clogged_traps:{frac_clogged_traps}")
 
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
@@ -565,16 +503,15 @@ class Pipeline(ProcessABC):
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
-        cells_used = df[
-            df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
-        ].dropna(how="all")
+        cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
+            how="all"
+        )
         traps_above_nthresh = (
             cells_used.groupby("trap").count().apply(np.mean, axis=1)
             > es_parameters["thresh_trap_ncells"]
         )
         traps_above_athresh = (
-            cells_used.groupby("trap").sum().apply(np.mean, axis=1)
-            / tile_size**2
+            cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
             > es_parameters["thresh_trap_area"]
         )
 
@@ -605,9 +542,7 @@ class Pipeline(ProcessABC):
         switch_case = {
             "tiler": lambda f: f["trap_info/drifts"].shape[0] - 1,
             "baby": lambda f: f["cell_info/timepoint"][-1],
-            "extraction": lambda f: f[
-                "extraction/general/None/area/timepoint"
-            ][-1],
+            "extraction": lambda f: f["extraction/general/None/area/timepoint"][-1],
         }
         return switch_case[step]
 
@@ -683,8 +618,7 @@ class Pipeline(ProcessABC):
             if (
                 from_start
                 and (
-                    config.get("overwrite", False) == True
-                    or np.all(list(ow.values()))
+                    config.get("overwrite", False) == True or np.all(list(ow.values()))
                 )
                 and filename.exists()
             ):
@@ -725,9 +659,7 @@ class Pipeline(ProcessABC):
                     "image_id": image_id
                     if isinstance(image_id, int)
                     else str(image_id),
-                    "parameters": PipelineParameters.from_dict(
-                        pparams
-                    ).to_yaml(),
+                    "parameters": PipelineParameters.from_dict(pparams).to_yaml(),
                 }
             )
 
