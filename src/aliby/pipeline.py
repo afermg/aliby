@@ -474,7 +474,7 @@ class Pipeline(ProcessABC):
                                         and i == min_process_from
                                     ):
                                         logging.getLogger("aliby").info(
-                                            f"Found {steps['tiler'].n_traps} traps in {image.name}"
+                                            f"Found {steps['tiler'].n_tiles} traps in {image.name}"
                                         )
                                     elif step == "baby":
                                         # write state and pass info to ext (Alan: what's ext?)
