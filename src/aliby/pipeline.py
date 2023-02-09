@@ -36,14 +36,34 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 
 class PipelineParameters(ParametersABC):
+<<<<<<< HEAD
     """Define parameters for the different steps of the pipeline."""
+=======
+    """
+    Define parameters for what processes are run and how.
+
+    Input is a a list of dictionaries, one for
+    general in collection:
+    pass dictionary for each step
+    --------------------
+    expt_id: int or str Experiment id (if integer) or local path (if string).
+    directory: str Directory into which results are dumped. Default is "../data"
+
+    Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
+    timepoints and extraction parameters from there.
+    """
+>>>>>>> dev
 
     _pool_index = None
 
     def __init__(
         self, general, tiler, baby, extraction, postprocessing, reporting
     ):
+<<<<<<< HEAD
         """Initialise, but called by a class method not directly."""
+=======
+        """Initialise with general parameters and those for tiler, baby, extraction, postprocessing, and reporting."""
+>>>>>>> dev
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -60,6 +80,7 @@ class PipelineParameters(ParametersABC):
         extraction={},
         postprocessing={},
     ):
+<<<<<<< HEAD
         """
         Initialise parameters for steps of the pipeline.
 
@@ -79,6 +100,9 @@ class PipelineParameters(ParametersABC):
             Parameters for post-processing.
         """
         # Alan: should 19993 be updated?
+=======
+        # Alan: 19993 should be updated?
+>>>>>>> dev
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
@@ -87,7 +111,11 @@ class PipelineParameters(ParametersABC):
         # Alan: an error message rather than a default might be better
         directory = Path(general.get("directory", "../data"))
 
+<<<<<<< HEAD
         # get log files, either locally or via OMERO
+=======
+        # connect to OMERO
+>>>>>>> dev
         with dispatch_dataset(
             expt_id,
             **{k: general.get(k) for k in ("host", "username", "password")},
