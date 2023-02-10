@@ -18,7 +18,7 @@ from extraction.core.functions.loaders import (
     load_redfuns,
 )
 
-# Define types
+# define types
 reduction_method = t.Union[t.Callable, str, None]
 extraction_tree = t.Dict[
     str, t.Dict[reduction_method, t.Dict[str, t.Collection]]
@@ -27,7 +27,7 @@ extraction_result = t.Dict[
     str, t.Dict[reduction_method, t.Dict[str, t.Dict[str, pd.Series]]]
 ]
 
-# Global parameters used to load functions that either analyse cells or their background. These global parameters both allow the functions to be stored in a dictionary for access only on demand and to be defined simply in extraction/core/functions.
+# Global variables used to load functions that either analyse cells or their background. These global variables both allow the functions to be stored in a dictionary for access only on demand and to be defined simply in extraction/core/functions.
 CELL_FUNS, TRAPFUNS, FUNS = load_funs()
 CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
 RED_FUNS = load_redfuns()
@@ -37,9 +37,7 @@ RED_FUNS = load_redfuns()
 
 
 class ExtractorParameters(ParametersABC):
-    """
-    Base class to define parameters for extraction.
-    """
+    """Base class to define parameters for extraction."""
 
     def __init__(
         self,
@@ -48,12 +46,14 @@ class ExtractorParameters(ParametersABC):
         multichannel_ops: t.Dict = {},
     ):
         """
+        Initialise.
+
         Parameters
         ----------
         tree: dict
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
-            str channel -> U(function,None) reduction -> str metric
+            str channel -> U(function, None) reduction -> str metric
             If not of depth three, tree will be filled with None.
         sub_bg: set
         multichannel_ops: dict
@@ -65,7 +65,7 @@ class ExtractorParameters(ParametersABC):
     @staticmethod
     def guess_from_meta(store_name: str, suffix="fast"):
         """
-        Find the microscope used from the h5 metadata.
+        Find the microscope name from the h5 metadata.
 
         Parameters
         ----------
@@ -98,17 +98,7 @@ class Extractor(StepABC):
 
     Usually the metric is applied to only a tile's masked area, but some metrics depend on the whole tile.
 
-    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks is the third level.
-
-    Parameters
-    ----------
-    parameters: core.extractor Parameters
-        Parameters that include the channels, and reduction and
-        extraction functions.
-    store: str
-        Path to the h5 file, which must contain the cell masks.
-    tiler: pipeline-core.core.segmentation tiler
-        Class that contains or fetches the images used for segmentation.
+    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks, such as mean, is the third level.
     """
 
     # Alan: should this data be stored here or all such data in a separate file
@@ -129,10 +119,13 @@ class Extractor(StepABC):
 
         Parameters
         ----------
-        parameters: ExtractorParameters object
+        parameters: core.extractor Parameters
+            Parameters that include the channels, reduction and
+            extraction functions.
         store: str
-            Name of h5 file
-        tiler: Tiler object
+            Path to the h5 file containing the cell masks.
+        tiler: pipeline-core.core.segmentation tiler
+            Class that contains or fetches the images used for segmentation.
         """
         self.params = parameters
         if store:
@@ -179,14 +172,18 @@ class Extractor(StepABC):
 
     @property
     def group(self):
-        # returns path within h5 file
+        """Return path within the h5 file."""
         if not hasattr(self, "_out_path"):
             self._group = "/extraction/"
         return self._group
 
     def load_custom_funs(self):
         """
-        Define any custom functions to be functions of cell_masks and trap_image only.
+        Incorporate the extra arguments of custom functions into their definitions.
+
+        Normal functions only have cell_masks and trap_image as their
+        arguments, and here custom functions are made the same by
+        setting the values of their extra arguments.
 
         Any other parameters are taken from the experiment's metadata and automatically applied. These parameters therefore must be loaded within an Extractor instance.
         """
@@ -206,12 +203,13 @@ class Extractor(StepABC):
             k: {k2: self.get_meta(k2) for k2 in v}
             for k, v in CUSTOM_ARGS.items()
         }
-        # define custom functions - those with extra arguments other than cell_masks and trap_image - as functions of two variables
+        # define custom functions
         self._custom_funs = {}
         for k, f in CUSTOM_FUNS.items():
 
             def tmp(f):
                 # pass extra arguments to custom function
+                # return a function of cell_masks and trap_image
                 return lambda cell_masks, trap_image: trap_apply(
                     f,
                     cell_masks,
@@ -222,6 +220,7 @@ class Extractor(StepABC):
             self._custom_funs[k] = tmp(f)
 
     def load_funs(self):
+        """Define all functions, including custum ones."""
         self.load_custom_funs()
         self._all_cell_funs = set(self._custom_funs.keys()).union(CELL_FUNS)
         # merge the two dicts
@@ -239,20 +238,18 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Optional[np.ndarray]:
         """
-        Find tiles for a given time point and given channels and z-stacks.
-
-        Returns None if no tiles are found.
+        Find tiles for a given time point, channels, and z-stacks.
 
         Any additional keyword arguments are passed to tiler.get_tiles_timepoint
 
         Parameters
         ----------
         tp: int
-            Time point of interest
+            Time point of interest.
         channels: list of strings (optional)
-            Channels of interest
+            Channels of interest.
         z: list of integers (optional)
-            Indices for the z-stacks of interest
+            Indices for the z-stacks of interest.
         """
         if channels is None:
             # find channels from tiler
@@ -265,16 +262,16 @@ class Extractor(StepABC):
             channel_ids = None
         if z is None:
             # gets the tiles data via tiler
-            z: t.List[int] = list(range(self.tiler.shape[-3]))
-        tiles = (
+            z = list(range(self.tiler.shape[-3]))
+        res = (
             self.tiler.get_tiles_timepoint(
                 tp, channels=channel_ids, z=z, **kwargs
             )
             if channel_ids
             else None
         )
-        # data arranged as (traps, channels, timepoints, X, Y, Z)
-        return tiles
+        # data arranged as (tiles, channels, time points, X, Y, Z)
+        return res
 
     def extract_traps(
         self,
@@ -302,11 +299,10 @@ class Extractor(StepABC):
         Returns
         -------
         res_idx: a tuple of tuples
-            A two-tuple of a tuple of results and a tuple with the corresponding trap_id and cell labels
+            A two-tuple comprising a tuple of results and a tuple of the tile_id and cell labels
         """
         if labels is None:
             self._log("No labels given. Sorting cells using index.")
-
         cell_fun = True if metric in self._all_cell_funs else False
         idx = []
         results = []
@@ -337,7 +333,9 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, pd.Series]:
         """
-        Returns dict with metrics as key and metrics applied to data as values for data from one timepoint.
+        Return dict with metrics as key and metrics applied to data as values.
+
+        Data from one time point is used.
         """
         d = {
             metric: self.extract_traps(
@@ -349,7 +347,7 @@ class Extractor(StepABC):
 
     def reduce_extract(
         self,
-        traps: np.ndarray,
+        tiles_data: np.ndarray,
         masks: t.List[np.ndarray],
         red_metrics: t.Dict[reduction_method, t.Collection[str]],
         **kwargs,
@@ -359,8 +357,8 @@ class Extractor(StepABC):
 
         Parameters
         ----------
-        traps: array
-            An array of image data arranged as (traps, X, Y, Z)
+        tiles_data: array
+            An array of image data arranged as (tiles, X, Y, Z)
         masks: list of arrays
             An array of masks for each trap: one per cell at the trap
         red_metrics: dict
@@ -371,20 +369,20 @@ class Extractor(StepABC):
 
         Returns
         ------
-        Dictionary of dataframes with the corresponding reductions and metrics nested.
+        Dict of dataframes with the corresponding reductions and metrics nested.
         """
         # create dict with keys naming the reduction in the z-direction and the reduced data as values
-        reduced_traps = {}
-        if traps is not None:
+        reduced_tiles_data = {}
+        if tiles_data is not None:
             for red_fun in red_metrics.keys():
-                reduced_traps[red_fun] = [
-                    self.reduce_dims(trap, method=RED_FUNS[red_fun])
-                    for trap in traps
+                reduced_tiles_data[red_fun] = [
+                    self.reduce_dims(tile_data, method=RED_FUNS[red_fun])
+                    for tile_data in tiles_data
                 ]
         d = {
             red_fun: self.extract_funs(
                 metrics=metrics,
-                traps=reduced_traps.get(red_fun, [None for _ in masks]),
+                traps=reduced_tiles_data.get(red_fun, [None for _ in masks]),
                 masks=masks,
                 **kwargs,
             )
@@ -403,9 +401,9 @@ class Extractor(StepABC):
         Parameters
         ----------
         img: array
-            An array of the image data arranged as (X, Y, Z)
+            An array of the image data arranged as (X, Y, Z).
         method: function
-            The reduction function
+            The reduction function.
         """
         reduced = img
         if method is not None:
@@ -422,7 +420,7 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, t.Dict[str, t.Dict[str, tuple]]]:
         """
-        Extract for an individual time-point.
+        Extract for an individual time point.
 
         Parameters
         ----------
@@ -452,7 +450,6 @@ class Extractor(StepABC):
             The first tuple is the result of applying the metrics to a particular cell or trap; the second tuple is either (trap_id, cell_label) for a metric applied to a cell or a trap_id for a metric applied to a trap.
 
             An example is d["GFP"]["np_max"]["mean"][0], which gives a tuple of the calculated mean GFP fluorescence for all cells.
-
         """
         # TODO Can we split the different extraction types into sub-methods to make this easier to read?
         if tree is None:
@@ -464,7 +461,6 @@ class Extractor(StepABC):
         tree_chs = (*ch_tree,)
         # create a Cells object to extract information from the h5 file
         cells = Cells(self.local)
-
         # find the cell labels and store as dict with trap_ids as keys
         if labels is None:
             raw_labels = cells.labels_at_time(tp)
@@ -472,7 +468,6 @@ class Extractor(StepABC):
                 trap_id: raw_labels.get(trap_id, [])
                 for trap_id in range(cells.ntraps)
             }
-
         # find the cell masks for a given trap as a dict with trap_ids as keys
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
@@ -482,11 +477,9 @@ class Extractor(StepABC):
                     masks[trap_id] = np.dstack(np.array(cells)).astype(bool)
         # convert to a list of masks
         masks = [np.array(v) for v in masks.values()]
-
         # find image data at the time point
-        # stored as an array arranged as (traps, channels, timepoints, X, Y, Z)
+        # stored as an array arranged as (traps, channels, time points, X, Y, Z)
         tiles = self.get_tiles(tp, tile_shape=tile_size, channels=tree_chs)
-
         # generate boolean masks for background as a list with one mask per trap
         bgs = []
         if self.params.sub_bg:
@@ -496,7 +489,6 @@ class Extractor(StepABC):
                 else np.zeros((tile_size, tile_size))
                 for m in masks
             ]
-
         # perform extraction by applying metrics
         d = {}
         self.img_bgsub = {}
@@ -510,9 +502,9 @@ class Extractor(StepABC):
                 img = None
             # apply metrics to image data
             d[ch] = self.reduce_extract(
-                red_metrics=red_metrics,
-                traps=img,
+                tiles_data=img,
                 masks=masks,
+                red_metrics=red_metrics,
                 labels=labels,
                 **kwargs,
             )
@@ -537,8 +529,7 @@ class Extractor(StepABC):
                     labels=labels,
                     **kwargs,
                 )
-
-        # apply any metrics that use multiple channels (eg pH calculations)
+        # apply any metrics using multiple channels, such as pH calculations
         for name, (
             chs,
             merge_fun,
@@ -560,10 +551,9 @@ class Extractor(StepABC):
                     labels=labels,
                     **kwargs,
                 )
-
         return d
 
-    def get_imgs(self, channel: t.Optional[str], traps, channels=None):
+    def get_imgs(self, channel: t.Optional[str], tiles, channels=None):
         """
         Return image from a correct source, either raw or bgsub.
 
@@ -571,20 +561,20 @@ class Extractor(StepABC):
         ----------
         channel: str
             Name of channel to get.
-        traps: ndarray
-            An array of the image data having dimensions of (trap_id, channel, tp, tile_size, tile_size, n_zstacks).
+        tiles: ndarray
+            An array of the image data having dimensions of (tile_id, channel, tp, tile_size, tile_size, n_zstacks).
         channels: list of str (optional)
             List of available channels.
 
         Returns
         -------
         img: ndarray
-            An array of image data with dimensions (no traps, X, Y, no Z channels)
+            An array of image data with dimensions (no tiles, X, Y, no Z channels)
         """
         if channels is None:
             channels = (*self.params.tree,)
         if channel in channels:  # TODO start here to fetch channel using regex
-            return traps[:, channels.index(channel), 0]
+            return tiles[:, channels.index(channel), 0]
         elif channel in self.img_bgsub:
             return self.img_bgsub[channel]
 
@@ -622,7 +612,6 @@ class Extractor(StepABC):
             tps = list(range(self.meta["time_settings/ntimepoints"][0]))
         elif isinstance(tps, int):
             tps = [tps]
-
         # store results in dict
         d = {}
         for tp in tps:
@@ -669,7 +658,7 @@ class Extractor(StepABC):
         self.writer.id_cache.clear()
 
     def get_meta(self, flds: t.Union[str, t.Collection]):
-        # Obtain metadata for one or multiple fields
+        """Obtain metadata for one or multiple fields."""
         if isinstance(flds, str):
             flds = [flds]
         meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
@@ -692,7 +681,7 @@ def flatten_nesteddict(
     to: str (optional)
         Specifies the format of the output, either pd.Series (default) or a list
     tp: int
-        Timepoint used to name the pd.Series
+        Time point used to name the pd.Series
 
     Returns
     -------

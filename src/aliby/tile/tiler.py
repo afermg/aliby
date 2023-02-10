@@ -539,7 +539,7 @@ class Tiler(StepABC):
         Returns
         -------
         res: array
-            Data arranged as (tiles, channels, timepoints, X, Y, Z)
+            Data arranged as (tiles, channels, time points, X, Y, Z)
         """
         # FIXME add support for sub-tiling a tile
         # FIXME can we ignore z

@@ -20,7 +20,6 @@ def div0(array, fill=0, axis=-1):
     slices_0, slices_1 = [[slice(None)] * len(array.shape)] * 2
     slices_0[axis] = 0
     slices_1[axis] = 1
-
     with np.errstate(divide="ignore", invalid="ignore"):
         c = np.true_divide(
             array[tuple(slices_0)],
