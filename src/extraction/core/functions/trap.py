@@ -5,14 +5,14 @@ import numpy as np
 
 def imBackground(cell_masks, trap_image):
     """
-    Finds the median background (pixels not comprising cells) from trap_image
+    Find the median background (pixels not comprising cells) from trap_image.
 
     Parameters
     ----------
     cell_masks: 3d array
        Segmentation masks for cells
     trap_image:
-        The image (all channels) for the tile containing the cell
+        The image (all channels) for the tile containing the cell.
     """
     if not len(cell_masks):
         # create cell_masks if none are given
@@ -25,14 +25,14 @@ def imBackground(cell_masks, trap_image):
 
 def background_max5(cell_masks, trap_image):
     """
-    Finds the mean of the maximum five pixels of the background (pixels not comprising cells) from trap_image
+    Finds the mean of the maximum five pixels of the background.
 
     Parameters
     ----------
     cell_masks: 3d array
-        Segmentation masks for cells
+        Segmentation masks for cells.
     trap_image:
-        The image (all channels) for the tile containing the cell
+        The image (all channels) for the tile containing the cell.
     """
     if not len(cell_masks):
         # create cell_masks if none are given

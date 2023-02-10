@@ -1,6 +1,4 @@
-"""
-Pipeline and chaining elements.
-"""
+"""Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
 import logging
 import os
 import re
@@ -36,23 +34,14 @@ from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
 
 class PipelineParameters(ParametersABC):
-    """
-    Parameters that host what is run and how. It takes a list of dictionaries, one for
-    general in collection:
-    pass dictionary for each step
-    --------------------
-    expt_id: int or str Experiment id (if integer) or local path (if string).
-    directory: str Directory into which results are dumped. Default is "../data"
-
-    Provides default parameters for the entire pipeline. This downloads the logfiles and sets the default
-    timepoints and extraction parameters from there.
-    """
+    """Define parameters for the steps of the pipeline."""
 
     _pool_index = None
 
     def __init__(
         self, general, tiler, baby, extraction, postprocessing, reporting
     ):
+        """Initialise, but called by a class method - not directly."""
         self.general = general
         self.tiler = tiler
         self.baby = baby
@@ -69,13 +58,34 @@ class PipelineParameters(ParametersABC):
         extraction={},
         postprocessing={},
     ):
+        """
+        Initialise parameters for steps of the pipeline.
+
+        Some parameters are extracted from the log files.
+
+        Parameters
+        ---------
+        general: dict
+            Parameters to set up the pipeline.
+        tiler: dict
+            Parameters for tiler.
+        baby: dict (optional)
+            Parameters for Baby.
+        extraction: dict (optional)
+            Parameters for extraction.
+        postprocessing: dict (optional)
+            Parameters for post-processing.
+        """
+        # Alan: should 19993 be updated?
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
             general["expt_id"] = expt_id
 
+        # Alan: an error message rather than a default might be better
         directory = Path(general.get("directory", "../data"))
 
+        # get log files, either locally or via OMERO
         with dispatch_dataset(
             expt_id,
             **{k: general.get(k) for k in ("host", "username", "password")},
@@ -83,7 +93,7 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-                # Download logs to use for metadata
+            # download logs for metadata
             conn.cache_logs(directory)
         try:
             meta_d = MetaData(directory, None).load_logs()
@@ -95,9 +105,10 @@ class PipelineParameters(ParametersABC):
                 "channels": ["Brightfield"],
                 "ntps": [2000],
             }
-            # Set minimal metadata
+            # set minimal metadata
             meta_d = minimal_default_meta
 
+        # define default values for general parameters
         tps = meta_d.get("ntps", 2000)
         defaults = {
             "general": dict(
@@ -118,7 +129,8 @@ class PipelineParameters(ParametersABC):
             )
         }
 
-        for k, v in general.items():  # Overwrite general parameters
+        # update default values using inputs
+        for k, v in general.items():
             if k not in defaults["general"]:
                 defaults["general"][k] = v
             elif isinstance(v, dict):
@@ -127,15 +139,13 @@ class PipelineParameters(ParametersABC):
             else:
                 defaults["general"][k] = v
 
+        # define defaults and update with any inputs
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
         defaults["extraction"] = (
             exparams_from_meta(meta_d)
             or BabyParameters.default(**extraction).to_dict()
         )
-        defaults["postprocessing"] = {}
-        defaults["reporting"] = {}
-
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
         ).to_dict()
@@ -150,22 +160,22 @@ class PipelineParameters(ParametersABC):
 
 class Pipeline(ProcessABC):
     """
-    A chained set of Pipeline elements connected through pipes.
-    Tiling, Segmentation,Extraction and Postprocessing should use their own default parameters.
-    These can be overriden passing the key:value of parameters to override to a PipelineParameters class
+    Initialise and run tiling, segmentation, extraction and post-processing.
 
+    Each step feeds the next one.
+
+    To customise parameters for any step use the PipelineParameters class.stem
     """
 
-    iterative_steps = ["tiler", "baby", "extraction"]
-
+    pipeline_steps = ["tiler", "baby", "extraction"]
     step_sequence = [
         "tiler",
         "baby",
         "extraction",
         "postprocessing",
     ]
-
     # Indicate step-writer groupings to perform special operations during step iteration
+    # Alan: replace with - specify the group in the h5 files written by each step (?)
     writer_groups = {
         "tiler": ["trap_info"],
         "baby": ["cell_info"],
@@ -178,8 +188,8 @@ class Pipeline(ProcessABC):
     }
 
     def __init__(self, parameters: PipelineParameters, store=None):
+        """Initialise - not usually called directly."""
         super().__init__(parameters)
-
         if store is not None:
             store = Path(store)
         self.store = store
@@ -188,20 +198,19 @@ class Pipeline(ProcessABC):
     def setLogger(
         folder, file_level: str = "INFO", stream_level: str = "WARNING"
     ):
-
+        """Initialise and format logger."""
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s:%(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
-
+        # for streams - stdout, files, etc.
         ch = logging.StreamHandler()
         ch.setLevel(getattr(logging, stream_level))
         ch.setFormatter(formatter)
         logger.addHandler(ch)
-
-        # create file handler which logs even debug messages
+        # create file handler that logs even debug messages
         fh = logging.FileHandler(Path(folder) / "aliby.log", "w+")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
@@ -216,20 +225,20 @@ class Pipeline(ProcessABC):
     @classmethod
     def from_folder(cls, dir_path):
         """
-        Constructor to re-process all files in a given folder.
+        Re-process all h5 files in a given folder.
 
-        Assumes all files share the same parameters (even if they don't share
-        the same channel set).
+        All files must share the same parameters, even if they have different channels.
 
         Parameters
         ---------
-        dir_path : str or Pathlib indicating the folder containing the files to process
+        dir_path : str or Pathlib
+            Folder containing the files.
         """
+        # find h5 files
         dir_path = Path(dir_path)
         files = list(dir_path.rglob("*.h5"))
         assert len(files), "No valid files found in folder"
         fpath = files[0]
-
         # TODO add support for non-standard unique folder names
         with h5py.File(fpath, "r") as f:
             pipeline_parameters = PipelineParameters.from_yaml(
@@ -237,8 +246,7 @@ class Pipeline(ProcessABC):
             )
         pipeline_parameters.general["directory"] = dir_path.parent
         pipeline_parameters.general["filter"] = [fpath.stem for fpath in files]
-
-        # Fix legacy postprocessing parameters
+        # fix legacy post-processing parameters
         post_process_params = pipeline_parameters.postprocessing.get(
             "parameters", None
         )
@@ -247,16 +255,19 @@ class Pipeline(ProcessABC):
                 post_process_params
             )
             del pipeline_parameters.postprocessing["parameters"]
-
         return cls(pipeline_parameters)
 
     @classmethod
     def from_existing_h5(cls, fpath):
         """
-        Constructor to process an existing hdf5 file.
-        Notice that it forces a single file, not suitable for multiprocessing of certain positions.
+        Re-process an existing h5 file.
 
-        It i s also used as a base for a folder-wide reprocessing.
+        Not suitable for more than one file.
+
+        Parameters
+        ---------
+        fpath: str
+            Name of file.
         """
         with h5py.File(fpath, "r") as f:
             pipeline_parameters = PipelineParameters.from_yaml(
@@ -265,7 +276,6 @@ class Pipeline(ProcessABC):
         directory = Path(fpath).parent
         pipeline_parameters.general["directory"] = directory
         pipeline_parameters.general["filter"] = Path(fpath).stem
-
         post_process_params = pipeline_parameters.postprocessing.get(
             "parameters", None
         )
@@ -274,7 +284,6 @@ class Pipeline(ProcessABC):
                 post_process_params
             )
             del pipeline_parameters.postprocessing["parameters"]
-
         return cls(pipeline_parameters, store=directory)
 
     @property
@@ -282,12 +291,8 @@ class Pipeline(ProcessABC):
         return logging.getLogger("aliby")
 
     def run(self):
-        """
-        Config holds the general information, use in main
-        Steps: all holds general tasks
-        steps: strain_name holds task for a given strain
-        """
-
+        """Run separate pipelines for all positions in an experiment."""
+        # general information in config
         config = self.parameters.to_dict()
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
@@ -297,82 +302,76 @@ class Pipeline(ProcessABC):
             k: config["general"].get(k)
             for k in ("host", "username", "password")
         }
-
         dispatcher = dispatch_dataset(expt_id, **self.server_info)
         logging.getLogger("aliby").info(
             f"Fetching data using {dispatcher.__class__.__name__}"
         )
-        # Do all all initialisations
-
+        # get log files, either locally or via OMERO
         with dispatcher as conn:
             image_ids = conn.get_images()
-
             directory = self.store or root_dir / conn.unique_name
-
             if not directory.exists():
                 directory.mkdir(parents=True)
-
-            # Download logs to use for metadata
+            # download logs to use for metadata
             conn.cache_logs(directory)
-
-        # Modify to the configuration
+        # update configuration
         self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
-
         self.setLogger(directory)
-
-        # Filter TODO integrate filter onto class and add regex
-        def filt_int(d: dict, filt: int):
-            return {k: v for i, (k, v) in enumerate(d.items()) if i == filt}
-
-        def filt_str(image_ids: dict, filt: str):
-            return {k: v for k, v in image_ids.items() if re.search(filt, k)}
-
-        def pick_filter(image_ids: dict, filt: int or str):
-            if isinstance(filt, str):
-                image_ids = filt_str(image_ids, filt)
-            elif isinstance(filt, int):
-                image_ids = filt_int(image_ids, filt)
-            return image_ids
-
-        if isinstance(pos_filter, list):
-            image_ids = {
-                k: v
-                for filt in pos_filter
-                for k, v in pick_filter(image_ids, filt).items()
-            }
-        else:
-            image_ids = pick_filter(image_ids, pos_filter)
-
+        # pick particular images if desired
+        if pos_filter:
+            if isinstance(pos_filter, list):
+                image_ids = {
+                    k: v
+                    for filt in pos_filter
+                    for k, v in self.apply_filter(image_ids, filt).items()
+                }
+            else:
+                image_ids = self.apply_filter(image_ids, pos_filter)
         assert len(image_ids), "No images to segment"
-
-        if distributed != 0:  # Gives the number of simultaneous processes
+        # create pipelines
+        if distributed != 0:
+            # multiple cores
             with Pool(distributed) as p:
                 results = p.map(
-                    lambda x: self.create_pipeline(*x),
+                    lambda x: self.run_one_position(*x),
                     [(k, i) for i, k in enumerate(image_ids.items())],
-                    # num_cpus=distributed,
-                    # position=0,
                 )
-
-        else:  # Sequential
+        else:
+            # single core
             results = []
             for k, v in tqdm(image_ids.items()):
-                r = self.create_pipeline((k, v), 1)
+                r = self.run_one_position((k, v), 1)
                 results.append(r)
-
         return results
 
-    def create_pipeline(
+    def apply_filter(self, image_ids: dict, filt: int or str):
+        """Select images by picking a particular one or by using a regular expression to parse their file names."""
+        if isinstance(filt, str):
+            # pick images using a regular expression
+            image_ids = {
+                k: v for k, v in image_ids.items() if re.search(filt, k)
+            }
+        elif isinstance(filt, int):
+            # pick the filt'th image
+            image_ids = {
+                k: v for i, (k, v) in enumerate(image_ids.items()) if i == filt
+            }
+        return image_ids
+
+    def run_one_position(
         self,
-        image_id: t.Tuple[str, str or PosixPath or int],
+        name_image_id: t.Tuple[str, str or PosixPath or int],
         index: t.Optional[int] = None,
     ):
-        """ """
+        """Set up and run a pipeline for one position."""
         self._pool_index = index
-        name, image_id = image_id
+        name, image_id = name_image_id
+        # session and filename are defined by calling setup_pipeline.
+        # can they be deleted here?
         session = None
         filename = None
+        #
         run_kwargs = {"extraction": {"labels": None, "masks": None}}
         try:
             (
@@ -386,7 +385,6 @@ class Pipeline(ProcessABC):
                 session,
                 trackers_state,
             ) = self._setup_pipeline(image_id)
-
             loaded_writers = {
                 name: writer(filename)
                 for k in self.step_sequence
@@ -398,20 +396,17 @@ class Pipeline(ProcessABC):
                 "baby": ["mother_assign"],
             }
 
-            # START PIPELINE
+            # START
             frac_clogged_traps = 0
             min_process_from = min(process_from.values())
-
             with get_image_class(image_id)(
                 image_id, **self.server_info
             ) as image:
-
-                # Initialise Steps
+                # initialise steps
                 if "tiler" not in steps:
                     steps["tiler"] = Tiler.from_image(
                         image, TilerParameters.from_dict(config["tiler"])
                     )
-
                 if process_from["baby"] < tps:
                     session = initialise_tf(2)
                     steps["baby"] = BabyRunner.from_tiler(
@@ -420,8 +415,7 @@ class Pipeline(ProcessABC):
                     )
                     if trackers_state:
                         steps["baby"].crawler.tracker_states = trackers_state
-
-                # Limit extraction parameters during run using the available channels in tiler
+                # limit extraction parameters using the available channels in tiler
                 if process_from["extraction"] < tps:
                     # TODO Move this parameter validation into Extractor
                     av_channels = set((*steps["tiler"].channels, "general"))
@@ -433,7 +427,6 @@ class Pipeline(ProcessABC):
                     config["extraction"]["sub_bg"] = av_channels.intersection(
                         config["extraction"]["sub_bg"]
                     )
-
                     av_channels_wsub = av_channels.union(
                         [c + "_bgsub" for c in config["extraction"]["sub_bg"]]
                     )
@@ -441,29 +434,27 @@ class Pipeline(ProcessABC):
                     for op, (input_ch, _, _) in tmp.items():
                         if not set(input_ch).issubset(av_channels_wsub):
                             del config["extraction"]["multichannel_ops"][op]
-
                     exparams = ExtractorParameters.from_dict(
                         config["extraction"]
                     )
                     steps["extraction"] = Extractor.from_tiler(
                         exparams, store=filename, tiler=steps["tiler"]
                     )
+                    # set up progress meter
                     pbar = tqdm(
                         range(min_process_from, tps),
                         desc=image.name,
                         initial=min_process_from,
                         total=tps,
-                        # position=index + 1,
                     )
                     for i in pbar:
-
                         if (
                             frac_clogged_traps
                             < earlystop["thresh_pos_clogged"]
                             or i < earlystop["min_tp"]
                         ):
-
-                            for step in self.iterative_steps:
+                            # run through steps
+                            for step in self.pipeline_steps:
                                 if i >= process_from[step]:
                                     result = steps[step].run_tp(
                                         i, **run_kwargs.get(step, {})
@@ -477,18 +468,16 @@ class Pipeline(ProcessABC):
                                             tp=i,
                                             meta={"last_processed": i},
                                         )
-
-                                    # Step-specific actions
+                                    # perform step
                                     if (
                                         step == "tiler"
                                         and i == min_process_from
                                     ):
                                         logging.getLogger("aliby").info(
-                                            f"Found {steps['tiler'].n_traps} traps in {image.name}"
+                                            f"Found {steps['tiler'].n_tiles} traps in {image.name}"
                                         )
-                                    elif (
-                                        step == "baby"
-                                    ):  # Write state and pass info to ext
+                                    elif step == "baby":
+                                        # write state and pass info to ext (Alan: what's ext?)
                                         loaded_writers["state"].write(
                                             data=steps[
                                                 step
@@ -498,47 +487,43 @@ class Pipeline(ProcessABC):
                                             ].datatypes.keys(),
                                             tp=i,
                                         )
-                                    elif (
-                                        step == "extraction"
-                                    ):  # Remove mask/label after ext
+                                    elif step == "extraction":
+                                        # remove mask/label after extraction
                                         for k in ["masks", "labels"]:
                                             run_kwargs[step][k] = None
-
+                            # check and report clogging
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
                             self._log(
                                 f"{name}:Clogged_traps:{frac_clogged_traps}"
                             )
-
                             frac = np.round(frac_clogged_traps * 100)
                             pbar.set_postfix_str(f"{frac} Clogged")
-                        else:  # Stop if more than X% traps are clogged
+                        else:
+                            # stop if too many traps are clogged
                             self._log(
-                                f"{name}:Analysis stopped early at time {i} with {frac_clogged_traps} clogged traps"
+                                f"{name}:Stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             meta.add_fields({"end_status": "Clogged"})
                             break
-
                         meta.add_fields({"last_processed": i})
-
-                    # Run post-processing
+                    # run post-processing
                     meta.add_fields({"end_status": "Success"})
                     post_proc_params = PostProcessorParameters.from_dict(
                         config["postprocessing"]
                     )
                     PostProcessor(filename, post_proc_params).run()
-
                     self._log("Analysis finished successfully.", "info")
                     return 1
 
-        except Exception as e:  # Catch bugs during setup or runtime
+        except Exception as e:
+            # catch bugs during setup or run time
             logging.exception(
                 f"{name}: Exception caught.",
                 exc_info=True,
             )
-            # This prints the type, value, and stack trace of the
-            # current exception being handled.
+            # print the type, value, and stack trace of the exception
             traceback.print_exc()
             raise e
         finally:
@@ -546,23 +531,48 @@ class Pipeline(ProcessABC):
 
     @staticmethod
     def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
+        """
+        Check recent time points for tiles with too many cells.
+
+        Returns the fraction of clogged tiles, where clogged tiles have
+        too many cells or too much of their area covered by cells.
+
+        Parameters
+        ----------
+        filename: str
+            Name of h5 file.
+        es_parameters: dict
+            Parameters defining when early stopping should happen.
+            For example:
+                    {'min_tp': 100,
+                    'thresh_pos_clogged': 0.4,
+                    'thresh_trap_ncells': 8,
+                    'thresh_trap_area': 0.9,
+                    'ntps_to_eval': 5}
+        tile_size: int
+            Size of tile.
+        """
+        # get the area of the cells organised by trap and cell number
         s = Signal(filename)
         df = s["/extraction/general/None/area"]
+        # check the latest time points only
         cells_used = df[
             df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
         ].dropna(how="all")
+        # find tiles with too many cells
         traps_above_nthresh = (
             cells_used.groupby("trap").count().apply(np.mean, axis=1)
             > es_parameters["thresh_trap_ncells"]
         )
+        # find tiles with cells covering too great a fraction of the tiles' area
         traps_above_athresh = (
             cells_used.groupby("trap").sum().apply(np.mean, axis=1)
             / tile_size**2
             > es_parameters["thresh_trap_area"]
         )
-
         return (traps_above_nthresh & traps_above_athresh).mean()
 
+    # Alan: can both this method and the next be deleted?
     def _load_config_from_file(
         self,
         filename: PosixPath,
@@ -607,73 +617,66 @@ class Pipeline(ProcessABC):
         t.List[np.ndarray],
     ]:
         """
-        Initialise pipeline components and if necessary use
-        exising file to continue existing experiments.
+        Initialise steps in a pipeline.
 
+        If necessary use a file to re-start experiments already partly run.
 
         Parameters
         ----------
-        image_id : int
-            identifier of image in OMERO server, or filename
+        image_id : int or str
+            Identifier of a data set in an OMERO server or a filename.
 
         Returns
-        ---------
+        -------
         filename: str
-        meta:
-        config:
-        process_from:
-        tps:
-        steps:
-        earlystop:
-        session:
-        trackers_state:
-
-        Examples
-        --------
-        FIXME: Add docs.
-
+            Path to a h5 file to write to.
+        meta: object
+            agora.io.metadata.MetaData object
+        config: dict
+            Configuration parameters.
+        process_from: dict
+            Gives from which time point each step of the pipeline should start.
+        tps: int
+            Number of time points.
+        steps: dict
+        earlystop: dict
+            Parameters to check whether the pipeline should be stopped.
+        session: None
+        trackers_state: list
+            States of any trackers from earlier runs.
         """
         config = self.parameters.to_dict()
-        pparams = config
-        image_id = image_id
-        general_config = config["general"]
+        # Alan: session is never changed
         session = None
-        earlystop = general_config.get("earlystop", None)
-        process_from = {k: 0 for k in self.iterative_steps}
+        earlystop = config["general"].get("earlystop", None)
+        process_from = {k: 0 for k in self.pipeline_steps}
         steps = {}
-        ow = {k: 0 for k in self.step_sequence}
-
         # check overwriting
-        ow_id = general_config.get("overwrite", 0)
+        ow_id = config["general"].get("overwrite", 0)
         ow = {step: True for step in self.step_sequence}
         if ow_id and ow_id is not True:
             ow = {
                 step: self.step_sequence.index(ow_id) < i
                 for i, step in enumerate(self.step_sequence, 1)
             }
-
-        # Set up
-        directory = general_config["directory"]
-
-        trackers_state: t.List[np.ndarray] = []
+        # set up
+        directory = config["general"]["directory"]
+        trackers_state = []
         with get_image_class(image_id)(image_id, **self.server_info) as image:
             filename = Path(f"{directory}/{image.name}.h5")
             meta = MetaData(directory, filename)
-
             from_start = True if np.any(ow.values()) else False
-
-            # New experiment or overwriting
+            # remove existing file if overwriting
             if (
                 from_start
                 and (
-                    config.get("overwrite", False) == True
+                    config["general"].get("overwrite", False)
                     or np.all(list(ow.values()))
                 )
                 and filename.exists()
             ):
                 os.remove(filename)
-
-            # If no previous segmentation and keep tiler
+            # if the file exists with no previous segmentation use its tiler
             if filename.exists():
                 self._log("Result file exists.", "info")
                 if not ow["tiler"]:
@@ -692,15 +695,14 @@ class Pipeline(ProcessABC):
                             if ow["baby"]
                             else StateReader(filename).get_formatted_states()
                         )
-
                         config["tiler"] = steps["tiler"].parameters.to_dict()
                     except Exception:
+                        # Alan: a warning or log here?
                         pass
-
             if config["general"]["use_explog"]:
                 meta.run()
-
-            meta.add_fields(  # Add non-logfile metadata
+            # add metadata not in the log file
+            meta.add_fields(
                 {
                     "aliby_version": version("aliby"),
                     "baby_version": version("aliby-baby"),
@@ -709,13 +711,11 @@ class Pipeline(ProcessABC):
                     if isinstance(image_id, int)
                     else str(image_id),
                     "parameters": PipelineParameters.from_dict(
-                        pparams
+                        config
                     ).to_yaml(),
                 }
             )
-
-            tps = min(general_config["tps"], image.data.shape[0])
-
+            tps = min(config["general"]["tps"], image.data.shape[0])
             return (
                 filename,
                 meta,

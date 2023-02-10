@@ -1,7 +1,4 @@
-"""
-A set of utilities for dealing with ALCATRAS traps
-"""
-
+"""Functions for identifying and dealing with ALCATRAS traps."""
 
 import numpy as np
 from skimage import feature, transform
@@ -31,10 +28,10 @@ def segment_traps(
     **identify_traps_kwargs,
 ):
     """
-    Uses an entropy filter and Otsu thresholding to find a trap template,
+    Use an entropy filter and Otsu thresholding to find a trap template,
     which is then passed to identify_trap_locations.
 
-    To obtain candidate traps it the major axis length of a tile must be smaller than tilesize.
+    To obtain candidate traps the major axis length of a tile must be smaller than tilesize.
 
     The hyperparameters have not been optimised.
 
@@ -60,7 +57,7 @@ def segment_traps(
     Returns
     -------
     traps: an array of pairs of integers
-        The coordinates of the centroids of the traps
+        The coordinates of the centroids of the traps.
     """
     # keep a memory of image in case need to re-run
     img = image
@@ -144,17 +141,18 @@ def identify_trap_locations(
     image, trap_template, optimize_scale=True, downscale=0.35, trap_size=None
 ):
     """
-    Identify the traps in a single image based on a trap template,
-    which requires the trap template to be similar to the image
-    (same camera, same magification - ideally the same experiment).
+    Identify the traps in a single image based on a trap template.
 
-    Uses normalised correlation in scikit-image's match_template.
+    Requires the trap template to be similar to the image
+    (same camera, same magnification - ideally the same experiment).
 
-    The search is speeded up by downscaling both the image and
+    Use normalised correlation in scikit-image's to match_template.
+
+    The search is sped up by down-scaling both the image and
     the trap template before running the template matching.
 
     The trap template is rotated and re-scaled to improve matching.
-    The parameters of the rotation and rescaling are optimised, although
+    The parameters of the rotation and re-scaling are optimised, although
     over restricted ranges.
 
     Parameters
