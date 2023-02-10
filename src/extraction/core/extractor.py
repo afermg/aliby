@@ -347,7 +347,7 @@ class Extractor(StepABC):
 
     def reduce_extract(
         self,
-        tiles_data: np.ndarray,
+        traps: np.ndarray,
         masks: t.List[np.ndarray],
         red_metrics: t.Dict[reduction_method, t.Collection[str]],
         **kwargs,
@@ -373,11 +373,11 @@ class Extractor(StepABC):
         """
         # create dict with keys naming the reduction in the z-direction and the reduced data as values
         reduced_tiles_data = {}
-        if tiles_data is not None:
+        if traps is not None:
             for red_fun in red_metrics.keys():
                 reduced_tiles_data[red_fun] = [
                     self.reduce_dims(tile_data, method=RED_FUNS[red_fun])
-                    for tile_data in tiles_data
+                    for tile_data in traps
                 ]
         d = {
             red_fun: self.extract_funs(
@@ -502,7 +502,7 @@ class Extractor(StepABC):
                 img = None
             # apply metrics to image data
             d[ch] = self.reduce_extract(
-                tiles_data=img,
+                traps=img,
                 masks=masks,
                 red_metrics=red_metrics,
                 labels=labels,
