@@ -35,10 +35,9 @@ The output is a folder with the original logfiles and a set of hdf5 files, one w
 
 ### Access raw data
 
-ALIBY's tooling can also be used as an interface to OMERO servers, taking care of fetching data when needed.
+ALIBY's tooling can also be used as an interface to OMERO servers, for example, to fetch a brightfield channel.
  ```python
-from aliby.io.dataset import Dataset
-from aliby.io.image import Image
+from aliby.io.omero import Dataset, Image
 
 server_info= {
             "host": "host_address",
@@ -73,7 +72,7 @@ in time.
 
 It fetches the metadata from the Image object, and uses the TilerParameters values (all Processes in aliby depend on an associated Parameters class, which is in essence a dictionary turned into a class.)
 
-#### Get a timelapse for a given trap
+#### Get a timelapse for a given tile (remote connection)
 ```python
 fpath = "h5/location"
 
@@ -85,10 +84,10 @@ riv = remoteImageViewer(fpath)
 trap_tps = riv.get_trap_timepoints(trap_id, trange, ncols)
 ```
 
-This can take several seconds at the moment.
+Depending on the network speed can take several seconds at the moment.
 For a speed-up: take fewer z-positions if you can.
 
-#### Get the traps for a given time point
+#### Get the tiles for a given time point
 Alternatively, if you want to get all the traps at a given timepoint:
 
 ```python
