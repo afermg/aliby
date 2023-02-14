@@ -227,18 +227,3 @@ def identify_trap_locations(
         exclude_border=(trap_size // 3),
     )
     return coordinates
-
-
-###############################################################
-# functions below here do not appear to be used any more
-###############################################################
-
-
-def stretch_image(image):
-    # FIXME Used in aliby.utils.imageViewer
-    image = ((image - image.min()) / (image.max() - image.min())) * 255
-    minval = np.percentile(image, 2)
-    maxval = np.percentile(image, 98)
-    image = np.clip(image, minval, maxval)
-    image = (image - minval) / (maxval - minval)
-    return image
