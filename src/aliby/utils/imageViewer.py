@@ -30,7 +30,6 @@ from skimage.morphology import dilation
 
 from aliby.io.image import Image as OImage
 from aliby.tile.tiler import Tiler
-from aliby.tile.traps import stretch_image
 
 default_colours = {
     "Brightfield": "Greys_r",
