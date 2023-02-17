@@ -28,8 +28,7 @@ from agora.io.writer import load_attributes
 from PIL import Image
 from skimage.morphology import dilation
 
-from aliby.io.omero import Image as OImage
-from aliby.tile.tiler import Tiler
+from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.tile.traps import stretch_image
 
 default_colours = {
@@ -86,40 +85,12 @@ class BaseImageViewer(ABC):
 
         self._fpath = fpath
         attrs = load_attributes(fpath)
+        self._logfiles_meta = {}
+        self._logfiles_meta["channels"] = attrs["channels/channel"]
 
         self.image_id = attrs.get("image_id")
 
         assert self.image_id is not None, "No valid image_id found in metadata"
-
-
-class LocalImageViewer(BaseImageViewer):
-    def __init__(self, results_path: str, data_path: str):
-        super().__init__(results_path)
-
-        with dispatch_image(data_path)(data_path) as image:
-            self.tiler = Tiler(image.data, self._meta)
-
-        self.cells = Cells.from_source(fpath)
-
-
-class remoteImageViewer(BaseImageViewer):
-    """
-    This ImageViewer combines fetching remote images with tiling and outline display.
-    """
-
-    def __init__(self, fpath, server_info=None):
-        self.super().__init__(fpath)
-
-        if server_info is None:
-            server_info = attrs["parameters"]["general"]["server_info"]
-        self.server_info = server_info
-
-        with dispatch_image(self.image_id)(
-            self.image_id, **self.server_info
-        ) as image:
-            self.tiler = Tiler.from_hdf5(image, fpath)
-
-        self.cells = Cells.from_source(fpath)
 
     @property
     def shape(self):
@@ -138,6 +109,59 @@ class remoteImageViewer(BaseImageViewer):
         # Print  cell label at a given time-point
         return self.cells.labels_at_time(tp)
 
+
+class LocalImageViewer(BaseImageViewer):
+    """
+    Tool to generate figures from local files, either zarr or files organised
+    in directories.
+    """
+
+    def __init__(self, results_path: str, data_path: str):
+        super().__init__(results_path)
+
+        from aliby.io.image import ImageDir, ImageZarr
+
+        self._image_class = (
+            ImageZarr if data_path.endswith(".zar") else ImageDir
+        )
+
+        with dispatch_image(data_path)(data_path) as image:
+            self.tiler = Tiler(
+                image.data,
+                self._meta if hasattr(self, "_meta") else self._logfiles_meta,
+                TilerParameters.default(),
+            )
+
+        self.cells = Cells.from_source(results_path)
+
+
+class remoteImageViewer(BaseImageViewer):
+    """
+    This ImageViewer combines fetching remote images with tiling and outline display.
+    """
+
+    def __init__(
+        self,
+        results_path: str,
+        server_info: t.Dict[str, str],
+    ):
+        self.super().__init__(results_path)
+
+        from aliby.io.omero import Image as OImage
+
+        self._image_class = OImage
+
+        self._server_info = (
+            server_info or attrs["parameters"]["general"]["server_info"]
+        )
+
+        with dispatch_image(self.image_id)(
+            self.image_id, **self.server_info
+        ) as image:
+            self.tiler = Tiler.from_hdf5(image, results_path)
+
+        self.cells = Cells.from_source(results_path)
+
     def random_valid_trap_tp(
         self,
         min_ncells: int = None,
@@ -149,7 +173,6 @@ class remoteImageViewer(BaseImageViewer):
         return self.cells.random_valid_trap_tp(
             min_ncells=min_ncells,
             min_consecutive_tps=min_consecutive_tps,
-            # label_modulo=label_modulo,
         )
 
     def get_entire_position(self):
@@ -165,10 +188,10 @@ class remoteImageViewer(BaseImageViewer):
         return self._full
 
     def get_tc(self, tp, channel=None, server_info=None):
-        server_info = server_info or self.server_info
+        server_info = server_info or self._server_info
         channel = channel or self.tiler.ref_channel
 
-        with OImage(self.image_id, **server_info) as image:
+        with self._image_class(self.image_id, **server_info) as image:
             self.tiler.image = image.data
             return self.tiler.get_tc(tp, channel)
 
@@ -194,7 +217,6 @@ class remoteImageViewer(BaseImageViewer):
         channels: t.Union[str, t.Collection[str]] = None,
         z: int = None,
         server_info=None,
-        **kwargs,
     ):
 
         if tps and not isinstance(tps, t.Collection):
@@ -212,10 +234,8 @@ class remoteImageViewer(BaseImageViewer):
         z = z or self.tiler.ref_z
 
         ch_tps = [(channels[0], tp) for tp in tps]
-        with OImage(self.image_id, **server_info) as image:
+        with self._image_class(self.image_id, **server_info) as image:
             self.tiler.image = image.data
-            # if ch_tps.difference(self.full.keys()):
-            # tps = set(tps).difference(self.full.keys())
             for ch, tp in ch_tps:
                 if (ch, tp) not in self.full:
                     self.full[(ch, tp)] = self.tiler.get_tiles_timepoint(
