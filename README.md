@@ -20,6 +20,8 @@ See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INST
 
 ### CLI
 
+If installed via poetry, you have access to a Command Line Interface (CLI)
+
  ```bash
 aliby-run --expt_id EXPT_PATH --distributed 4 --tps None
  ```

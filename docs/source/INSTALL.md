@@ -62,7 +62,7 @@ For Windows, the simplest way to install it is using conda (or mamba). You can i
     $ \PATH\TO\POETRY\LOCATION\poetry install
 
   - MacOS
-  Under work (See issue https://github.com/ome/omero-py/issues/317)
+  For local access and processing, follow the same instructions as Linux. Remote access to OMERO servers depends on some issues in one of our depedencies being solved (See issue https://github.com/ome/omero-py/issues/317)
 
 ### Git version
 
@@ -71,7 +71,7 @@ Install [ poetry ](https://python-poetry.org/docs/#installation) for dependency 
 In case you want to have local version:
 
     $ git clone git@gitlab.com/aliby/aliby.git
-    $ cd aliby  
+    $ cd aliby
     
  and then either
 
@@ -85,9 +85,9 @@ for a version with only local access, or
 
     $$ poetry install --with dev
 
-to install with compatibale versions of the development tools we use, such as black.
+to install with compatible versions of the development tools we use, such as black.
 
-This commands will automatically install the [ BABY ](https://gitlab.com/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
+These commands will automatically install the [ BABY ](https://gitlab.com/aliby/baby) segmentation software. Support for additional segmentation and tracking algorithms is under development.
 
 ## Omero Server
 
