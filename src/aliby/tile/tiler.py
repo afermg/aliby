@@ -232,8 +232,9 @@ class Tiler(StepABC):
         self.image = image
         self._metadata = metadata
         self.channels = metadata.get(
-            "channels", list(range(metadata["size_c"]))
+            "channels", list(range(metadata.get("size_c", 0)))
         )
+
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
 
         self.trap_locs = trap_locs
@@ -352,7 +353,10 @@ class Tiler(StepABC):
         -------
         full: an array of images
         """
-        full = self.image[t, c].compute(scheduler="synchronous")
+        full = self.image[t, c]
+        if hasattr(full, "compute"):  # If using dask fetch images here
+            full = full.compute(scheduler="synchronous")
+
         return full
 
     @property
