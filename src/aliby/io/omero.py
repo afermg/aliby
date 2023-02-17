@@ -171,7 +171,19 @@ class BridgeOmero:
 
 
 class Dataset(BridgeOmero):
-    def __init__(self, expt_id: str or int, **server_info):
+    """
+    Tool to interact with Omero Datasets remotely, access their
+    metadata and associated files and images.
+
+
+    Parameters
+    ----------
+    expt_id: int Dataset id on server
+    server_info: dict host, username and password
+
+    """
+
+    def __init__(self, expt_id: int, **server_info):
         super().__init__(ome_id=expt_id, **server_info)
 
     @property
