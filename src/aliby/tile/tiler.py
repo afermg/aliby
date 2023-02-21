@@ -300,9 +300,7 @@ class Tiler(StepABC):
     @classmethod
     def from_h5(
         cls,
-        image: t.Union[
-            ImageLocalOME, ImageDir
-        ],  # TODO provide baseclass instead
+        image,
         filepath: t.Union[str, PosixPath],
         parameters: TilerParameters = None,
     ):
@@ -458,7 +456,7 @@ class Tiler(StepABC):
             An index for a channel
         """
         traps = []
-        # get OMERO image
+        # get image
         full = self.get_tc(tp, c)
         for trap in self.trap_locs:
             # pad trap if necessary
