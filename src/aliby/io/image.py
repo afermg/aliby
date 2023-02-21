@@ -235,7 +235,7 @@ class ImageDir(BaseLocalImage):
         super().__init__(path)
         self.image_id = str(self.path.stem)
 
-        self._meta = dir_to_meta(self.path)
+        self._meta = dir_to_meta(self.path, **kwargs)
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
@@ -290,12 +290,14 @@ class ImageZarr(BaseLocalImage):
     def __init__(self, path: t.Union[str, PosixPath], **kwargs):
         super().__init__(path)
         self.set_meta()
+        try:
+            self._img = zarr.open(self.path)
+            self.add_size_to_meta()
+        except Exception as e:
+            print(f"Could not add size info to metadata: {e}")
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional zarr files"""
-        self._img = zarr.open(self.path)
-        self.add_size_to_meta()
-
         return self._img
 
     def add_size_to_meta(self):
@@ -312,10 +314,12 @@ class ImageZarr(BaseLocalImage):
 
     @property
     def dimorder(self):
+        # FIXME hardcoded order based on zarr compression/cloning script
+        return "TCZYX"
         # Assumes only dimensions start with "size"
-        return [
-            k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
-        ]
+        # return [
+        #     k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
+        # ]
 
 
 class ImageDummy(BaseLocalImage):
