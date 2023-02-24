@@ -1822,6 +1822,29 @@ files = [
 ]
 
 [[package]]
+name = "jupytext"
+version = "1.14.4"
+description = "Jupyter notebooks as Markdown documents, Julia, Python or R scripts"
+category = "dev"
+optional = false
+python-versions = "~=3.6"
+files = [
+    {file = "jupytext-1.14.4-py3-none-any.whl", hash = "sha256:c5f5647112aa4ea4c61c31e48a216a4c49d315a0fc43d4f483529ed3b0b1a0d9"},
+    {file = "jupytext-1.14.4.tar.gz", hash = "sha256:4c09f1b8f837888dec11c1253e813b5cacdc20eecefcf2f9a0b870ae6bd44a65"},
+]
+
+[package.dependencies]
+markdown-it-py = ">=1.0.0,<3.0.0"
+mdit-py-plugins = "*"
+nbformat = "*"
+pyyaml = "*"
+toml = "*"
+
+[package.extras]
+rst2md = ["sphinx-gallery (>=0.7.0,<0.8.0)"]
+toml = ["toml"]
+
+[[package]]
 name = "keras"
 version = "2.9.0"
 description = "Deep learning for humans."
@@ -5092,4 +5115,4 @@ omero = ["omero-py"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8, <3.11"
-content-hash = "83fdcbd0dc8fe2de25c948d1e2bae1b5bc3b3916a3325ef63d76b5c32fb93a2a"
+content-hash = "765e45e01f9a9896d17f9ee3b7d6dbf6345ecf297f1fe648db18ed9fa55cc689"
