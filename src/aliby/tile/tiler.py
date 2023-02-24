@@ -444,9 +444,9 @@ class Tiler(StepABC):
         else:
             self.trap_locs.drifts.append(drift.tolist())
 
-    def get_tp_data(self, tp, c):
+    def get_tp_data(self, tp, c) -> np.ndarray:
         """
-        Returns all traps corrected for drift.
+        Returns all tiles corrected for drift.
 
         Parameters
         ----------
@@ -454,6 +454,10 @@ class Tiler(StepABC):
             An index for a time point
         c: integer
             An index for a channel
+
+        Returns
+        ----------
+        Numpy ndarray of tiles with shape (tile, z, y, x)
         """
         traps = []
         # get image
