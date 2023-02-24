@@ -162,6 +162,15 @@ class Cells:
         ]
         return self.group_by_traps(traps, masks)
 
+    def at_times(self, timepoints: t.Iterable[int], kind="mask"):
+        return [
+            [
+                np.dstack(tile_masks) if len(tile_masks) else []
+                for tile_masks in self.at_time(tp, kind=kind).values()
+            ]
+            for tp in timepoints
+        ]
+
     def group_by_traps(
         self, traps: t.Collection, cell_labels: t.Collection
     ) -> t.Dict[int, t.List[int]]:
