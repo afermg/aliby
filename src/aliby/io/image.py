@@ -33,6 +33,22 @@ def get_examples_dir():
     return files("aliby").parent.parent / "examples" / "tiler"
 
 
+def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+    """Wrapper to instatiate the appropiate image
+
+    Parameters
+    ----------
+    source : t.Union[str, int, t.Dict[str, str], PosixPath]
+        Image identifier
+
+    Examples
+    --------
+    FIXME: Add docs.
+
+    """
+    return dispatch_image(source)(source)
+
+
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     """
     Wrapper to pick the appropiate Image class depending on the source of data.
@@ -235,7 +251,7 @@ class ImageDir(BaseLocalImage):
         super().__init__(path)
         self.image_id = str(self.path.stem)
 
-        self._meta = dir_to_meta(self.path, **kwargs)
+        self._meta = dir_to_meta(self.path)
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
