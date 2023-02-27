@@ -19,10 +19,8 @@ def trap_apply(cell_fun, cell_masks, *args, **kwargs):
     **kwargs: dict
         Keyword arguments to pass if needed to custom functions.
     """
-    # find an index for each cell in the trap
-    cells_iter = (*range(cell_masks.shape[2]),)
     # apply cell_fun to each cell and return the results as a list
-    return [cell_fun(cell_masks[..., i], *args, **kwargs) for i in cells_iter]
+    return [cell_fun(mask, *args, **kwargs) for mask in cell_masks]
 
 
 def reduce_z(trap_image: np.ndarray, fun: t.Callable):
