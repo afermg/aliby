@@ -108,7 +108,7 @@ def _dispatch_tile_reduction(how: t.Union[int, str, t.List[int]], axis=1):
         raise Exception(f"Invalid reduction {how}")
 
 
-def tile_like(arr1, arr2):
+def tile_like(arr1: np.ndarray, arr2: np.ndarray):
     """
     Tile the first two dimensions of arr1 (ND) to match arr2 (2D)
     """

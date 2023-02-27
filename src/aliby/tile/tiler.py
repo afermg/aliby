@@ -216,7 +216,7 @@ class Tiler(StepABC):
         image: da.core.Array,
         metadata: dict,
         parameters: TilerParameters,
-        trap_locs=None,
+        trap_locs: t.List[t.List[int]] = None,
     ):
         """
         Initialise Tiler
@@ -237,7 +237,7 @@ class Tiler(StepABC):
 
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
 
-        self.trap_locs = trap_locs
+        self.trap_locs: t.List[t.List[int]] = trap_locs
         try:
             self.z_perchannel = {
                 ch: zsect
@@ -302,7 +302,7 @@ class Tiler(StepABC):
         cls,
         image,
         filepath: t.Union[str, PosixPath],
-        parameters: TilerParameters = None,
+        parameters: t.Optional[TilerParameters] = None,
     ):
         """
         Instantiate Tiler from hdf5 files
