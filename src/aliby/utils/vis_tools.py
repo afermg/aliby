@@ -2,8 +2,8 @@
 """
 Visualisation tools useful to generate figures cell pictures and figures from scripts.
 """
-
 import typing as t
+from copy import copy
 
 import numpy as np
 
@@ -140,3 +140,15 @@ def long_side_vertical(arr):
     if np.subtract(*arr.shape):
         result = arr.T
     return result
+
+
+def rescale(arr):
+    arr_min = arr.min()
+    arr_max = arr.max()
+    return (arr - arr_min) / (arr_max - arr_min)
+
+
+def crop_mask(img: np.ndarray, mask: np.ndarray):
+    img = copy(img).astype(float)
+    img[~mask] = np.nan
+    return img
