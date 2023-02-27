@@ -63,7 +63,8 @@ def get_cellmasks_at_times(results_path: str, timepoints: t.List[int] = [0]):
 
 
 def concatenate_dims(ndarray, axis1: int, axis2: int):
-    return np.concatenate(np.moveaxis(ndarray, axis1, 0), axis=axis2)
+    axis2 = len(ndarray.shape) + axis2 if axis2 < 0 else axis2
+    return np.concatenate(np.moveaxis(ndarray, axis1, 0), axis=axis2 - 1)
 
 
 def get_tile_mask_pairs(
