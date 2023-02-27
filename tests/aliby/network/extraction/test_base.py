@@ -52,7 +52,7 @@ def test_extractor(imgs, masks, tree):
     extractor.tree = tree
     traps = imgs["GFP"]
     # Generate mock labels
-    labels = list(range(masks.shape[2]))
+    labels = list(range(len(masks)))
     for ch_branches in extractor.params.tree.values():
         print(
             extractor.reduce_extract(
