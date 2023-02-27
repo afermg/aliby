@@ -78,6 +78,7 @@ coverage = "^7.0.4"
 # [tool.poetry.group.gui.dependencies]
 # napari = ">=0.4.16"
 jupytext = "^1.14.4"
+grid-strategy = "^0.0.1"
 
 [tool.poetry.group.docs]
 optional = true
