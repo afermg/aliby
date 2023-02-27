@@ -120,7 +120,7 @@ def segment_traps(
         for x, y in centroids
     ]
     # make a mean template from all the found traps
-    mean_template = np.dstack(candidate_templates).astype(int).mean(axis=-1)
+    mean_template = np.stack(candidate_templates).astype(int).mean(axis=0)
 
     # find traps using the mean trap template
     traps = identify_trap_locations(

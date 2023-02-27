@@ -479,7 +479,7 @@ class Extractor(StepABC):
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}
             for trap_id, cells in raw_masks.items():
                 if len(cells):
-                    masks[trap_id] = np.dstack(np.array(cells)).astype(bool)
+                    masks[trap_id] = np.stack(np.array(cells)).astype(bool)
         # convert to a list of masks
         masks = [np.array(v) for v in masks.values()]
 
@@ -491,7 +491,7 @@ class Extractor(StepABC):
         bgs = []
         if self.params.sub_bg:
             bgs = [
-                ~np.sum(m, axis=2).astype(bool)
+                ~np.sum(m, axis=0).astype(bool)
                 if np.any(m)
                 else np.zeros((tile_size, tile_size))
                 for m in masks

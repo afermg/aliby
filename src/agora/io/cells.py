@@ -165,7 +165,7 @@ class Cells:
     def at_times(self, timepoints: t.Iterable[int], kind="mask"):
         return [
             [
-                np.dstack(tile_masks) if len(tile_masks) else []
+                np.stack(tile_masks) if len(tile_masks) else []
                 for tile_masks in self.at_time(tp, kind=kind).values()
             ]
             for tp in timepoints

@@ -264,8 +264,8 @@ class remoteImageViewer(BaseImageViewer):
         ]
         lbls = [self.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
         lbld_outlines = [
-            np.dstack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(
-                axis=2
+            np.stack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(
+                axis=0
             )
             if len(lblset)
             else np.zeros_like(imgs_list[0]).astype(bool)
