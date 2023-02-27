@@ -13,7 +13,7 @@ def trap_apply(cell_fun, cell_masks, *args, **kwargs):
     cell_fun: function
         Function to apply to the cell (from extraction/cell.py)
     cell_masks: 3d array
-        Segmentation masks for the cells. Note that cells are the last dimension N (Y,X,N)
+        Segmentation masks for the cells. Note that cells are in the first dimension (N, Y,X)
     *args: tuple
         Trap_image and any other arguments to pass if needed to custom functions.
     **kwargs: dict
