@@ -30,7 +30,7 @@ def test_metrics_run(imgs, masks, f):
 
     for ch, img in imgs.items():
         if ch != "segoutlines":
-            assert tuple(masks.shape[:2]) == tuple(imgs[ch].shape)
+            assert tuple(masks.shape[-2:]) == tuple(imgs[ch].shape)
             f(masks, img)
 
 

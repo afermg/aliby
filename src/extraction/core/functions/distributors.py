@@ -23,7 +23,7 @@ def trap_apply(cell_fun, cell_masks, *args, **kwargs):
     return [cell_fun(mask, *args, **kwargs) for mask in cell_masks]
 
 
-def reduce_z(trap_image: np.ndarray, fun: t.Callable):
+def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     """
     Reduce the trap_image to 2d.
 
@@ -33,15 +33,16 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable):
         Images for all the channels associated with a trap
     fun: function
         Function to execute the reduction
-
+    axis: int (default 0)
+        Axis in which we apply the reduction operation.
     """
     # FUTURE replace with py3.10's match-case.
     if (
         hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck"
     ):  # Bottleneck type
-        return getattr(bn.reduce, fun.__name__)(trap_image, axis=2)
+        return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
     elif isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
-        return fun.reduce(trap_image, axis=2)
+        return fun.reduce(trap_image, axis=axis)
     else:  # WARNING: Very slow, only use when no alternatives exist
-        return np.apply_along_axis(fun, 2, trap_image)
+        return np.apply_along_axis(fun, axis, trap_image)
