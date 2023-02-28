@@ -4200,6 +4200,21 @@ serve = ["aiohttp (>=3.7)", "aiohttp-cors", "aiorwlock", "colorful", "fastapi", 
 tune = ["pandas", "requests", "tabulate", "tensorboardX (>=1.9)"]
 
 [[package]]
+name = "readchar"
+version = "4.0.3"
+description = "Library to easily read single chars and key strokes"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "readchar-4.0.3-py3-none-any.whl", hash = "sha256:3d4351c563aba4ae7d4e0b821a234d48bc748f45b74e3f38b50cba3857b57acb"},
+    {file = "readchar-4.0.3.tar.gz", hash = "sha256:1d920d0e9ab76ec5d42192a68d15af2562663b5dfbf4a67cf9eba520e1ca57e6"},
+]
+
+[package.dependencies]
+setuptools = ">=41.0"
+
+[[package]]
 name = "requests"
 version = "2.28.2"
 description = "Python HTTP for Humans."
@@ -5491,4 +5506,4 @@ omero = ["omero-py"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8, <3.11"
-content-hash = "31bfed07b2eb2ab8f19b6dbf1b1a662329dc193b4fa8f8b44ea34556d23ed363"
+content-hash = "c057d7f7f0b6f9d0069a2ed3b558f017b7c37dd58ffb8d16aac50a8f7d8c1e24"
