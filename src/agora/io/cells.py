@@ -358,8 +358,8 @@ class Cells:
     @cached_property
     def mothers_daughters(self) -> np.ndarray:
         """
-        Return a single array with three columns, containing information about the mother-daughter relationships:
-        tile, mothers and daughters.
+        Return a single array with three columns, containing information about
+        the mother-daughter relationships: tile, mothers and daughters.
 
         Returns
         -------
@@ -481,7 +481,9 @@ class Cells:
         return nested_massign
 
     @lru_cache(maxsize=200)
-    def labelled_in_frame(self, frame: int, global_id=False) -> np.ndarray:
+    def labelled_in_frame(
+        self, frame: int, global_id: bool = False
+    ) -> np.ndarray:
         """
         Returns labels in a 4D ndarray with the global ids with shape
         (ntraps, max_nlabels, ysize, xsize) at a given frame.
@@ -621,6 +623,7 @@ class Cells:
         size=1,
         min_ncells: int = 2,
         min_consecutive_ntps: int = 5,
+        interval: t.Union[None, t.Tuple[int, int]] = None,
         seed=0,
     ) -> t.Tuple[t.Tuple[t.List[int], t.List[int], t.List[int]], np.ndarray]:
         """
