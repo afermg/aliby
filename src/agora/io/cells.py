@@ -367,8 +367,8 @@ class Cells:
             An array with shape (n, 3) where n is the number of mother-daughter pairs found.
             The columns contain:
             - tile: the tile where the mother cell is located.
-            - mothers: the index of the mother cell within the tile. If there is no mother, this is zero.
-            - daughters: the index of the daughter cell within the tile. If there is no daughter, this is zero.
+            - mothers: the index of the mother cell within the tile.
+            - daughters: the index of the daughter cell within the tile.
         """
         nested_massign = self.mothers
 
