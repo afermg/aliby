@@ -15,9 +15,14 @@ from aliby.io.image import instatiate_image
 from aliby.tile.tiler import Tiler, TilerParameters
 
 
-def fetch_tc(image_path: str, results_path: str, t: int = 0, c: int = 0):
-    with instatiate_image(image_path) as iz:
-        tiler = Tiler.from_h5(iz, results_path, TilerParameters.default())
+def fetch_tc(
+    image_path: str, results_path: str, t: int = 0, c: int = 0
+) -> np.ndarray:
+    """
+    Return 3D ndarray with (Z,Y,X) for a given pair of time point and channel.
+    """
+    with instatiate_image(image_path) as img:
+        tiler = Tiler.from_h5(img, results_path, TilerParameters.default())
         tc = tiler.get_tp_data(t, c)
     return tc
 

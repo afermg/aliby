@@ -43,7 +43,9 @@ def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
 
     Examples
     --------
-    FIXME: Add docs.
+    image_path = "path/to/image"]
+    with instatiate_image(image_path) as img:
+        print(imz.data, img.metadata)
 
     """
     return dispatch_image(source)(source)

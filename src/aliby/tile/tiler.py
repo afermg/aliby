@@ -330,7 +330,7 @@ class Tiler(StepABC):
         return tiler
 
     @lru_cache(maxsize=2)
-    def get_tc(self, t, c):
+    def get_tc(self, t: int, c: int) -> np.ndarray:
         """
         Load image using dask.
         Assumes the image is arranged as
