@@ -33,6 +33,8 @@ And to run Omero servers, the basic arguments are shown:
 
 The output is a folder with the original logfiles and a set of hdf5 files, one with the results of each multidimensional inside.
 
+For more information, including available options, see the page on [running the analysis pipeline](https://aliby.readthedocs.io/en/latest/PIPELINE.html)
+
 ## Using specific components
 
 ### Access raw data
