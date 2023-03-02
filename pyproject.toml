@@ -34,7 +34,6 @@ scikit-learn = ">=1.0.2" # Used for an extraction metric
 scipy = ">=1.7.3"
 
 # Pipeline + I/O
-aliby-baby = "^0.1.15"
 dask = "^2021.12.0"
 imageio = "2.8.0" # For image-visualisation utilities
 requests-toolbelt = "^0.9.1"
@@ -59,6 +58,12 @@ zarr = "^2.14.0"
 omero = [ "omero-py" ]
 network = [ "omero-py", "zeroc-ice" ]
 
+[tool.poetry.group.baby]
+optional = true
+
+[tool.poetry.group.baby.dependencies]
+aliby-baby = "^0.1.15"
+
 [tool.poetry.group.dev]
 optional = true
 
@@ -74,12 +79,16 @@ pre-commit = "^2.20.0"
 seaborn = "^0.11.2"
 debugpy = "^1.6.3"
 coverage = "^7.0.4"
-
-# [tool.poetry.group.gui.dependencies]
-# napari = ">=0.4.16"
 jupytext = "^1.14.4"
 grid-strategy = "^0.0.1"
 readchar = "^4.0.3"
+
+
+[tool.poetry.group.napari]
+optional = true
+
+[tool.poetry.group.napari.dependencies]
+napari = ">=0.4.16"
 
 [tool.poetry.group.docs]
 optional = true
@@ -96,6 +105,8 @@ optional = true
 [tool.poetry.group.test.dependencies]
 pytest = "^6.2.5"
 
+[tool.poetry.group.torch.dependencies]
+torch = "^1.13.1"
 
 [tool.black]
 line-length = 79
