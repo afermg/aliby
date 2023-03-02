@@ -1,14 +1,13 @@
 import typing as t
-from time import perf_counter
-from typing import List
 
+import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
+
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_attributes
-
 from aliby.tile.tiler import Tiler
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.functions.distributors import reduce_z, trap_apply
@@ -286,9 +285,9 @@ class Extractor(StepABC):
         Parameters
         ----------
         traps: list of arrays
-            List of images.
+            t.List of images.
         masks: list of arrays
-            List of masks.
+            t.List of masks.
         metric: str
             Metric to extract.
         labels: dict
@@ -327,8 +326,8 @@ class Extractor(StepABC):
 
     def extract_funs(
         self,
-        traps: List[np.array],
-        masks: List[np.array],
+        traps: t.List[np.array],
+        masks: t.List[np.array],
         metrics: t.List[str],
         **kwargs,
     ) -> t.Dict[str, pd.Series]:
@@ -408,6 +407,8 @@ class Extractor(StepABC):
         reduced = img
         if method is not None:
             reduced = reduce_z(img, method)
+        if reduced.shape[0] < 10:
+            print("ahoy")
         return reduced
 
     def extract_tp(
@@ -483,12 +484,22 @@ class Extractor(StepABC):
         # generate boolean masks for background as a list with one mask per trap
         bgs = []
         if self.params.sub_bg:
-            bgs = [
-                ~np.sum(m, axis=0).astype(bool)
-                if np.any(m)
-                else np.zeros((tile_size, tile_size))
-                for m in masks
-            ]
+            # bgs = [
+            #     ~np.sum(m, axis=0).astype(bool)
+            #     if np.any(m)
+            #     else np.zeros((tile_size, tile_size)).astype(bool)
+            #     for m in masks
+            # ]
+            bgs = ~np.array(
+                list(
+                    map(
+                        lambda x: np.sum(x, axis=0)
+                        if np.any(x)
+                        else np.zeros((tile_size, tile_size)),
+                        masks,
+                    )
+                )
+            ).astype(bool)
         # perform extraction by applying metrics
         d = {}
         self.img_bgsub = {}
@@ -496,7 +507,7 @@ class Extractor(StepABC):
             # NB ch != is necessary for threading
             if ch != "general" and tiles is not None and len(tiles):
                 # image data for all traps and z sections for a particular channel
-                # as an array arranged as (no traps, X, Y, no Z channels)
+                # as an array arranged as (tiles, Z, X, Y, )
                 img = tiles[:, tree_chs.index(ch), 0]
             else:
                 img = None
@@ -509,18 +520,25 @@ class Extractor(StepABC):
                 **kwargs,
             )
             # apply metrics to image data with the background subtracted
-            if bgs and ch in self.params.sub_bg and img is not None:
+            if bgs.any() and ch in self.params.sub_bg and img is not None:
                 # calculate metrics with subtracted bg
                 ch_bs = ch + "_bgsub"
-                self.img_bgsub[ch_bs] = []
-                for trap, bg in zip(img, bgs):
-                    bg_fluo = np.zeros_like(trap)
-                    not_cell = np.where(bg)
-                    # skip for empty traps
-                    if len(not_cell[0]):
-                        bg_fluo = np.median(trap[not_cell], axis=0)
-                    # subtract median background
-                    self.img_bgsub[ch_bs].append(trap - bg_fluo)
+                # subtract median background
+
+                self.img_bgsub[ch_bs] = np.moveaxis(
+                    np.stack(
+                        list(
+                            map(
+                                lambda tile, mask: np.moveaxis(tile, 0, -1)
+                                - bn.median(tile[:, mask], axis=1),
+                                img,
+                                bgs,
+                            )
+                        )
+                    ),
+                    -1,
+                    1,
+                )  # End with tiles, z, y, x
                 # apply metrics to background-corrected data
                 d[ch_bs] = self.reduce_extract(
                     red_metrics=ch_tree[ch],
@@ -564,7 +582,7 @@ class Extractor(StepABC):
         tiles: ndarray
             An array of the image data having dimensions of (tile_id, channel, tp, tile_size, tile_size, n_zstacks).
         channels: list of str (optional)
-            List of available channels.
+            t.List of available channels.
 
         Returns
         -------
@@ -580,7 +598,7 @@ class Extractor(StepABC):
 
     def _run_tp(
         self,
-        tps: List[int] = None,
+        tps: t.List[int] = None,
         tree=None,
         save=True,
         **kwargs,

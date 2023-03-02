@@ -559,8 +559,7 @@ class Tiler(StepABC):
             # only return requested z
             val = self.get_tp_data(tp, c)[:, z]
             # starts with the order: tiles, z, y, x
-            # returns the order: tiles, C, T, X, Y, Z
-            val = val.swapaxes(1, 3).swapaxes(1, 2)
+            # returns the order: tiles, C, T, Z, X, Y
             val = np.expand_dims(val, axis=1)
             res.append(val)
         if tile_shape is not None:
