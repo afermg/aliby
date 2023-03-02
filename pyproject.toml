@@ -109,6 +109,9 @@ optional = true
 [tool.poetry.group.test.dependencies]
 pytest = "^6.2.5"
 
+[tool.poetry.group.torch]
+optional = true
+
 [tool.poetry.group.torch.dependencies]
 torch = "^1.13.1"
 
