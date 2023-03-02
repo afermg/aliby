@@ -231,7 +231,7 @@ def parse_from_grammar(filepath: str, grammar: t.Dict):
                     d[subkey] = parse_x(header, **subvalues)
         except Exception as e:
             logging.getLogger("aliby").critical(
-                f"Parsing failed for key {key}"
+                f"Parsing failed for key {key} and values {values}"
             )
             raise (e)
     return d

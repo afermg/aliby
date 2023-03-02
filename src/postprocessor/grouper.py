@@ -24,7 +24,7 @@ class Grouper(ABC):
     def __init__(self, dir: Union[str, PosixPath]):
         """Find h5 files and load a chain for each one."""
         path = Path(dir)
-        assert path.exists(), "Dir does not exist"
+        assert path.exists(), f"{str(dir)} does not exist"
         self.name = path.name
         self.files = list(path.glob("*.h5"))
         assert len(self.files), "No valid h5 files in dir"

@@ -2,23 +2,26 @@
 import re
 import typing as t
 from pathlib import PosixPath
-
 import h5py
+
+# should we move these functions here?
+from aliby.tile.tiler import find_channel_name
 
 
 def exparams_from_meta(
     meta: t.Union[dict, PosixPath, str], extras: t.Collection[str] = ["ph"]
 ):
     """
-    Obtain parameters from metadata of hdf5 file.
-    It compares a list of candidate channels using case-inspecific REGEX to identify valid channels.
+    Obtain parameters from metadata of the h5 file.
+
+    Compares a list of candidate channels using case-insensitive
+    REGEX to identify valid channels.
     """
-    meta = meta if isinstance(meta, dict) else load_attributes(meta)
+    meta = meta if isinstance(meta, dict) else load_metadata(meta)
     base = {
         "tree": {"general": {"None": ["area", "volume", "eccentricity"]}},
         "multichannel_ops": {},
     }
-
     candidate_channels = {
         "Citrine",
         "GFP",
@@ -30,7 +33,6 @@ def exparams_from_meta(
         "Cy5",
         "mKO2",
     }
-
     default_reductions = {"max"}
     default_metrics = {
         "mean",
@@ -40,33 +42,26 @@ def exparams_from_meta(
         "max5px",
         # "nuc_est_conv",
     }
-
-    # Defined ratiometric combinations that can be used as ratio
-    # key is numerator and value is denominator; add more to support additional channel names
+    # define ratiometric combinations
+    # key is numerator and value is denominator
+    # add more to support additional channel names
     ratiometric_combinations = {"phluorin405": ("phluorin488", "gfpfast")}
-
     default_reduction_metrics = {
         r: default_metrics for r in default_reductions
     }
     # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
-
-    from aliby.tile.tiler import find_channel_name
-
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
-        # Find channels in metadata whose names match
+        # find matching channels in metadata
         found_channel = find_channel_name(meta.get("channels", []), av_channel)
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
-
     for ch in extant_fluorescence_ch:
         base["tree"][ch] = default_reduction_metrics
-
     base["sub_bg"] = extant_fluorescence_ch
-
-    # Additional extraction defaults when channels available
+    # additional extraction defaults if the channels are available
     if "ph" in extras:
-        # SWAINLAB-specific names
+        # SWAINLAB specific names
         # find first valid combination of ratiometric fluorescence channels
         numerator_channel, denominator_channel = (None, None)
         for ch1, chs2 in ratiometric_combinations.items():
@@ -80,8 +75,7 @@ def exparams_from_meta(
                     if found_channel2:
                         denominator_channel = found_channel2
                         break
-
-        # If two compatible ratiometric channels are available
+        # if two compatible ratiometric channels are available
         if numerator_channel is not None and denominator_channel is not None:
             sets = {
                 b + a: (x, y)
@@ -102,11 +96,11 @@ def exparams_from_meta(
                     *v,
                     default_reduction_metrics,
                 ]
-
     return base
 
 
-def load_attributes(file: t.Union[str, PosixPath], group="/"):
+def load_metadata(file: t.Union[str, PosixPath], group="/"):
+    """Get meta data from an h5 file."""
     with h5py.File(file, "r") as f:
         meta = dict(f[group].attrs.items())
     return meta

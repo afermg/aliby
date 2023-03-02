@@ -1,11 +1,26 @@
 #!/usr/bin/env jupyter
+import argparse
+from aliby.pipeline import Pipeline, PipelineParameters
 
 
 def run():
-    import argparse
+    """
+    Run a default microscopy analysis pipeline.
 
-    from aliby.pipeline import Pipeline, PipelineParameters
+    Parse command-line arguments and set default parameter values for running a pipeline, then
+    construct and execute the pipeline with the parameters obtained. Command-line arguments can
+    override default parameter values. If a command-line argument is a string representation of
+    an integer, convert it to an integer.
 
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    FIXME: Add docs.
+    FIXME: GTP-generated. Confirm manually.
+    """
     parser = argparse.ArgumentParser(
         prog="aliby-run",
         description="Run a default microscopy analysis pipeline",
