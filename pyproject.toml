@@ -53,9 +53,6 @@ zarr = "^2.14.0"
 omero = [ "omero-py" ]
 
 # Postprocessing
-[tool.poetry.group.pp]
-optional = true
-
 [tool.poetry.group.pp.dependencies]
 leidenalg = "^0.8.8"
 more-itertools = "^8.12.0"
