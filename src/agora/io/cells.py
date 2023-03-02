@@ -1,6 +1,5 @@
 import logging
 import typing as t
-from collections.abc import Iterable
 from itertools import groupby
 from pathlib import Path, PosixPath
 from functools import lru_cache, cached_property

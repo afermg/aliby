@@ -35,7 +35,7 @@ def get_tiles_at_times(
         int, t.List[int], str, t.Callable
     ] = lambda x: concatenate_dims(x, 1, -1),
     channel: int = 1,
-):
+) -> np.ndarray:
     """Use Image and tiler to get tiled position for specific time points.
 
     Parameters
@@ -66,11 +66,13 @@ def get_tiles_at_times(
     return tp_channel_stack
 
 
-def get_cellmasks_at_times(results_path: str, timepoints: t.List[int] = [0]):
+def get_cellmasks_at_times(
+    results_path: str, timepoints: t.List[int] = [0]
+) -> t.List[t.List[np.ndarray]]:
     return Cells(results_path).at_times(timepoints)
 
 
-def concatenate_dims(ndarray, axis1: int, axis2: int):
+def concatenate_dims(ndarray, axis1: int, axis2: int) -> np.ndarray:
     axis2 = len(ndarray.shape) + axis2 if axis2 < 0 else axis2
     return np.concatenate(np.moveaxis(ndarray, axis1, 0), axis=axis2 - 1)
 
@@ -202,13 +204,20 @@ def overlay_masks_tiles(
 
 
 def _sample_n_tiles_masks(
-    image_path: str, results_path: str, n: int, seed: int = 0
+    image_path: str,
+    results_path: str,
+    n: int,
+    seed: int = 0,
+    interval=None,
 ) -> t.Tuple[t.Tuple, t.Tuple[np.ndarray, np.ndarray]]:
 
     cells = Cells(results_path)
-    locations, masks = cells._sample_masks(n, seed=seed)
+    locations, masks = cells._sample_masks(n, seed=seed, interval=interval)
 
     processed_tiles, cropped_masks = overlay_masks_tiles(
-        image_path, results_path, masks, [locations[i] for i in (0, 2)]
+        image_path,
+        results_path,
+        masks,
+        [locations[i] for i in (0, 2)],
     )
     return locations, (processed_tiles, cropped_masks)

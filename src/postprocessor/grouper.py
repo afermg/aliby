@@ -371,7 +371,6 @@ def concat_standard(
     return combined
 
 
-# why _ind ?
 def concat_signal_ind(
     path: str,
     chainer: Chainer,

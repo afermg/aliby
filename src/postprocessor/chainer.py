@@ -7,10 +7,8 @@ from copy import copy
 import pandas as pd
 
 from agora.io.signal import Signal
-from agora.utils.association import validate_association
 from agora.utils.kymograph import bidirectional_retainment_filter
-from postprocessor.core.abc import get_parameters, get_process
-from postprocessor.core.lineageprocess import LineageProcessParameters
+from postprocessor.core.abc import get_process
 
 
 class Chainer(Signal):
@@ -62,13 +60,12 @@ class Chainer(Signal):
             data = self.common_chains[dataset](**kwargs)
         else:
             # use Signal's get_raw
-            data = self.get_raw(dataset, in_minutes=in_minutes)
+            data = self.get_raw(dataset, in_minutes=in_minutes, lineage=True)
             if chain:
                 data = self.apply_chain(data, chain, **kwargs)
         if retain:
             # keep data only from early time points
             data = self.get_retained(data, retain)
-            # data = data.loc[data.notna().sum(axis=1) > data.shape[1] * retain]
         if stages and "stage" not in data.columns.names:
             # return stages as additional column level
             stages_index = [

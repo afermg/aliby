@@ -44,6 +44,7 @@ class PostProcessorParameters(ParametersABC):
 
     @classmethod
     def default(cls, kind=[]):
+        """Sequential postprocesses to be operated"""
         targets = {
             "prepost": {
                 "merger": "/extraction/general/None/area",
