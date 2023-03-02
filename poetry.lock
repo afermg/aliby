@@ -1501,7 +1501,7 @@ protobuf = ["grpcio-tools (>=1.43.0)"]
 name = "h5py"
 version = "2.10.0"
 description = "Read and write HDF5 files from Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 files = [
@@ -6196,4 +6196,4 @@ omero = ["omero-py"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8, <3.11"
-content-hash = "a903bea70d0492ec9e8c370fbd9a37216c678f3d7f0de95dd0762f6bd9d953dd"
+content-hash = "a786c15f436189c79059f3ff0f074404fb89fec1b886b32e2309fe402e6d7eda"
