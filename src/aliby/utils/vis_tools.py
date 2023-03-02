@@ -170,20 +170,22 @@ def _sample_n_tiles_masks(
     n: int,
     seed: int = 0,
     interval=None,
-    as_generator=False,
 ) -> t.Tuple[t.Tuple, t.Tuple[np.ndarray, np.ndarray]]:
 
     cells = Cells(results_path)
     indices, masks = cells._sample_masks(n, seed=seed, interval=interval)
 
-    processed_tiles, cropped_masks = _overlay_masks_tiles(
-        image_path,
-        results_path,
-        masks,
-        [indices[i] for i in (0, 2)],
-        as_generator=as_generator,
-    )
-    return indices, (processed_tiles, cropped_masks)
+    # zipped_indices = zip(*indices)
+    for index, (background, cropped_fg) in zip(
+        zip(*indices),
+        _gen_overlay_masks_tiles(
+            image_path,
+            results_path,
+            masks,
+            [indices[i] for i in (0, 2)],
+        ),
+    ):
+        yield index, (background, cropped_fg)
 
 
 def _overlay_mask_tile(
@@ -194,7 +196,6 @@ def _overlay_mask_tile(
     bg_channel: int = 0,
     fg_channel: int = 1,
     reduce_z: t.Union[None, t.Callable] = np.max,
-    as_generator: bool = False,
 ) -> t.Tuple[np.ndarray, np.ndarray]:
     """
     Return a tuplw with two channels
@@ -220,7 +221,7 @@ def _overlay_mask_tile(
     return reduced_z[0], cropped_fg
 
 
-def _overlay_masks_tiles(
+def _gen_overlay_masks_tiles(
     image_path: str,
     results_path: str,
     masks: np.ndarray,
@@ -228,11 +229,13 @@ def _overlay_masks_tiles(
     bg_channel: int = 0,
     fg_channel: int = 1,
     reduce_z: t.Union[None, t.Callable] = np.max,
-    as_generator: bool = False,
-) -> t.Tuple[np.ndarray, np.ndarray]:
+) -> t.Generator[t.Tuple[np.ndarray, np.ndarray], None, None]:
+    """
+    Generator of mask tiles
+    """
 
-    tmp = [
-        _overlay_mask_tile(
+    for mask, index in zip(masks, zip(*indices)):
+        yield _overlay_mask_tile(
             image_path,
             results_path,
             mask,
@@ -241,7 +244,3 @@ def _overlay_masks_tiles(
             fg_channel,
             reduce_z,
         )
-        for mask, index in zip(masks, zip(*indices))
-    ]
-
-    return [np.stack(x) for x in zip(*tmp)]
