@@ -662,7 +662,7 @@ class Pipeline(ProcessABC):
             }
 
         # Set up
-        directory = general_config["directory"]
+        directory = config["general"]["directory"]
 
         trackers_state: t.List[np.ndarray] = []
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
