@@ -11,7 +11,6 @@ import yaml
 from utils_find_1st import cmp_equal, find_1st
 
 from agora.io.bridge import BridgeH5
-from agora.io.utils import timed
 
 #################### Dynamic version ##################################
 
