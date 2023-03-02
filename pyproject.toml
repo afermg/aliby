@@ -109,6 +109,7 @@ optional = true
 
 [tool.poetry.group.torch.dependencies]
 torch = "^1.13.1"
+pytorch-lightning = "^1.9.3"
 
 [tool.black]
 line-length = 79
