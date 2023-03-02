@@ -56,7 +56,7 @@ class OmeroExplorer:
     def acq(self):
         return {k: parse_annot(v, "acq") for k, v in self.raw_acq.items()}
 
-    def load(self, min_id=18000, min_date=None):
+    def load(self, min_id=0, min_date=None):
         """
         :min_id: int
         :min_date: tuple
@@ -77,7 +77,10 @@ class OmeroExplorer:
             # sort by dates
             dates = [d.getDate() for d in self._dsets_bak]
             self._dsets_bak[:] = [
-                a for _, a in sorted(zip(dates, self._dsets_bak))
+                a
+                for _, a in sorted(
+                    zip(dates, self._dsets_bak), key=lambda x: x[0]
+                )
             ]
 
             self._dsets_bak = [
