@@ -5,14 +5,12 @@ import itertools
 import logging
 import operator
 import typing as t
-from functools import partial, wraps
+from functools import wraps
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
 
 import cv2
-import h5py
-import numpy as np
 
 
 def repr_obj(obj, indent=0):
