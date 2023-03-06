@@ -482,7 +482,7 @@ class Extractor(StepABC):
         # stored as an array arranged as (traps, channels, time points, X, Y, Z)
         tiles = self.get_tiles(tp, tile_shape=tile_size, channels=tree_chs)
         # generate boolean masks for background as a list with one mask per trap
-        bgs = []
+        bgs = np.array([])
         if self.params.sub_bg:
             # bgs = [
             #     ~np.sum(m, axis=0).astype(bool)
