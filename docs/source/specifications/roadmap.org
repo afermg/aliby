@@ -53,6 +53,7 @@ Extraction could easily increase its processing speed. Most of the code was not 
 
 ** Writers/Readers
 - Consider storing signals that are similar (e.g., signals arising from each channel) in a single multidimensional array to save storage space.
+- Refactor (Extraction/Postprocessing) Writer to use the DynamicWriter Abstract Base Class.
 
 ** Pipeline
 Pipeline is in dire need of refactoring, as it coordinates too many things. The best approach would be to modify the structure to delegate more responsibilities to Steps (such as validation) and Writers (such as writing metadata).
@@ -78,3 +79,6 @@ Pipeline is in dire need of refactoring, as it coordinates too many things. The 
 * Secrets in the code
 - As aliby is adapted to future Python versions, keep up with the "FUTURE" statements that enunciate how code can be improved in new python version
 - Track FIXMEs and, if we cannot solve them immediately, open an associated issue
+
+* Minor inconveniences to fix
+- Update CellTracker models by training with current scikit-learn (currently it warns that the models were trained in an older version of sklearn )
