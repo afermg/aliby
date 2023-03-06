@@ -82,6 +82,7 @@ jupytext = "^1.14.4"
 grid-strategy = "^0.0.1"
 readchar = "^4.0.3"
 ipdb = "^0.13.11"
+trio = "^0.22.0"
 
 
 [tool.poetry.group.napari]
