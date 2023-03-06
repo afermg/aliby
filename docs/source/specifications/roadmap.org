@@ -69,6 +69,7 @@ Pipeline is in dire need of refactoring, as it coordinates too many things. The 
 - Contribution guidelines (after developing some)
 
 * Tools/alternatives that may be worth considering for the future
+- trio/asyncio/anyio for concurrent processing of individual threads
 - Pandas -> Polars: Reconsider after pandas 2.0; they will become interoperable
 - awkward arrays: Better way to represent
 - h5py -> zarr: OME-ZARR format is out now, it is possible that the field will move in that direction. This would also make us being stuck in h5py 2.10.0 less egregious.
