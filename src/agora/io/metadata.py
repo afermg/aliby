@@ -12,6 +12,7 @@ If there are no metadata files, ALIBY requires indicating indices for tiler, seg
 
 """
 import glob
+import logging
 import os
 import typing as t
 from datetime import datetime
@@ -97,7 +98,9 @@ def find_file(root_dir, regex):
         )
         file = [sorted(file)[0]]
     if len(file) == 0:
-        print("Warning:Metadata: No valid swainlab .log found.")
+        logging.getLogger("aliby").log(
+            logging.WARNING, "Metadata: No valid swainlab .log found."
+        )
     else:
         return file[0]
     return None
