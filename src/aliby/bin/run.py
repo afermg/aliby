@@ -1,5 +1,7 @@
 #!/usr/bin/env jupyter
 import argparse
+
+from agora.utils.cast import _str_to_int
 from aliby.pipeline import Pipeline, PipelineParameters
 
 
@@ -19,7 +21,6 @@ def run():
     Examples
     --------
     FIXME: Add docs.
-    FIXME: GTP-generated. Confirm manually.
     """
     parser = argparse.ArgumentParser(
         prog="aliby-run",
@@ -37,23 +38,13 @@ def run():
         "password": None,
     }
 
-    def _cast_str(x: str or None):
-        """
-        Cast string as int if possible. If Nonetype return None.
-        """
-        if x:
-            try:
-                return int(x)
-            except:
-                return x
-
     for k in param_values:
         parser.add_argument(f"--{k}", action="store")
 
     args = parser.parse_args()
 
     for k in param_values:
-        if passed_value := _cast_str(getattr(args, k)):
+        if passed_value := _str_to_int(getattr(args, k)):
 
             param_values[k] = passed_value
 
