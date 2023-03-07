@@ -13,6 +13,7 @@ A peak-identifying algorithm recovers the x and y-axis location of traps in the 
 
 The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, X, Y).
 """
+import logging
 import re
 import typing as t
 import warnings
@@ -26,7 +27,7 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
-from aliby.io.image import ImageLocalOME, ImageDir, ImageDummy
+from aliby.io.image import ImageDummy
 from aliby.tile.traps import segment_traps
 
 
@@ -578,7 +579,7 @@ class Tiler(StepABC):
         """Return index of reference channel."""
         return self.get_channel_index(self.parameters.ref_channel)
 
-    def get_channel_index(self, channel: str or int):
+    def get_channel_index(self, channel: str or int) -> int:
         """
         Find index for channel using regex.
 
@@ -640,7 +641,7 @@ class Tiler(StepABC):
 
 
 # Alan: do we need these as well as get_channel_index and get_channel_name?
-# self._log below is not defined
+# TODO homogenise these into a pair of functions
 def find_channel_index(image_channels: t.List[str], channel: str):
     """
     Access
@@ -649,7 +650,10 @@ def find_channel_index(image_channels: t.List[str], channel: str):
         found = re.match(channel, ch, re.IGNORECASE)
         if found:
             if len(found.string) - (found.endpos - found.start()):
-                self._log(f"Channel {channel} matched {ch} using regex")
+                logging.getLogger("aliby").log(
+                    logging.WARNING,
+                    f"Channel {channel} matched {ch} using regex",
+                )
             return i
 
 
