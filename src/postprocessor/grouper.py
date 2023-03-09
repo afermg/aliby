@@ -353,7 +353,6 @@ class phGrouper(NameGrouper):
         return aggregated
 
 
-# Alan: why are these separate functions?
 def concat_standard(
     path: str,
     chainer: Chainer,
@@ -475,9 +474,7 @@ class MultiGrouper:
             )
         return self._sigtable
 
-    # Alan: function seems out of place
-    # seaborn is not in pyproject.toml
-    def sigtable_plot(self) -> None:
+    def _sigtable_plot(self) -> None:
         """
         Plot number of chains for all available experiments.
 

@@ -76,14 +76,12 @@ class PipelineParameters(ParametersABC):
         postprocessing: dict (optional)
             Parameters for post-processing.
         """
-        # Alan: should 19993 be updated?
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
             expt_id = str(expt_id)
             general["expt_id"] = expt_id
 
-        # Alan: an error message rather than a default might be better
-        directory = Path(general.get("directory", "../data"))
+        directory = Path(general["directory"])
 
         # get log files, either locally or via OMERO
         with dispatch_dataset(
@@ -174,8 +172,8 @@ class Pipeline(ProcessABC):
         "extraction",
         "postprocessing",
     ]
-    # Indicate step-writer groupings to perform special operations during step iteration
-    # Alan: replace with - specify the group in the h5 files written by each step (?)
+
+    # Specify the group in the h5 files written by each step
     writer_groups = {
         "tiler": ["trap_info"],
         "baby": ["cell_info"],
@@ -477,7 +475,7 @@ class Pipeline(ProcessABC):
                                             f"Found {steps['tiler'].n_tiles} traps in {image.name}"
                                         )
                                     elif step == "baby":
-                                        # write state and pass info to ext (Alan: what's ext?)
+                                        # write state and pass info to Extractor
                                         loaded_writers["state"].write(
                                             data=steps[
                                                 step
@@ -572,7 +570,8 @@ class Pipeline(ProcessABC):
         )
         return (traps_above_nthresh & traps_above_athresh).mean()
 
-    # Alan: can both this method and the next be deleted?
+    # FIXME: Remove this functionality. It used to be for
+    # older hdf5 file formats.
     def _load_config_from_file(
         self,
         filename: PosixPath,
@@ -587,6 +586,8 @@ class Pipeline(ProcessABC):
                     process_from[k] += 1
         return process_from, trackers_state, overwrite
 
+    # FIXME: Remove this functionality. It used to be for
+    # older hdf5 file formats.
     @staticmethod
     def legacy_get_last_tp(step: str) -> t.Callable:
         """Get last time-point in different ways depending
@@ -646,7 +647,7 @@ class Pipeline(ProcessABC):
             States of any trackers from earlier runs.
         """
         config = self.parameters.to_dict()
-        # Alan: session is never changed
+        # TODO Alan: Verify if session must be passed
         session = None
         earlystop = config["general"].get("earlystop", None)
         process_from = {k: 0 for k in self.pipeline_steps}
@@ -697,8 +698,8 @@ class Pipeline(ProcessABC):
                         )
                         config["tiler"] = steps["tiler"].parameters.to_dict()
                     except Exception:
-                        # Alan: a warning or log here?
-                        pass
+                        self._log(f"Overwriting tiling data")
+
             if config["general"]["use_explog"]:
                 meta.run()
             # add metadata not in the log file

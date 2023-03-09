@@ -203,9 +203,8 @@ class Signal(BridgeH5):
                     merged = pd.DataFrame([], index=index)
         return merged
 
-    # Alan: do we need two similar properties - see below?
-    @property
-    def datasets(self):
+    @cached_property
+    def p_available(self):
         """Print data sets available in h5 file."""
         if not hasattr(self, "_available"):
             self._available = []
@@ -213,11 +212,6 @@ class Signal(BridgeH5):
                 f.visititems(self.store_signal_path)
         for sig in self._available:
             print(sig)
-
-    @cached_property
-    def p_available(self):
-        """Print data sets available in h5 file."""
-        self.datasets
 
     @cached_property
     def available(self):
