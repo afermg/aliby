@@ -163,3 +163,15 @@ def slices_from_spans(spans: t.Tuple[int], df: pd.DataFrame) -> t.List[slice]:
         for start, end in zip(cumsum[:-1], cumsum[1:])
     ]
     return slices
+
+
+def drop_mother_label(index: pd.MultiIndex) -> np.ndarray:
+    no_mother_label = index
+    if "mother_label" in index.names:
+        no_mother_label = index.droplevel("mother_label")
+    return np.array(no_mother_label.tolist())
+
+
+def get_index_as_np(signal: pd.DataFrame):
+    # Get mother labels from multiindex dataframe
+    return np.array(signal.index.to_list())

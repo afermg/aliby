@@ -51,9 +51,11 @@ class LineageProcess(PostProcessABC):
             data, lineage=lineage, *extra_data
         )
 
-    def load_lineage(self, lineage):
-        """
-        Reshape the lineage information if needed
-        """
-        # TODO does this need to be a function?
-        self.lineage = lineage
+    def get_lineage_information(self, signal):
+        if "mother_label" in signal.index.names:
+            lineage = get_index_as_np(signal)
+        elif self.cells is not None:
+            lineage = self.cells.mothers_daughters
+        else:
+            raise Exception("No linage information found")
+        return lineage

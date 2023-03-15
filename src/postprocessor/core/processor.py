@@ -286,7 +286,8 @@ class PostProcessor(ProcessABC):
                     # self.parameters.lineage_location
                 )
                 loaded_process = self.classfun[process](parameters)
-                loaded_process.load_lineage(lineage)
+                loaded_process.lineage = lineage
+
             else:
                 loaded_process = self.classfun[process](parameters)
 
