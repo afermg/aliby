@@ -158,9 +158,8 @@ class PostProcessor(ProcessABC):
         ]
         self._writer.write("modifiers/merges", data=changes_history)
 
-        with h5py.File(
-            self._filename, "a"
-        ) as f:  # TODO Remove this once done tweaking
+        # TODO Remove this once test is wriiten for consecutive postprocesses
+        with h5py.File(self._filename, "a") as f:
             if "modifiers/picks" in f:
                 del f["modifiers/picks"]
 
@@ -249,7 +248,7 @@ class PostProcessor(ProcessABC):
         self._writer.write(
             "modifiers/picks",
             data=pd.MultiIndex.from_arrays(
-                # FIXME there seem to be repeated indices, it should not be the case
+                # TODO Check if multiindices are still repeated
                 np.unique(indices, axis=0).T if indices.any() else [[], []],
                 names=["trap", "cell_label"],
             ),
