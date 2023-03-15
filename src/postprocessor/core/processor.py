@@ -4,16 +4,14 @@ from typing import Dict, List, Union
 import h5py
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.cells import Cells
 from agora.io.signal import Signal
 from agora.io.writer import Writer
-from tqdm import tqdm
-
 from postprocessor.core.abc import get_parameters, get_process
-from postprocessor.core.lineageprocess import (
-    LineageProcessParameters,
-)
+from postprocessor.core.lineageprocess import LineageProcessParameters
 from postprocessor.core.reshapers.merger import merger, mergerParameters
 from postprocessor.core.reshapers.picker import picker, pickerParameters
 
