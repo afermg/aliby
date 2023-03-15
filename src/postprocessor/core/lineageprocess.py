@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from agora.abc import ParametersABC
+from agora.utils.kymograph import get_index_as_np
 from postprocessor.core.abc import PostProcessABC
 
 
