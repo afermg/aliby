@@ -12,8 +12,8 @@ from agora.io.signal import Signal
 from agora.io.writer import Writer
 from postprocessor.core.abc import get_parameters, get_process
 from postprocessor.core.lineageprocess import LineageProcessParameters
-from postprocessor.core.reshapers.merger import merger, mergerParameters
-from postprocessor.core.reshapers.picker import picker, pickerParameters
+from postprocessor.core.reshapers.merger import Merger, MergerParameters
+from postprocessor.core.reshapers.picker import Picker, PickerParameters
 
 
 class PostProcessorParameters(ParametersABC):
@@ -77,8 +77,8 @@ class PostProcessorParameters(ParametersABC):
         }
         param_sets = {
             "prepost": {
-                "merger": mergerParameters.default(),
-                "picker": pickerParameters.default(),
+                "merger": MergerParameters.default(),
+                "picker": PickerParameters.default(),
             }
         }
         outpaths = {}
@@ -125,12 +125,12 @@ class PostProcessor(ProcessABC):
             if not isinstance(dicted_params[k], dict):
                 dicted_params[k] = dicted_params[k].to_dict()
 
-        self.merger = merger(
-            mergerParameters.from_dict(dicted_params["merger"])
+        self.merger = Merger(
+            MergerParameters.from_dict(dicted_params["merger"])
         )
 
-        self.picker = picker(
-            pickerParameters.from_dict(dicted_params["picker"]),
+        self.picker = Picker(
+            PickerParameters.from_dict(dicted_params["picker"]),
             cells=Cells.from_source(filename),
         )
         self.classfun = {
@@ -356,9 +356,3 @@ class PostProcessor(ProcessABC):
         metadata: Dict,
     ):
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
-
-
-def _if_dict(item):
-    if hasattr(item, "to_dict"):
-        item = item.to_dict()
-    return item
