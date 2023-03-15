@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import re
 from itertools import product
 from pydoc import locate
 
-from agora.abc import ProcessABC, ParametersABC
+from agora.abc import ParametersABC, ProcessABC
 
 
 class PostProcessABC(ProcessABC):
@@ -41,15 +42,15 @@ def get_process(process, suffix="") -> PostProcessABC or ParametersABC or None:
     """
     base_location = "postprocessor.core"
     possible_locations = ("processes", "multisignal", "reshapers")
-    valid_syntaxes = (process, _to_pascal_case(process))
+    valid_syntaxes = (_to_snake_case(process), _to_pascal_case(process))
 
     found = None
     for possible_location, process_syntax in product(
         possible_locations, valid_syntaxes
     ):
-        found = locate(
-            f"{base_location}.{possible_location}.{process}.{process_syntax}{suffix}"
-        )
+
+        location = f"{base_location}.{possible_location}.{process.lower()}.{process_syntax}{suffix}"
+        found = locate(location)
         if found is not None:
             break
     else:
@@ -73,3 +74,9 @@ def _to_pascal_case(snake_str: str) -> str:
     # Based on https://stackoverflow.com/a/19053800
     components = snake_str.split("_")
     return "".join(x.title() for x in components)
+
+
+def _to_snake_case(pascal_str: str) -> str:
+    # Convert a snake_case string to PascalCase.
+    # Based on https://stackoverflow.com/a/12867228
+    return re.sub("(?!^)([A-Z]+)", r"_\1", pascal_str).lower()
