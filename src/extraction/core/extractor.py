@@ -100,7 +100,7 @@ class Extractor(StepABC):
     Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks, such as mean, is the third level.
     """
 
-    # Alan: should this data be stored here or all such data in a separate file
+    # TODO Alan: Move this to a location with the SwainLab defaults
     default_meta = {
         "pixel_size": 0.236,
         "z_size": 0.6,

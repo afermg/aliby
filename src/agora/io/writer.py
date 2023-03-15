@@ -230,7 +230,6 @@ class LinearBabyWriter(DynamicWriter):
     Assumes the edgemasks are of form ((None, tile_size, tile_size), bool).
     """
 
-    # TODO make this YAML: Alan: why?
     compression = "gzip"
     _default_tile_size = 117
     datatypes = {
@@ -319,11 +318,7 @@ class StateWriter(DynamicWriter):
     @staticmethod
     def format_values_tpback(states: list, val_name: str):
         """Unpacks a dict of state data into tp_back, trap, value."""
-        # initialise as empty lists
-        # Alan: is this initialisation necessary?
-        tp_back, trap, value = [
-            [[] for _ in states[0][val_name]] for _ in range(3)
-        ]
+
         # store results as a list of tuples
         lbl_tuples = [
             (tp_back, trap, cell_label)
@@ -334,6 +329,11 @@ class StateWriter(DynamicWriter):
         # unpack list of tuples to define variables
         if len(lbl_tuples):
             tp_back, trap, value = zip(*lbl_tuples)
+        else:
+            # set as empty lists
+            tp_back, trap, value = [
+                [[] for _ in states[0][val_name]] for _ in range(3)
+            ]
         return tp_back, trap, value
 
     @staticmethod
@@ -409,9 +409,9 @@ class StateWriter(DynamicWriter):
 
 #################### Extraction version ###############################
 class Writer(BridgeH5):
-    """Class to transform data into compatible structures."""
-
-    # Alan: when is this used?
+    """
+    Class to transform data into compatible structures.
+    Used by Extractor and Postprocessor within the pipeline."""
 
     def __init__(self, filename, flag=None, compression="gzip"):
         """
@@ -473,7 +473,7 @@ class Writer(BridgeH5):
             self.write_pd(f, path, data, compression=self.compression)
         # data is a multi-index dataframe
         elif isinstance(data, pd.MultiIndex):
-            # Alan: should we still not compress here?
+            # TODO: benchmark I/O speed when using compression
             self.write_index(f, path, data)  # , compression=self.compression)
         # data is a dictionary of dataframes
         elif isinstance(data, Dict) and np.all(

@@ -640,8 +640,8 @@ class Tiler(StepABC):
         return tile
 
 
-# Alan: do we need these as well as get_channel_index and get_channel_name?
-# TODO homogenise these into a pair of functions
+# FIXME: Refactor to support both channel or index
+# self._log below is not defined
 def find_channel_index(image_channels: t.List[str], channel: str):
     """
     Access
