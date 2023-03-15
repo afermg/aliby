@@ -6,15 +6,15 @@ import pandas as pd
 from agora.abc import ParametersABC
 from agora.io.cells import Cells
 
-from agora.utils.association import validate_association
+from agora.utils.association import validate_association, last_col_as_rows
 from postprocessor.core.lineageprocess import LineageProcess
 
 
 class pickerParameters(ParametersABC):
     _defaults = {
         "sequence": [
-            ["lineage", "intersection", "families"],
-            ["condition", "intersection", "present", 7],
+            ["lineage", "families"],
+            ["condition", "present", 7],
         ],
     }
 
@@ -42,31 +42,29 @@ class picker(LineageProcess):
         signal: pd.DataFrame,
         how: str,
         mothers_daughters: t.Optional[np.ndarray] = None,
-    ):
-        self.orig_signals = signal
+    ) -> pd.MultiIndex:
 
-        idx = np.array(signal.index.to_list())
+        cells_present = drop_mother_label(signal.index)
 
         if mothers_daughters is None:
             mothers_daughters = self.cells.mothers_daughters
-        valid_indices, valid_lineage = [slice(None)] * 2
+
+        valid_indices = slice(None)
 
         if how == "mothers":
-            valid_lineage, valid_indices = validate_association(
-                mothers_daughters, idx, match_column=0
+            _, valid_indices = validate_association(
+                mothers_daughters, cells_present, match_column=0
             )
         elif how == "daughters":
-            valid_lineage, valid_indices = validate_association(
-                mothers_daughters, idx, match_column=1
+            _, valid_indices = validate_association(
+                mothers_daughters, cells_present, match_column=1
             )
         elif how == "families":  # Mothers and daughters that are still present
-            valid_lineage, valid_indices = validate_association(
-                mothers_daughters, idx
+            _, valid_indices = validate_association(
+                mothers_daughters, cells_present
             )
 
-        idx = idx[valid_indices]
-        mothers_daughters = mothers_daughters[valid_lineage]
-        return idx
+        return signal.index[valid_indices]
 
     def pick_by_condition(self, signals, condition, thresh):
         idx = self.switch_case(signals, condition, thresh)
@@ -80,7 +78,7 @@ class picker(LineageProcess):
             self.mothers = lineage[:, :2]
             self.daughters = lineage[:, [0, 2]]
 
-            for alg, op, *params in self.sequence:
+            for alg, *params in self.sequence:
                 new_indices = tuple()
                 if indices:
                     if alg == "lineage":
@@ -93,10 +91,7 @@ class picker(LineageProcess):
                         new_indices = getattr(self, "pick_by_" + alg)(
                             signals.loc[list(indices)], param1, param2
                         )
-                    new_indices = [tuple(x) for x in new_indices]
-
-                if op == "union":
-                    new_indices = indices.union(new_indices)
+                        new_indices = [tuple(x) for x in new_indices]
 
                 indices = indices.intersection(new_indices)
         else:
@@ -147,3 +142,10 @@ def any_present(signals, threshold):
         index=signals.index,
     )
     return any_present
+
+
+def drop_mother_label(index: pd.MultiIndex) -> np.ndarray:
+    no_mother_label = index
+    if "mother_label" in index.names:
+        no_mother_label = index.droplevel("mother_label")
+    return np.array(no_mother_label.tolist())
