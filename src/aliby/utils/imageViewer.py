@@ -30,6 +30,7 @@ from agora.io.cells import Cells
 from agora.io.writer import load_attributes
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
+from aliby.utils.plot import stretch_image
 
 default_colours = {
     "Brightfield": "Greys_r",
@@ -443,35 +444,3 @@ def concat_pad(a: np.array, width, nrows):
             axis=1,
         )
     )
-
-
-def stretch_image(image):
-    """
-    Performs contrast stretching on an input image.
-
-    This function takes an array-like input image and enhances its contrast by adjusting
-    the dynamic range of pixel values. It first scales the pixel values between 0 and 255,
-    then clips the values that are below the 2nd percentile or above the 98th percentile.
-    Finally, the pixel values are scaled to the range between 0 and 1.
-
-    Parameters
-    ----------
-    image : array-like
-        Input image.
-
-    Returns
-    -------
-    stretched : ndarray
-        Contrast-stretched version of the input image.
-
-    Examples
-    --------
-    FIXME: Add docs.
-    FIXME: GTP-generated. Confirm manually.
-    """
-    image = ((image - image.min()) / (image.max() - image.min())) * 255
-    minval = np.percentile(image, 2)
-    maxval = np.percentile(image, 98)
-    image = np.clip(image, minval, maxval)
-    image = (image - minval) / (maxval - minval)
-    return image
