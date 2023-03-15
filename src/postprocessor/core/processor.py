@@ -193,6 +193,7 @@ class PostProcessor(ProcessABC):
         moset = set([tuple(x) for x in trap_mother])
         daset = set([tuple(x) for x in trap_daughter])
         picked_set = set([tuple(x) for x in indices])
+
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
         multii = pd.MultiIndex(
