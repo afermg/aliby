@@ -5,26 +5,26 @@ Overview of potential improvements, goals, issues and other thoughts worth keepi
 * General goals
 - Simplify code base
 - Reduce dependency on BABY
-- Abstract components beyond cells
-- Implement multiple
-- Enable providing metadata defaults
+- Abstract components beyond cell outlines (i.e, vacuole, or other ROIs)
+- Enable providing metadata defaults (remove dependency of metadata)
 - (Relevant to BABY): Migrate aliby-baby to Pytorch from Keras. Immediately after upgrade h5py to the latest version (we are stuck in 2.10.0 due to Keras).
 
-* Long-term tasks
-- Split segmentation, tracking and lineage into independent Steps
+* Long-term tasks (Soft Eng)
+- Support external segmentation/tracking/lineage/processing tools
+  - Split segmentation, tracking and lineage into independent Steps
 - Implement the pipeline as an acyclic graph
 - Isolate lineage and tracking into a section of aliby or an independent package
 - Abstract cells into "ROIs" or "Outlines"
 - Abstract lineage into "Outline relationships" (this may help study cell-to-cell interactions in the future)
-- Support external segmentation/tracking/lineage/processing tools
-- Make live cell processing great again!
 - Add support to next generation microscopy formats.
+- Make live cell processing great again! (low priority)
 
 * Potential features
 - Flat field correction (requires research on what is the best way to do it)
 - Support for monotiles (e.g., agarose pads)
 - Support the user providing location of tiles (could be a GUI in which the user selects a region)
 - Support multiple neural networks (e.g., vacuole/nucleus in adition to cell segmentation)
+- Use CellPose as a backup for accuracy-first pipelines
 
 * Potential CLI(+matplotlib) interfaces
 The fastest way to get a gui-like interface is by using matplotlib as a panel to update and read keyboard inputs to interact with the data. All of this can be done within matplotlib in a few hundreds of line of code.
@@ -45,14 +45,14 @@ Extraction could easily increase its processing speed. Most of the code was not 
 - Clarify the limits of picking and merging classes: These are temporal procedures; in the future segmentation should become more accurate, making picking Picker redundant; better tracking/lineage assignemnt will make merging redundant.
 - Formalise how lineage and reshaper processes are handled
 - Non-destructive postprocessing.
-  The way postprocessing is done is destructive at the moment. If we aim to perform more complex data analysis automatically an implementation of complementary and tractable sub-pipelines is essential.
+  The way postprocessing is done is destructive at the moment. If we aim to perform more complex data analysis automatically an implementation of complementary and tractable sub-pipelines is essential. (low priority, perhaps within scripts)
 - Functionalise parameter-process schema. This schema provides a decent structure, but it requires a lot of boilerplate code. To transition the best option is probably a function that converts Process classes into a function, and another that extracts default values from a Parameters class. This could in theory replace most Process-Parameters pairs. Lineage functions will pose a problem and a common interface to get lineage or outline-to-outline relationships demands to be engineered.
 
 ** Compiler/Reporter
 - Remove compiler step, and focus on designing an adequate report, then build it straight after postprocessing ends.
 
 ** Writers/Readers
-- Consider storing signals that are similar (e.g., signals arising from each channel) in a single multidimensional array to save storage space.
+- Consider storing signals that are similar (e.g., signals arising from each channel) in a single multidimensional array to save storage space. (mid priority)
 - Refactor (Extraction/Postprocessing) Writer to use the DynamicWriter Abstract Base Class.
 
 ** Pipeline
@@ -62,6 +62,7 @@ Pipeline is in dire need of refactoring, as it coordinates too many things. The 
 - I/O interfaces
 - Visualisation helpers and other functions
 - Running one pipeline from another
+- Groupers
 
 * Documentation
 - Tutorials and how-to for the usual tasks
@@ -72,7 +73,7 @@ Pipeline is in dire need of refactoring, as it coordinates too many things. The 
 * Tools/alternatives that may be worth considering for the future
 - trio/asyncio/anyio for concurrent processing of individual threads
 - Pandas -> Polars: Reconsider after pandas 2.0; they will become interoperable
-- awkward arrays: Better way to represent
+- awkward arrays: Better way to represent data series with different sizes
 - h5py -> zarr: OME-ZARR format is out now, it is possible that the field will move in that direction. This would also make us being stuck in h5py 2.10.0 less egregious.
 - Use CellACDC's work on producing a common interface to access a multitude of segmentation algorithms.
 
