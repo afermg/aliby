@@ -133,9 +133,8 @@ class BridgeOmero:
         """
         # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
-        server_info = safe_load(bridge.meta_h5["parameters"])["general"][
-            "server_info"
-        ]
+        meta = safe_load(bridge.meta_h5["parameters"])["general"]
+        server_info = {k: meta[k] for k in ("host", "username", "password")}
         return server_info
 
     def set_id(self, ome_id: int):
