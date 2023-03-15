@@ -74,7 +74,9 @@ for i, k in enumerate((*essential, *param_values.keys())):
 
 for k, suffix in essential.items():  # Autocomplete if fullpath not provided
     if not str(param_values[k]).endswith(suffix):
-        param_values[k] = Path(param_values[k]) / f"{ param_values['pos'] }.{suffix}"
+        param_values[k] = (
+            Path(param_values[k]) / f"{ param_values['pos'] }.{suffix}"
+        )
 
 
 # Functions
@@ -100,7 +102,9 @@ def annotate_image(current_key=None, valid_values: t.Tuple[int] = (1, 2)):
     # Show image to annotate
     while current_key is None or current_key not in valid_values:
         if current_key is not None:
-            print(f"Invalid value. Please try with valid values {valid_values}")
+            print(
+                f"Invalid value. Please try with valid values {valid_values}"
+            )
 
         if (current_key := readchar.readkey()) in "qsu":
             # if (current_key := input()) in "qsu":
@@ -112,7 +116,8 @@ def annotate_image(current_key=None, valid_values: t.Tuple[int] = (1, 2)):
 
 
 async def generate_image(
-    generator, location_stack: t.List[t.Tuple[np.ndarray, t.Tuple[int, int, int]]]
+    generator,
+    location_stack: t.List[t.Tuple[np.ndarray, t.Tuple[int, int, int]]],
 ):
     new_location_image = next(generator)
     location_stack.append((new_location_image[0], new_location_image[1]))
@@ -122,7 +127,9 @@ def _parse_input(value: str, valid_values: t.Tuple[int]):
     try:
         return int(value)
     except:
-        print(f"Non-parsable value. Please try again with valid values {valid_values}")
+        print(
+            f"Non-parsable value. Please try again with valid values {valid_values}"
+        )
         return None
 
 
@@ -151,7 +158,9 @@ def write_into_file(file_path: str, line: str):
         f.write(str(line))
 
 
-async def parent(image_path, results_path, out_dir, ncells, seed, interval):
+async def annotate_images(
+    image_path, results_path, out_dir, ncells, seed, interval
+):
 
     preemptive_cache = 3
 
@@ -190,7 +199,14 @@ async def parent(image_path, results_path, out_dir, ncells, seed, interval):
         write_into_file(
             out_annot_file,
             ",".join(
-                ("experiment", "position", "tile", "cell_label", "tp", "annotation")
+                (
+                    "experiment",
+                    "position",
+                    "tile",
+                    "cell_label",
+                    "tp",
+                    "annotation",
+                )
             )
             + "\n",
         )
@@ -225,7 +241,8 @@ async def parent(image_path, results_path, out_dir, ncells, seed, interval):
     print("Annotation done!")
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
+def annotate():
     if any([param_values.get(k) is None for k in ("min_tp", "max_tp")]):
         interval = None
     else:
@@ -233,7 +250,7 @@ if __name__ == "__main__":
 
     print(param_values)
     trio.run(
-        parent,
+        annotate_images,
         param_values["image_path"],
         param_values["results_path"],
         param_values["out_dir"],
