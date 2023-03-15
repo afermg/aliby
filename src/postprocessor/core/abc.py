@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
+from itertools import product
 from pydoc import locate
 
-from agora.abc import ProcessABC
+from agora.abc import ProcessABC, ParametersABC
 
 
 class PostProcessABC(ProcessABC):
@@ -26,7 +27,7 @@ class PostProcessABC(ProcessABC):
         return get_parameters(cls.__name__).default(*args, **kwargs)
 
 
-def get_process(process, suffix=""):
+def get_process(process, suffix="") -> PostProcessABC or ParametersABC or None:
     """
     Dynamically import a process class from the available process locations.
     Assumes process filename and class name are the same
@@ -40,24 +41,35 @@ def get_process(process, suffix=""):
     """
     base_location = "postprocessor.core"
     possible_locations = ("processes", "multisignal", "reshapers")
+    valid_syntaxes = (process, _to_pascal_case(process))
 
     found = None
-    for possible_location in possible_locations:
-        location = (
-            f"{base_location}.{possible_location}.{process}.{process}{suffix}"
+    for possible_location, process_syntax in product(
+        possible_locations, valid_syntaxes
+    ):
+        found = locate(
+            f"{base_location}.{possible_location}.{process}.{process_syntax}{suffix}"
         )
-        found = locate(location)
         if found is not None:
-            return found
+            break
+    else:
 
-    raise Exception(
-        f"{process} not found in locations {possible_locations} at {base_location}"
-    )
+        raise Exception(
+            f"{process} not found in locations {possible_locations} at {base_location}"
+        )
+    return found
 
 
-def get_parameters(process):
+def get_parameters(process: str) -> ParametersABC:
     """
     Dynamically import parameters from the 'processes' folder.
     Assumes parameter is the same name as the file with 'Parameters' added at the end.
     """
     return get_process(process, suffix="Parameters")
+
+
+def _to_pascal_case(snake_str: str) -> str:
+    # Convert a snake_case string to PascalCase.
+    # Based on https://stackoverflow.com/a/19053800
+    components = snake_str.split("_")
+    return "".join(x.title() for x in components)
