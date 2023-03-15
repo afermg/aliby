@@ -3,8 +3,8 @@ from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
 from postprocessor.core.functions.tracks import get_joinable
 
-# TODO Why not capitalized?
-class mergerParameters(ParametersABC):
+
+class MergerParameters(ParametersABC):
     """
     :param tol: float or int threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,
@@ -22,8 +22,7 @@ class mergerParameters(ParametersABC):
     }
 
 
-# TODO Why not capitalized?
-class merger(PostProcessABC):
+class Merger(PostProcessABC):
     """
     Combines rows of tracklet that are likely to be the same.
     """

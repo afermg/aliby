@@ -10,7 +10,7 @@ from postprocessor.core.lineageprocess import (
 )
 
 
-class bud_metricParameters(LineageProcessParameters):
+class BudMetricParameters(LineageProcessParameters):
     """
     Parameters
     """
@@ -18,13 +18,13 @@ class bud_metricParameters(LineageProcessParameters):
     _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
 
-class bud_metric(LineageProcess):
+class BudMetric(LineageProcess):
     """
     Requires mother-bud information to create a new dataframe where the indices are mother ids and
     values are the daughters' values for a given signal.
     """
 
-    def __init__(self, parameters: bud_metricParameters):
+    def __init__(self, parameters: BudMetricParameters):
         super().__init__(parameters)
 
     def run(

@@ -10,7 +10,7 @@ from agora.utils.association import validate_association, last_col_as_rows
 from postprocessor.core.lineageprocess import LineageProcess
 
 
-class pickerParameters(ParametersABC):
+class PickerParameters(ParametersABC):
     _defaults = {
         "sequence": [
             ["lineage", "families"],
@@ -19,7 +19,7 @@ class pickerParameters(ParametersABC):
     }
 
 
-class picker(LineageProcess):
+class Picker(LineageProcess):
     """
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be
@@ -30,7 +30,7 @@ class picker(LineageProcess):
 
     def __init__(
         self,
-        parameters: pickerParameters,
+        parameters: PickerParameters,
         cells: Cells,
     ):
         super().__init__(parameters=parameters)
