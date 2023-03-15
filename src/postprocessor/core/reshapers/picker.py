@@ -5,9 +5,9 @@ import pandas as pd
 
 from agora.abc import ParametersABC
 from agora.io.cells import Cells
-
 from agora.utils.association import validate_association
-from agora.utils.kymograph import drop_mother_label, get_index_as_np
+from agora.utils.cast import _str_to_int
+from agora.utils.kymograph import drop_mother_label
 from postprocessor.core.lineageprocess import LineageProcess
 
 
@@ -100,7 +100,7 @@ class Picker(LineageProcess):
             self._log(f"No lineage assignment")
             indices = np.array([])
 
-        return np.array(list(indices))
+        return np.array(tuple(map(_str_to_int, x)) for x in indices)
 
     def switch_case(
         self,
