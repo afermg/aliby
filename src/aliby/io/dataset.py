@@ -54,7 +54,7 @@ class DatasetLocalABC(ABC):
     Abstract Base class to find local files, either OME-XML or raw images.
     """
 
-    _valid_suffixes = ("tiff", "png")
+    _valid_suffixes = ("tiff", "png", "zarr")
     _valid_meta_suffixes = ("txt", "log")
 
     def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
@@ -121,16 +121,23 @@ class DatasetLocalDir(DatasetLocalABC):
         )
 
     def get_images(self):
-        """Return a dictionary of folder names and their paths."""
-        return {
-            folder.name: folder
-            for folder in self.path.glob("*/")
-            if any(
+        """Return a dictionary of folder or file names and their paths.
+
+        FUTURE 3.12 use pathlib is_junction to pick Dir or File
+        """
+        images = {
+            item.name: item
+            for item in self.path.glob("*/")
+            if item.is_dir()
+            and any(
                 path
                 for suffix in self._valid_suffixes
-                for path in folder.glob(f"*.{suffix}")
+                for path in item.glob(f"*.{suffix}")
             )
+            or item.suffix[1:] in self._valid_suffixes
         }
+
+        return images
 
 
 class DatasetLocalOME(DatasetLocalABC):
@@ -138,7 +145,9 @@ class DatasetLocalOME(DatasetLocalABC):
 
     def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
         super().__init__(dpath)
-        assert len(self.get_images()), "No .tiff files found"
+        assert len(
+            self.get_images()
+        ), f"No valid files found. Formats are {suffixes}"
 
     @property
     def date(self):

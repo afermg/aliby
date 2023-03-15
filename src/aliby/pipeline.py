@@ -78,6 +78,8 @@ class PipelineParameters(ParametersABC):
         """
         expt_id = general.get("expt_id", 19993)
         if isinstance(expt_id, PosixPath):
+            assert expt_id.exists()
+
             expt_id = str(expt_id)
             general["expt_id"] = expt_id
 
@@ -329,7 +331,7 @@ class Pipeline(ProcessABC):
         config["general"]["directory"] = directory
         self.setLogger(directory)
         # pick particular images if desired
-        if pos_filter:
+        if pos_filter is not None:
             if isinstance(pos_filter, list):
                 image_ids = {
                     k: v
