@@ -183,12 +183,19 @@ class TileLocations:
 
 
 class TilerParameters(ParametersABC):
-    """Set default parameters for Tiler."""
+    """
+    tile_size: int
+    ref_channel: str or int
+    ref_z: int
+    backup_ref_channel int or None, if int indicates the index for reference channel. Used when image does not include metadata, ref_channel is a string and channel names are included in parsed logfiles.
+
+    """
 
     _defaults = {
         "tile_size": 117,
         "ref_channel": "Brightfield",
         "ref_z": 0,
+        "backup_ref_channel": None,
     }
 
 
@@ -225,6 +232,10 @@ class Tiler(StepABC):
         self._metadata = metadata
         self.channels = metadata.get(
             "channels", list(range(metadata.get("size_c", 0)))
+        )
+        self.ref_channel = (
+            self.get_channel_index(parameters.ref_channel)
+            or self.backup_ref_channel
         )
 
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
@@ -579,23 +590,23 @@ class Tiler(StepABC):
         """Return index of reference channel."""
         return self.get_channel_index(self.parameters.ref_channel)
 
-    def get_channel_index(self, channel: str or int) -> int:
+    def get_channel_index(self, channel: str or int) -> int or None:
         """
-        Find index for channel using regex.
-
-        Returns the first matched string.
+        Find index for channel using regex. Returns the first matched string.
+        If self.channels is integers (no image metadata) it returns None.
+        If channel is integer
 
         Parameters
         ----------
         channel: string or int
             The channel or index to be used.
         """
+
+        if all(map(lambda x: isinstance(x, int), self.channels)):
+            channel = channel if isinstance(channel, int) else None
+
         if isinstance(channel, str):
             channel = find_channel_index(self.channels, channel)
-            if channel is None:
-                raise Warning(
-                    f"Reference channel {channel} not in the available channels: {self.channels}"
-                )
         return channel
 
     @staticmethod
