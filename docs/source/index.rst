@@ -8,11 +8,11 @@
 
    Home page <self>
    Installation <INSTALL.md>
+   Pipeline options <PIPELINE.md>
+   Contributing <CONTRIBUTING.md>
    ..
       Examples <examples.rst>
-   Reference <api.rst>
-   ..
-      Contributing <CONTRIBUTING.md>
+      Reference <api.rst>
    ..
 
 .. include:: ../../README.md
