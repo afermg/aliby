@@ -67,7 +67,7 @@ Static Type:
     - poetry run mypy . --exclude 'setup\.py$'
     # We can remove the flag once this is resolved https://github.com/pypa/setuptools/issues/2345
 
-# TODO add more tests before activate automatic release
+# TODO add more tests before activating auto-release
 # Bump_release:
 #   stage: release
 #   script:

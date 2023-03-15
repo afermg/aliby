@@ -56,7 +56,6 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
 def join_tracks_pair(target: np.ndarray, source: np.ndarray) -> np.ndarray:
     """
     Join two tracks and return the new value of the target.
-    TODO replace this with arrays only.
     """
     target_copy = copy(target)
     end = find_1st(target_copy[::-1], 0, cmp_larger)
