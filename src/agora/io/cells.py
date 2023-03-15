@@ -333,7 +333,7 @@ class Cells:
 
         # Apply an interval filter to focucs on a slice
         if interval is not None:
-            interval = tuple(np.array(interval) - min_consecutive_tps // 2)
+            interval = tuple(np.array(interval))
         else:
             interval = (0, window.shape[1])
 
