@@ -33,7 +33,9 @@ def get_examples_dir():
     return files("aliby").parent.parent / "examples" / "tiler"
 
 
-def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+def instatiate_image(
+    source: t.Union[str, int, t.Dict[str, str], PosixPath], **kwargs
+):
     """Wrapper to instatiate the appropiate image
 
     Parameters
@@ -48,7 +50,7 @@ def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
         print(imz.data, img.metadata)
 
     """
-    return dispatch_image(source)(source)
+    return dispatch_image(source)(source, **kwargs)
 
 
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
