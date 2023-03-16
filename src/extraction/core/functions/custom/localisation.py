@@ -129,7 +129,6 @@ def nuc_est_conv(
 
 
 def nuc_conv_3d(cell_mask, trap_image, pixel_size=0.23, spacing=0.6):
-    print(cell_mask.shape, trap_image.shape)
     cell_mask = np.stack([cell_mask] * trap_image.shape[0])
     ratio = spacing / pixel_size
     cell_fluo = trap_image[cell_mask]

@@ -249,5 +249,5 @@ class StepABC(ProcessABC):
         return self._run_tp(tp, **kwargs)
 
     def run(self):
-        # Replace run withn run_tp
+        # Replace run with run_tp
         raise Warning("Steps use run_tp instead of run")

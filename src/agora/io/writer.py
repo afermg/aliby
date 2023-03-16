@@ -172,7 +172,6 @@ class DynamicWriter:
                             # append or create new dataset
                             self._append(value, key, hgroup)
                     except Exception as e:
-                        print(key, value)
                         self._log(
                             f"{key}:{value} could not be written: {e}", "error"
                         )

@@ -407,8 +407,6 @@ class Extractor(StepABC):
         reduced = img
         if method is not None:
             reduced = reduce_z(img, method)
-        if reduced.shape[0] < 10:
-            print("ahoy")
         return reduced
 
     def extract_tp(
@@ -484,12 +482,6 @@ class Extractor(StepABC):
         # generate boolean masks for background as a list with one mask per trap
         bgs = np.array([])
         if self.params.sub_bg:
-            # bgs = [
-            #     ~np.sum(m, axis=0).astype(bool)
-            #     if np.any(m)
-            #     else np.zeros((tile_size, tile_size)).astype(bool)
-            #     for m in masks
-            # ]
             bgs = ~np.array(
                 list(
                     map(
