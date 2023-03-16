@@ -1,3 +1,4 @@
+import typing as t
 from itertools import takewhile
 from typing import Dict, List, Union
 
@@ -10,6 +11,11 @@ from agora.abc import ParametersABC, ProcessABC
 from agora.io.cells import Cells
 from agora.io.signal import Signal
 from agora.io.writer import Writer
+from agora.utils.indexing import (
+    _assoc_indices_to_3d,
+    validate_association,
+)
+from agora.utils.kymograph import get_index_as_np
 from postprocessor.core.abc import get_parameters, get_process
 from postprocessor.core.lineageprocess import LineageProcessParameters
 from postprocessor.core.reshapers.merger import Merger, MergerParameters
@@ -146,53 +152,14 @@ class PostProcessor(ProcessABC):
     def run_prepost(self):
         # TODO Split function
         """Important processes run before normal post-processing ones"""
+        record = self._signal.get_raw(self.targets["prepost"]["merger"])
+        merge_events = self.merger.run(record)
 
-        merge_events = self.merger.run(
-            self._signal[self.targets["prepost"]["merger"]]
-        )
-
-        prev_idchanges = self._signal.get_merges()
-
-        changes_history = list(prev_idchanges) + [
-            np.array(x) for x in merge_events
-        ]
-        self._writer.write("modifiers/merges", data=changes_history)
-
-        # TODO Remove this once test is wriiten for consecutive postprocesses
-        with h5py.File(self._filename, "a") as f:
-            if "modifiers/picks" in f:
-                del f["modifiers/picks"]
-
-        indices = self.picker.run(
-            self._signal[self.targets["prepost"]["picker"][0]]
-        )
-
-        combined_idx = ([], [], [])
-        trap, mother, daughter = combined_idx
-
-        lineage = self.picker.cells.mothers_daughters
-
-        if lineage.any():
-            trap, mother, daughter = lineage.T
-            combined_idx = np.vstack((trap, mother, daughter))
-
-        trap_mother = np.vstack((trap, mother)).T
-        trap_daughter = np.vstack((trap, daughter)).T
-
-        multii = pd.MultiIndex.from_arrays(
-            combined_idx,
-            names=["trap", "mother_label", "daughter_label"],
-        )
         self._writer.write(
-            "postprocessing/lineage",
-            data=multii,
-            overwrite="overwrite",
+            "modifiers/merges", data=[np.array(x) for x in merge_events]
         )
 
-        # apply merge to mother-trap_daughter
-        moset = set([tuple(x) for x in trap_mother])
-        daset = set([tuple(x) for x in trap_daughter])
-        picked_set = set([tuple(x) for x in indices])
+        lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
 
         with h5py.File(self._filename, "a") as f:
             merge_events = f["modifiers/merges"][()]
@@ -203,31 +170,41 @@ class PostProcessor(ProcessABC):
         )
         self.lineage_merged = multii
 
-        if merge_events.any():
+        indices = get_index_as_np(record)
+        if merge_events.any():  # Update lineages after merge events
+            # We validate merges that associate existing mothers and daughters
+            valid_merges, valid_indices = validate_association(merges, indices)
 
-            def search(a, b):
-                return np.where(
-                    np.in1d(
-                        np.ravel_multi_index(a.T, a.max(0) + 1),
-                        np.ravel_multi_index(b.T, a.max(0) + 1),
-                    )
-                )
+            grouped_merges = group_merges(merges)
+            # Sumarise the merges linking the first and final id
+            # Shape (X,2,2)
+            summarised = np.array(
+                [(x[0][0], x[-1][1]) for x in grouped_merges]
+            )
+            # List the indices that weill be deleted, as they are in-between
+            # Shape (Y,2)
+            to_delete = np.vstack(
+                [
+                    x.reshape(-1, x.shape[-1])[1:-1]
+                    for x in grouped_merges
+                    if len(x) > 1
+                ]
+            )
 
-            for target, source in merge_events:
-                if (
-                    tuple(source) in moset
-                ):  # update mother to lowest positive index among the two
-                    mother_ids = search(trap_mother, source)
-                    trap_mother[mother_ids] = (
-                        target[0],
-                        self.pick_mother(
-                            trap_mother[mother_ids][0][1], target[1]
-                        ),
-                    )
-                if tuple(source) in daset:
-                    trap_daughter[search(trap_daughter, source)] = target
-                if tuple(source) in picked_set:
-                    indices[search(indices, source)] = target
+            flat_indices = lineage.reshape(-1, 2)
+            valid_merges, valid_indices = validate_association(
+                summarised, flat_indices
+            )
+            # Replace
+            id_eq_matrix = compare_indices(flat_indices, to_delete)
+
+            # Update labels of merged tracklets
+            flat_indices[valid_indices] = summarised[valid_merges, 1]
+
+            # Remove labels that will be removed when merging
+            flat_indices = flat_indices[id_eq_matrix.any(axis=1)]
+
+            lineage_merged = flat_indices.reshape(-1, 2)
 
             self.lineage_merged = pd.MultiIndex.from_arrays(
                 np.unique(
@@ -240,21 +217,30 @@ class PostProcessor(ProcessABC):
                 ).T,
                 names=["trap", "mother_label", "daughter_label"],
             )
-        self._writer.write(
-            "postprocessing/lineage_merged",
-            data=self.lineage_merged,
-            overwrite="overwrite",
-        )
 
-        self._writer.write(
-            "modifiers/picks",
-            data=pd.MultiIndex.from_arrays(
-                # TODO Check if multiindices are still repeated
-                np.unique(indices, axis=0).T if indices.any() else [[], []],
-                names=["trap", "cell_label"],
-            ),
-            overwrite="overwrite",
-        )
+        # Remove after implementing outside
+        # self._writer.write(
+        #     "modifiers/picks",
+        #     data=pd.MultiIndex.from_arrays(
+        #         # TODO Check if multiindices are still repeated
+        #         np.unique(indices, axis=0).T if indices.any() else [[], []],
+        #         names=["trap", "cell_label"],
+        #     ),
+        #     overwrite="overwrite",
+        # )
+
+        # combined_idx = ([], [], [])
+
+        # multii = pd.MultiIndex.from_arrays(
+        #     combined_idx,
+        #     names=["trap", "mother_label", "daughter_label"],
+        # )
+        # self._writer.write(
+        #     "postprocessing/lineage",
+        #     data=multii,
+        #     # TODO check if overwrite is still needed
+        #     overwrite="overwrite",
+        # )
 
     @staticmethod
     def pick_mother(a, b):
@@ -357,3 +343,38 @@ class PostProcessor(ProcessABC):
         metadata: Dict,
     ):
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
+
+
+def union_find(lsts):
+    sets = [set(lst) for lst in lsts if lst]
+    merged = True
+    while merged:
+        merged = False
+        results = []
+        while sets:
+            common, rest = sets[0], sets[1:]
+            sets = []
+            for x in rest:
+                if x.isdisjoint(common):
+                    sets.append(x)
+                else:
+                    merged = True
+                    common |= x
+            results.append(common)
+        sets = results
+    return sets
+
+
+def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
+    # Return a list where the cell is present as source and target
+    # (multimerges)
+
+    sources_targets = compare_indices(merges[:, 0, :], merges[:, 1, :])
+    is_multimerge = sources_targets.any(axis=0) | sources_targets.any(axis=1)
+    is_monomerge = ~is_multimerge
+
+    multimerge_subsets = union_find(list(zip(*np.where(sources_targets))))
+    return [
+        *[merges[np.array(tuple(x))] for x in multimerge_subsets],
+        *[[event] for event in merges[is_monomerge]],
+    ]

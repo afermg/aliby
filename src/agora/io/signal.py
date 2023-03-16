@@ -11,7 +11,7 @@ import pandas as pd
 
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_df
-from agora.utils.association import validate_association
+from agora.utils.indexing import validate_association
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
 
@@ -171,7 +171,7 @@ class Signal(BridgeH5):
 
         """
         if isinstance(merges, bool):
-            merges: np.ndarray = self.get_merges() if merges else np.array([])
+            merges: np.ndarray = self.load_merges() if merges else np.array([])
         if merges.any():
             merged = apply_merges(data, merges)
         else:
@@ -292,7 +292,7 @@ class Signal(BridgeH5):
             self._log(f"Could not fetch dataset {dataset}: {e}", "error")
             raise e
 
-    def get_merges(self):
+    def load_merges(self):
         """Get merge events going up to the first level."""
         with h5py.File(self.filename, "r") as f:
             merges = f.get("modifiers/merges", np.array([]))

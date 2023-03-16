@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from utils_find_1st import cmp_larger, find_1st
 
-from agora.utils.association import validate_association
+from agora.utils.indexing import validate_association
 
 
 def apply_merges(data: pd.DataFrame, merges: np.ndarray):
