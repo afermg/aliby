@@ -30,7 +30,7 @@ from agora.io.cells import Cells
 from agora.io.writer import load_attributes
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
-from aliby.utils.plot import stretch_image
+from aliby.utils.plot import stretch_clip
 
 default_colours = {
     "Brightfield": "Greys_r",
@@ -364,7 +364,7 @@ class remoteImageViewer(BaseImageViewer):
         ), "Invalid norm argument."
 
         if norm and norm in ("l1", "l2", "max"):
-            images = {k: stretch_image(v) for k, v in images.items()}
+            images = {k: stretch_clip(v) for k, v in images.items()}
 
         images = [concat_pad(img, width, nrows) for img in images.values()]
         # TODO convert to RGB to draw fluorescence with colour
