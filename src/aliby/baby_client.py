@@ -139,11 +139,13 @@ class BabyRunner(StepABC):
             if parameters is None
             else parameters.model_config
         )
+
         tiler_z = self.tiler.shape[-3]
         model_name = self.model_config["flattener_file"]
-        assert (
-            f"{tiler_z}z" in model_name
-        ), f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
+        if tiler_z != 5:
+            assert (
+                f"{tiler_z}z" in model_name
+            ), f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
 
         self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
