@@ -80,12 +80,18 @@ It fetches the metadata from the Image object, and uses the TilerParameters valu
 ```python
 fpath = "h5/location"
 
-trap_id = 9
-trange = list(range(0, 30))
+tile_id = 9
+trange = range(0, 10)
 ncols = 8
 
 riv = remoteImageViewer(fpath)
-trap_tps = riv.get_trap_timepoints(trap_id, trange, ncols)
+trap_tps = [riv.tiler.get_tiles_timepoint(tile_id, t) for t in trange] 
+
+# You can also access labelled traps
+m_ts = riv.get_labelled_trap(tile_id=0, tps=[0])
+
+# And plot them directly
+riv.plot_labelled_trap(trap_id=0, channels=[0, 1, 2, 3], trange=range(10))
 ```
 
 Depending on the network speed can take several seconds at the moment.
@@ -95,8 +101,8 @@ For a speed-up: take fewer z-positions if you can.
 Alternatively, if you want to get all the traps at a given timepoint:
 
 ```python
-timepoint = 0
-seg_expt.get_tiles_timepoints(timepoint, tile_size=96, channels=None,
+timepoint = (4,6)
+tiler.get_tiles_timepoint(timepoint, channels=None,
                                 z=[0,1,2,3,4])
 ```
 

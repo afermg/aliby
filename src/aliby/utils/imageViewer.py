@@ -6,12 +6,12 @@ Example of usage:
 
 fpath = "/home/alan/Documents/dev/skeletons/scripts/data/16543_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/URA8_young018.h5"
 
-trap_id = 9
-trange = list(range(0, 30))
+tile_id = 9
+trange = list(range(0, 10))
 ncols = 8
 
 riv = remoteImageViewer(fpath)
-riv.plot_labelled_trap(trap_id, trange, [0], ncols=ncols)
+riv.plot_labelled_trap(tile_id, trange, [0], ncols=ncols)
 
 """
 
@@ -224,7 +224,7 @@ class RemoteImageViewer(BaseImageViewer):
 
     def get_labelled_trap(
         self,
-        trap_id: int,
+        tile_id: int,
         tps: t.Union[range, t.Collection[int]],
         channels=None,
         concatenate=True,
@@ -234,12 +234,12 @@ class RemoteImageViewer(BaseImageViewer):
         Core method to fetch traps and labels together
         """
         imgs = self.get_pos_timepoints(tps, channels=channels, **kwargs)
-        imgs_list = [x[trap_id] for x in imgs.values()]
+        imgs_list = [x[tile_id] for x in imgs.values()]
         outlines = [
-            self.cells.at_time(tp, kind="edgemask").get(trap_id, [])
+            self.cells.at_time(tp, kind="edgemask").get(tile_id, [])
             for tp in tps
         ]
-        lbls = [self.cells.labels_at_time(tp).get(trap_id, []) for tp in tps]
+        lbls = [self.cells.labels_at_time(tp).get(tile_id, []) for tp in tps]
         lbld_outlines = [
             np.stack([mask * lbl for mask, lbl in zip(maskset, lblset)]).max(
                 axis=0
@@ -253,7 +253,7 @@ class RemoteImageViewer(BaseImageViewer):
             imgs_list = np.concatenate(imgs_list, axis=1)
         return lbld_outlines, imgs_list
 
-    def get_images(self, trap_id, trange, channels, **kwargs):
+    def get_images(self, tile_id, trange, channels, **kwargs):
         """
         Wrapper to fetch images
         """
@@ -262,13 +262,13 @@ class RemoteImageViewer(BaseImageViewer):
 
         for ch in self._find_channels(channels):
             out, imgs[ch] = self.get_labelled_trap(
-                trap_id, trange, channels=[ch], **kwargs
+                tile_id, trange, channels=[ch], **kwargs
             )
         return out, imgs
 
     def plot_labelled_trap(
         self,
-        trap_id: int,
+        tile_id: int,
         channels,
         trange: t.Union[range, t.Collection[int]],
         remove_axis: bool = False,
@@ -288,7 +288,7 @@ class RemoteImageViewer(BaseImageViewer):
 
         Parameters
         ----------
-        trap_id : int
+        tile_id : int
             Identifier of trap
         channels : Union[str, int]
             Channels to use
@@ -325,7 +325,7 @@ class RemoteImageViewer(BaseImageViewer):
         nrows = int(np.ceil(len(trange) / ncols))
         width = self.tiler.tile_size * ncols
 
-        out, images = self.get_images(trap_id, trange, channels, **kwargs)
+        out, images = self.get_images(tile_id, trange, channels, **kwargs)
 
         # dilation makes outlines easier to see
         out = dilation(out).astype(float)
