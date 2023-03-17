@@ -47,7 +47,7 @@ class Signal(BridgeH5):
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
         if isinstance(dsets, str):  # no pre-processing
-            df = self.get_raw(dsets)
+            df = self.apply_prepost(dsets)
             return self.add_name(df, dsets)
         elif isinstance(dsets, list):  # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
