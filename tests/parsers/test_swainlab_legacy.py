@@ -54,7 +54,3 @@ def test_essential_meta_fields(legacy_log_interface: dict):
     assert len(
         legacy_log_interface["channels"]
     ), "Channels present but names not found"
-
-    assert len(
-        legacy_log_interface["channels"]
-    ), "Channels present but names not found"
