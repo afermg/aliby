@@ -147,7 +147,7 @@ class DatasetLocalOME(DatasetLocalABC):
         super().__init__(dpath)
         assert len(
             self.get_images()
-        ), f"No valid files found. Formats are {suffixes}"
+        ), f"No valid files found. Formats are {self._valid_suffixes}"
 
     @property
     def date(self):
