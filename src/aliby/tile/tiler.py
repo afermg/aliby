@@ -231,12 +231,13 @@ class Tiler(StepABC):
         self.image = image
         self._metadata = metadata
         self.channels = metadata.get(
-            "channels", list(range(metadata.get("size_c", 0)))
+            "channels",
+            list(range(metadata.get("size_c", 0))),
         )
-        self.ref_channel = (
-            self.get_channel_index(parameters.ref_channel)
-            or self.backup_ref_channel
-        )
+
+        self.ref_channel = self.get_channel_index(parameters.ref_channel)
+        if self.ref_channel is None:
+            self.ref_channel = self.backup_ref_channel
 
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         self.tile_locs = tile_locs
