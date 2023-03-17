@@ -42,9 +42,6 @@ class buddings(LineageProcess):
     def __init__(self, parameters: buddingsParameters):
         super().__init__(parameters)
 
-    def load_lineage(self, lineage):
-        self.lineage = lineage
-
     def run(
         self, signal: pd.DataFrame, lineage: np.ndarray = None
     ) -> pd.DataFrame:

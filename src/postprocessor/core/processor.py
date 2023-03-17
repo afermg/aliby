@@ -13,7 +13,7 @@ from agora.io.signal import Signal
 from agora.io.writer import Writer
 from agora.utils.indexing import (
     _assoc_indices_to_3d,
-    validate_association,
+    _3d_index_to_2d,
     compare_indices,
 )
 from agora.utils.kymograph import get_index_as_np
@@ -161,6 +161,7 @@ class PostProcessor(ProcessABC):
         )
 
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
+        lineage_merged = []
 
         indices = get_index_as_np(record)
         if merges.any():  # Update lineages after merge events
@@ -184,7 +185,13 @@ class PostProcessor(ProcessABC):
             # Remove repeated labels post-merging
             lineage_merged = np.unique(flat_indices.reshape(-1, 2, 2), axis=0)
 
-        self._writer.write("modifiers/lineage_merged", lineage_merged)
+        self.lineage = _3d_index_to_2d(
+            np.array(lineage_merged if len(lineage_merged) else lineage)
+        )
+
+        self._writer.write(
+            "modifiers/lineage_merged", _3d_index_to_2d(lineage_merged)
+        )
 
         picked_indices = self.picker.run(
             self._signal[self.targets["prepost"]["picker"][0]]
@@ -227,23 +234,19 @@ class PostProcessor(ProcessABC):
             else:
                 parameters = self.parameters_classfun[process].default()
 
+            loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
-                lineage = self._signal.lineage(
-                    # self.parameters.lineage_location
-                )
-                loaded_process = self.classfun[process](parameters)
-                loaded_process.lineage = lineage
+                loaded_process.lineage = self.lineage
 
-            else:
-                loaded_process = self.classfun[process](parameters)
-
+            if process == "bud_metric":
+                print("stop")
             for dataset in datasets:
                 if isinstance(dataset, list):  # multisignal process
                     signal = [self._signal[d] for d in dataset]
                 elif isinstance(dataset, str):
                     signal = self._signal[dataset]
                 else:
-                    raise ("Incorrect dataset")
+                    raise Exception("Unavailable record")
 
                 if len(signal):
                     result = loaded_process.run(signal)
