@@ -567,12 +567,8 @@ class Writer(BridgeH5):
                 )
                 dset = f[indices_path]
                 dset[()] = df.index.get_level_values(level=name).tolist()
-            # create dataset and write columns
-            if (
-                df.columns.dtype == int
-                or df.columns.dtype == np.dtype("uint")
-                or df.columns.name == "timepoint"
-            ):
+
+                # create dataset and write time points as columns
                 tp_path = path + "/timepoint"
                 f.create_dataset(
                     name=tp_path,
