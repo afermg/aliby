@@ -549,7 +549,7 @@ class Writer(BridgeH5):
                 compression=kwargs.get("compression", None),
             )
             dset = f[values_path]
-            dset[()] = df.values
+            dset[()] = df.values.astype("float16")
 
             # create dateset and write indices
             if not len(df):  # Only write more if not empty

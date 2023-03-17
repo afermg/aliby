@@ -110,22 +110,30 @@ def _assoc_indices_to_3d(ndarray: np.ndarray):
 
     This is useful when converting a signal multiindex before comparing association.
     """
-    columns = np.arange(ndarray.shape[1])
+    result = ndarray
+    if len(ndarray) and ndarray.ndim > 1:
+        columns = np.arange(ndarray.shape[1])
 
-    return np.stack(
-        (
-            ndarray[:, np.delete(columns, -1)],
-            ndarray[:, np.delete(columns, -2)],
-        ),
-        axis=1,
-    )
+        result = np.stack(
+            (
+                ndarray[:, np.delete(columns, -1)],
+                ndarray[:, np.delete(columns, -2)],
+            ),
+            axis=1,
+        )
+    return result
 
 
 def _3d_index_to_2d(array: np.ndarray):
     """
     Opposite to _assoc_indices_to_3d.
     """
-    return np.concatenate((array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1)
+    result = array
+    if len(array):
+        result = np.concatenate(
+            (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
+        )
+    return result
 
 
 def compare_indices(x: np.ndarray, y: np.ndarray) -> np.ndarray:
