@@ -34,7 +34,7 @@ New grammar
 
 import logging
 import typing as t
-from pathlib import PosixPath
+from pathlib import Path
 
 import pandas as pd
 from pyparsing import (
@@ -61,7 +61,7 @@ class HeaderEndNotFound(Exception):
         self.errors = errors
 
 
-def extract_header(filepath: PosixPath):
+def extract_header(filepath: Path):
     # header_contents = ""
     with open(filepath, "r") as f:
         try:
@@ -299,5 +299,5 @@ def parse_x(string: str, type: str, **kwargs):
     return eval(f"parse_{type}(string, **kwargs)")
 
 
-def parse_from_swainlab_grammar(filepath: t.Union[str, PosixPath]):
+def parse_from_swainlab_grammar(filepath: t.Union[str, Path]):
     return parse_from_grammar(filepath, grammar)

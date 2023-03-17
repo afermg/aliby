@@ -5,7 +5,7 @@ import re
 import typing as t
 from collections import Counter
 from datetime import datetime
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import numpy as np
 from logfile_parser import Parser
@@ -392,7 +392,7 @@ def get_chs(exptype):
 
 def load_annot_from_cache(exp_id, cache_dir="cache/"):
     # TODO Documentation
-    if type(cache_dir) is not PosixPath:
+    if type(cache_dir) is not Path:
         cache_dir = Path(cache_dir)
 
     annot_sets = {}

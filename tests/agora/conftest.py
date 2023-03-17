@@ -3,7 +3,7 @@
 Load data necessary to test agora.
 """
 import typing as t
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +14,7 @@ def data_dir():
 
 
 @pytest.fixture(scope="module")
-def yaml_file(data_dir: PosixPath):
+def yaml_file(data_dir: Path):
     data = data_dir / "parameters.yaml"
     if not data.exists():
         pytest.fail(f"There is no file at {str( data_dir )}.")

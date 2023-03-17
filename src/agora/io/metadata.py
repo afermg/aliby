@@ -1,5 +1,5 @@
 """
-Anthology of interfaces for different parsers and lack of them.
+Anthology of interfaces fordispatch_metadata_parse different parsers and lack of them.
 
 ALIBY decides on using different metadata parsers based on two elements:
 
@@ -16,7 +16,7 @@ import logging
 import os
 import typing as t
 from datetime import datetime
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import pandas as pd
 from pytz import timezone
@@ -176,7 +176,7 @@ def get_meta_from_legacy(parsed_metadata: dict):
     return result
 
 
-def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
+def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     """
     Dispatcher function that determines which parser to use based on the file ending.
 
@@ -205,7 +205,7 @@ def parse_swainlab_metadata(filedir: t.Union[str, PosixPath]):
     return minimal_meta
 
 
-def dispatch_metadata_parser(filepath: t.Union[str, PosixPath]):
+def dispatch_metadata_parser(filepath: t.Union[str, Path]):
     """
     Function to dispatch different metadata parsers that convert logfiles into a
     basic metadata dictionary. Currently only contains the swainlab log parsers.
@@ -222,7 +222,7 @@ def dispatch_metadata_parser(filepath: t.Union[str, PosixPath]):
     return parsed_meta
 
 
-def dir_to_meta(path: PosixPath, suffix="tiff"):
+def dir_to_meta(path: Path, suffix="tiff"):
     filenames = list(path.glob(f"*.{suffix}"))
 
     try:

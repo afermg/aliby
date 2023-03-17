@@ -5,7 +5,7 @@ import typing as t
 from abc import ABC, abstractproperty
 from collections import Counter
 from functools import cached_property as property
-from pathlib import Path, PosixPath
+from pathlib import Path
 from typing import Dict, List, Union
 
 import h5py
@@ -21,7 +21,7 @@ from postprocessor.chainer import Chainer
 class Grouper(ABC):
     """Base grouper class."""
 
-    def __init__(self, dir: Union[str, PosixPath]):
+    def __init__(self, dir: Union[str, Path]):
         """Find h5 files and load a chain for each one."""
         path = Path(dir)
         assert path.exists(), f"{str(dir)} does not exist"

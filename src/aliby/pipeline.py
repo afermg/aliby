@@ -6,7 +6,7 @@ import traceback
 import typing as t
 from copy import copy
 from importlib.metadata import version
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -77,7 +77,7 @@ class PipelineParameters(ParametersABC):
             Parameters for post-processing.
         """
         expt_id = general.get("expt_id", 19993)
-        if isinstance(expt_id, PosixPath):
+        if isinstance(expt_id, Path):
             assert expt_id.exists()
 
             expt_id = str(expt_id)
@@ -373,7 +373,7 @@ class Pipeline(ProcessABC):
 
     def run_one_position(
         self,
-        name_image_id: t.Tuple[str, str or PosixPath or int],
+        name_image_id: t.Tuple[str, str or Path or int],
         index: t.Optional[int] = None,
     ):
         """Set up and run a pipeline for one position."""
@@ -589,7 +589,7 @@ class Pipeline(ProcessABC):
     # older hdf5 file formats.
     def _load_config_from_file(
         self,
-        filename: PosixPath,
+        filename: Path,
         process_from: t.Dict[str, int],
         trackers_state: t.List,
         overwrite: t.Dict[str, bool],
@@ -623,7 +623,7 @@ class Pipeline(ProcessABC):
     def _setup_pipeline(
         self, image_id: int
     ) -> t.Tuple[
-        PosixPath,
+        Path,
         MetaData,
         t.Dict,
         int,

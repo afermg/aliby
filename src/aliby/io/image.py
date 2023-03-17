@@ -16,7 +16,7 @@ ImageDummy is a dummy class for silent failure testing.
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -35,13 +35,13 @@ def get_examples_dir():
 
 
 def instantiate_image(
-    source: t.Union[str, int, t.Dict[str, str], PosixPath], **kwargs
+    source: t.Union[str, int, t.Dict[str, str], Path], **kwargs
 ):
     """Wrapper to instatiate the appropiate image
 
     Parameters
     ----------
-    source : t.Union[str, int, t.Dict[str, str], PosixPath]
+    source : t.Union[str, int, t.Dict[str, str], Path]
         Image identifier
 
     Examples
@@ -54,7 +54,7 @@ def instantiate_image(
     return dispatch_image(source)(source, **kwargs)
 
 
-def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     """
     Wrapper to pick the appropiate Image class depending on the source of data.
     """
@@ -63,7 +63,7 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
 
         instatiator = Image
     elif isinstance(source, dict) or (
-        isinstance(source, (str, PosixPath)) and Path(source).is_dir()
+        isinstance(source, (str, Path)) and Path(source).is_dir()
     ):
         if Path(source).suffix == ".zarr":
             instatiator = ImageZarr
@@ -84,7 +84,7 @@ class BaseLocalImage(ABC):
 
     _default_dimorder = "tczyx"
 
-    def __init__(self, path: t.Union[str, PosixPath]):
+    def __init__(self, path: t.Union[str, Path]):
         # If directory, assume contents are naturally sorted
         self.path = Path(path)
 
@@ -252,7 +252,7 @@ class ImageDir(BaseLocalImage):
     - Provides Dimorder as it is set in the filenames, or expects order during instatiation
     """
 
-    def __init__(self, path: t.Union[str, PosixPath], **kwargs):
+    def __init__(self, path: t.Union[str, Path], **kwargs):
         super().__init__(path)
         self.image_id = str(self.path.stem)
 
@@ -308,7 +308,7 @@ class ImageZarr(BaseLocalImage):
     skeletons/scripts/howto_omero/convert_clone_zarr_to_tiff.py
     """
 
-    def __init__(self, path: t.Union[str, PosixPath], **kwargs):
+    def __init__(self, path: t.Union[str, Path], **kwargs):
         super().__init__(path)
         self.set_meta()
         try:

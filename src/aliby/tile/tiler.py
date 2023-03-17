@@ -18,7 +18,7 @@ import re
 import typing as t
 import warnings
 from functools import lru_cache
-from pathlib import PosixPath
+from pathlib import Path
 
 import dask.array as da
 import h5py
@@ -302,7 +302,7 @@ class Tiler(StepABC):
     def from_h5(
         cls,
         image,
-        filepath: t.Union[str, PosixPath],
+        filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
     ):
         """

@@ -7,7 +7,7 @@ import re
 import warnings
 from abc import abstractmethod
 from collections import Counter
-from pathlib import PosixPath
+from pathlib import Path
 from typing import Dict, Iterable, Tuple, Union
 
 import h5py
@@ -98,7 +98,7 @@ class Compiler(ProcessABC):
 
 
 class ExperimentCompiler(Compiler):
-    def __init__(self, CompilerParameters, exp_path: PosixPath):
+    def __init__(self, CompilerParameters, exp_path: Path):
         super().__init__(CompilerParameters)
         self.load_data(exp_path)
 
@@ -117,7 +117,7 @@ class ExperimentCompiler(Compiler):
             )
         }
 
-    def load_data(self, path: PosixPath):
+    def load_data(self, path: Path):
         self.grouper = NameGrouper(path)
         self.meta = Meta(self.grouper.files[0])
 

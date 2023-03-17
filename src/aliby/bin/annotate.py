@@ -17,7 +17,7 @@ import typing as t
 
 from copy import copy
 from datetime import datetime
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -135,7 +135,7 @@ def _parse_input(value: str, valid_values: t.Tuple[int]):
 
 def write_annotation(
     experiment_position: str,
-    out_dir: PosixPath,
+    out_dir: Path,
     annotation: str,
     location_stack: t.Tuple[t.Tuple[int, int, int], np.ndarray],
 ):

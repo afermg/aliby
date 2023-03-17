@@ -10,7 +10,7 @@ import shutil
 import time
 import typing as t
 from abc import ABC, abstractproperty, abstractmethod
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
@@ -57,7 +57,7 @@ class DatasetLocalABC(ABC):
     _valid_suffixes = ("tiff", "png", "zarr")
     _valid_meta_suffixes = ("txt", "log")
 
-    def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
+    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         self.path = Path(dpath)
 
     def __enter__(self):
@@ -110,7 +110,7 @@ class DatasetLocalABC(ABC):
 class DatasetLocalDir(DatasetLocalABC):
     """Find paths to a data set, comprising multiple images in different folders."""
 
-    def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
+    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
 
     @property
@@ -143,7 +143,7 @@ class DatasetLocalDir(DatasetLocalABC):
 class DatasetLocalOME(DatasetLocalABC):
     """Find names of images in a folder, assuming images in OME-TIFF format."""
 
-    def __init__(self, dpath: t.Union[str, PosixPath], *args, **kwargs):
+    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
         assert len(
             self.get_images()
