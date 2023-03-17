@@ -61,23 +61,6 @@ class ExtractorParameters(ParametersABC):
         self.sub_bg = sub_bg
         self.multichannel_ops = multichannel_ops
 
-    @staticmethod
-    def guess_from_meta(store_name: str, suffix="fast"):
-        """
-        Find the microscope name from the h5 metadata.
-
-        Parameters
-        ----------
-        store_name : str or Path
-            For a h5 file
-        suffix : str
-            Added at the end of the predicted parameter set
-        """
-        with h5py.File(store_name, "r") as f:
-            microscope = f["/"].attrs.get("microscope")
-        assert microscope, "No metadata found"
-        return "_".join((microscope, suffix))
-
     @classmethod
     def default(cls):
         return cls({})

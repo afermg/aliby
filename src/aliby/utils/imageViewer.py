@@ -30,7 +30,7 @@ from agora.io.cells import Cells
 from agora.io.writer import load_attributes
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
-from aliby.utils.plot import stretch_image
+from aliby.utils.plot import stretch_clip
 
 default_colours = {
     "Brightfield": "Greys_r",
@@ -54,28 +54,6 @@ def custom_imshow(a, norm=None, cmap=None, *args, **kwargs):
         interpolation_stage="rgba",
         **kwargs,
     )
-
-
-class localImageViewer:
-    """
-    Fast access to Images segmented locally without tiling
-    from image.h5 objects.
-    """
-
-    def __init__(self, h5file, data_source=None):
-        self._hdf = h5py.File(h5file)
-        self.positions = list(self._hdf.keys())
-        self.current_position = self.positions[0]
-
-    def plot_position(self, channel=0, tp=0, z=0, stretch=True):
-        pixvals = self._hdf[self.current_position][channel, tp, ..., z]
-        if stretch:
-            minval = np.percentile(pixvals, 0.5)
-            maxval = np.percentile(pixvals, 99.5)
-            pixvals = np.clip(pixvals, minval, maxval)
-            pixvals = ((pixvals - minval) / (maxval - minval)) * 255
-
-        Image.fromarray(pixvals.astype(np.uint8))
 
 
 class BaseImageViewer(ABC):
@@ -112,6 +90,7 @@ class LocalImageViewer(BaseImageViewer):
     """
     Tool to generate figures from local files, either zarr or files organised
     in directories.
+    TODO move common functionality from RemoteImageViewer to BaseImageViewer
     """
 
     def __init__(self, results_path: str, data_path: str):
@@ -133,7 +112,7 @@ class LocalImageViewer(BaseImageViewer):
         self.cells = Cells.from_source(results_path)
 
 
-class remoteImageViewer(BaseImageViewer):
+class RemoteImageViewer(BaseImageViewer):
     """
     This ImageViewer combines fetching remote images with tiling and outline display.
     """
@@ -364,7 +343,7 @@ class remoteImageViewer(BaseImageViewer):
         ), "Invalid norm argument."
 
         if norm and norm in ("l1", "l2", "max"):
-            images = {k: stretch_image(v) for k, v in images.items()}
+            images = {k: stretch_clip(v) for k, v in images.items()}
 
         images = [concat_pad(img, width, nrows) for img in images.values()]
         # TODO convert to RGB to draw fluorescence with colour
