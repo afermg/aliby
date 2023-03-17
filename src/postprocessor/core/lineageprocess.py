@@ -2,6 +2,7 @@
 import typing as t
 from abc import abstractmethod
 
+import h5py
 import numpy as np
 import pandas as pd
 
@@ -52,11 +53,17 @@ class LineageProcess(PostProcessABC):
             data, lineage=lineage, *extra_data
         )
 
-    def get_lineage_information(self, signal):
-        if "mother_label" in signal.index.names:
-            lineage = get_index_as_np(signal)
-        elif self.cells is not None:
-            lineage = self.cells.mothers_daughters
-        else:
-            raise Exception("No linage information found")
+    def get_lineage_information(self, signal, merged=True):
+
+        with h5py.File(self.cells.filename, "a") as f:
+            if "modifiers/lineage_merged" in f and merged:
+                lineage = f.get("modifiers/lineage_merged")[()]
+            elif "modifiers/lineage" in f:
+                lineage = f.get("modifiers/lineage_merged")[()]
+            elif "mother_label" in signal.index.names:
+                lineage = get_index_as_np(signal)
+            elif self.cells is not None:
+                lineage = self.cells.mothers_daughters
+            else:
+                raise Exception("No linage information found")
         return lineage
