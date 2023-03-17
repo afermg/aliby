@@ -160,7 +160,9 @@ class PostProcessor(ProcessABC):
             "modifiers/merges", data=[np.array(x) for x in merges]
         )
 
-        lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
+        lineage = self.picker.cells.mothers_daughters
+        if lineage.any():
+            lineage = _assoc_indices_to_3d(lineage)
         lineage_merged = []
 
         indices = get_index_as_np(record)
