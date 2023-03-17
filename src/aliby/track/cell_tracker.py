@@ -6,7 +6,7 @@ import pickle
 import typing as t
 from collections import Counter
 from os.path import dirname, join
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -70,11 +70,11 @@ class CellTracker(FeatureCalculator):
         if extrafeats is None:
             extrafeats = ()
 
-        if type(model) is str or type(model) is PosixPath:
+        if type(model) is str or type(model) is Path:
             with open(Path(model), "rb") as f:
                 model = pickle.load(f)
 
-        if type(bak_model) is str or type(bak_model) is PosixPath:
+        if type(bak_model) is str or type(bak_model) is Path:
             with open(Path(bak_model), "rb") as f:
                 bak_model = pickle.load(f)
 

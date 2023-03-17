@@ -1,7 +1,7 @@
 import logging
 import typing as t
 from itertools import groupby
-from pathlib import Path, PosixPath
+from pathlib import Path
 from functools import lru_cache, cached_property
 
 import h5py
@@ -26,13 +26,13 @@ class Cells:
     """
 
     def __init__(self, filename, path="cell_info"):
-        self.filename: t.Optional[t.Union[str, PosixPath]] = filename
+        self.filename: t.Optional[t.Union[str, Path]] = filename
         self.cinfo_path: t.Optional[str] = path
         self._edgemasks: t.Optional[str] = None
         self._tile_size: t.Optional[int] = None
 
     @classmethod
-    def from_source(cls, source: t.Union[PosixPath, str]):
+    def from_source(cls, source: t.Union[Path, str]):
         return cls(Path(source))
 
     def _log(self, message: str, level: str = "warn"):

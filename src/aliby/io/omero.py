@@ -5,7 +5,7 @@ Tools to manage I/O using a remote OMERO server.
 import re
 import typing as t
 from abc import abstractmethod
-from pathlib import PosixPath
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -115,7 +115,7 @@ class BridgeOmero:
     @classmethod
     def server_info_from_h5(
         cls,
-        filepath: t.Union[str, PosixPath],
+        filepath: t.Union[str, Path],
     ):
         """Return server info from hdf5 file.
 
@@ -123,7 +123,7 @@ class BridgeOmero:
         ----------
         cls : BridgeOmero
             BridgeOmero class
-        filepath : t.Union[str, PosixPath]
+        filepath : t.Union[str, Path]
             Location of hdf5 file.
 
         Examples
@@ -150,7 +150,7 @@ class BridgeOmero:
         return valid_annotations
 
     def add_file_as_annotation(
-        self, file_to_upload: t.Union[str, PosixPath], **kwargs
+        self, file_to_upload: t.Union[str, Path], **kwargs
     ):
         """Upload annotation to object on OMERO server. Only valid in subclasses.
 
@@ -252,7 +252,7 @@ class Dataset(BridgeOmero):
     @classmethod
     def from_h5(
         cls,
-        filepath: t.Union[str, PosixPath],
+        filepath: t.Union[str, Path],
     ):
         """Instatiate Dataset from a hdf5 file.
 
@@ -260,7 +260,7 @@ class Dataset(BridgeOmero):
         ----------
         cls : Image
             Image class
-        filepath : t.Union[str, PosixPath]
+        filepath : t.Union[str, Path]
             Location of hdf5 file.
 
         Examples
@@ -299,7 +299,7 @@ class Image(BridgeOmero):
     @classmethod
     def from_h5(
         cls,
-        filepath: t.Union[str, PosixPath],
+        filepath: t.Union[str, Path],
     ):
         """Instatiate Image from a hdf5 file.
 
@@ -307,7 +307,7 @@ class Image(BridgeOmero):
         ----------
         cls : Image
             Image class
-        filepath : t.Union[str, PosixPath]
+        filepath : t.Union[str, Path]
             Location of hdf5 file.
 
         Examples

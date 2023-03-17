@@ -3,7 +3,7 @@ import typing as t
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import copy
-from pathlib import Path, PosixPath
+from pathlib import Path
 from time import perf_counter
 from typing import Union
 
@@ -60,14 +60,14 @@ class ParametersABC(ABC):
         else:
             return iterable
 
-    def to_yaml(self, path: Union[PosixPath, str] = None):
+    def to_yaml(self, path: Union[Path, str] = None):
         """
         Returns a yaml stream of the attributes of the class instance.
         If path is provided, the yaml stream is saved there.
 
         Parameters
         ----------
-        path : Union[PosixPath, str]
+        path : Union[Path, str]
             Output path.
         """
         if path:
@@ -80,7 +80,7 @@ class ParametersABC(ABC):
         return cls(**d)
 
     @classmethod
-    def from_yaml(cls, source: Union[PosixPath, str]):
+    def from_yaml(cls, source: Union[Path, str]):
         """
         Returns instance from a yaml filename or stdin
         """
@@ -211,7 +211,7 @@ class ProcessABC(ABC):
 def check_type_recursive(val1, val2):
     same_types = True
     if not isinstance(val1, type(val2)) and not all(
-        type(x) in (PosixPath, str) for x in (val1, val2)  # Ignore str->path
+        type(x) in (Path, str) for x in (val1, val2)  # Ignore str->path
     ):
         return False
     if not isinstance(val1, t.Iterable) and not isinstance(val2, t.Iterable):

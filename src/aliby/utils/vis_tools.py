@@ -11,7 +11,7 @@ from copy import copy
 import numpy as np
 
 from agora.io.cells import Cells
-from aliby.io.image import instatiate_image
+from aliby.io.image import instantiate_image
 from aliby.tile.tiler import Tiler, TilerParameters
 
 
@@ -21,7 +21,7 @@ def fetch_tc(
     """
     Return 3D ndarray with (Z,Y,X) for a given pair of time point and channel.
     """
-    with instatiate_image(image_path) as img:
+    with instantiate_image(image_path) as img:
         tiler = Tiler.from_h5(img, results_path, TilerParameters.default())
         tc = tiler.get_tp_data(t, c)
     return tc
@@ -55,7 +55,7 @@ def get_tiles_at_times(
     """
 
     # Get the correct tile in space and time
-    with instatiate_image(image_path) as image:
+    with instantiate_image(image_path) as image:
         tiler = Tiler.from_h5(image, results_path, TilerParameters.default())
         tp_channel_stack = [
             _dispatch_tile_reduction(tile_reduction)(

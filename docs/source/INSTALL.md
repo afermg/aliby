@@ -125,3 +125,45 @@ docker-compose stop
 Segmentation has been tested on: Mac OSX Mojave, Ubuntu 20.04 and Arch Linux.
 Data processing has been tested on all the above and Windows 11.
 
+### Detailed Windows installation
+#### Create environment
+Open anaconda powershell as administrator
+```shell  script
+conda create -n devaliby2 -c conda-forge python=3.8 omero-py
+conda activate devaliby2
+```
+
+#### Install poetry
+    You may have to specify the python executable to get this to work :
+```shell script
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | C:\Users\USERNAME\Anaconda3\envs\devaliby2\python.exe -
+
+```    Also specify full path when running poetry (there must be a way to sort this)
+
+- Clone the repository (Assuming you have ssh properly set up)
+```shell script
+git clone git@gitlab.com:aliby/aliby.git
+cd aliby
+poetry install --all-extras
+```
+
+You may need to run the full poetry path twice - first time gave an error message, worked second time
+
+```shell script
+C:\Users\v1iclar2\AppData\Roaming\Python\Scripts\poetry install --all-extras
+```
+
+confirm installation of aliby - python...import aliby - get no error message
+
+#### Access the virtual environment from the IDE (e.g., PyCharm)
+New project
+In location - navigate to the aliby folder (eg c::/Users/Public/Repos/aliby
+
+- Select the correct python interpreter
+click the interpreter name at the bottom right
+click add local interpreter
+on the left click conda environment
+click the 3 dots to the right of the interpreter path and navigate to the python executable from the environment created above (eg C:\Users\v1iclar2\Anaconda3\envs\devaliby2\python.exe)
+
+#### Potential Windows issues
+- Sometimes the library pywin32 gives trouble, just install it using pip or conda 

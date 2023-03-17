@@ -1,7 +1,7 @@
 # File with defaults for ease of use
 import re
 import typing as t
-from pathlib import PosixPath
+from pathlib import Path
 import h5py
 
 # should we move these functions here?
@@ -9,7 +9,7 @@ from aliby.tile.tiler import find_channel_name
 
 
 def exparams_from_meta(
-    meta: t.Union[dict, PosixPath, str], extras: t.Collection[str] = ["ph"]
+    meta: t.Union[dict, Path, str], extras: t.Collection[str] = ["ph"]
 ):
     """
     Obtain parameters from metadata of the h5 file.
@@ -99,7 +99,7 @@ def exparams_from_meta(
     return base
 
 
-def load_metadata(file: t.Union[str, PosixPath], group="/"):
+def load_metadata(file: t.Union[str, Path], group="/"):
     """Get meta data from an h5 file."""
     with h5py.File(file, "r") as f:
         meta = dict(f[group].attrs.items())

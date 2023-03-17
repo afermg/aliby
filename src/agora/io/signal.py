@@ -2,7 +2,7 @@ import logging
 import typing as t
 from copy import copy
 from functools import cached_property, lru_cache
-from pathlib import PosixPath
+from pathlib import Path
 
 import bottleneck as bn
 import h5py
@@ -23,7 +23,7 @@ class Signal(BridgeH5):
     Signal assumes that the metadata and data are accessible to perform time-adjustments and apply previously recorded post-processes.
     """
 
-    def __init__(self, file: t.Union[str, PosixPath]):
+    def __init__(self, file: t.Union[str, Path]):
         """Define index_names for dataframes, candidate fluorescence channels, and composite statistics."""
         super().__init__(file, flag=None)
         self.index_names = (

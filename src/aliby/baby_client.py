@@ -6,7 +6,7 @@ import logging
 import re
 import time
 import typing as t
-from pathlib import Path, PosixPath
+from pathlib import Path
 from time import perf_counter
 
 import baby.errors
@@ -108,9 +108,7 @@ class BabyParameters(ParametersABC):
             tf_version=2,
         )
 
-    def update_baby_modelset(
-        self, path: t.Union[str, PosixPath, t.Dict[str, str]]
-    ):
+    def update_baby_modelset(self, path: t.Union[str, Path, t.Dict[str, str]]):
         """
         Replace default BABY model and flattener with another one from a folder outputted
         by our standard retraining script.
