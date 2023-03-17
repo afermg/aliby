@@ -4,7 +4,6 @@
    contain the root `toctree` directive.
 
 .. toctree::
-   :hidden:
 
    Home page <self>
    Installation <INSTALL.md>

@@ -1,1 +1,3 @@
-#!/usr/bin/env jupyter
+"""
+Command Line Interface utilities.
+"""

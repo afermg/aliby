@@ -1,4 +1,8 @@
-#!/usr/bin/env jupyter
+"""
+Extracted from the baby repository. Bud Tracker algorithm to link
+cell outlines as mothers and buds.
+"""
+# /usr/bin/env jupyter
 
 import pickle
 from os.path import join

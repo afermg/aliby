@@ -11,11 +11,12 @@ End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentati
 ## Quickstart Documentation
 Installation of [VS Studio](https://visualstudio.microsoft.com/downloads/#microsoft-visual-c-redistributable-for-visual-studio-2022) Native MacOS support for is under work, but you can use containers (e.g., Docker, Podman) in the meantime.
 
-For analysing local data
+To analyse local data
  ```bash
-pip install aliby # aliby[network] if you want to access an OMERO server
+pip install aliby 
  ```
-
+ Add any of the optional flags `omero` and `utils` (e.g., `pip install aliby[omero, utils]`). `omero` provides tools to connect with an OMERO server and `utils` provides visualisation, user interface and additional deep learning tools.
+  
 See our [installation instructions]( https://aliby.readthedocs.io/en/latest/INSTALL.html ) for more details.
 
 ### CLI

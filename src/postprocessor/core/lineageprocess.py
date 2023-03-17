@@ -21,7 +21,7 @@ class LineageProcessParameters(ParametersABC):
 
 class LineageProcess(PostProcessABC):
     """
-    Lineage process that must be passed a (N,3) lineage matrix (where the coliumns are trap, mother, daughter respectively)
+    Lineage process that must be passed a (N,3) lineage matrix (where the columns are trap, mother, daughter respectively)
     """
 
     def __init__(self, parameters: LineageProcessParameters):
