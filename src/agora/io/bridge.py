@@ -162,5 +162,8 @@ def image_creds_from_h5(fpath: str):
     attrs = attrs_from_h5(fpath)
     return (
         attrs["image_id"],
-        yaml.safe_load(attrs["parameters"])["general"]["server_info"],
+        {
+            k: yaml.safe_load(attrs["parameters"])["general"][k]
+            for k in ("username", "password", "host")
+        },
     )
