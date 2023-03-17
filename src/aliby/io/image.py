@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path, PosixPath
 
 import dask.array as da
+import numpy as np
 import xmltodict
 import zarr
 from dask.array.image import imread
@@ -33,7 +34,9 @@ def get_examples_dir():
     return files("aliby").parent.parent / "examples" / "tiler"
 
 
-def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
+def instantiate_image(
+    source: t.Union[str, int, t.Dict[str, str], PosixPath], **kwargs
+):
     """Wrapper to instatiate the appropiate image
 
     Parameters
@@ -44,18 +47,18 @@ def instatiate_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     Examples
     --------
     image_path = "path/to/image"]
-    with instatiate_image(image_path) as img:
+    with instantiate_image(image_path) as img:
         print(imz.data, img.metadata)
 
     """
-    return dispatch_image(source)(source)
+    return dispatch_image(source)(source, **kwargs)
 
 
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], PosixPath]):
     """
     Wrapper to pick the appropiate Image class depending on the source of data.
     """
-    if isinstance(source, int):
+    if isinstance(source, (int, np.int64)):
         from aliby.io.omero import Image
 
         instatiator = Image

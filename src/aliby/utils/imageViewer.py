@@ -27,8 +27,7 @@ from PIL import Image
 from skimage.morphology import dilation
 
 from agora.io.cells import Cells
-from agora.io.writer import load_attributes
-from aliby.io.image import dispatch_image
+from agora.io.metadata import dispatch_metadata_parser
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.utils.plot import stretch_clip
 
@@ -82,11 +81,14 @@ class BaseImageViewer(ABC):
     def __init__(self, fpath):
 
         self._fpath = fpath
-        attrs = load_attributes(fpath)
+        attrs = dispatch_metadata_parser(fpath.parent)
         self._logfiles_meta = {}
-        self._logfiles_meta["channels"] = attrs["channels/channel"]
+        # self._logfiles_meta["channels"] =
 
         self.image_id = attrs.get("image_id")
+        if self.image_id is None:
+            with h5py.File(fpath, "r") as f:
+                self.image_id = f.attrs.get("image_id")
 
         assert self.image_id is not None, "No valid image_id found in metadata"
 
@@ -133,7 +135,7 @@ class LocalImageViewer(BaseImageViewer):
         self.cells = Cells.from_source(results_path)
 
 
-class remoteImageViewer(BaseImageViewer):
+class RemoteImageViewer(BaseImageViewer):
     """
     This ImageViewer combines fetching remote images with tiling and outline display.
     """
@@ -143,20 +145,16 @@ class remoteImageViewer(BaseImageViewer):
         results_path: str,
         server_info: t.Dict[str, str],
     ):
-        self.super().__init__(results_path)
+        super().__init__(results_path)
 
-        from aliby.io.omero import Image as OImage
-
-        self._image_class = OImage
+        from aliby.io.omero import UnsafeImage as OImage
 
         self._server_info = (
             server_info or attrs["parameters"]["general"]["server_info"]
         )
 
-        with dispatch_image(self.image_id)(
-            self.image_id, **self.server_info
-        ) as image:
-            self.tiler = Tiler.from_hdf5(image, results_path)
+        unsafe_image = OImage(self.image_id, **self._server_info)
+        self.tiler = Tiler.from_h5(unsafe_image, results_path)
 
         self.cells = Cells.from_source(results_path)
 
@@ -232,6 +230,7 @@ class remoteImageViewer(BaseImageViewer):
         z = z or self.tiler.ref_z
 
         ch_tps = [(channels[0], tp) for tp in tps]
+
         with self._image_class(self.image_id, **server_info) as image:
             self.tiler.image = image.data
             for ch, tp in ch_tps:
