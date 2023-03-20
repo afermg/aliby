@@ -109,17 +109,14 @@ def _assoc_indices_to_3d(ndarray: np.ndarray):
     Convert the last column to a new row while repeating all previous indices.
 
     This is useful when converting a signal multiindex before comparing association.
+
+    Assumes the input array has shape (N,3)
     """
     result = ndarray
     if len(ndarray) and ndarray.ndim > 1:
-        columns = np.arange(ndarray.shape[1])
-
-        result = np.stack(
-            (
-                ndarray[:, np.delete(columns, -1)],
-                ndarray[:, np.delete(columns, -2)],
-            ),
-            axis=1,
+        result = np.transpose(
+            np.hstack((ndarray[:, [0]], ndarray)).reshape(-1, 2, 2),
+            axes=[0, 2, 1],
         )
     return result
 
