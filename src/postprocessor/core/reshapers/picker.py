@@ -100,7 +100,7 @@ class Picker(LineageProcess):
             self._log(f"No lineage assignment")
             indices = np.array([])
 
-        return np.array([tuple(map(_str_to_int, x)) for x in indices])
+        return np.array([tuple(map(_str_to_int, x)) for x in indices]).T
 
     def switch_case(
         self,

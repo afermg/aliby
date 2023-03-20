@@ -166,7 +166,6 @@ class PostProcessor(ProcessABC):
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
         lineage_merged = []
 
-        indices = get_index_as_np(record)
         if merges.any():  # Update lineages after merge events
 
             grouped_merges = group_merges(merges)
@@ -233,9 +232,6 @@ class PostProcessor(ProcessABC):
 
             else:
                 parameters = self.parameters_classfun[process].default()
-
-            if process == "buddings":
-                print("stop")
 
             loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
