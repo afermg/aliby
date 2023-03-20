@@ -14,7 +14,7 @@ readme = "README.md"
 
 [tool.poetry.scripts]
 aliby-run = "aliby.bin.run:run"
-aliby-annotate = "aliby.bin.annotate:annotate_image"
+aliby-annotate = "aliby.bin.annotate:annotate"
 aliby-visualise = "aliby.bin.visualise:napari_overlay"
 
 [build-system]
