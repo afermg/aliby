@@ -129,11 +129,11 @@ class Signal(BridgeH5):
         Returns an array with three columns: the tile id, the mother label, and the daughter label.
         """
         if lineage_location is None:
-            lineage_location = "postprocessing/lineage"
-            if merged:
-                lineage_location += "_merged"
+            lineage_location = "postprocessing/lineage_merged"
         with h5py.File(self.filename, "r") as f:
-            tile_mo_da = f[lineage_location]
+            if lineage_location not in f:
+                lineage_location =  f[lineage_location.split("_")[0]]
+            tile_mo_da = f[lineage_location.split("_")[0]]
             lineage = np.array(
                 (
                     tile_mo_da["trap"],
