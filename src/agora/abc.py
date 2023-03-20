@@ -202,7 +202,7 @@ class ProcessABC(ABC):
     def run(self):
         pass
 
-    def _log(self, message: str, level: str = "warn"):
+    def _log(self, message: str, level: str = "warning"):
         # Log messages in the corresponding level
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
