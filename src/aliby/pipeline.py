@@ -508,11 +508,12 @@ class Pipeline(ProcessABC):
                             frac_clogged_traps = self.check_earlystop(
                                 filename, earlystop, steps["tiler"].tile_size
                             )
-                            self._log(
-                                f"{name}:Clogged_traps:{frac_clogged_traps}"
-                            )
-                            frac = np.round(frac_clogged_traps * 100)
-                            pbar.set_postfix_str(f"{frac} Clogged")
+                            if frac_clogged_traps > 0.3:
+                                self._log(
+                                    f"{name}:Clogged_traps:{frac_clogged_traps}"
+                                )
+                                frac = np.round(frac_clogged_traps * 100)
+                                pbar.set_postfix_str(f"{frac} Clogged")
                         else:
                             # stop if too many traps are clogged
                             self._log(
@@ -567,7 +568,7 @@ class Pipeline(ProcessABC):
         """
         # get the area of the cells organised by trap and cell number
         s = Signal(filename)
-        df = s["/extraction/general/None/area"]
+        df = s.get_raw("/extraction/general/None/area")
         # check the latest time points only
         cells_used = df[
             df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
