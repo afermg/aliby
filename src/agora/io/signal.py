@@ -61,7 +61,7 @@ class Signal(BridgeH5):
     def get(self, dsets: t.Union[str, t.Collection], **kwargs):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
         if isinstance(dsets, str):  # no pre-processing
-            df = get_raw(dsets, **kwargs)
+            df = self.get_raw(dsets, **kwargs)
             prepost_applied = self.apply_prepost(dsets, **kwargs)
 
             return self.add_name(prepost_applied, dsets)

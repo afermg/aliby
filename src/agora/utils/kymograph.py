@@ -5,7 +5,8 @@ from copy import copy
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from agora.utils.indexing import validate_association
+
+from agora.utils.indexing import validate_associatio n
 
 index_row = t.Tuple[str, str, int, int]
 
@@ -121,7 +122,7 @@ def bidirectional_retainment_filter(
 def melt_reset(df: pd.DataFrame, additional_ids: t.Dict[str, pd.Series] = {}):
     new_df = add_index_levels(df, additional_ids)
 
-    return new_df.melt(ignore_index=False).reset_index()
+    return new_df.melt(ignore_index=False, var_name="time (minutes)", value_name="signal").reset_index()
 
 
 # Drop cells that if used would reduce info the most
