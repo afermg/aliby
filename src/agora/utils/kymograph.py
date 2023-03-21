@@ -5,6 +5,7 @@ from copy import copy
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from agora.utils.indexing import validate_association
 
 index_row = t.Tuple[str, str, int, int]
 
@@ -175,3 +176,67 @@ def drop_mother_label(index: pd.MultiIndex) -> np.ndarray:
 def get_index_as_np(signal: pd.DataFrame):
     # Get mother labels from multiindex dataframe
     return np.array(signal.index.to_list())
+
+
+def standard_filtering(
+    raw: pd.DataFrame,
+    lin: np.ndarray,
+    presence_high: float = 0.8,
+    presence_low: int = 7,
+):
+    # Get all mothers
+    _, valid_indices = validate_association(
+        lin, np.array(raw.index.to_list()), match_column=0
+    )
+    in_lineage = raw.loc[valid_indices]
+
+    # Filter mothers by presence
+    present = in_lineage.loc[
+        in_lineage.notna().sum(axis=1) > (in_lineage.shape[1] * presence_high)
+    ]
+
+    # Get indices
+    indices = np.array(present.index.to_list())
+    to_cast = np.stack((lin[:, :2], lin[:, [0, 2]]), axis=1)
+    ndin = to_cast[..., None] == indices.T[None, ...]
+
+    # use indices to fetch all daughters
+    valid_association = ndin.all(axis=2)[:, 0].any(axis=-1)
+
+    # Remove repeats
+    mothers, daughters = np.split(to_cast[valid_association], 2, axis=1)
+    mothers = mothers[:, 0]
+    daughters = daughters[:, 0]
+    d_m_dict = {tuple(d): m[-1] for m, d in zip(mothers, daughters)}
+
+    # assuming unique sorts
+    raw_mothers = raw.loc[_as_tuples(mothers)]
+    raw_mothers["mother_label"] = 0
+    raw_daughters = raw.loc[_as_tuples(daughters)]
+    raw_daughters["mother_label"] = d_m_dict.values()
+    concat = pd.concat((raw_mothers, raw_daughters)).sort_index()
+    concat.set_index("mother_label", append=True, inplace=True)
+
+    # Last filter to remove tracklets that are too short
+    removed_buds = concat.notna().sum(axis=1) <= presence_low
+    filt = concat.loc[~removed_buds]
+
+    # We check that no mothers are left child-less
+    m_d_dict = {tuple(m): [] for m in mothers}
+    for (trap, d), m in d_m_dict.items():
+        m_d_dict[(trap, m)].append(d)
+
+    for trap, daughter, mother in concat.index[removed_buds]:
+        idx_to_delete = m_d_dict[(trap, mother)].index(daughter)
+        del m_d_dict[(trap, mother)][idx_to_delete]
+
+    bud_free = []
+    for m, d in m_d_dict.items():
+        if not d:
+            bud_free.append(m)
+
+    final_result = filt.drop(bud_free)
+
+    # In the end, we get the mothers present for more than {presence_lineage1}% of the experiment
+    # and their tracklets present for more than {presence_lineage2} time-points
+    return final_result

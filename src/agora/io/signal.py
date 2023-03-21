@@ -47,19 +47,24 @@ class Signal(BridgeH5):
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
         if isinstance(dsets, str):  # no pre-processing
-            df = self.apply_prepost(dsets)
-            return self.add_name(df, dsets)
+            return self.get(dsets)
         elif isinstance(dsets, list):  # pre-processing
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
             # Check we are not comparing tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
             ), "Tile data and cell data can't be mixed"
-            return [
-                self.add_name(self.apply_prepost(dset), dset) for dset in dsets
-            ]
+            return [self.get(dset) for dset in dsets]
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
+
+    def get(self, dsets: t.Union[str, t.Collection], **kwargs):
+        """Get and potentially pre-process data from h5 file and return as a dataframe."""
+        if isinstance(dsets, str):  # no pre-processing
+            df = get_raw(dsets, **kwargs)
+            prepost_applied = self.apply_prepost(dsets, **kwargs)
+
+            return self.add_name(prepost_applied, dsets)
 
     @staticmethod
     def add_name(df, name):
@@ -129,18 +134,24 @@ class Signal(BridgeH5):
         Returns an array with three columns: the tile id, the mother label, and the daughter label.
         """
         if lineage_location is None:
-            lineage_location = "postprocessing/lineage_merged"
+            lineage_location = "modifiers/lineage_merged"
         with h5py.File(self.filename, "r") as f:
+            # if lineage_location not in f:
+            #     lineage_location = lineage_location.split("_")[0]
             if lineage_location not in f:
-                lineage_location =  f[lineage_location.split("_")[0]]
-            tile_mo_da = f[lineage_location.split("_")[0]]
-            lineage = np.array(
-                (
-                    tile_mo_da["trap"],
-                    tile_mo_da["mother_label"],
-                    tile_mo_da["daughter_label"],
-                )
-            ).T
+                lineage_location = "postprocessor/lineage"
+            tile_mo_da = f[lineage_location]
+
+            if isinstance(tile_mo_da, h5py.Dataset):
+                lineage = tile_mo_da[()]
+            else:
+                lineage = np.array(
+                    (
+                        tile_mo_da["trap"],
+                        tile_mo_da["mother_label"],
+                        tile_mo_da["daughter_label"],
+                    )
+                ).T
         return lineage
 
     @_first_arg_str_to_df
