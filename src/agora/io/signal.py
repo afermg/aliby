@@ -139,7 +139,7 @@ class Signal(BridgeH5):
             # if lineage_location not in f:
             #     lineage_location = lineage_location.split("_")[0]
             if lineage_location not in f:
-                lineage_location = "postprocessor/lineage"
+                lineage_location = "postprocessing/lineage"
             tile_mo_da = f[lineage_location]
 
             if isinstance(tile_mo_da, h5py.Dataset):

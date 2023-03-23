@@ -60,7 +60,7 @@ class LineageProcess(PostProcessABC):
         elif hasattr(self, "lineage"):
             lineage = self.lineage
         elif hasattr(self, "cells"):
-            with h5py.File(self.cells.filename, "a") as f:
+            with h5py.File(self.cells.filename, "r") as f:
                 if (lineage_loc := "modifiers/lineage_merged") in f and merged:
                     lineage = f.get(lineage_loc)[()]
                 elif (lineage_loc := "modifiers/lineage)") in f:
