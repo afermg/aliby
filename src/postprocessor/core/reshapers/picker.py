@@ -25,7 +25,7 @@ class Picker(LineageProcess):
     :cells: Cell object passed to the constructor
     :condition: Tuple with condition and associated parameter(s), conditions can be
     "present", "nonstoply_present" or "quantile".
-    Determines the thersholds or fractions of signals to use.
+    Determine the thresholds or fractions of signals to use.
     :lineage: str {"mothers", "daughters", "families" (mothers AND daughters), "orphans"}. Mothers/daughters picks cells with those tags, families pick the union of both and orphans the difference between the total and families.
     """
 
@@ -35,7 +35,6 @@ class Picker(LineageProcess):
         cells: Cells or None = None,
     ):
         super().__init__(parameters=parameters)
-
         self.cells = cells
 
     def pick_by_lineage(
@@ -44,13 +43,9 @@ class Picker(LineageProcess):
         how: str,
         mothers_daughters: t.Optional[np.ndarray] = None,
     ) -> pd.MultiIndex:
-
         cells_present = drop_mother_label(signal.index)
-
         mothers_daughters = self.get_lineage_information(signal)
-
         valid_indices = slice(None)
-
         if how == "mothers":
             _, valid_indices = validate_association(
                 mothers_daughters, cells_present, match_column=0
@@ -63,7 +58,6 @@ class Picker(LineageProcess):
             _, valid_indices = validate_association(
                 mothers_daughters, cells_present
             )
-
         return signal.index[valid_indices]
 
     def pick_by_condition(self, signal, condition, thresh):
@@ -73,13 +67,10 @@ class Picker(LineageProcess):
     def run(self, signal):
         self.orig_signal = signal
         indices = set(signal.index)
-
         lineage = self.get_lineage_information(signal)
-
         if len(lineage):
             self.mothers = lineage[:, :2]
             self.daughters = lineage[:, [0, 2]]
-
             for alg, *params in self.sequence:
                 new_indices = tuple()
                 if indices:
@@ -94,13 +85,11 @@ class Picker(LineageProcess):
                             signal.loc[list(indices)], param1, param2
                         )
                         new_indices = [tuple(x) for x in new_indices]
-
                 indices = indices.intersection(new_indices)
         else:
             self._log(f"No lineage assignment")
             indices = np.array([])
-
-        return np.array([tuple(map(_str_to_int, x)) for x in indices]).T
+        return np.array([tuple(map(_str_to_int, x)) for x in indices])
 
     def switch_case(
         self,
@@ -128,7 +117,7 @@ def _as_int(threshold: t.Union[float, int], ntps: int):
 
 def any_present(signal, threshold):
     """
-    Returns a mask for cells, True if there is a cell in that trap that was present for more than :threshold: timepoints.
+    Return a mask for cells, True if there is a cell in that trap that was present for more than :threshold: timepoints.
     """
     any_present = pd.Series(
         np.sum(

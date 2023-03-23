@@ -18,7 +18,7 @@ from postprocessor.core.processes.savgol import non_uniform_savgol
 
 
 def load_test_dset():
-    # Load development dataset to test functions
+    """Load development dataset to test functions."""
     return pd.DataFrame(
         {
             ("a", 1, 1): [2, 5, np.nan, 6, 8] + [np.nan] * 5,
@@ -31,7 +31,7 @@ def load_test_dset():
 
 
 def max_ntps(track: pd.Series) -> int:
-    # Get number of timepoints
+    """Get number of time points."""
     indices = np.where(track.notna())
     return np.max(indices) - np.min(indices)
 
@@ -84,9 +84,7 @@ def clean_tracks(
     """
     ntps = get_tracks_ntps(tracks)
     grs = get_avg_grs(tracks)
-
     growing_long_tracks = tracks.loc[(ntps >= min_len) & (grs > min_gr)]
-
     return growing_long_tracks
 
 
@@ -111,7 +109,6 @@ def merge_tracks(
     joinable_pairs = get_joinable(tracks, **kwargs)
     if joinable_pairs:
         tracks = join_tracks(tracks, joinable_pairs, drop=drop)
-
     return (tracks, joinable_pairs)
 
 
@@ -135,28 +132,23 @@ def get_joint_ids(merging_seqs) -> dict:
     2 ab cd
     3 abcd
 
-    We shold get:
+    We should get:
 
     output {a:a, b:a, c:a, d:a}
 
     """
     if not merging_seqs:
         return {}
-
     targets, origins = list(zip(*merging_seqs))
     static_tracks = set(targets).difference(origins)
-
     joint = {track_id: track_id for track_id in static_tracks}
     for target, origin in merging_seqs:
         joint[origin] = target
-
     moved_target = [
         k for k, v in joint.items() if joint[v] != v and v in joint.values()
     ]
-
     for orig in moved_target:
         joint[orig] = rec_bottom(joint, orig)
-
     return {
         k: v for k, v in joint.items() if k != v
     }  # remove ids that point to themselves
@@ -184,14 +176,11 @@ def join_tracks(tracks, joinable_pairs, drop=True) -> pd.DataFrame:
     :param drop: bool indicating whether or not to drop moved rows
 
     """
-
     tmp = copy(tracks)
     for target, source in joinable_pairs:
         tmp.loc[target] = join_track_pair(tmp.loc[target], tmp.loc[source])
-
         if drop:
             tmp = tmp.drop(source)
-
     return tmp
 
 
@@ -206,7 +195,7 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
     """
     Get the pair of track (without repeats) that have a smaller error than the
     tolerance. If there is a track that can be assigned to two or more other
-    ones, it chooses the one with a lowest error.
+    ones, choose the one with lowest error.
 
     :param tracks: (m x n) dataframe where rows are cell tracks and
         columns are timepoints
@@ -324,7 +313,6 @@ def get_means(x, i):
         v = x[~np.isnan(x)][:i]
     else:
         v = x[~np.isnan(x)][i:]
-
     return np.nanmean(v)
 
 
@@ -335,12 +323,12 @@ def get_last_i(x, i):
         v = x[~np.isnan(x)][:i]
     else:
         v = x[~np.isnan(x)][i:]
-
     return v
 
 
 def localid_to_idx(local_ids, contig_trap):
-    """Fetch then original ids from a nested list with joinable local_ids
+    """
+    Fetch the original ids from a nested list with joinable local_ids.
 
     input
     :param local_ids: list of list of pairs with cell ids to be joint
@@ -392,7 +380,6 @@ def get_dMetric(
         dMetric = np.abs(np.subtract.outer(post, pre))
     else:
         dMetric = np.abs(np.subtract.outer(pre, post))
-
     dMetric[np.isnan(dMetric)] = (
         tol + 1 + np.nanmax(dMetric)
     )  # nans will be filtered
@@ -404,28 +391,26 @@ def solve_matrices(
 ):
     """
     Solve the distance matrices obtained in get_dMetric and/or merged from
-    independent dMetric matrices
+    independent dMetric matrices.
     """
-
     ids = solve_matrix(dMetric)
     if not len(ids[0]):
         return []
     pre, post = prepost
-
     norm = (
         np.array(pre)[ids[len(pre) > len(post)]] if tol < 1 else 1
     )  # relative or absolute tol
     result = dMetric[ids] / norm
     ids = ids if len(pre) < len(post) else ids[::-1]
-
     return [idx for idx, res in zip(zip(*ids), result) if res <= tol]
 
 
 def get_closest_pairs(
     pre: List[float], post: List[float], tol: Union[float, int] = 1
 ):
-    """Calculate a cost matrix the Hungarian algorithm to pick the best set of
-    options
+    """
+    Calculate a cost matrix for the Hungarian algorithm to pick the best set of
+    options.
 
     input
     :param pre: list of floats with edges on left
@@ -437,7 +422,6 @@ def get_closest_pairs(
 
     """
     dMetric = get_dMetric(pre, post, tol)
-
     return solve_matrices(dMetric, pre, post, tol)
 
 
@@ -465,9 +449,7 @@ def solve_matrix(dMetric):
             tmp[:, j] += np.nan
             glob_is.append(i)
             glob_js.append(j)
-
             std = sorted(tmp[~np.isnan(tmp)])
-
     return (np.array(glob_is), np.array(glob_js))
 
 
@@ -475,7 +457,6 @@ def plot_joinable(tracks, joinable_pairs):
     """
     Convenience plotting function for debugging and data vis
     """
-
     nx = 8
     ny = 8
     _, axes = plt.subplots(nx, ny)
@@ -493,7 +474,6 @@ def plot_joinable(tracks, joinable_pairs):
                 # except:
                 #     pass
                 ax.plot(post_srs.index, post_srs.values, "g")
-
     plt.show()
 
 
@@ -506,21 +486,17 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
     :param min_dgr: float minimum difference in growth rate from
         the interpolation
     """
-
     mins, maxes = [
         tracks.notna().apply(np.where, axis=1).apply(fn)
         for fn in (np.min, np.max)
     ]
-
     mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
     mins_d.index = mins_d.index - 1  # make indices equal
     # TODO add support for skipping time points
     maxes_d = maxes.groupby(maxes).apply(lambda x: x.index.tolist())
-
     common = sorted(
         set(mins_d.index).intersection(maxes_d.index), reverse=True
     )
-
     return [(maxes_d[t], mins_d[t]) for t in common]
 
 

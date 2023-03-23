@@ -1,7 +1,5 @@
-import logging
 import typing as t
 from itertools import takewhile
-from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
@@ -16,7 +14,6 @@ from agora.utils.indexing import (
     _assoc_indices_to_3d,
 )
 from agora.utils.merge import merge_association
-from agora.utils.kymograph import get_index_as_np
 from postprocessor.core.abc import get_parameters, get_process
 from postprocessor.core.lineageprocess import (
     LineageProcess,
@@ -35,24 +32,37 @@ class PostProcessorParameters(ParametersABC):
         while objectives are relative or absolute paths to datasets. If relative paths the
         post-processed addresses are used. The order of processes matters.
 
+    Supply parameters for picker, merger, and processes.
+    The order of processes matters.
+
+    'processes' are defined in ./processes/ while objectives are relative or absolute paths to datasets. If relative paths the post-processed addresses are used.
     """
 
     def __init__(
         self,
-        targets={},
-        param_sets={},
-        outpaths={},
+        targets: t.Dict = {},
+        param_sets: t.Dict = {},
+        outpaths: t.Dict = {},
     ):
-        self.targets: Dict = targets
-        self.param_sets: Dict = param_sets
-        self.outpaths: Dict = outpaths
+        self.targets = targets
+        self.param_sets = param_sets
+        self.outpaths = outpaths
 
     def __getitem__(self, item):
         return getattr(self, item)
 
     @classmethod
     def default(cls, kind=[]):
-        """Sequential postprocesses to be operated"""
+        """
+        Include buddings and bud_metric and estimates of their time derivatives.
+
+        Parameters
+        ----------
+        kind: list of str
+            If "ph_batman" included, add targets for experiments using pHlourin.
+        """
+        # each subitem specifies the function to be called and the location
+        # on the h5 file to be written
         targets = {
             "prepost": {
                 "merger": "/extraction/general/None/area",
@@ -61,9 +71,7 @@ class PostProcessorParameters(ParametersABC):
             "processes": [
                 [
                     "buddings",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
+                    ["/extraction/general/None/volume"],
                 ],
                 [
                     "dsignal",
@@ -93,7 +101,7 @@ class PostProcessorParameters(ParametersABC):
         }
         outpaths = {}
         outpaths["aggregate"] = "/postprocessing/experiment_wide/aggregated/"
-
+        # pHlourin experiments are special
         if "ph_batman" in kind:
             targets["processes"]["dsignal"].append(
                 [
@@ -115,46 +123,56 @@ class PostProcessorParameters(ParametersABC):
                     ]
                 ],
             )
-
         return cls(targets=targets, param_sets=param_sets, outpaths=outpaths)
 
 
 class PostProcessor(ProcessABC):
     def __init__(self, filename, parameters):
+        """
+        Initialise PostProcessor
+
+        Parameters
+        ----------
+        filename: str or PosixPath
+            Name of h5 file.
+        parameters: PostProcessorParameters object
+            An instance of PostProcessorParameters.
+        """
         super().__init__(parameters)
         self._filename = filename
         self._signal = Signal(filename)
         self._writer = Writer(filename)
-
+        # parameters for merger and picker
         dicted_params = {
             i: parameters["param_sets"]["prepost"][i]
             for i in ["merger", "picker"]
         }
-
         for k in dicted_params.keys():
             if not isinstance(dicted_params[k], dict):
                 dicted_params[k] = dicted_params[k].to_dict()
-
+        # merger and picker
         self.merger = Merger(
             MergerParameters.from_dict(dicted_params["merger"])
         )
-
         self.picker = Picker(
             PickerParameters.from_dict(dicted_params["picker"]),
             cells=Cells.from_source(filename),
         )
+        # processes, such as buddings
         self.classfun = {
             process: get_process(process)
             for process, _ in parameters["targets"]["processes"]
         }
+        # parameters for the process in classfun
         self.parameters_classfun = {
             process: get_parameters(process)
             for process, _ in parameters["targets"]["processes"]
         }
+        # locations to be written in the h5 file
         self.targets = parameters["targets"]
 
     def run_prepost(self):
-        # TODO Split function
+        """Using picker, get and write lineages, returning mothers and daughters."""
         """Important processes run before normal post-processing ones"""
         record = self._signal.get_raw(self.targets["prepost"]["merger"])
         merges = np.array(self.merger.run(record), dtype=int)
@@ -175,7 +193,6 @@ class PostProcessor(ProcessABC):
         self.lineage = _3d_index_to_2d(
             lineage_merged if len(lineage_merged) else lineage
         )
-
         self._writer.write(
             "modifiers/lineage_merged", _3d_index_to_2d(lineage_merged)
         )
@@ -204,91 +221,98 @@ class PostProcessor(ProcessABC):
         return x
 
     def run(self):
-        # TODO Documentation :) + Split
+        """
+        Write the results to the h5 file.
+        Processes include identifying buddings and finding bud metrics.
+        """
+        # run merger, picker, and find lineages
         self.run_prepost()
-
+        # run processes
         for process, datasets in tqdm(self.targets["processes"]):
-            if process in self.parameters["param_sets"].get(
-                "processes", {}
-            ):  # If we assigned parameters
+            if process in self.parameters["param_sets"].get("processes", {}):
+                # parameters already assigned
                 parameters = self.parameters_classfun[process](
                     self.parameters[process]
                 )
-
             else:
+                # assign parameters
                 parameters = self.parameters_classfun[process].default()
-
+            # load process
             loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
                 loaded_process.lineage = self.lineage
 
+            # apply process to each dataset
             for dataset in datasets:
-                if isinstance(dataset, list):  # multisignal process
-                    signal = [self._signal[d] for d in dataset]
-                elif isinstance(dataset, str):
-                    signal = self._signal[dataset]
-                else:
-                    raise Exception("Unavailable record")
+                self.run_process(dataset, process, loaded_process)
 
-                if len(signal) and (
-                    not isinstance(loaded_process, LineageProcess)
-                    or len(loaded_process.lineage)
-                ):
-                    result = loaded_process.run(signal)
-                else:
-                    result = pd.DataFrame(
-                        [], columns=signal.columns, index=signal.index
-                    )
-                    result.columns.names = ["timepoint"]
-
-                if process in self.parameters["outpaths"]:
-                    outpath = self.parameters["outpaths"][process]
-                elif isinstance(dataset, list):
-                    # If no outpath defined, place the result in the minimum common
-                    # branch of all signals used
-                    prefix = "".join(
-                        c[0]
-                        for c in takewhile(
-                            lambda x: all(x[0] == y for y in x), zip(*dataset)
-                        )
-                    )
-                    outpath = (
-                        prefix
-                        + "_".join(  # TODO check that it always finishes in '/'
-                            [
-                                d[len(prefix) :].replace("/", "_")
-                                for d in dataset
-                            ]
-                        )
-                    )
-                elif isinstance(dataset, str):
-                    outpath = dataset[1:].replace("/", "_")
-                else:
-                    raise ("Outpath not defined", type(dataset))
-
-                if process not in self.parameters["outpaths"]:
-                    outpath = "/postprocessing/" + process + "/" + outpath
-
-                if isinstance(result, dict):  # Multiple Signals as output
-                    for k, v in result.items():
-                        self.write_result(
-                            outpath + f"/{k}",
-                            v,
-                            metadata={},
-                        )
-                else:
-                    self.write_result(
-                        outpath,
-                        result,
-                        metadata={},
-                    )
+    def run_process(self, dataset, process, loaded_process):
+        """Run process on a single dataset and write the result."""
+        # define signal
+        if isinstance(dataset, list):
+            # multisignal process
+            signal = [self._signal[d] for d in dataset]
+        elif isinstance(dataset, str):
+            signal = self._signal[dataset]
+        else:
+            raise ("Incorrect dataset")
+        # run process on signal
+        if len(signal) and (
+            not isinstance(loaded_process, LineageProcess)
+            or len(loaded_process.lineage)
+        ):
+            result = loaded_process.run(signal)
+        else:
+            result = pd.DataFrame(
+                [], columns=signal.columns, index=signal.index
+            )
+            result.columns.names = ["timepoint"]
+        # define outpath, where result will be written
+        if process in self.parameters["outpaths"]:
+            outpath = self.parameters["outpaths"][process]
+        elif isinstance(dataset, list):
+            # no outpath is defined
+            # place the result in the minimum common branch of all signals
+            prefix = "".join(
+                c[0]
+                for c in takewhile(
+                    lambda x: all(x[0] == y for y in x), zip(*dataset)
+                )
+            )
+            outpath = (
+                prefix
+                + "_".join(  # TODO check that it always finishes in '/'
+                    [d[len(prefix) :].replace("/", "_") for d in dataset]
+                )
+            )
+        elif isinstance(dataset, str):
+            outpath = dataset[1:].replace("/", "_")
+        else:
+            raise ("Outpath not defined", type(dataset))
+        # add postprocessing to outpath when required
+        if process not in self.parameters["outpaths"]:
+            outpath = "/postprocessing/" + process + "/" + outpath
+        # write result
+        if isinstance(result, dict):
+            # multiple Signals as output
+            for k, v in result.items():
+                self.write_result(
+                    outpath + f"/{k}",
+                    v,
+                    metadata={},
+                )
+        else:
+            # a single Signal as output
+            self.write_result(
+                outpath,
+                result,
+                metadata={},
+            )
 
     def write_result(
         self,
         path: str,
-        result: Union[List, pd.DataFrame, np.ndarray],
-        metadata: Dict,
+        result: t.Union[t.List, pd.DataFrame, np.ndarray],
+        metadata: t.Dict,
     ):
-        if not result.any().any():
-            logging.getLogger("aliby").warning(f"Record {path} is empty")
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
