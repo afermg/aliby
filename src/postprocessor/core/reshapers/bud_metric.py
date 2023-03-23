@@ -42,7 +42,7 @@ class BudMetric(LineageProcess):
         """
 
         signal: Daughter-inclusive dataframe
-        md: Mother-daughters dictionary where key is mother's index and value a list of daugher indices
+        md: Mother-daughters dictionary where key is mother's index and its values are a list of daughter indices
 
         Get fvi (First Valid Index) for all cells
         Create empty matrix
