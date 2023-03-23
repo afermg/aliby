@@ -102,7 +102,7 @@ class Picker(LineageProcess):
         case_mgr = {
             "any_present": lambda s, thresh: any_present(s, thresh),
             "present": lambda s, thresh: s.notna().sum(axis=1) > thresh,
-            "nonstoply_present": lambda s, thresh: s.apply(thresh, axis=1)
+            "continuously_present": lambda s, thresh: s.apply(thresh, axis=1)
             > thresh,
             "growing": lambda s, thresh: s.diff(axis=1).sum(axis=1) > thresh,
         }
