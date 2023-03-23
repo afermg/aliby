@@ -6,11 +6,21 @@ from postprocessor.core.functions.tracks import get_joinable
 
 class MergerParameters(ParametersABC):
     """
-    :param tol: float or int threshold of average (prediction error/std) necessary
-        to consider two tracks the same. If float is fraction of first track,
-        if int it is absolute units.
-    :param window: int value of window used for savgol_filter
-    :param degree: int value of polynomial degree passed to savgol_filter
+    Define the parameters for merger from a dict.
+
+    There are five parameters expected in the dict:
+
+    smooth, boolean
+        Whether or not to smooth with a savgol_filter.
+    tol: float or  int
+        The threshold of average prediction error/std necessary to
+        consider two tracks the same.
+        If float, the threshold is the fraction of the first track;
+        if int, the threshold is in absolute units.
+    window: int
+        The size of the window of the savgol_filter.
+    degree: int v
+        The order of the polynomial used by the savgol_filter
     """
 
     _defaults = {
@@ -23,9 +33,7 @@ class MergerParameters(ParametersABC):
 
 
 class Merger(PostProcessABC):
-    """
-    Combines rows of tracklet that are likely to be the same.
-    """
+    """Combine rows of tracklet that are likely to be the same."""
 
     def __init__(self, parameters):
         super().__init__(parameters)
@@ -33,5 +41,11 @@ class Merger(PostProcessABC):
     def run(self, signal):
         joinable = []
         if signal.shape[1] > 4:
-            joinable = get_joinable(signal, tol=self.parameters.tolerance)
+            joinable = get_joinable(
+                signal,
+                smooth=self.parameters.smooth,
+                tol=self.parameters.tolerance,
+                window=self.parameters.window,
+                degree=self.parameters.degree,
+            )
         return joinable
