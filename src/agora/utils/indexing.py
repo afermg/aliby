@@ -114,10 +114,16 @@ def _assoc_indices_to_3d(ndarray: np.ndarray):
     """
     result = ndarray
     if len(ndarray) and ndarray.ndim > 1:
-        result = np.transpose(
-            np.hstack((ndarray[:, [0]], ndarray)).reshape(-1, 2, 2),
-            axes=[0, 2, 1],
+        columns = np.arange(ndarray.shape[1])
+
+        result = np.stack(
+            (
+                ndarray[:, np.delete(columns, -1)],
+                ndarray[:, np.delete(columns, -2)],
+            ),
+            axis=1,
         )
+
     return result
 
 
