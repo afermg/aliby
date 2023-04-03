@@ -31,8 +31,11 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
 
     """
 
+    indices = data.index
+    if "mother_label" in indices.names:
+        indices = indices.droplevel("mother_label")
     valid_merges, indices = validate_association(
-        merges, np.array(list(data.index))
+        merges, np.array(list(indices))
     )
 
     # Assign non-merged
@@ -129,14 +132,15 @@ def merge_association(
 
     valid_indices = comparison_mat.any(axis=0)
 
-    replacement_d = {}
-    for dataset in grouped_merges:
-        for k in dataset:
-            replacement_d[tuple(k[0])] = dataset[-1][1]
+    if valid_indices.any():  # Where valid, perform transformation
+        replacement_d = {}
+        for dataset in grouped_merges:
+            for k in dataset:
+                replacement_d[tuple(k[0])] = dataset[-1][1]
 
-    flat_indices[valid_indices] = [
-        replacement_d[tuple(i)] for i in flat_indices[valid_indices]
-    ]
+        flat_indices[valid_indices] = [
+            replacement_d[tuple(i)] for i in flat_indices[valid_indices]
+        ]
 
     merged_indices = flat_indices.reshape(-1, 2, 2)
     return merged_indices

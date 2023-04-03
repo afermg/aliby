@@ -204,7 +204,9 @@ class PostProcessor(ProcessABC):
             self._writer.write(
                 "modifiers/picks",
                 data=pd.MultiIndex.from_arrays(
-                    picked_indices, names=["trap", "cell_label"]
+                    picked_indices.T,
+                    # names=["trap", "cell_label", "mother_label"],
+                    names=["trap", "cell_label"],
                 ),
                 overwrite="overwrite",
             )

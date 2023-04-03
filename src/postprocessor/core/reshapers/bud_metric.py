@@ -65,23 +65,36 @@ class BudMetric(LineageProcess):
         mothers_mat = np.zeros((len(md), signal.shape[1]))
         cells_were_dropped = 0  # Flag determines if mothers (1), daughters (2) or both were missing (3)
 
-        md_index = signal.index.droplevel("mother_label")
-        if md is not None:  # Get intersection of lineage and current index
+        md_index = signal.index
+        if (
+            "mother_label" not in md_index.names
+        ):  # Generate mother label from md dict if unavailable
+            d = {v: k for k, values in md.items() for v in values}
+            signal["mother_label"] = list(
+                map(lambda x: d.get(x, [0])[-1], signal.index)
+            )
+            signal.set_index("mother_label", append=True, inplace=True)
             related_items = set(
                 [*md.keys(), *[y for x in md.values() for y in x]]
             )
-            intersection = md_index.intersection(related_items)
-            if len(intersection) < len(signal):
-                print("Dropped cells before bud_metric")  # TODO log
+            md_index = md_index.intersection(related_items)
+        elif "mother_label" in md_index.names:
+            md_index = md_index.droplevel("mother_label")
+        else:
+            raise ("Unavailable relationship information")
 
-            signal = (
-                signal.reset_index("mother_label")
-                .loc(axis=0)[intersection]
-                .set_index("mother_label", append=True)
-            )
+        if len(md_index) < len(signal):
+            print("Dropped cells before bud_metric")  # TODO log
+
+        signal = (
+            signal.reset_index("mother_label")
+            .loc(axis=0)[md_index]
+            .set_index("mother_label", append=True)
+        )
 
         names = list(signal.index.names)
         del names[-2]
+
         output_df = (
             signal.loc[signal.index.get_level_values("mother_label") > 0]
             .groupby(names)
@@ -101,7 +114,7 @@ def _combine_daughter_tracks(tracks: t.Collection[pd.Series]):
     prioritising the most recent entity.
     """
     sorted_da_ids = tracks.sort_index(level="cell_label")
-    tp_fvt = sorted_da_ids.apply(lambda x: x.last_valid_index(), axis=0)
+    tp_fvt = sorted_da_ids.apply(lambda x: x.first_valid_index(), axis=1)
     tp_fvt = sorted_da_ids.index.get_indexer(tp_fvt)
     tp_fvt[tp_fvt < 0] = sorted_da_ids.shape[0] - 1
 
