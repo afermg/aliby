@@ -320,7 +320,9 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             picks = set()
             if path in f:
-                picks = set(zip(*[f[path + name] for name in names]))
+                picks = set(
+                    zip(*[f[path + name] for name in names if name in f[path]])
+                )
             return picks
 
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
