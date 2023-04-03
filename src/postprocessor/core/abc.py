@@ -42,14 +42,17 @@ def get_process(process, suffix="") -> PostProcessABC or ParametersABC or None:
     """
     base_location = "postprocessor.core"
     possible_locations = ("processes", "multisignal", "reshapers")
-    valid_syntaxes = (_to_snake_case(process), _to_pascal_case(process))
+    valid_syntaxes = (
+        _to_snake_case(process),
+        _to_pascal_case(_to_snake_case(process)),
+    )
 
     found = None
     for possible_location, process_syntax in product(
         possible_locations, valid_syntaxes
     ):
 
-        location = f"{base_location}.{possible_location}.{process.lower()}.{process_syntax}{suffix}"
+        location = f"{base_location}.{possible_location}.{_to_snake_case(process)}.{process_syntax}{suffix}"
         found = locate(location)
         if found is not None:
             break
