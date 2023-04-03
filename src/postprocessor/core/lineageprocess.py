@@ -40,7 +40,7 @@ class LineageProcess(PostProcessABC):
     def as_function(
         cls,
         data: pd.DataFrame,
-        lineage: t.Union[t.Dict[t.Tuple[int], t.List[int]]],
+        lineage: t.Union[t.Dict[t.Tuple[int], t.List[int]]] = None,
         *extra_data,
         **kwargs,
     ):
