@@ -100,6 +100,7 @@ class BudMetric(LineageProcess):
             .groupby(names)
             .apply(lambda x: _combine_daughter_tracks(x))
         )
+        output_df.columns = signal.columns
         output_df["padding_level"] = 0
         output_df.set_index("padding_level", append=True, inplace=True)
 
@@ -114,9 +115,10 @@ def _combine_daughter_tracks(tracks: t.Collection[pd.Series]):
     prioritising the most recent entity.
     """
     sorted_da_ids = tracks.sort_index(level="cell_label")
-    tp_fvt = sorted_da_ids.apply(lambda x: x.first_valid_index(), axis=1)
-    tp_fvt = sorted_da_ids.index.get_indexer(tp_fvt)
-    tp_fvt[tp_fvt < 0] = sorted_da_ids.shape[0] - 1
+    sorted_da_ids.index = range(len(sorted_da_ids))
+    tp_fvt = sorted_da_ids.apply(lambda x: x.first_valid_index(), axis=0)
+    tp_fvt = sorted_da_ids.columns.get_indexer(tp_fvt)
+    tp_fvt[tp_fvt < 0] = len(sorted_da_ids) - 1
 
     _metric = np.choose(tp_fvt, sorted_da_ids.values)
-    return pd.Series(_metric)
+    return pd.Series(_metric, index=tracks.columns)
