@@ -22,11 +22,18 @@ class PickerParameters(ParametersABC):
 
 class Picker(LineageProcess):
     """
-    :cells: Cell object passed to the constructor
-    :condition: Tuple with condition and associated parameter(s), conditions can be
-    "present", "nonstoply_present" or "quantile".
-    Determine the thresholds or fractions of signals to use.
-    :lineage: str {"mothers", "daughters", "families" (mothers AND daughters), "orphans"}. Mothers/daughters picks cells with those tags, families pick the union of both and orphans the difference between the total and families.
+
+    Parameters
+    ----------
+    cells: Cell object
+        Passed to the class's constructor.
+    condition: tuple
+        Tuple with condition and associated parameter(s), conditions can be
+        "present", "nonstoply_present" or "quantile".
+        Determine the thresholds or fractions of signals to use.
+    lineage: str
+        Either "mothers", "daughters", "families" (mothers AND daughters), "orphans". Mothers or daughters picks cells with those tags, families picks the union of
+        both, and orphans picks the difference between the total and families.
     """
 
     def __init__(
@@ -34,6 +41,7 @@ class Picker(LineageProcess):
         parameters: PickerParameters,
         cells: Cells or None = None,
     ):
+        """Initialise from a Cells instance."""
         super().__init__(parameters=parameters)
         self.cells = cells
 
@@ -43,6 +51,7 @@ class Picker(LineageProcess):
         how: str,
         mothers_daughters: t.Optional[np.ndarray] = None,
     ) -> pd.MultiIndex:
+        """"""
         cells_present = drop_mother_label(signal.index)
         mothers_daughters = self.get_lineage_information(signal)
         valid_indices = slice(None)
@@ -54,7 +63,8 @@ class Picker(LineageProcess):
             _, valid_indices = validate_association(
                 mothers_daughters, cells_present, match_column=1
             )
-        elif how == "families":  # Mothers and daughters that are still present
+        elif how == "families":
+            # mothers and daughters that are still present
             _, valid_indices = validate_association(
                 mothers_daughters, cells_present
             )
@@ -65,15 +75,17 @@ class Picker(LineageProcess):
         return idx
 
     def run(self, signal):
+        """Pick indices from the index of a signal's dataframe and return as an array."""
         self.orig_signal = signal
         indices = set(signal.index)
         lineage = self.get_lineage_information(signal)
         if len(lineage):
-            self.mothers = lineage[:, :2]
+            self.mothers = lineage[:, [0, 1]]
             self.daughters = lineage[:, [0, 2]]
             for alg, *params in self.sequence:
                 new_indices = tuple()
                 if indices:
+                    # pick new indices
                     if alg == "lineage":
                         param1 = params[0]
                         new_indices = getattr(self, "pick_by_" + alg)(
@@ -87,9 +99,10 @@ class Picker(LineageProcess):
                         new_indices = [tuple(x) for x in new_indices]
                 indices = indices.intersection(new_indices)
         else:
-            self._log(f"No lineage assignment")
+            self._log("No lineage assignment")
             indices = np.array([])
-        return np.array([tuple(map(_str_to_int, x)) for x in indices])
+        indices_arr = np.array([tuple(map(_str_to_int, x)) for x in indices])
+        return indices_arr
 
     def switch_case(
         self,
