@@ -79,7 +79,7 @@ def validate_association(
         valid_association = va_intermediate.all(axis=1)
         # 2. find matches in indices
         # make True comparisons match for at least one mother or daughter in association
-        ind_intermediate = valid_cell_ids.any(axis=1)
+        ind_intermediate = valid_association.any(axis=1)
         # make True comparisons match for at least one row in association
         valid_indices = ind_intermediate.any(axis=0)
         # OLD
