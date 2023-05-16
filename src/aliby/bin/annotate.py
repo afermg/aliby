@@ -5,10 +5,18 @@ Currently only works on UNIX-like systems due to using "/" to split addresses.
 Usage example
 
 From python
-$ python  dev_async_annotator.py --image_path path/to/folder/with/h5files --results_path path/to/folder/with/images/zarr --pos position_name --ncells max_n_to_annotate
+$ python annotator.py --image_path path/to/folder/with/h5files --results_path path/to/folder/with/images/zarr --pos position_name --ncells max_n_to_annotate
 
 As executable (installed via poetry)
-$ dev_async_annotator.py --image_path path/to/folder/with/h5files --results_path path/to/folder/with/images/zarr --pos position_name --ncells max_n_to_annotate
+$ annotator.py --image_path path/to/folder/with/h5files --results_path path/to/folder/with/images/zarr --pos position_name --ncells max_n_to_annotate
+
+During annotation:
+- Assign a (binary) label by typing '1' or '2'.
+- Type 'u' to undo.
+- Type 's' to skip.
+- Type 'q' to quit.
+
+File will be saved in: ./YYYY-MM-DD_annotation/annotation.csv, where YYYY-MM-DD is the current date.
 
 """
 import argparse
