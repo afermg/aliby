@@ -41,7 +41,7 @@ class Picker(LineageProcess):
         parameters: PickerParameters,
         cells: Cells or None = None,
     ):
-        """Initialise from a Cells instance."""
+        """Initialise picker."""
         super().__init__(parameters=parameters)
         self.cells = cells
 

@@ -1,3 +1,4 @@
+# change "prepost" to "preprocess"; change filename to postprocessor_engine.py ??
 import typing as t
 from itertools import takewhile
 
@@ -61,34 +62,22 @@ class PostProcessorParameters(ParametersABC):
         kind: list of str
             If "ph_batman" included, add targets for experiments using pHlourin.
         """
-        # each subitem specifies the function to be called and the location
-        # on the h5 file to be written
+        # each subitem specifies the function to be called
+        # and the h5-file location for the results
+        #: why does merger have a string and picker a list?
         targets = {
             "prepost": {
                 "merger": "/extraction/general/None/area",
                 "picker": ["/extraction/general/None/area"],
             },
             "processes": [
-                [
-                    "buddings",
-                    ["/extraction/general/None/volume"],
-                ],
-                [
-                    "dsignal",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
-                ],
-                [
-                    "bud_metric",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
-                ],
+                ["buddings", ["/extraction/general/None/volume"]],
+                ["dsignal", ["/extraction/general/None/volume"]],
+                ["bud_metric", ["/extraction/general/None/volume"]],
                 [
                     "dsignal",
                     [
-                        "/postprocessing/bud_metric/extraction_general_None_volume",
+                        "/postprocessing/bud_metric/extraction_general_None_volume"
                     ],
                 ],
             ],
@@ -129,7 +118,7 @@ class PostProcessorParameters(ParametersABC):
 class PostProcessor(ProcessABC):
     def __init__(self, filename, parameters):
         """
-        Initialise PostProcessor
+        Initialise PostProcessor.
 
         Parameters
         ----------
@@ -172,31 +161,32 @@ class PostProcessor(ProcessABC):
         self.targets = parameters["targets"]
 
     def run_prepost(self):
-        """Using picker, get and write lineages, returning mothers and daughters."""
-        """Important processes run before normal post-processing ones"""
+        """
+        Run picker and merger and get lineages.
+
+        Necessary before any processes can run.
+        """
+        # run merger
         record = self._signal.get_raw(self.targets["prepost"]["merger"])
         merges = np.array(self.merger.run(record), dtype=int)
-
         self._writer.write(
             "modifiers/merges", data=[np.array(x) for x in merges]
         )
-
+        # get lineages from picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
         lineage_merged = []
-
-        if merges.any():  # Update lineages after merge events
-
+        if merges.any():
+            # update lineages after merge events
             merged_indices = merge_association(lineage, merges)
-            # Remove repeated labels post-merging
+            # remove repeated labels post-merging
             lineage_merged = np.unique(merged_indices, axis=0)
-
         self.lineage = _3d_index_to_2d(
             lineage_merged if len(lineage_merged) else lineage
         )
         self._writer.write(
             "modifiers/lineage_merged", _3d_index_to_2d(lineage_merged)
         )
-
+        # run picker
         picked_indices = self.picker.run(
             self._signal[self.targets["prepost"]["picker"][0]]
         )

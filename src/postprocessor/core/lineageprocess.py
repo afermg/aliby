@@ -72,5 +72,5 @@ class LineageProcess(PostProcessABC):
                 elif self.cells is not None:
                     lineage = self.cells.mothers_daughters
         else:
-            raise Exception("No linage information found")
+            raise Exception("No lineage information found")
         return lineage
