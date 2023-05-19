@@ -21,6 +21,8 @@ def validate_association(
 
     We use broadcasting for speed.
 
+    Both mother and bud in association must be in indices.
+
     Parameters
     ----------
     association : np.ndarray
@@ -49,12 +51,22 @@ def validate_association(
     >>> indices = np.array([ [0, 1], [0, 2], [0, 3]])
     >>> print(indices.T)
 
-    >>> valid_associations, valid_indices = validate_association(association, indices)
+    >>> valid_association, valid_indices = validate_association(association, indices)
 
-    >>> print(valid_associations)
-    array([ True, False, False, False])
+    >>> print(valid_association)
+     array([ True, False, False, False])
     >>> print(valid_indices)
-    array([ True, False, True])
+     array([ True, False, True])
+
+    and
+
+    >>> association = np.array([[[0,3], [0,1]], [[0,2], [0,4]]])
+    >>> indices = np.array([[0,1], [0,2], [0,3]])
+    >>> valid_association, valid_indices = validate_association(association, indices)
+    >>> print(valid_association)
+     array([ True, False])
+    >>> print(valid_indices)
+     array([ True, False, True])
     """
     if association.ndim == 2:
         # reshape into 3D array for broadcasting
@@ -69,33 +81,29 @@ def validate_association(
     valid_ndassociation = (
         association[..., np.newaxis] == indicesT[np.newaxis, ...]
     )
+    # find matches in association
+    ###
     # make True comparisons have both trap_ids and cell labels matching
     valid_cell_ids = valid_ndassociation.all(axis=2)
     if match_column is None:
-        # 1. find matches in association
         # make True comparisons match at least one row in indices
         va_intermediate = valid_cell_ids.any(axis=2)
-        # make True comparisons have both mother and daughter matching rows in indices
+        # make True comparisons have both mother and bud matching rows in indices
         valid_association = va_intermediate.all(axis=1)
-        # 2. find matches in indices
-        # make True comparisons match for at least one mother or daughter in association
-        ind_intermediate = valid_cell_ids.any(axis=1)
-        # make True comparisons match for at least one row in association
-        valid_indices = ind_intermediate.any(axis=0)
-        # OLD
-        # valid_indices = (
-        #     valid_ndassociation[valid_association].all(axis=2).any(axis=(0, 1))
-        # )
     else:
         # match_column selects mothers if 0 and daughters if 1
         # make True match at least one row in indices
         valid_association = valid_cell_ids[:, match_column].any(axis=1)
-        # make True match at least one row in association
-        valid_indices = valid_cell_ids[:, match_column].any(axis=0)
-        # OLD
-        # valid_association = (
-        #     valid_cell_ids[:, match_column] & valid_indices
-        # ).any(axis=1)
+    # find matches in indices
+    ###
+    # make True comparisons have a validated association for both the mother and bud
+    # make True comparisons have both trap_ids and cell labels matching
+    valid_cell_ids_va = valid_ndassociation[valid_association].all(axis=2)
+    if match_column is None:
+        # make True comparisons match at least one mother or bud in association
+        valid_indices = valid_cell_ids_va.any(axis=1)[0]
+    else:
+        valid_indices = valid_cell_ids_va[:, match_column][0]
     return valid_association, valid_indices
 
 
@@ -132,7 +140,7 @@ def _assoc_indices_to_3d(ndarray: np.ndarray):
 
 
 def _3d_index_to_2d(array: np.ndarray):
-    """Perform opposite switch to _assoc_indices_to_3d."""
+    """Revert switch from _assoc_indices_to_3d."""
     result = array
     if len(array):
         result = np.concatenate(
@@ -143,7 +151,8 @@ def _3d_index_to_2d(array: np.ndarray):
 
 def compare_indices(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
-    Fetch two 2-D indices and return a binary 2-D matrix
-    where a True value links two cells where all cells are the same.
+    Compare two 2D arrays using broadcasting.
+
+    Return a binary array where a True value links two cells where all cells are the same.
     """
-    return (x[..., None] == y.T[None, ...]).all(axis=1)
+    return (x[..., np.newaxis] == y.T[np.newaxis, ...]).all(axis=1)
