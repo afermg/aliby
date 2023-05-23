@@ -12,7 +12,7 @@ from postprocessor.core.abc import PostProcessABC
 
 
 class LineageProcessParameters(ParametersABC):
-    """Parameters."""
+    """Parameters - none are necessary."""
 
     _defaults = {}
 
@@ -21,7 +21,7 @@ class LineageProcess(PostProcessABC):
     """
     To analyse lineage data.
 
-    Currently bare bones, but extracts lineage information from a signal or a Cells object.
+    Currently bare bones, but extracts lineage information from a Signal or Cells object.
     """
 
     def __init__(self, parameters: LineageProcessParameters):
@@ -35,7 +35,7 @@ class LineageProcess(PostProcessABC):
         lineage: np.ndarray,
         *args,
     ):
-        """Implement method required by PostProcessABC."""
+        """Implement method required by PostProcessABC - undefined."""
         pass
 
     @classmethod
@@ -47,9 +47,9 @@ class LineageProcess(PostProcessABC):
         **kwargs,
     ):
         """
-        Override PostProcess.as_function classmethod.
+        Override PostProcesABC.as_function method.
 
-        Lineage functions require lineage information to be passed if run as functions.
+        Lineage functions require lineage information to be run as functions.
         """
         parameters = cls.default_parameters(**kwargs)
         return cls(parameters=parameters).run(
