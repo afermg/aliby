@@ -28,12 +28,13 @@ def validate_association(
     association : np.ndarray
         2D array of lineage associations where columns are (trap, mother, daughter)
         or
-        a 3D array, which is an array of 2 X 2 arrays comprising  [[trap_id, mother_label], [trap_id, daughter_label]].
+        a 3D array, which is an array of 2 X 2 arrays comprising [[trap_id, mother_label], [trap_id, daughter_label]].
     indices : np.ndarray
-        a 2D array where each column is a different level, such as (trap_id, cell_label). This should not include mother_label.
+        A 2D array where each column is a different level, such as (trap_id, cell_label). This array should not include mother_label.
     match_column: int
-        If 0, match mothers; if 1 match daughters.
-        If None, match both mothers and daughters.
+        If 0, matches indicate mothers from mother-bud pairs;
+        If 1, matches indicate daughters from mother-bud pairs;
+        If None, matches indicate either mothers or daughters in mother-bud pairs.
 
     Returns
     -------
@@ -100,7 +101,7 @@ def validate_association(
     # make True comparisons have both trap_ids and cell labels matching
     valid_cell_ids_va = valid_ndassociation[valid_association].all(axis=2)
     if match_column is None:
-        # make True comparisons match at least one mother or bud in association
+        # make True comparisons match either a mother or a bud in association
         valid_indices = valid_cell_ids_va.any(axis=1)[0]
     else:
         valid_indices = valid_cell_ids_va[:, match_column][0]

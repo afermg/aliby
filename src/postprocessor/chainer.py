@@ -14,9 +14,10 @@ from postprocessor.core.abc import get_process
 class Chainer(Signal):
     """
     Extend Signal by applying post-processes and allowing composite signals that combine basic signals.
-    It "chains" multiple processes upon fetching a dataset to produce the desired datasets.
 
-    Instead of reading processes previously applied, it executes
+    Chainer "chains" multiple processes upon fetching a dataset.
+
+    Instead of reading processes previously applied, Chainer executes
     them when called.
     """
 
@@ -25,6 +26,7 @@ class Chainer(Signal):
     }
 
     def __init__(self, *args, **kwargs):
+        """Initialise chainer."""
         super().__init__(*args, **kwargs)
 
         def replace_path(path: str, bgsub: bool = ""):
@@ -34,7 +36,7 @@ class Chainer(Signal):
             path = re.sub(channel, f"{channel}{suffix}", path)
             return path
 
-        # Add chain with and without bgsub for composite statistics
+        # add chain with and without bgsub for composite statistics
         self.common_chains = {
             alias
             + bgsub: lambda **kwargs: self.get(

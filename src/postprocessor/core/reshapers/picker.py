@@ -30,7 +30,8 @@ class PickerParameters(ParametersABC):
 
 class Picker(LineageProcess):
     """
-    Picker selects cells from a signal using lineage information and by how long and by how they are retained in the data set.
+    Picker selects cells from a signal using lineage information and
+    by how and for how long they are retained in the data set.
     """
 
     def __init__(
@@ -143,7 +144,7 @@ def _as_int(threshold: t.Union[float, int], ntps: int):
 
 def any_present(signal, threshold):
     """Return pd.Series for cells where True indicates that cell was present for more than threshold time points."""
-    #: isn't full_traps all we need?
+    #: why isn't full_traps all we need?
     full_traps = (signal.notna().sum(axis=1) > threshold).groupby("trap")
     any_present = pd.Series(
         np.sum(
