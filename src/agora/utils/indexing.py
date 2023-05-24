@@ -19,9 +19,11 @@ def validate_association(
     """
     Identify matches between two arrays by comparing rows.
 
+    We match lineage data on mother-bud pairs with all the cells identified to specialise to only those cells in mother-bud pairs.
+
     We use broadcasting for speed.
 
-    Both mother and bud in association must be in indices.
+    Both a mother and bud in association must be in indices.
 
     Parameters
     ----------
@@ -30,7 +32,8 @@ def validate_association(
         or
         a 3D array, which is an array of 2 X 2 arrays comprising [[trap_id, mother_label], [trap_id, daughter_label]].
     indices : np.ndarray
-        A 2D array where each column is a different level, such as (trap_id, cell_label). This array should not include mother_label.
+        A 2D array where each column is a different level, such as (trap_id, cell_label), which typically is an index of a Signal
+        dataframe. This array should not include mother_label.
     match_column: int
         If 0, matches indicate mothers from mother-bud pairs;
         If 1, matches indicate daughters from mother-bud pairs;
