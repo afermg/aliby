@@ -201,26 +201,17 @@ class PostProcessor(ProcessABC):
                 overwrite="overwrite",
             )
 
-    @staticmethod
-    def pick_mother(a, b):
-        """Update the mother id following this priorities:
-
-        The mother has a lower id
-        """
-        x = max(a, b)
-        if min([a, b]):
-            x = [a, b][np.argmin([a, b])]
-        return x
-
     def run(self):
         """
         Write the results to the h5 file.
+
         Processes include identifying buddings and finding bud metrics.
         """
         # run merger, picker, and find lineages
         self.run_prepost()
         # run processes
         for process, datasets in tqdm(self.targets["processes"]):
+            # process is a str; datasets is a list of str
             if process in self.parameters["param_sets"].get("processes", {}):
                 # parameters already assigned
                 parameters = self.parameters_classfun[process](
@@ -233,7 +224,6 @@ class PostProcessor(ProcessABC):
             loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
                 loaded_process.lineage = self.lineage
-
             # apply process to each dataset
             for dataset in datasets:
                 self.run_process(dataset, process, loaded_process)
@@ -259,7 +249,7 @@ class PostProcessor(ProcessABC):
                 [], columns=signal.columns, index=signal.index
             )
             result.columns.names = ["timepoint"]
-        # define outpath, where result will be written
+        # define outpath to write result
         if process in self.parameters["outpaths"]:
             outpath = self.parameters["outpaths"][process]
         elif isinstance(dataset, list):
@@ -308,3 +298,15 @@ class PostProcessor(ProcessABC):
         metadata: t.Dict,
     ):
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
+
+    @staticmethod
+    def pick_mother(a, b):
+        """
+        Update the mother id following this priorities:
+
+        The mother has a lower id
+        """
+        x = max(a, b)
+        if min([a, b]):
+            x = [a, b][np.argmin([a, b])]
+        return x

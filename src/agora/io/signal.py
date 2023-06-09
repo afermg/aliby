@@ -271,7 +271,7 @@ class Signal(BridgeH5):
         Parameters
         ----------
         dataset: str or list of strs
-            The name of the h5 file or a list of h5 file names
+            The name of the h5 file or a list of h5 file names.
         in_minutes: boolean
             If True,
         lineage: boolean
@@ -354,10 +354,7 @@ class Signal(BridgeH5):
         fullname: str,
         node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """
-        Store the name of a signal if it is a leaf node
-        (a group with no more groups inside) and if it starts with extraction.
-        """
+        """Store the name of a signal if it is a leaf node and if it starts with extraction."""
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):

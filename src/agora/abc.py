@@ -17,7 +17,7 @@ atomic = t.Union[int, float, str, bool]
 
 class ParametersABC(ABC):
     """
-    Defines parameters as attributes and allows parameters to
+    Define parameters as attributes and allow parameters to
     be converted to either a dictionary or to yaml.
 
     No attribute should be called "parameters"!
@@ -25,7 +25,7 @@ class ParametersABC(ABC):
 
     def __init__(self, **kwargs):
         """
-        Defines parameters as attributes
+        Define parameters as attributes.
         """
         assert (
             "parameters" not in kwargs
@@ -243,11 +243,9 @@ class StepABC(ProcessABC):
 
     @timer
     def run_tp(self, tp: int, **kwargs):
-        """
-        Time and log the timing of a step.
-        """
+        """Time and log the timing of a step."""
         return self._run_tp(tp, **kwargs)
 
     def run(self):
         # Replace run with run_tp
-        raise Warning("Steps use run_tp instead of run")
+        raise Warning("Steps use run_tp instead of run.")

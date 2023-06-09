@@ -43,7 +43,7 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
 
     # Implement the merges and drop source rows.
     # TODO Use matrices to perform merges in batch
-    # for ecficiency
+    # for efficiency
     if valid_merges.any():
         to_merge = data.loc[indices]
         targets, sources = zip(*merges[valid_merges])

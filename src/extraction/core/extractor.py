@@ -80,7 +80,7 @@ class Extractor(StepABC):
 
     Usually the metric is applied to only a tile's masked area, but some metrics depend on the whole tile.
 
-    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks, such as mean, is the third level.
+    Extraction follows a three-level tree structure. Channels, such as GFP, are the root level; the reduction algorithm, such as maximum projection, is the second level; the specific metric, or operation, to apply to the masks, such as mean, is the third or leaf level.
     """
 
     # TODO Alan: Move this to a location with the SwainLab defaults
@@ -202,7 +202,7 @@ class Extractor(StepABC):
             self._custom_funs[k] = tmp(f)
 
     def load_funs(self):
-        """Define all functions, including custum ones."""
+        """Define all functions, including custom ones."""
         self.load_custom_funs()
         self._all_cell_funs = set(self._custom_funs.keys()).union(CELL_FUNS)
         # merge the two dicts
@@ -335,7 +335,7 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, t.Dict[reduction_method, t.Dict[str, pd.Series]]]:
         """
-        Wrapper to apply reduction and then extraction.
+        Wrapper to reduce to a 2D image and then extract.
 
         Parameters
         ----------
@@ -499,7 +499,6 @@ class Extractor(StepABC):
                 # calculate metrics with subtracted bg
                 ch_bs = ch + "_bgsub"
                 # subtract median background
-
                 self.img_bgsub[ch_bs] = np.moveaxis(
                     np.stack(
                         list(
@@ -579,7 +578,9 @@ class Extractor(StepABC):
         **kwargs,
     ) -> dict:
         """
-        Wrapper to add compatibility with other steps of the pipeline.
+        Run extraction for one position and for the specified time points.
+
+        Save the results to a h5 file.
 
         Parameters
         ----------
@@ -597,7 +598,7 @@ class Extractor(StepABC):
         Returns
         -------
         d: dict
-            A dict of the extracted data with a concatenated string of channel, reduction metric, and cell metric as keys and pd.Series of the extracted data as values.
+            A dict of the extracted data for one position with a concatenated string of channel, reduction metric, and cell metric as keys and pd.DataFrame of the extracted data for all time points as values.
         """
         if tree is None:
             tree = self.params.tree
@@ -633,7 +634,7 @@ class Extractor(StepABC):
 
     def save_to_hdf(self, dict_series, path=None):
         """
-        Save the extracted data to the h5 file.
+        Save the extracted data for one position to the h5 file.
 
         Parameters
         ----------

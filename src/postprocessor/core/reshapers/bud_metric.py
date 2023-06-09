@@ -1,5 +1,4 @@
 import typing as t
-from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,7 +30,7 @@ class BudMetric(LineageProcess):
     def run(
         self,
         signal: pd.DataFrame,
-        lineage: Dict[pd.Index, Tuple[pd.Index]] = None,
+        lineage: t.Dict[pd.Index, t.Tuple[pd.Index]] = None,
     ):
         if lineage is None:
             if hasattr(self, "lineage"):
@@ -44,7 +43,7 @@ class BudMetric(LineageProcess):
 
     @staticmethod
     def get_bud_metric(
-        signal: pd.DataFrame, md: Dict[Tuple, Tuple[Tuple]] = None
+        signal: pd.DataFrame, md: t.Dict[t.Tuple, t.Tuple[t.Tuple]] = None
     ):
         """
 

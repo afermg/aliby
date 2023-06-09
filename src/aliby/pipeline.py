@@ -320,7 +320,7 @@ class Pipeline(ProcessABC):
         )
         # get log files, either locally or via OMERO
         with dispatcher as conn:
-            image_ids = conn.get_images()
+            position_ids = conn.get_images()
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
@@ -330,29 +330,29 @@ class Pipeline(ProcessABC):
         self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
         self.setLogger(directory)
-        # pick particular images if desired
+        # pick particular positions if desired
         if pos_filter is not None:
             if isinstance(pos_filter, list):
-                image_ids = {
+                position_ids = {
                     k: v
                     for filt in pos_filter
-                    for k, v in self.apply_filter(image_ids, filt).items()
+                    for k, v in self.apply_filter(position_ids, filt).items()
                 }
             else:
-                image_ids = self.apply_filter(image_ids, pos_filter)
-        assert len(image_ids), "No images to segment"
+                position_ids = self.apply_filter(position_ids, pos_filter)
+        assert len(position_ids), "No images to segment"
         # create pipelines
         if distributed != 0:
             # multiple cores
             with Pool(distributed) as p:
                 results = p.map(
                     lambda x: self.run_one_position(*x),
-                    [(k, i) for i, k in enumerate(image_ids.items())],
+                    [(k, i) for i, k in enumerate(position_ids.items())],
                 )
         else:
             # single core
             results = []
-            for k, v in tqdm(image_ids.items()):
+            for k, v in tqdm(position_ids.items()):
                 r = self.run_one_position((k, v), 1)
                 results.append(r)
         return results
@@ -453,13 +453,14 @@ class Pipeline(ProcessABC):
                     steps["extraction"] = Extractor.from_tiler(
                         exparams, store=filename, tiler=steps["tiler"]
                     )
-                    # set up progress meter
+                    # set up progress bar
                     pbar = tqdm(
                         range(min_process_from, tps),
                         desc=image.name,
                         initial=min_process_from,
                         total=tps,
                     )
+                    # run through time points
                     for i in pbar:
                         if (
                             frac_clogged_traps
@@ -469,9 +470,12 @@ class Pipeline(ProcessABC):
                             # run through steps
                             for step in self.pipeline_steps:
                                 if i >= process_from[step]:
+                                    # perform step
                                     result = steps[step].run_tp(
                                         i, **run_kwargs.get(step, {})
                                     )
+                                    # write to h5 file using writers
+                                    # extractor writes to h5 itself
                                     if step in loaded_writers:
                                         loaded_writers[step].write(
                                             data=result,
@@ -481,7 +485,7 @@ class Pipeline(ProcessABC):
                                             tp=i,
                                             meta={"last_processed": i},
                                         )
-                                    # perform step
+                                    # clean up
                                     if (
                                         step == "tiler"
                                         and i == min_process_from
@@ -501,7 +505,7 @@ class Pipeline(ProcessABC):
                                             tp=i,
                                         )
                                     elif step == "extraction":
-                                        # remove mask/label after extraction
+                                        # remove masks and labels after extraction
                                         for k in ["masks", "labels"]:
                                             run_kwargs[step][k] = None
                             # check and report clogging
