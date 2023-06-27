@@ -65,7 +65,7 @@ pycatch22 = "^0.4.2"
 
 
 [tool.poetry.group.baby.dependencies]
-aliby-baby = "^0.1.16"
+aliby-baby = "^0.1.17"
 
 [tool.poetry.group.dev]
 optional = true
