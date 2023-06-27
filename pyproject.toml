@@ -45,6 +45,7 @@ tqdm = "^4.62.3" # progress bars
 xmltodict = "^0.13.0" # read ome-tiff metadata
 zarr = "^2.14.0"
 GitPython = "^3.1.27"
+h5py = "2.10" # File I/O
 
 
 # Networking
@@ -53,6 +54,7 @@ omero-py = { version = ">=5.6.2", optional = true } # contact omero server
 [tool.poetry.extras]
 omero = ["omero-py"]
 utils = ["napari", "torch", "pytorch-lightning", "torchvision", "trio", "grid-strategy"]
+baby = ["aliby-baby"]
 
 
 # Postprocessing
@@ -63,8 +65,7 @@ pycatch22 = "^0.4.2"
 
 
 [tool.poetry.group.baby.dependencies]
-aliby-baby = "^0.1.15"
-h5py = "2.10" # File I/O
+aliby-baby = "^0.1.16"
 
 [tool.poetry.group.dev]
 optional = true
