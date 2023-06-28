@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aliby"
-version = "0.1.61"
+version = "0.1.64"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz <alan.munoz@ed.ac.uk>"]
 packages = [
@@ -51,11 +51,8 @@ h5py = "2.10" # File I/O
 # Networking
 omero-py = { version = ">=5.6.2", optional = true } # contact omero server
 
-[tool.poetry.extras]
-omero = ["omero-py"]
-utils = ["napari", "torch", "pytorch-lightning", "torchvision", "trio", "grid-strategy"]
-baby = ["aliby-baby"]
-
+# Baby segmentation
+aliby-baby = {version = "^0.1.17", optional=true}
 
 # Postprocessing
 [tool.poetry.group.pp.dependencies]
@@ -63,9 +60,9 @@ leidenalg = "^0.8.8"
 more-itertools = "^8.12.0"
 pycatch22 = "^0.4.2"
 
+[tool.poetry.group.pp]
+optional = true
 
-[tool.poetry.group.baby.dependencies]
-aliby-baby = "^0.1.17"
 
 [tool.poetry.group.dev]
 optional = true
@@ -105,13 +102,18 @@ pytest = "^6.2.5"
 [tool.poetry.group.utils]
 optional = true
 
+# Dependency groups can only be used by a poetry installation, not pip
 [tool.poetry.group.utils.dependencies]
-napari = ">=0.4.16"
-torch = "^1.13.1"
-pytorch-lightning = "^1.9.3"
-torchvision = "^0.14.1"
-trio = "^0.22.0"
-grid-strategy = "^0.0.1"
+napari = {version = ">=0.4.16", optional=true}
+Torch = {version = "^1.13.1", optional=true}
+pytorch-lightning = {version = "^1.9.3", optional=true}
+torchvision = {version = "^0.14.1", optional=true}
+trio = {version = "^0.22.0", optional=true}
+grid-strategy = {version = "^0.0.1", optional=true}
+
+[tool.poetry.extras]
+omero = ["omero-py"]
+baby = ["aliby-baby"]
 
 [tool.black]
 line-length = 79
