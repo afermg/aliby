@@ -367,9 +367,9 @@ class Tiler(StepABC):
         full: an array of images
         """
         full = self.image[t, c]
-        if hasattr(full, "compute"):  # If using dask fetch images here
+        if hasattr(full, "compute"):
+            # if using dask fetch images
             full = full.compute(scheduler="synchronous")
-
         return full
 
     @property

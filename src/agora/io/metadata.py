@@ -189,10 +189,13 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     filedir = Path(filedir)
     filepath = find_file(filedir, "*.log")
     if filepath:
+        # new log files
         raw_parse = parse_from_swainlab_grammar(filepath)
         minimal_meta = get_meta_swainlab(raw_parse)
     else:
+        # old log files
         if filedir.is_file() or str(filedir).endswith(".zarr"):
+            # log file is in parent directory
             filedir = filedir.parent
         legacy_parse = parse_logfiles(filedir)
         minimal_meta = (
