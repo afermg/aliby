@@ -1,17 +1,29 @@
 """
 Tiler: Divides images into smaller tiles.
 
-The tasks of the Tiler are selecting regions of interest, or tiles, of images - with one trap per tile, correcting for the drift of the microscope stage over time, and handling errors and bridging between the image data and Aliby’s image-processing steps.
+The tasks of the Tiler are selecting regions of interest, or tiles, of
+images - with one trap per tile, correcting for the drift of the microscope
+stage over time, and handling errors and bridging between the image data
+and Aliby’s image-processing steps.
 
 Tiler subclasses deal with either network connections or local files.
 
-To find tiles, we use a two-step process: we analyse the bright-field image to produce the template of a trap, and we fit this template to the image to find the tiles' centres.
+To find tiles, we use a two-step process: we analyse the bright-field image
+to produce the template of a trap, and we fit this template to the image to
+find the tiles' centres.
 
-We use texture-based segmentation (entropy) to split the image into foreground -- cells and traps -- and background, which we then identify with an Otsu filter. Two methods are used to produce a template trap from these regions: pick the trap with the smallest minor axis length and average over all validated traps.
+We use texture-based segmentation (entropy) to split the image into
+foreground -- cells and traps -- and background, which we then identify with
+an Otsu filter. Two methods are used to produce a template trap from these
+regions: pick the trap with the smallest minor axis length and average over
+all validated traps.
 
-A peak-identifying algorithm recovers the x and y-axis location of traps in the original image, and we choose the approach to template that identifies the most tiles.
+A peak-identifying algorithm recovers the x and y-axis location of traps in
+the original image, and we choose the approach to template that identifies
+the most tiles.
 
-The experiment is stored as an array with a standard indexing order of (Time, Channels, Z-stack, X, Y).
+The experiment is stored as an array with a standard indexing order of
+(Time, Channels, Z-stack, X, Y).
 """
 import logging
 import re
@@ -593,7 +605,10 @@ class Tiler(StepABC):
 
     def get_channel_index(self, channel: str or int) -> int or None:
         """
-        Find index for channel using regex. Returns the first matched string.
+        Find index for channel using regex.
+
+        Return the first matched string.
+
         If self.channels is integers (no image metadata) it returns None.
         If channel is integer
 
@@ -602,10 +617,8 @@ class Tiler(StepABC):
         channel: string or int
             The channel or index to be used.
         """
-
         if all(map(lambda x: isinstance(x, int), self.channels)):
             channel = channel if isinstance(channel, int) else None
-
         if isinstance(channel, str):
             channel = find_channel_index(self.channels, channel)
         return channel

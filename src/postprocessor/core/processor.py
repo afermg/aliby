@@ -229,7 +229,7 @@ class PostProcessor(ProcessABC):
                 self.run_process(dataset, process, loaded_process)
 
     def run_process(self, dataset, process, loaded_process):
-        """Run process on a single dataset and write the result."""
+        """Run process to obtain a single dataset and write the result."""
         # define signal
         if isinstance(dataset, list):
             # multisignal process

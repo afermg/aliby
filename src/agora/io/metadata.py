@@ -66,7 +66,7 @@ class MetaData:
 # Needed because HDF5 attributes do not support dictionaries
 def flatten_dict(nested_dict, separator="/"):
     """
-    Flattens nested dictionary. If empty return as-is.
+    Flatten nested dictionary. If empty return as-is.
     """
     flattened = {}
     if nested_dict:
@@ -79,9 +79,7 @@ def flatten_dict(nested_dict, separator="/"):
 # Needed because HDF5 attributes do not support datetime objects
 # Takes care of time zones & daylight saving
 def datetime_to_timestamp(time, locale="Europe/London"):
-    """
-    Convert datetime object to UNIX timestamp
-    """
+    """Convert datetime object to UNIX timestamp."""
     return timezone(locale).localize(time).timestamp()
 
 
@@ -189,7 +187,6 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     Dictionary with minimal metadata
     """
     filedir = Path(filedir)
-
     filepath = find_file(filedir, "*.log")
     if filepath:
         raw_parse = parse_from_swainlab_grammar(filepath)
@@ -201,24 +198,23 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
         minimal_meta = (
             get_meta_from_legacy(legacy_parse) if legacy_parse else {}
         )
-
     return minimal_meta
 
 
 def dispatch_metadata_parser(filepath: t.Union[str, Path]):
     """
-    Function to dispatch different metadata parsers that convert logfiles into a
-    basic metadata dictionary. Currently only contains the swainlab log parsers.
+    Dispatch different metadata parsers that convert logfiles into a dictionary.
+
+    Currently only contains the swainlab log parsers.
 
     Input:
     --------
-    filepath: str existing file containing metadata, or folder containing naming conventions
+    filepath: str existing file containing metadata, or folder containing naming
+    conventions
     """
     parsed_meta = parse_swainlab_metadata(filepath)
-
     if parsed_meta is None:
         parsed_meta = dir_to_meta
-
     return parsed_meta
 
 

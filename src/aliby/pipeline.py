@@ -154,6 +154,7 @@ class PipelineParameters(ParametersABC):
         defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
 
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
+        # why are BabyParameters here as an alternative?
         defaults["extraction"] = (
             exparams_from_meta(meta_d)
             or BabyParameters.default(**extraction).to_dict()
@@ -432,6 +433,7 @@ class Pipeline(ProcessABC):
                 if process_from["extraction"] < tps:
                     # TODO Move this parameter validation into Extractor
                     av_channels = set((*steps["tiler"].channels, "general"))
+                    # overwrite extraction specified by PipelineParameters !!
                     config["extraction"]["tree"] = {
                         k: v
                         for k, v in config["extraction"]["tree"].items()
@@ -681,12 +683,12 @@ class Pipeline(ProcessABC):
                 for i, step in enumerate(self.step_sequence, 1)
             }
 
-        # Set up
+        # set up
         directory = config["general"]["directory"]
-
         trackers_state: t.List[np.ndarray] = []
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             filename = Path(f"{directory}/{image.name}.h5")
+            # load metadata
             meta = MetaData(directory, filename)
             from_start = True if np.any(ow.values()) else False
             # remove existing file if overwriting

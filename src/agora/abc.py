@@ -24,9 +24,7 @@ class ParametersABC(ABC):
     """
 
     def __init__(self, **kwargs):
-        """
-        Define parameters as attributes.
-        """
+        """Define parameters as attributes."""
         assert (
             "parameters" not in kwargs
         ), "No attribute should be named parameters"
@@ -35,8 +33,9 @@ class ParametersABC(ABC):
 
     def to_dict(self, iterable="null") -> t.Dict:
         """
-        Recursive function to return a nested dictionary of the
-        attributes of the class instance.
+        Return a nested dictionary of the attributes of the class instance.
+
+        Uses recursion.
         """
         if isinstance(iterable, dict):
             if any(
@@ -62,7 +61,8 @@ class ParametersABC(ABC):
 
     def to_yaml(self, path: Union[Path, str] = None):
         """
-        Returns a yaml stream of the attributes of the class instance.
+        Return a yaml stream of the attributes of the class instance.
+
         If path is provided, the yaml stream is saved there.
 
         Parameters
@@ -81,9 +81,7 @@ class ParametersABC(ABC):
 
     @classmethod
     def from_yaml(cls, source: Union[Path, str]):
-        """
-        Returns instance from a yaml filename or stdin
-        """
+        """Return instance from a yaml filename or stdin."""
         is_buffer = True
         try:
             if Path(source).exists():
@@ -107,7 +105,8 @@ class ParametersABC(ABC):
 
     def update(self, name: str, new_value):
         """
-        Update values recursively
+        Update values recursively.
+
         if name is a dictionary, replace data where existing found or add if not.
         It warns against type changes.
 
@@ -179,7 +178,8 @@ def add_to_collection(
 class ProcessABC(ABC):
     """
     Base class for processes.
-    Defines parameters as attributes and requires run method to be defined.
+
+    Define parameters as attributes and requires a run method.
     """
 
     def __init__(self, parameters):
