@@ -94,7 +94,7 @@ class Signal(BridgeH5):
             if tinterval_location in f.attrs:
                 return f.attrs[tinterval_location][0]
             else:
-                logging.getlogger("aliby").warn(
+                logging.getLogger("aliby").warn(
                     f"{str(self.filename).split('/')[-1]}: using default time interval of 5 minutes"
                 )
                 return 5
