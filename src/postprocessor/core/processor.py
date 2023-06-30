@@ -1,3 +1,4 @@
+# change "prepost" to "preprocess"; change filename to postprocessor_engine.py ??
 import typing as t
 from itertools import takewhile
 
@@ -61,34 +62,22 @@ class PostProcessorParameters(ParametersABC):
         kind: list of str
             If "ph_batman" included, add targets for experiments using pHlourin.
         """
-        # each subitem specifies the function to be called and the location
-        # on the h5 file to be written
+        # each subitem specifies the function to be called
+        # and the h5-file location for the results
+        #: why does merger have a string and picker a list?
         targets = {
             "prepost": {
                 "merger": "/extraction/general/None/area",
                 "picker": ["/extraction/general/None/area"],
             },
             "processes": [
-                [
-                    "buddings",
-                    ["/extraction/general/None/volume"],
-                ],
-                [
-                    "dsignal",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
-                ],
-                [
-                    "bud_metric",
-                    [
-                        "/extraction/general/None/volume",
-                    ],
-                ],
+                ["buddings", ["/extraction/general/None/volume"]],
+                ["dsignal", ["/extraction/general/None/volume"]],
+                ["bud_metric", ["/extraction/general/None/volume"]],
                 [
                     "dsignal",
                     [
-                        "/postprocessing/bud_metric/extraction_general_None_volume",
+                        "/postprocessing/bud_metric/extraction_general_None_volume"
                     ],
                 ],
             ],
@@ -129,7 +118,7 @@ class PostProcessorParameters(ParametersABC):
 class PostProcessor(ProcessABC):
     def __init__(self, filename, parameters):
         """
-        Initialise PostProcessor
+        Initialise PostProcessor.
 
         Parameters
         ----------
@@ -172,31 +161,32 @@ class PostProcessor(ProcessABC):
         self.targets = parameters["targets"]
 
     def run_prepost(self):
-        """Using picker, get and write lineages, returning mothers and daughters."""
-        """Important processes run before normal post-processing ones"""
+        """
+        Run picker and merger and get lineages.
+
+        Necessary before any processes can run.
+        """
+        # run merger
         record = self._signal.get_raw(self.targets["prepost"]["merger"])
         merges = np.array(self.merger.run(record), dtype=int)
-
         self._writer.write(
             "modifiers/merges", data=[np.array(x) for x in merges]
         )
-
+        # get lineages from picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
         lineage_merged = []
-
-        if merges.any():  # Update lineages after merge events
-
+        if merges.any():
+            # update lineages after merge events
             merged_indices = merge_association(lineage, merges)
-            # Remove repeated labels post-merging
+            # remove repeated labels post-merging
             lineage_merged = np.unique(merged_indices, axis=0)
-
         self.lineage = _3d_index_to_2d(
             lineage_merged if len(lineage_merged) else lineage
         )
         self._writer.write(
             "modifiers/lineage_merged", _3d_index_to_2d(lineage_merged)
         )
-
+        # run picker
         picked_indices = self.picker.run(
             self._signal[self.targets["prepost"]["picker"][0]]
         )
@@ -211,26 +201,17 @@ class PostProcessor(ProcessABC):
                 overwrite="overwrite",
             )
 
-    @staticmethod
-    def pick_mother(a, b):
-        """Update the mother id following this priorities:
-
-        The mother has a lower id
-        """
-        x = max(a, b)
-        if min([a, b]):
-            x = [a, b][np.argmin([a, b])]
-        return x
-
     def run(self):
         """
         Write the results to the h5 file.
+
         Processes include identifying buddings and finding bud metrics.
         """
         # run merger, picker, and find lineages
         self.run_prepost()
         # run processes
         for process, datasets in tqdm(self.targets["processes"]):
+            # process is a str; datasets is a list of str
             if process in self.parameters["param_sets"].get("processes", {}):
                 # parameters already assigned
                 parameters = self.parameters_classfun[process](
@@ -243,13 +224,12 @@ class PostProcessor(ProcessABC):
             loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
                 loaded_process.lineage = self.lineage
-
             # apply process to each dataset
             for dataset in datasets:
                 self.run_process(dataset, process, loaded_process)
 
     def run_process(self, dataset, process, loaded_process):
-        """Run process on a single dataset and write the result."""
+        """Run process to obtain a single dataset and write the result."""
         # define signal
         if isinstance(dataset, list):
             # multisignal process
@@ -269,7 +249,7 @@ class PostProcessor(ProcessABC):
                 [], columns=signal.columns, index=signal.index
             )
             result.columns.names = ["timepoint"]
-        # define outpath, where result will be written
+        # define outpath to write result
         if process in self.parameters["outpaths"]:
             outpath = self.parameters["outpaths"][process]
         elif isinstance(dataset, list):
@@ -318,3 +298,15 @@ class PostProcessor(ProcessABC):
         metadata: t.Dict,
     ):
         self._writer.write(path, result, meta=metadata, overwrite="overwrite")
+
+    @staticmethod
+    def pick_mother(a, b):
+        """
+        Update the mother id following this priorities:
+
+        The mother has a lower id
+        """
+        x = max(a, b)
+        if min([a, b]):
+            x = [a, b][np.argmin([a, b])]
+        return x

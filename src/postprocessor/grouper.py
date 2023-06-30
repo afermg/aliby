@@ -86,8 +86,9 @@ class Grouper(ABC):
         **kwargs,
     ):
         """
-        Concatenate data for one signal from different h5 files, with
-        one h5 file per position, into a dataframe.
+        Concatenate data for one signal from different h5 files into a dataframe.
+
+        Each h5 file corresponds to one position
 
         Parameters
         ----------
@@ -267,17 +268,17 @@ class Grouper(ABC):
 
     @property
     def stages_span(self):
-        # FAILS on my example
+        # TODO: fails on my example
         return self.fsignal.stages_span
 
     @property
     def max_span(self):
-        # FAILS on my example
+        # TODO: fails on my example
         return self.fsignal.max_span
 
     @property
     def stages(self):
-        # FAILS on my example
+        # TODO: fails on my example
         return self.fsignal.stages
 
     @property

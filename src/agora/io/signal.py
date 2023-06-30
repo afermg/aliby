@@ -60,10 +60,10 @@ class Signal(BridgeH5):
 
     def get(self, dsets: t.Union[str, t.Collection], **kwargs):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
-        if isinstance(dsets, str):  # no pre-processing
-            df = self.get_raw(dsets, **kwargs)
+        if isinstance(dsets, str):
+            # no pre-processing
+            dsets = self.get_raw(dsets, **kwargs)
             prepost_applied = self.apply_prepost(dsets, **kwargs)
-
             return self.add_name(prepost_applied, dsets)
 
     @staticmethod
@@ -73,7 +73,7 @@ class Signal(BridgeH5):
         return df
 
     def cols_in_mins(self, df: pd.DataFrame):
-        # Convert numerical columns in a dataframe to minutes
+        """Convert numerical columns in a dataframe to minutes."""
         try:
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
@@ -141,7 +141,6 @@ class Signal(BridgeH5):
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
             tile_mo_da = f[lineage_location]
-
             if isinstance(tile_mo_da, h5py.Dataset):
                 lineage = tile_mo_da[()]
             else:
@@ -272,7 +271,7 @@ class Signal(BridgeH5):
         Parameters
         ----------
         dataset: str or list of strs
-            The name of the h5 file or a list of h5 file names
+            The name of the h5 file or a list of h5 file names.
         in_minutes: boolean
             If True,
         lineage: boolean
@@ -288,15 +287,17 @@ class Signal(BridgeH5):
                     self.get_raw(dset, in_minutes=in_minutes, lineage=lineage)
                     for dset in dataset
                 ]
-            if lineage:  # assume that df is sorted
+            if lineage:
+                # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
-                a, b = validate_association(
+                valid_association, valid_indices = validate_association(
                     lineage,
                     np.array(df.index.to_list()),
+                    #: are mothers not match_column=0?
                     match_column=1,
                 )
-                mother_label[b] = lineage[a, 1]
+                mother_label[valid_indices] = lineage[valid_association, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
             return df
         except Exception as e:
@@ -353,10 +354,7 @@ class Signal(BridgeH5):
         fullname: str,
         node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """
-        Store the name of a signal if it is a leaf node
-        (a group with no more groups inside) and if it starts with extraction.
-        """
+        """Store the name of a signal if it is a leaf node and if it starts with extraction."""
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):

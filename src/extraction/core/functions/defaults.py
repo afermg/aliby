@@ -1,10 +1,9 @@
 # File with defaults for ease of use
-import re
 import typing as t
 from pathlib import Path
+
 import h5py
 
-# should we move these functions here?
 from aliby.tile.tiler import find_channel_name
 
 
@@ -59,6 +58,7 @@ def exparams_from_meta(
     for ch in extant_fluorescence_ch:
         base["tree"][ch] = default_reduction_metrics
     base["sub_bg"] = extant_fluorescence_ch
+
     # additional extraction defaults if the channels are available
     if "ph" in extras:
         # SWAINLAB specific names

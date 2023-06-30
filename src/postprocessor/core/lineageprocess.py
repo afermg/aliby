@@ -12,19 +12,20 @@ from postprocessor.core.abc import PostProcessABC
 
 
 class LineageProcessParameters(ParametersABC):
-    """
-    Parameters
-    """
+    """Parameters - none are necessary."""
 
     _defaults = {}
 
 
 class LineageProcess(PostProcessABC):
     """
-    Lineage process that must be passed a (N,3) lineage matrix (where the columns are trap, mother, daughter respectively)
+    To analyse lineage data.
+
+    Currently bare bones, but extracts lineage information from a Signal or Cells object.
     """
 
     def __init__(self, parameters: LineageProcessParameters):
+        """Initialise using PostProcessABC."""
         super().__init__(parameters)
 
     @abstractmethod
@@ -34,6 +35,7 @@ class LineageProcess(PostProcessABC):
         lineage: np.ndarray,
         *args,
     ):
+        """Implement method required by PostProcessABC - undefined."""
         pass
 
     @classmethod
@@ -45,8 +47,9 @@ class LineageProcess(PostProcessABC):
         **kwargs,
     ):
         """
-        Overrides PostProcess.as_function classmethod.
-        Lineage functions require lineage information to be passed if run as function.
+        Override PostProcesABC.as_function method.
+
+        Lineage functions require lineage information to be run as functions.
         """
         parameters = cls.default_parameters(**kwargs)
         return cls(parameters=parameters).run(
@@ -54,8 +57,9 @@ class LineageProcess(PostProcessABC):
         )
 
     def get_lineage_information(self, signal=None, merged=True):
-
+        """Get lineage as an array with tile IDs, mother labels, and corresponding bud labels."""
         if signal is not None and "mother_label" in signal.index.names:
+            # from kymograph
             lineage = get_index_as_np(signal)
         elif hasattr(self, "lineage"):
             lineage = self.lineage
@@ -68,5 +72,5 @@ class LineageProcess(PostProcessABC):
                 elif self.cells is not None:
                     lineage = self.cells.mothers_daughters
         else:
-            raise Exception("No linage information found")
+            raise Exception("No lineage information found")
         return lineage

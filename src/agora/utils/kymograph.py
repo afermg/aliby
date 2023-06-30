@@ -170,6 +170,7 @@ def slices_from_spans(spans: t.Tuple[int], df: pd.DataFrame) -> t.List[slice]:
 
 
 def drop_mother_label(index: pd.MultiIndex) -> np.ndarray:
+    """Remove mother_label level from a MultiIndex."""
     no_mother_label = index
     if "mother_label" in index.names:
         no_mother_label = index.droplevel("mother_label")

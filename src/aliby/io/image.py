@@ -30,14 +30,14 @@ from agora.io.metadata import dir_to_meta, dispatch_metadata_parser
 
 
 def get_examples_dir():
-    """Get examples directory which stores dummy image for tiler"""
+    """Get examples directory that stores dummy image for tiler."""
     return files("aliby").parent.parent / "examples" / "tiler"
 
 
 def instantiate_image(
     source: t.Union[str, int, t.Dict[str, str], Path], **kwargs
 ):
-    """Wrapper to instatiate the appropiate image
+    """Wrapper to instantiate the appropriate image
 
     Parameters
     ----------
@@ -55,26 +55,26 @@ def instantiate_image(
 
 
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
-    """
-    Wrapper to pick the appropiate Image class depending on the source of data.
-    """
+    """Pick the appropriate Image class depending on the source of data."""
     if isinstance(source, (int, np.int64)):
         from aliby.io.omero import Image
 
-        instatiator = Image
+        instantiator = Image
     elif isinstance(source, dict) or (
         isinstance(source, (str, Path)) and Path(source).is_dir()
     ):
         if Path(source).suffix == ".zarr":
-            instatiator = ImageZarr
+            instantiator = ImageZarr
         else:
-            instatiator = ImageDir
+            instantiator = ImageDir
+    elif isinstance(source, Path) and source.is_file():
+        # my addition
+        instantiator = ImageLocalOME
     elif isinstance(source, str) and Path(source).is_file():
-        instatiator = ImageLocalOME
+        instantiator = ImageLocalOME
     else:
         raise Exception(f"Invalid data source at {source}")
-
-    return instatiator
+    return instantiator
 
 
 class BaseLocalImage(ABC):
@@ -82,6 +82,7 @@ class BaseLocalImage(ABC):
     Base Image class to set path and provide context management method.
     """
 
+    # default image order
     _default_dimorder = "tczyx"
 
     def __init__(self, path: t.Union[str, Path]):
@@ -98,8 +99,7 @@ class BaseLocalImage(ABC):
         return False
 
     def rechunk_data(self, img):
-        # Format image using x and y size from metadata.
-
+        """Format image using x and y size from metadata."""
         self._rechunked_img = da.rechunk(
             img,
             chunks=(
@@ -145,16 +145,16 @@ class ImageLocalOME(BaseLocalImage):
     in which a multidimensional tiff image contains the metadata.
     """
 
-    def __init__(self, path: str, dimorder=None):
+    def __init__(self, path: str, dimorder=None, **kwargs):
         super().__init__(path)
         self._id = str(path)
+        self.set_meta(str(path))
 
-    def set_meta(self):
+    def set_meta(self, path):
         meta = dict()
         try:
             with TiffFile(path) as f:
                 self._meta = xmltodict.parse(f.ome_metadata)["OME"]
-
             for dim in self.dimorder:
                 meta["size_" + dim.lower()] = int(
                     self._meta["Image"]["Pixels"]["@Size" + dim]
@@ -165,21 +165,19 @@ class ImageLocalOME(BaseLocalImage):
                 ]
                 meta["name"] = self._meta["Image"]["@Name"]
                 meta["type"] = self._meta["Image"]["Pixels"]["@Type"]
-
-        except Exception as e:  # Images not in OMEXML
-
+        except Exception as e:
+            # images not in OMEXML
             print("Warning:Metadata not found: {}".format(e))
             print(
-                f"Warning: No dimensional info provided. Assuming {self._default_dimorder}"
+                "Warning: No dimensional info provided. "
+                f"Assuming {self._default_dimorder}"
             )
-
-            # Mark non-existent dimensions for padding
+            # mark non-existent dimensions for padding
             self.base = self._default_dimorder
             # self.ids = [self.index(i) for i in dimorder]
-
-            self._dimorder = base
-
+            self._dimorder = self.base
             self._meta = meta
+            # self._meta["name"] = Path(path).name.split(".")[0]
 
     @property
     def name(self):
@@ -246,7 +244,7 @@ class ImageDir(BaseLocalImage):
     It inherits from BaseLocalImage so we only override methods that are critical.
 
     Assumptions:
-    - One folders per position.
+    - One folder per position.
     - Images are flat.
     - Channel, Time, z-stack and the others are determined by filenames.
     - Provides Dimorder as it is set in the filenames, or expects order during instatiation
@@ -318,7 +316,7 @@ class ImageZarr(BaseLocalImage):
             print(f"Could not add size info to metadata: {e}")
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading local multidimensional zarr files"""
+        """Return 5D dask array for lazy-loading local multidimensional zarr files."""
         return self._img
 
     def add_size_to_meta(self):

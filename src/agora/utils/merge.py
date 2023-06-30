@@ -13,8 +13,11 @@ from agora.utils.indexing import compare_indices, validate_association
 
 
 def apply_merges(data: pd.DataFrame, merges: np.ndarray):
-    """Split data in two, one subset for rows relevant for merging and one
-    without them. It uses an array of source tracklets and target tracklets
+    """
+    Split data in two, one subset for rows relevant for merging and one
+    without them.
+
+    Use an array of source tracklets and target tracklets
     to efficiently merge them.
 
     Parameters
@@ -43,7 +46,7 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
 
     # Implement the merges and drop source rows.
     # TODO Use matrices to perform merges in batch
-    # for ecficiency
+    # for efficiency
     if valid_merges.any():
         to_merge = data.loc[indices]
         targets, sources = zip(*merges[valid_merges])

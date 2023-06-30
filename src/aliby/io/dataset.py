@@ -54,7 +54,7 @@ class DatasetLocalABC(ABC):
     Abstract Base class to find local files, either OME-XML or raw images.
     """
 
-    _valid_suffixes = ("tiff", "png", "zarr")
+    _valid_suffixes = ("tiff", "png", "zarr", "tif")
     _valid_meta_suffixes = ("txt", "log")
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
