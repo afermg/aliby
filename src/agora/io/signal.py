@@ -70,7 +70,7 @@ class Signal(BridgeH5):
 
     @staticmethod
     def add_name(df, name):
-        """Add column of identical strings to a dataframe."""
+        """TODO"""
         df.name = name
         return df
 
