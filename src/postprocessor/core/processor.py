@@ -139,7 +139,7 @@ class PostProcessor(ProcessABC):
         for k in dicted_params.keys():
             if not isinstance(dicted_params[k], dict):
                 dicted_params[k] = dicted_params[k].to_dict()
-        # merger and picker
+        # initialise merger and picker
         self.merger = Merger(
             MergerParameters.from_dict(dicted_params["merger"])
         )
@@ -147,12 +147,12 @@ class PostProcessor(ProcessABC):
             PickerParameters.from_dict(dicted_params["picker"]),
             cells=Cells.from_source(filename),
         )
-        # processes, such as buddings
+        # get processes, such as buddings
         self.classfun = {
             process: get_process(process)
             for process, _ in parameters["targets"]["processes"]
         }
-        # parameters for the process in classfun
+        # get parameters for the processes in classfun
         self.parameters_classfun = {
             process: get_parameters(process)
             for process, _ in parameters["targets"]["processes"]

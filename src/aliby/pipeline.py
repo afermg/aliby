@@ -592,41 +592,6 @@ class Pipeline(ProcessABC):
         )
         return (traps_above_nthresh & traps_above_athresh).mean()
 
-    # FIXME: Remove this functionality. It used to be for
-    # older hdf5 file formats.
-    def _load_config_from_file(
-        self,
-        filename: Path,
-        process_from: t.Dict[str, int],
-        trackers_state: t.List,
-        overwrite: t.Dict[str, bool],
-    ):
-        with h5py.File(filename, "r") as f:
-            for k in process_from.keys():
-                if not overwrite[k]:
-                    process_from[k] = self.legacy_get_last_tp[k](f)
-                    process_from[k] += 1
-        return process_from, trackers_state, overwrite
-
-    # FIXME: Remove this functionality. It used to be for
-    # older hdf5 file formats.
-    @staticmethod
-    def legacy_get_last_tp(step: str) -> t.Callable:
-        """Get last time-point in different ways depending
-        on which step we are using
-
-        To support segmentation in aliby < v0.24
-        TODO Deprecate and replace with State method
-        """
-        switch_case = {
-            "tiler": lambda f: f["trap_info/drifts"].shape[0] - 1,
-            "baby": lambda f: f["cell_info/timepoint"][-1],
-            "extraction": lambda f: f[
-                "extraction/general/None/area/timepoint"
-            ][-1],
-        }
-        return switch_case[step]
-
     def _setup_pipeline(
         self, image_id: int
     ) -> t.Tuple[
@@ -682,7 +647,6 @@ class Pipeline(ProcessABC):
                 step: self.step_sequence.index(ow_id) < i
                 for i, step in enumerate(self.step_sequence, 1)
             }
-
         # set up
         directory = config["general"]["directory"]
         trackers_state: t.List[np.ndarray] = []
@@ -722,7 +686,7 @@ class Pipeline(ProcessABC):
                         )
                         config["tiler"] = steps["tiler"].parameters.to_dict()
                     except Exception:
-                        self._log(f"Overwriting tiling data")
+                        self._log("Overwriting tiling data")
 
             if config["general"]["use_explog"]:
                 meta.run()

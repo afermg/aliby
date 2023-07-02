@@ -20,7 +20,9 @@ class Signal(BridgeH5):
     """
     Fetch data from h5 files for post-processing.
 
-    Signal assumes that the metadata and data are accessible to perform time-adjustments and apply previously recorded post-processes.
+    Signal assumes that the metadata and data are accessible to
+    perform time-adjustments and apply previously recorded
+    post-processes.
     """
 
     def __init__(self, file: t.Union[str, Path]):
