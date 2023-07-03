@@ -105,7 +105,7 @@ class BudMetric(LineageProcess):
         return output_df
 
 
-def _combine_daughter_tracks(tracks: pd.DataFrame):
+def _combine_daughter_tracks_old(tracks: pd.DataFrame):
     """
     Combine multiple time series of daughter cells into one time series.
 
@@ -140,4 +140,52 @@ def _combine_daughter_tracks(tracks: pd.DataFrame):
     assert (
         (combined_tracks == old) | (np.isnan(combined_tracks) & np.isnan(old))
     ).all(), "yikes"
+    return pd.Series(combined_tracks, index=tracks.columns)
+
+
+def _combine_daughter_tracks(tracks: pd.DataFrame):
+    """
+    Combine multiple time series of daughter cells into one time series.
+
+    Concatenate daughter values into one time series starting with the first
+    daughter and replacing later values with the values from the next daughter,
+    and so on.
+
+    Parameters
+    ----------
+    tracks: a Signal
+        Data for all daughters, which are distinguished by different cell_labels,
+        for a particular trap and mother_label.
+    """
+    # sort by daughter IDs
+    bud_df = tracks.sort_index(level="cell_label")
+    # remove multi-index
+    no_rows = len(bud_df)
+    bud_df.index = range(no_rows)
+    # find time point of first non-NaN data point of each row
+    init_tps = [
+        bud_df.iloc[irow].first_valid_index() for irow in range(no_rows)
+    ]
+    # sort so that earliest daughter is first
+    sorted_rows = np.argsort(init_tps)
+    init_tps = np.sort(init_tps)
+    # combine data for all daughters
+    combined_tracks = np.nan * np.ones(tracks.columns.size)
+    for j, jrow in enumerate(sorted_rows):
+        # over-write with next earliest daughter
+        combined_tracks[bud_df.columns.get_loc(init_tps[j]) :] = (
+            bud_df.iloc[jrow].loc[init_tps[j] :].values
+        )
+    # ## OLD
+    # # find which row of sorted_df has the daughter for each time point
+    # tp_fvt: pd.Series = bud_df.apply(lambda x: x.first_valid_index(), axis=0)
+    # # combine data for all daughters
+    # old = np.nan * np.ones(tracks.columns.size)
+    # for bud_row in np.unique(tp_fvt.dropna().values).astype(int):
+    #     ilocs = np.where(tp_fvt.values == bud_row)[0]
+    #     old[ilocs] = bud_df.values[bud_row, ilocs]
+    # assert (
+    #     (combined_tracks == old) | (np.isnan(combined_tracks) & np.isnan(old))
+    # ).all(), "yikes"
+    # ###
     return pd.Series(combined_tracks, index=tracks.columns)

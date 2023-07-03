@@ -37,7 +37,7 @@ class buddings(LineageProcess):
         """
         Generate dataframe of budding events.
 
-        Find daughters for mothers in a Signal for which we have lineage data.
+        Find daughters for those mothers in a Signal with lineage data.
         Create a dataframe indicating the time each daughter first appears.
 
         We use the data from Signal only to find when the daughters appear, by
@@ -66,14 +66,15 @@ class buddings(LineageProcess):
             columns=signal.columns,
         )
         buddings.columns.names = ["timepoint"]
-        # get time of first non-NaN value of signal for every mother using Pandas
+        # get time of first non-NaN value of signal for every cell using Pandas
         fvi = signal.apply(lambda x: x.first_valid_index(), axis=1)
         # fill the budding events
         for trap_mother_id, daughters in traps_mothers.items():
+            trap_daughter_ids = [
+                i for i in product((trap_mother_id[0],), daughters)
+            ]
             times_of_bud_appearance = fvi.loc[
-                fvi.index.intersection(
-                    list(product((trap_mother_id[0],), daughters))
-                )
+                fvi.index.intersection(trap_daughter_ids)
             ].values
             # ignore zeros - ignore buds in first image
             daughters_idx = set(times_of_bud_appearance).difference({0})
