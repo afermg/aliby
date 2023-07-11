@@ -54,4 +54,6 @@ class detrend(PostProcessABC):
         ).mean()
         # Detrend: subtract normalised time series by moving average
         signal_detrend = signal.subtract(signal_movavg)
-        return signal_detrend.dropna(axis=1)  # Remove columns with NaNs
+        # Rolling window operations create columns that are all NaNs at the left
+        # and right edges because of the maths.  This line removes these columns.
+        return signal_detrend.dropna(axis=1, how="all")
