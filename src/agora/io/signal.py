@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from agora.io.bridge import BridgeH5
-from agora.io.decorators import _first_arg_str_to_df
+from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_association
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
@@ -26,7 +26,8 @@ class Signal(BridgeH5):
     """
 
     def __init__(self, file: t.Union[str, Path]):
-        """Define index_names for dataframes, candidate fluorescence channels, and composite statistics."""
+        """Define index_names for dataframes, candidate fluorescence channels,
+        and composite statistics."""
         super().__init__(file, flag=None)
         self.index_names = (
             "experiment",
@@ -48,9 +49,9 @@ class Signal(BridgeH5):
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
-        if isinstance(dsets, str):  # no pre-processing
+        if isinstance(dsets, str):
             return self.get(dsets)
-        elif isinstance(dsets, list):  # pre-processing
+        elif isinstance(dsets, list):
             is_bgd = [dset.endswith("imBackground") for dset in dsets]
             # Check we are not comparing tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
@@ -60,17 +61,18 @@ class Signal(BridgeH5):
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
 
-    def get(self, dsets: t.Union[str, t.Collection], **kwargs):
-        """Get and potentially pre-process data from h5 file and return as a dataframe."""
-        if isinstance(dsets, str):
-            # no pre-processing
-            dsets = self.get_raw(dsets, **kwargs)
+    def get(self, dset_name: t.Union[str, t.Collection], **kwargs):
+        """Return pre-processed data as a dataframe."""
+        if isinstance(dset_name, str):
+            dsets = self.get_raw(dset_name, **kwargs)
             prepost_applied = self.apply_prepost(dsets, **kwargs)
-            return self.add_name(prepost_applied, dsets)
+            return self.add_name(prepost_applied, dset_name)
+        else:
+            raise Exception("Error in Signal.get")
 
     @staticmethod
     def add_name(df, name):
-        """TODO"""
+        """Add name of the Signal as an attribute to its corresponding dataframe."""
         df.name = name
         return df
 
@@ -103,7 +105,8 @@ class Signal(BridgeH5):
 
     @staticmethod
     def get_retained(df, cutoff):
-        """Return a fraction of the df, one without later time points."""
+        """Return rows of df with at least cutoff fraction of the total number
+        of time points."""
         return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
@@ -112,15 +115,15 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             return list(f.attrs["channels"])
 
-    @_first_arg_str_to_df
     def retained(self, signal, cutoff=0.8):
         """
         Load data (via decorator) and reduce the resulting dataframe.
 
         Load data for a signal or a list of signals and reduce the resulting
-        dataframes to a fraction of their original size, losing late time
-        points.
+        dataframes to rows with sufficient numbers of time points.
         """
+        if isinstance(signal, str):
+            signal = self.get_raw(signal)
         if isinstance(signal, pd.DataFrame):
             return self.get_retained(signal, cutoff)
         elif isinstance(signal, list):
@@ -133,13 +136,12 @@ class Signal(BridgeH5):
         """
         Get lineage data from a given location in the h5 file.
 
-        Returns an array with three columns: the tile id, the mother label, and the daughter label.
+        Returns an array with three columns: the tile id, the mother label,
+        and the daughter label.
         """
         if lineage_location is None:
             lineage_location = "modifiers/lineage_merged"
         with h5py.File(self.filename, "r") as f:
-            # if lineage_location not in f:
-            #     lineage_location = lineage_location.split("_")[0]
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
             tile_mo_da = f[lineage_location]
@@ -155,7 +157,7 @@ class Signal(BridgeH5):
                 ).T
         return lineage
 
-    @_first_arg_str_to_df
+    @_first_arg_str_to_raw_df
     def apply_prepost(
         self,
         data: t.Union[str, pd.DataFrame],

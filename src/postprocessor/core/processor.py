@@ -72,14 +72,14 @@ class PostProcessorParameters(ParametersABC):
             },
             "processes": [
                 ["buddings", ["/extraction/general/None/volume"]],
-                ["dsignal", ["/extraction/general/None/volume"]],
+                # ["dsignal", ["/extraction/general/None/volume"]],
                 ["bud_metric", ["/extraction/general/None/volume"]],
-                [
-                    "dsignal",
-                    [
-                        "/postprocessing/bud_metric/extraction_general_None_volume"
-                    ],
-                ],
+                # [
+                #     "dsignal",
+                #     [
+                #         "/postprocessing/bud_metric/extraction_general_None_volume"
+                #     ],
+                # ],
             ],
         }
         param_sets = {
@@ -209,9 +209,8 @@ class PostProcessor(ProcessABC):
         """
         # run merger, picker, and find lineages
         self.run_prepost()
-        # run processes
+        # run processes: process is a str; datasets is a list of str
         for process, datasets in tqdm(self.targets["processes"]):
-            # process is a str; datasets is a list of str
             if process in self.parameters["param_sets"].get("processes", {}):
                 # parameters already assigned
                 parameters = self.parameters_classfun[process](
@@ -230,9 +229,8 @@ class PostProcessor(ProcessABC):
 
     def run_process(self, dataset, process, loaded_process):
         """Run process to obtain a single dataset and write the result."""
-        # define signal
+        # get pre-processed data
         if isinstance(dataset, list):
-            # multisignal process
             signal = [self._signal[d] for d in dataset]
         elif isinstance(dataset, str):
             signal = self._signal[dataset]
@@ -249,8 +247,9 @@ class PostProcessor(ProcessABC):
                 [], columns=signal.columns, index=signal.index
             )
             result.columns.names = ["timepoint"]
-        # define outpath to write result
+        # use outpath to write result
         if process in self.parameters["outpaths"]:
+            # outpath already defined
             outpath = self.parameters["outpaths"][process]
         elif isinstance(dataset, list):
             # no outpath is defined

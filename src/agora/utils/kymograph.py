@@ -86,16 +86,19 @@ def bidirectional_retainment_filter(
     daughters_thresh: int = 7,
 ) -> pd.DataFrame:
     """
-    Retrieve families where mothers are present for more than a fraction of the experiment, and daughters for longer than some number of time-points.
+    Retrieve families where mothers are present for more than a fraction
+    of the experiment and daughters for longer than some number of
+    time-points.
 
     Parameters
     ----------
     df: pd.DataFrame
         Data
     mothers_thresh: float
-        Minimum fraction of experiment's total duration for which mothers must be present.
+        Minimum fraction of experiment's total duration for which mothers
+        must be present.
     daughters_thresh: int
-        Minimum number of time points for which daughters must be observed
+        Minimum number of time points for which daughters must be observed.
     """
     # daughters
     all_daughters = df.loc[df.index.get_level_values("mother_label") > 0]

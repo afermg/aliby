@@ -11,9 +11,7 @@ from postprocessor.core.lineageprocess import (
 
 
 class BudMetricParameters(LineageProcessParameters):
-    """
-    Parameters
-    """
+    """Give default location of lineage information."""
 
     _defaults = {"lineage_location": "postprocessing/lineage_merged"}
 
@@ -34,9 +32,11 @@ class BudMetric(LineageProcess):
         lineage: t.Dict[pd.Index, t.Tuple[pd.Index]] = None,
     ):
         if lineage is None:
+            # define lineage
             if hasattr(self, "lineage"):
                 lineage = self.lineage
             else:
+                # lineage information in the Signal dataframe
                 assert "mother_label" in signal.index.names
                 lineage = signal.index.to_list()
         return self.get_bud_metric(signal, mb_array_to_dict(lineage))
@@ -46,44 +46,40 @@ class BudMetric(LineageProcess):
         signal: pd.DataFrame, md: t.Dict[t.Tuple, t.Tuple[t.Tuple]] = None
     ):
         """
+        Generate a dataframe of a Signal for buds indexed by their mothers,
+        concatenating data from all the buds for each mother.
 
-        signal: Daughter-inclusive dataframe
-        md: dictionary where key is mother's index,
-        defined as (trap, cell_label), and its values are a list of
-        daughter indices, as (trap, cell_label).
-
-        Get fvi (First Valid Index) for all cells
-        Create empty matrix
-        for every mother:
-         - Get daughters' subdataframe
-         - sort  daughters by cell label
-         - get series of fvis
-         - concatenate the values of these ranges from the dataframe
-        Fill the empty matrix
-        Convert matrix into dataframe using mother indices
-
+        Parameters
+        ---------
+        signal: pd.Dataframe
+            A dataframe that includes data for both mothers and daughters.
+        md: dict
+            A dict of lineage information with each key a mother's index,
+            defined as (trap, cell_label), and the corresponding values are a
+            list of daughter indices, also defined as (trap, cell_label).
         """
         md_index = signal.index
         # md_index should only comprise (trap, cell_label)
         if "mother_label" not in md_index.names:
-            # dict with daughter indices as keys
-            d = {v: k for k, values in md.items() for v in values}
-            # generate mother_label in signal using the mother's cell_label
+            # dict with daughter indices as keys and mother indices as values
+            bud_dict = {v: k for k, values in md.items() for v in values}
+            # generate mother_label in Signal using the mother's cell_label
+            # cells with no mothers have a mother_label of 0
             signal["mother_label"] = list(
-                map(lambda x: d.get(x, [0])[-1], signal.index)
+                map(lambda x: bud_dict.get(x, [0])[-1], signal.index)
             )
             signal.set_index("mother_label", append=True, inplace=True)
             # combine mothers and daughter indices
             mothers_index = md.keys()
             daughters_index = [y for x in md.values() for y in x]
             relations = set([*mothers_index, *daughters_index])
-            # keep from md_index only mother and daughters
+            # keep from md_index only cells that are mother or daughters
             md_index = md_index.intersection(relations)
         else:
             md_index = md_index.droplevel("mother_label")
         if len(md_index) < len(signal):
             print("Dropped cells before applying bud_metric")  # TODO log
-        # restrict signal to the cells in md_index, moving mother_label to do so
+        # restrict signal to the cells in md_index moving mother_label to do so
         signal = (
             signal.reset_index("mother_label")
             .loc(axis=0)[md_index]
@@ -96,51 +92,13 @@ class BudMetric(LineageProcess):
         output_df = daughter_df.groupby(["trap", "mother_label"]).apply(
             lambda x: _combine_daughter_tracks(x)
         )
-
         output_df.columns = signal.columns
-        output_df["padding_level"] = 0
-        output_df.set_index("padding_level", append=True, inplace=True)
+        # daughter data is indexed by mothers, which themselves have no mothers
+        output_df["temp_mother_label"] = 0
+        output_df.set_index("temp_mother_label", append=True, inplace=True)
         if len(output_df):
             output_df.index.names = signal.index.names
         return output_df
-
-
-def _combine_daughter_tracks_old(tracks: pd.DataFrame):
-    """
-    Combine multiple time series of daughter cells into one time series.
-
-    At any one time, a mother cell should have only one daughter.
-
-    Two daughters are still sometimes present at the same time point, and we
-    then choose the daughter that appears first.
-
-    TODO We need to fix examples with more than one daughter at a time point.
-
-    Parameters
-    ----------
-    tracks: a Signal
-        Data for all daughters, which are distinguished by different cell_labels,
-        for a particular trap and mother_label.
-    """
-    # sort by daughter IDs
-    bud_df = tracks.sort_index(level="cell_label")
-    # remove multi-index
-    bud_df.index = range(len(bud_df))
-    # find which row of sorted_df has the daughter for each time point
-    tp_fvt: pd.Series = bud_df.apply(lambda x: x.first_valid_index(), axis=0)
-    # combine data for all daughters
-    combined_tracks = np.nan * np.ones(tracks.columns.size)
-    for bud_row in np.unique(tp_fvt.dropna().values).astype(int):
-        ilocs = np.where(tp_fvt.values == bud_row)[0]
-        combined_tracks[ilocs] = bud_df.values[bud_row, ilocs]
-    # TODO delete old version
-    tp_fvt = bud_df.columns.get_indexer(tp_fvt)
-    tp_fvt[tp_fvt == -1] = len(bud_df) - 1
-    old = np.choose(tp_fvt, bud_df.values)
-    assert (
-        (combined_tracks == old) | (np.isnan(combined_tracks) & np.isnan(old))
-    ).all(), "yikes"
-    return pd.Series(combined_tracks, index=tracks.columns)
 
 
 def _combine_daughter_tracks(tracks: pd.DataFrame):
@@ -176,16 +134,42 @@ def _combine_daughter_tracks(tracks: pd.DataFrame):
         combined_tracks[bud_df.columns.get_loc(init_tps[j]) :] = (
             bud_df.iloc[jrow].loc[init_tps[j] :].values
         )
-    # ## OLD
-    # # find which row of sorted_df has the daughter for each time point
-    # tp_fvt: pd.Series = bud_df.apply(lambda x: x.first_valid_index(), axis=0)
-    # # combine data for all daughters
-    # old = np.nan * np.ones(tracks.columns.size)
-    # for bud_row in np.unique(tp_fvt.dropna().values).astype(int):
-    #     ilocs = np.where(tp_fvt.values == bud_row)[0]
-    #     old[ilocs] = bud_df.values[bud_row, ilocs]
-    # assert (
-    #     (combined_tracks == old) | (np.isnan(combined_tracks) & np.isnan(old))
-    # ).all(), "yikes"
-    # ###
+    return pd.Series(combined_tracks, index=tracks.columns)
+
+
+def _combine_daughter_tracks_original(tracks: pd.DataFrame):
+    """
+    Combine multiple time series of daughter cells into one time series.
+
+    At any one time, a mother cell should have only one daughter.
+
+    Two daughters are still sometimes present at the same time point, and we
+    then choose the daughter that appears first.
+
+    TODO We need to fix examples with more than one daughter at a time point.
+
+    Parameters
+    ----------
+    tracks: a Signal
+        Data for all daughters, which are distinguished by different cell_labels,
+        for a particular trap and mother_label.
+    """
+    # sort by daughter IDs
+    bud_df = tracks.sort_index(level="cell_label")
+    # remove multi-index
+    bud_df.index = range(len(bud_df))
+    # find which row of sorted_df has the daughter for each time point
+    tp_fvt: pd.Series = bud_df.apply(lambda x: x.first_valid_index(), axis=0)
+    # combine data for all daughters
+    combined_tracks = np.nan * np.ones(tracks.columns.size)
+    for bud_row in np.unique(tp_fvt.dropna().values).astype(int):
+        ilocs = np.where(tp_fvt.values == bud_row)[0]
+        combined_tracks[ilocs] = bud_df.values[bud_row, ilocs]
+    # TODO delete old version
+    tp_fvt = bud_df.columns.get_indexer(tp_fvt)
+    tp_fvt[tp_fvt == -1] = len(bud_df) - 1
+    old = np.choose(tp_fvt, bud_df.values)
+    assert (
+        (combined_tracks == old) | (np.isnan(combined_tracks) & np.isnan(old))
+    ).all(), "yikes"
     return pd.Series(combined_tracks, index=tracks.columns)

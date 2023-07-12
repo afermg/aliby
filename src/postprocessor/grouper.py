@@ -86,16 +86,15 @@ class Grouper(ABC):
         **kwargs,
     ):
         """
-        Concatenate data for one signal from different h5 files into a dataframe.
-
-        Each h5 file corresponds to one position
+        Concatenate data for one signal from different h5 files, one for
+        each position, into a dataframe.
 
         Parameters
         ----------
         path : str
-           Signal location within h5py file
+           Signal location within h5 file.
         pool : int
-           Number of threads used; if 0 or None only one core is used
+           Number of threads used; if 0 or None only one core is used.
         mode: str
         standard: boolean
         **kwargs : key, value pairings
@@ -111,7 +110,7 @@ class Grouper(ABC):
         if standard:
             fn_pos = concat_standard
         else:
-            fn_pos = concat_signal_ind
+            fn_pos = concat_one_signal
             kwargs["mode"] = mode
         records = self.pool_function(
             path=path,
@@ -164,9 +163,8 @@ class Grouper(ABC):
         chainers: t.Dict[str, Chainer] = None,
         **kwargs,
     ):
-        """Enable different threads for independent chains, particularly useful when aggregating multiple elements."""
-        if pool is None:
-            pass
+        """Enable different threads for independent chains, particularly
+        useful when aggregating multiple elements."""
         chainers = chainers or self.chainers
         if pool:
             with Pool(pool) as p:
@@ -371,7 +369,7 @@ def concat_standard(
     return combined
 
 
-def concat_signal_ind(
+def concat_one_signal(
     path: str,
     chainer: Chainer,
     group: str,
