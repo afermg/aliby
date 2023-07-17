@@ -78,7 +78,9 @@ class BudMetric(LineageProcess):
         else:
             md_index = md_index.droplevel("mother_label")
         if len(md_index) < len(signal):
-            print("Dropped cells before applying bud_metric")  # TODO log
+            print(
+                f"Dropped {len(signal) - len(md_index)} cells before applying bud_metric"
+            )  # TODO log
         # restrict signal to the cells in md_index moving mother_label to do so
         signal = (
             signal.reset_index("mother_label")
@@ -90,7 +92,7 @@ class BudMetric(LineageProcess):
         daughter_df = signal.loc[mother_labels > 0]
         # join data for daughters with the same mother
         output_df = daughter_df.groupby(["trap", "mother_label"]).apply(
-            lambda x: _combine_daughter_tracks(x)
+            combine_daughter_tracks
         )
         output_df.columns = signal.columns
         # daughter data is indexed by mothers, which themselves have no mothers
@@ -101,7 +103,7 @@ class BudMetric(LineageProcess):
         return output_df
 
 
-def _combine_daughter_tracks(tracks: pd.DataFrame):
+def combine_daughter_tracks(tracks: pd.DataFrame):
     """
     Combine multiple time series of daughter cells into one time series.
 

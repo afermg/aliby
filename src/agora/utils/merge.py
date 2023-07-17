@@ -48,7 +48,7 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
     # TODO Use matrices to perform merges in batch
     # for efficiency
     if valid_merges.any():
-        to_merge = data.loc[indices]
+        to_merge = data.loc[indices].copy()
         targets, sources = zip(*merges[valid_merges])
         for source, target in zip(sources, targets):
             target = tuple(target)
