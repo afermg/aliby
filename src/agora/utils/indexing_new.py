@@ -12,29 +12,31 @@ import typing as t
 
 
 def validate_lineage(
-    association: np.ndarray,
+    lineage: np.ndarray,
     indices: np.ndarray,
     match_column: t.Optional[int] = None,
 ) -> t.Tuple[np.ndarray, np.ndarray]:
-    if association.ndim == 2:
-        # reshape into 3D array for broadcasting
-        # for each trap, [trap, mother, daughter] becomes
-        #  [[trap, mother], [trap, daughter]]
-        association = _assoc_indices_to_3d(association)
-
-    dtype = {"names": ["trap_id", "cell_id"], "formats": [int, int]}
-    intersections = np.intersect1d(
-        association.view(dtype), indices.view(dtype)
-    )
-    inter_array = intersections.view(int).reshape(-1, 2)
-    valid_association = np.isin(association.view(dtype), intersections).all(
-        axis=1
-    )
-    valid_indices = np.intersect1d(
-        association[valid_association.flatten(), ...].view(dtype),
-        indices.view(dtype),
-    )
-    return valid_association, valid_indices
+    """
+    Identify mother-bud pairs that exist both in lineage and a Signal's indices.
+    """
+    if lineage.ndim == 2:
+        # [trap, mother, daughter] becomes [[trap, mother], [trap, daughter]]
+        lineage = _assoc_indices_to_3d(lineage)
+    # dtype links together trap and cell ids
+    dtype = {
+        "names": ["trap_id", "cell_id"],
+        "formats": [np.int64, np.int64],
+    }
+    lineage = np.ascontiguousarray(lineage, dtype=np.int64)
+    # find (trap, cell_ids) in intersection
+    inboth = np.intersect1d(lineage.view(dtype), indices.view(dtype))
+    # both mother and bud must be in indices
+    valid_lineage = np.isin(lineage.view(dtype), inboth).all(axis=1).flatten()
+    # select only pairs of mother and bud indices
+    valid_indices = np.isin(
+        indices.view(dtype), lineage[valid_lineage.flatten(), ...].view(dtype)
+    ).flatten()
+    return valid_lineage, valid_indices
 
 
 def validate_association(
@@ -43,13 +45,61 @@ def validate_association(
     match_column: t.Optional[int] = None,
 ) -> t.Tuple[np.ndarray, np.ndarray]:
     """
-    Identify matches between two arrays by comparing rows.
+    Identify mother-bud pairs that exist both in lineage and a Signal's indices.
 
-    We match lineage data on mother-bud pairs with all the cells identified to specialise to only those cells in mother-bud pairs.
+    """
+    if association.ndim == 2:
+        # reshape into 3D array for broadcasting
+        # for each trap, [trap, mother, daughter] becomes
+        #  [[trap, mother], [trap, daughter]]
+        association = _assoc_indices_to_3d(association)
 
-    We use broadcasting for speed.
+    valid_association, valid_indices = validate_lineage(association, indices)
 
-    Both a mother and bud in association must be in indices.
+    # Alan's working code
+    # Compare existing association with available indices
+    # Swap trap and label axes for the association array to correctly cast
+    valid_ndassociation_a = association[..., None] == indices.T[None, ...]
+    # Broadcasting is confusing (but efficient):
+    # First we check the dimension across trap and cell id, to ensure both match
+    valid_cell_ids_a = valid_ndassociation_a.all(axis=2)
+    if match_column is None:
+        # Then we check the merge tuples to check which cases have both target and source
+        valid_association_a = valid_cell_ids_a.any(axis=2).all(axis=1)
+
+        # Finally we check the dimension that crosses all indices, to ensure the pair
+        # is present in a valid merge event.
+        valid_indices_a = (
+            valid_ndassociation_a[valid_association_a]
+            .all(axis=2)
+            .any(axis=(0, 1))
+        )
+    else:  # We fetch specific indices if we aim for the ones with one present
+        valid_indices_a = valid_cell_ids_a[:, match_column].any(axis=0)
+        # Valid association then becomes a boolean array, true means that there is a
+        # match (match_column) between that cell and the index
+        valid_association_a = (
+            valid_cell_ids_a[:, match_column] & valid_indices
+        ).any(axis=1)
+
+    assert np.array_equal(
+        valid_association, valid_association_a
+    ), "valid_association error"
+    assert np.array_equal(
+        valid_indices, valid_indices_a
+    ), "valid_indices error"
+
+    return valid_association, valid_indices
+
+
+def validate_association_old(
+    association: np.ndarray,
+    indices: np.ndarray,
+    match_column: t.Optional[int] = None,
+) -> t.Tuple[np.ndarray, np.ndarray]:
+    """
+    Identify mother-bud pairs that exist both in lineage and a Signal's indices.
+
 
     Parameters
     ----------
