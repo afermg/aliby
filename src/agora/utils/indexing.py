@@ -14,7 +14,11 @@ def validate_lineage(
     lineage: np.ndarray, indices: np.ndarray, how: str = "families"
 ):
     """
-    Identify mother-bud pairs that exist both in lineage and a Signal's indices.
+    Identify mother-bud pairs that exist both in lineage and a Signal's
+    indices.
+
+    We expect the lineage information to be unique: a bud should not have
+    two mothers.
 
     Parameters
     ----------
@@ -71,28 +75,33 @@ def validate_lineage(
         c_index = 0
     elif how == "daughters":
         c_index = 1
-    # dtype links together trap and cell ids
+    # data type to link together trap and cell ids
     dtype = {"names": ["trap_id", "cell_id"], "formats": [np.int64, np.int64]}
     lineage = np.ascontiguousarray(lineage, dtype=np.int64)
     # find (trap, cell_ids) in intersection
     inboth = np.intersect1d(lineage.view(dtype), indices.view(dtype))
     # find valid lineage
-    valid_lineage = np.isin(lineage.view(dtype), inboth)
+    valid_lineages = np.isin(lineage.view(dtype), inboth)
     if how == "families":
         # both mother and bud must be in indices
-        valid_lineage = valid_lineage.all(axis=1)
+        valid_lineage = valid_lineages.all(axis=1)
     else:
-        valid_lineage = valid_lineage[:, c_index, :]
+        valid_lineage = valid_lineages[:, c_index, :]
     # find valid indices
-    possible_indices = lineage[valid_lineage.flatten(), ...]
+    selected_lineages = lineage[valid_lineage.flatten(), ...]
     if how == "families":
         # select only pairs of mother and bud indices
         valid_indices = np.isin(
-            indices.view(dtype), possible_indices.view(dtype)
+            indices.view(dtype), selected_lineages.view(dtype)
         )
     else:
         valid_indices = np.isin(
-            indices.view(dtype), possible_indices.view(dtype)[:, c_index, :]
+            indices.view(dtype), selected_lineages.view(dtype)[:, c_index, :]
+        )
+    if valid_indices[valid_indices].size != valid_lineage[valid_lineage].size:
+        raise Exception(
+            "Error in validate_lineage: "
+            "lineage information is likely not unique."
         )
     return valid_lineage.flatten(), valid_indices.flatten()
 

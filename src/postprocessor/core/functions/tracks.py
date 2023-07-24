@@ -197,23 +197,26 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
     tolerance. If there is a track that can be assigned to two or more other
     ones, choose the one with lowest error.
 
-    :param tracks: (m x n) dataframe where rows are cell tracks and
-        columns are timepoints
-    :param tol: float or int threshold of average (prediction error/std) necessary
+    Parameters
+    ----------
+    tracks: (m x n) Signal
+        A Signal, usually area, dataframe where rows are cell tracks and
+        columns are time points.
+    tol: float or int
+        threshold of average (prediction error/std) necessary
         to consider two tracks the same. If float is fraction of first track,
         if int it is absolute units.
-    :param window: int value of window used for savgol_filter
-    :param degree: int value of polynomial degree passed to savgol_filter
-
+    window: int
+        value of window used for savgol_filter
+    degree: int
+        value of polynomial degree passed to savgol_filter
     """
+    # only consider time series with more than two non-NaN data points
     tracks = tracks.loc[tracks.notna().sum(axis=1) > 2]
 
-    # Commented because we are not smoothing in this step yet
-    # candict = {k:v for d in contig.values for k,v in d.items()}
-
     # smooth all relevant tracks
-
-    if smooth:  # Apply savgol filter TODO fix nans affecting edge placing
+    if smooth:
+        # Apply savgol filter TODO fix nans affecting edge placing
         clean = clean_tracks(
             tracks, min_len=window + 1, min_gr=0.9
         )  # get useful tracks
@@ -243,14 +246,6 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
             for pres, posts in preposts
         ]
 
-    # idx_to_means = lambda preposts: [
-    #     (
-    #         [get_means(smoothed_tracks.loc[pre], -window) for pre in pres],
-    #         [get_means(smoothed_tracks.loc[post], window) for post in posts],
-    #     )
-    #     for pres, posts in preposts
-    # ]
-
     def idx_to_pred(preposts):
         result = []
         for pres, posts in preposts:
@@ -274,15 +269,6 @@ def get_joinable(tracks, smooth=False, tol=0.1, window=5, degree=3) -> dict:
     # edges_dMetric = edges.apply(get_dMetric_wrap, tol=tol)
     # edges_dMetric_mean = edges_mean.apply(get_dMetric_wrap, tol=tol)
     edges_dMetric_pred = pre_pred.apply(get_dMetric_wrap, tol=tol)
-
-    # combined_dMetric = pd.Series(
-    #     [
-    #         [np.nanmin((a, b), axis=0) for a, b in zip(x, y)]
-    #         for x, y in zip(edges_dMetric, edges_dMetric_mean)
-    #     ],
-    #     index=edges_dMetric.index,
-    # )
-    # closest_pairs = combined_dMetric.apply(get_vec_closest_pairs, tol=tol)
     solutions = []
     # for (i, dMetrics), edgeset in zip(combined_dMetric.items(), edges):
     for (i, dMetrics), edgeset in zip(edges_dMetric_pred.items(), edges):
@@ -479,25 +465,25 @@ def plot_joinable(tracks, joinable_pairs):
 
 def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
     """
-    Get all pair of contiguous track ids from a tracks dataframe.
+    Get all pair of contiguous track ids from a tracks data frame.
 
-    :param tracks: (m x n) dataframe where rows are cell tracks and
-        columns are timepoints
-    :param min_dgr: float minimum difference in growth rate from
-        the interpolation
+    Parameters
+    ----------
+    tracks:  pd.Dataframe
+        A dataframe for one trap where rows are cell tracks and columns
+        are time points.
     """
-    mins, maxes = [
+    # time points bounding a tracklet of non-NaN values
+    mins, maxs = [
         tracks.notna().apply(np.where, axis=1).apply(fn)
         for fn in (np.min, np.max)
     ]
     mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
     mins_d.index = mins_d.index - 1  # make indices equal
     # TODO add support for skipping time points
-    maxes_d = maxes.groupby(maxes).apply(lambda x: x.index.tolist())
-    common = sorted(
-        set(mins_d.index).intersection(maxes_d.index), reverse=True
-    )
-    return [(maxes_d[t], mins_d[t]) for t in common]
+    maxs_d = maxs.groupby(maxs).apply(lambda x: x.index.tolist())
+    common = sorted(set(mins_d.index).intersection(maxs_d.index), reverse=True)
+    return [(maxs_d[t], mins_d[t]) for t in common]
 
 
 # def fit_track(track: pd.Series, obj=None):

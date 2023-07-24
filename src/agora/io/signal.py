@@ -11,7 +11,7 @@ import pandas as pd
 
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_raw_df
-from agora.utils.indexing import validate_association
+from agora.utils.indexing import validate_lineage
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
 
@@ -295,13 +295,13 @@ class Signal(BridgeH5):
                 # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
-                valid_association, valid_indices = validate_association(
+                # information on buds
+                valid_lineage, valid_indices = validate_lineage(
                     lineage,
                     np.array(df.index.to_list()),
-                    #: are mothers not match_column=0?
-                    match_column=1,
+                    "daughters",
                 )
-                mother_label[valid_indices] = lineage[valid_association, 1]
+                mother_label[valid_indices] = lineage[valid_lineage, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
             return df
         except Exception as e:

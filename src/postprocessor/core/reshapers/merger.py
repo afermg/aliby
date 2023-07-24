@@ -14,7 +14,7 @@ class MergerParameters(ParametersABC):
         Whether or not to smooth with a savgol_filter.
     tol: float or int
         The threshold of average prediction error/std necessary to
-        consider two tracks the same.
+        consider two tracks to be the same.
         If float, the threshold is the fraction of the first track;
         if int, the threshold is in absolute units.
     window: int
