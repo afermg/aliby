@@ -3,6 +3,7 @@
 {Summarize the bug encountered concisely}
 
 I confirm that I have (if relevant):
+- [ ] Read the troubleshooting guide: https://gitlab.com/aliby/aliby/-/wikis/Troubleshooting-(basic)
 - [ ] Updated aliby and aliby-baby.
 - [ ] Tried the unit test.
 - [ ] Tried a scaled-down version of my experiment (distributed=0, filter=0, tps=10)
