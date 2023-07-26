@@ -36,3 +36,19 @@ def test_crosscorr(
     dummy_signal2 = generate_sinusoids_df(time_axis, num_replicates)
     crosscorr_runner = crosscorr(crosscorrParameters.default())
     _ = crosscorr_runner.run(dummy_signal1, dummy_signal2)
+
+
+@pytest.mark.parametrize("time_axis", [np.linspace(0, 4, 200)])
+@pytest.mark.parametrize("num_replicates", [333])
+def test_autocorr(
+    time_axis,
+    num_replicates,
+):
+    """Tests croscorr.
+
+    Tests whether a crosscorr runner can be initialised with default
+    parameters and runs without errors, when performing autocorrelation.
+    """
+    dummy_signal1 = generate_sinusoids_df(time_axis, num_replicates)
+    crosscorr_runner = crosscorr(crosscorrParameters.default())
+    _ = crosscorr_runner.run(dummy_signal1, dummy_signal1)
