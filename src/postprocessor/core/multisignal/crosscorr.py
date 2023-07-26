@@ -115,6 +115,8 @@ class crosscorr(PostProcessABC):
         if trace_dfB is None:
             trace_dfB = trace_dfA
             trace_B = trace_A
+        else:
+            trace_B = trace_dfB.to_numpy()
         # find deviation from the mean
         dmean_A, stdA = _dev(trace_A, n_replicates, n_tps, self.stationary)
         dmean_B, stdB = _dev(trace_B, n_replicates, n_tps, self.stationary)
