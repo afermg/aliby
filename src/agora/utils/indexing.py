@@ -9,6 +9,9 @@ This can be:
 import numpy as np
 import typing as t
 
+# data type to link together trap and cell ids
+i_dtype = {"names": ["trap_id", "cell_id"], "formats": [np.int64, np.int64]}
+
 
 def validate_lineage(
     lineage: np.ndarray, indices: np.ndarray, how: str = "families"
@@ -75,13 +78,8 @@ def validate_lineage(
         c_index = 0
     elif how == "daughters":
         c_index = 1
-    # data type to link together trap and cell ids
-    dtype = {"names": ["trap_id", "cell_id"], "formats": [np.int64, np.int64]}
-    lineage = np.ascontiguousarray(lineage, dtype=np.int64)
-    # find (trap, cell_ids) in intersection
-    inboth = np.intersect1d(lineage.view(dtype), indices.view(dtype))
     # find valid lineage
-    valid_lineages = np.isin(lineage.view(dtype), inboth)
+    valid_lineages = index_isin(lineage, indices)
     if how == "families":
         # both mother and bud must be in indices
         valid_lineage = valid_lineages.all(axis=1)
@@ -92,11 +90,12 @@ def validate_lineage(
     if how == "families":
         # select only pairs of mother and bud indices
         valid_indices = np.isin(
-            indices.view(dtype), selected_lineages.view(dtype)
+            indices.view(i_dtype), selected_lineages.view(i_dtype)
         )
     else:
         valid_indices = np.isin(
-            indices.view(dtype), selected_lineages.view(dtype)[:, c_index, :]
+            indices.view(i_dtype),
+            selected_lineages.view(i_dtype)[:, c_index, :],
         )
     if valid_indices[valid_indices].size != valid_lineage[valid_lineage].size:
         raise Exception(
@@ -244,3 +243,18 @@ def compare_indices(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     where a True value links two cells where all cells are the same
     """
     return (x[..., None] == y.T[None, ...]).all(axis=1)
+
+
+def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Find those elements of x that are in y.
+
+    Both arrays must be arrays of integer indices,
+    such as (trap_id, cell_id).
+    """
+    x = np.ascontiguousarray(x, dtype=np.int64)
+    y = np.ascontiguousarray(y, dtype=np.int64)
+    xv = x.view(i_dtype)
+    inboth = np.intersect1d(xv, y.view(i_dtype))
+    x_bool = np.isin(xv, inboth)
+    return x_bool
