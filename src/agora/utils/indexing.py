@@ -85,8 +85,11 @@ def validate_lineage(
         valid_lineage = valid_lineages.all(axis=1)
     else:
         valid_lineage = valid_lineages[:, c_index, :]
+    flat_valid_lineage = valid_lineage.flatten()
     # find valid indices
-    selected_lineages = lineage[valid_lineage.flatten(), ...]
+    selected_lineages = np.ascontiguousarray(
+        lineage[flat_valid_lineage, ...], dtype=np.int64
+    )
     if how == "families":
         # select only pairs of mother and bud indices
         valid_indices = np.isin(
@@ -97,12 +100,19 @@ def validate_lineage(
             indices.view(i_dtype),
             selected_lineages.view(i_dtype)[:, c_index, :],
         )
-    if valid_indices[valid_indices].size != valid_lineage[valid_lineage].size:
+    flat_valid_indices = valid_indices.flatten()
+    if (
+        indices[flat_valid_indices, :].size
+        != np.unique(
+            lineage[flat_valid_lineage, :].reshape(-1, 2), axis=0
+        ).size
+    ):
+        # all unique indices in valid_lineages should be in valid_indices
         raise Exception(
             "Error in validate_lineage: "
             "lineage information is likely not unique."
         )
-    return valid_lineage.flatten(), valid_indices.flatten()
+    return flat_valid_lineage, flat_valid_indices
 
 
 def validate_association(
