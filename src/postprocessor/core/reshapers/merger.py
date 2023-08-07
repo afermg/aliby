@@ -1,7 +1,8 @@
-from agora.abc import ParametersABC
+import numpy as np
 
+from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
-from postprocessor.core.functions.tracks import get_joinable
+from postprocessor.core.functions.tracks import get_merges
 
 
 class MergerParameters(ParametersABC):
@@ -33,19 +34,20 @@ class MergerParameters(ParametersABC):
 
 
 class Merger(PostProcessABC):
-    """Combine rows of tracklet that are likely to be the same."""
+    """Find array of pairs of (trap, cell) indices to be merged."""
 
     def __init__(self, parameters):
         super().__init__(parameters)
 
     def run(self, signal):
-        joinable = []
         if signal.shape[1] > 4:
-            joinable = get_joinable(
+            merges = get_merges(
                 signal,
                 smooth=self.parameters.smooth,
                 tol=self.parameters.tolerance,
                 window=self.parameters.window,
                 degree=self.parameters.degree,
             )
-        return joinable
+        else:
+            merges = np.array([])
+        return merges

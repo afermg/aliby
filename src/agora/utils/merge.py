@@ -7,73 +7,16 @@ from copy import copy
 
 import numpy as np
 import pandas as pd
+
 from utils_find_1st import cmp_larger, find_1st
 
-from agora.utils.indexing import (
-    index_isin,
-    compare_indices,
-    validate_association,
-)
+# from agora.utils.indexing import (
+#     index_isin,
+#     compare_indices,
+#     validate_association,
+# )
 
-
-def apply_merges(data: pd.DataFrame, merges: np.ndarray):
-    """
-    Split data in two, one subset for rows relevant for merging and one
-    without them.
-
-    Use an array of source tracklets and target tracklets
-    to efficiently merge them.
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        Input DataFrame.
-    merges : np.ndarray
-        3-D ndarray where dimensions are (X,2,2): nmerges, source-target
-        pair and single-cell identifiers, respectively.
-
-    Examples
-    --------
-    FIXME: Add docs.
-
-    """
-
-    indices = data.index
-    if "mother_label" in indices.names:
-        indices = indices.droplevel("mother_label")
-    valid_merges, indices = validate_association(
-        merges, np.array(list(indices))
-    )
-
-    # Assign non-merged
-    merged = data.loc[~indices]
-
-    # Implement the merges and drop source rows.
-    # TODO Use matrices to perform merges in batch
-    # for efficiency
-    if valid_merges.any():
-        to_merge = data.loc[indices].copy()
-        targets, sources = zip(*merges[valid_merges])
-        for source, target in zip(sources, targets):
-            target = tuple(target)
-            to_merge.loc[target] = join_tracks_pair(
-                to_merge.loc[target].values,
-                to_merge.loc[tuple(source)].values,
-            )
-        to_merge.drop(map(tuple, sources), inplace=True)
-
-        merged = pd.concat((merged, to_merge), names=data.index.names)
-    return merged
-
-
-def join_tracks_pair(target: np.ndarray, source: np.ndarray) -> np.ndarray:
-    """
-    Join two tracks and return the new value of the target.
-    """
-    target_copy = target
-    end = find_1st(target_copy[::-1], 0, cmp_larger)
-    target_copy[-end:] = source[-end:]
-    return target_copy
+from agora.utils.indexing import index_isin
 
 
 def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
@@ -102,40 +45,7 @@ def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
     return res
 
 
-def union_find(lsts):
-    sets = [set(lst) for lst in lsts if lst]
-    merged = True
-    while merged:
-        merged = False
-        results = []
-        while sets:
-            common, rest = sets[0], sets[1:]
-            sets = []
-            for x in rest:
-                if x.isdisjoint(common):
-                    sets.append(x)
-                else:
-                    merged = True
-                    common |= x
-            results.append(common)
-        sets = results
-    return sets
-
-
-def sort_association(array: np.ndarray):
-    # Sort the internal associations
-
-    order = np.where(
-        (array[:, 0, ..., None] == array[:, 1].T[None, ...]).all(axis=1)
-    )
-
-    res = []
-    [res.append(x) for x in np.flip(order).flatten() if x not in res]
-    sorted_array = array[np.array(res)]
-    return sorted_array
-
-
-def merge_association(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
+def merge_lineage(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
     """Use merges to update lineage information."""
     flat_lineage = lineage.reshape(-1, 2)
     bud_mother_dict = {
@@ -180,3 +90,93 @@ def merge_association(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
     # remove any duplicates
     new_lineage = np.unique(new_lineage, axis=0)
     return new_lineage
+
+
+def apply_merges(data: pd.DataFrame, merges: np.ndarray):
+    """
+    Generate a new data frame containing merged tracks.
+
+    TODO: what about the incorrect merges?
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        A Signal data frame.
+    merges : np.ndarray
+        An array of pairs of (trap, cell) indices to merge.
+    """
+    indices = data.index
+    if "mother_label" in indices.names:
+        indices = indices.droplevel("mother_label")
+    indices = np.array(list(indices))
+    # merges in the data frame's indices
+    valid_merges = index_isin(merges, indices).all(axis=1).flatten()
+    # corresponding indices for the data frame in merges
+    selected_merges = merges[valid_merges, ...]
+    valid_indices = index_isin(indices, selected_merges).flatten()
+    # data not requiring merging
+    merged = data.loc[~valid_indices]
+    # merge tracks
+    if valid_merges.any():
+        to_merge = data.loc[valid_indices].copy()
+        left_indices = merges[:, 0]
+        right_indices = merges[:, 1]
+        # join left track with right track
+        for left_index, right_index in zip(left_indices, right_indices):
+            to_merge.loc[tuple(left_index)] = join_two_tracks(
+                to_merge.loc[tuple(left_index)].values,
+                to_merge.loc[tuple(right_index)].values,
+            )
+        # drop indices for right tracks
+        to_merge.drop(map(tuple, right_indices), inplace=True)
+        # add to data not requiring merges
+        merged = pd.concat((merged, to_merge), names=data.index.names)
+    return merged
+
+
+def join_two_tracks(
+    left_track: np.ndarray, right_track: np.ndarray
+) -> np.ndarray:
+    """Join two tracks and return the new one."""
+    new_track = left_track.copy()
+    # find last positive element by inverting track
+    end = find_1st(left_track[::-1], 0, cmp_larger)
+    # merge tracks into one
+    new_track[-end:] = right_track[-end:]
+    return new_track
+
+
+##################################################################
+
+
+def union_find(lsts):
+    sets = [set(lst) for lst in lsts if lst]
+    merged = True
+    while merged:
+        merged = False
+        results = []
+        while sets:
+            common, rest = sets[0], sets[1:]
+            sets = []
+            for x in rest:
+                if x.isdisjoint(common):
+                    sets.append(x)
+                else:
+                    merged = True
+                    common |= x
+            results.append(common)
+        sets = results
+    return sets
+
+
+def sort_association(array: np.ndarray):
+    # Sort the internal associations
+
+    order = np.where(
+        (array[:, 0, ..., None] == array[:, 1].T[None, ...]).all(axis=1)
+    )
+
+    res = []
+    [res.append(x) for x in np.flip(order).flatten() if x not in res]
+    sorted_array = array[np.array(res)]
+    return sorted_array

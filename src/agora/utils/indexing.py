@@ -87,19 +87,12 @@ def validate_lineage(
         valid_lineage = valid_lineages[:, c_index, :]
     flat_valid_lineage = valid_lineage.flatten()
     # find valid indices
-    selected_lineages = np.ascontiguousarray(
-        lineage[flat_valid_lineage, ...], dtype=np.int64
-    )
+    selected_lineages = lineage[flat_valid_lineage, ...]
     if how == "families":
         # select only pairs of mother and bud indices
-        valid_indices = np.isin(
-            indices.view(i_dtype), selected_lineages.view(i_dtype)
-        )
+        valid_indices = index_isin(indices, selected_lineages)
     else:
-        valid_indices = np.isin(
-            indices.view(i_dtype),
-            selected_lineages.view(i_dtype)[:, c_index, :],
-        )
+        valid_indices = index_isin(indices, selected_lineages[:, c_index, :])
     flat_valid_indices = valid_indices.flatten()
     if (
         indices[flat_valid_indices, :].size
@@ -113,6 +106,54 @@ def validate_lineage(
             "lineage information is likely not unique."
         )
     return flat_valid_lineage, flat_valid_indices
+
+
+def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Find those elements of x that are in y.
+
+    Both arrays must be arrays of integer indices,
+    such as (trap_id, cell_id).
+    """
+    x = np.ascontiguousarray(x, dtype=np.int64)
+    y = np.ascontiguousarray(y, dtype=np.int64)
+    xv = x.view(i_dtype)
+    inboth = np.intersect1d(xv, y.view(i_dtype))
+    x_bool = np.isin(xv, inboth)
+    return x_bool
+
+
+def _assoc_indices_to_3d(ndarray: np.ndarray):
+    """
+    Convert the last column to a new row and repeat first column's values.
+
+    For example: [trap, mother, daughter] becomes
+        [[trap, mother], [trap, daughter]].
+
+    Assumes the input array has shape (N,3).
+    """
+    result = ndarray
+    if len(ndarray) and ndarray.ndim > 1:
+        # faster indexing for single positions
+        if ndarray.shape[1] == 3:
+            result = np.transpose(
+                np.hstack((ndarray[:, [0]], ndarray)).reshape(-1, 2, 2),
+                axes=[0, 2, 1],
+            )
+        else:
+            # 20% slower but more general indexing
+            columns = np.arange(ndarray.shape[1])
+            result = np.stack(
+                (
+                    ndarray[:, np.delete(columns, -1)],
+                    ndarray[:, np.delete(columns, -2)],
+                ),
+                axis=1,
+            )
+    return result
+
+
+###################################################################
 
 
 def validate_association(
@@ -209,34 +250,6 @@ def validate_association(
     return valid_association, valid_indices
 
 
-def _assoc_indices_to_3d(ndarray: np.ndarray):
-    """
-    Convert the last column to a new row while repeating all previous indices.
-
-    This is useful when converting a signal multiindex before comparing association.
-
-    Assumes the input array has shape (N,3)
-    """
-    result = ndarray
-    if len(ndarray) and ndarray.ndim > 1:
-        if ndarray.shape[1] == 3:  # Faster indexing for single positions
-            result = np.transpose(
-                np.hstack((ndarray[:, [0]], ndarray)).reshape(-1, 2, 2),
-                axes=[0, 2, 1],
-            )
-        else:  # 20% slower but more general indexing
-            columns = np.arange(ndarray.shape[1])
-
-            result = np.stack(
-                (
-                    ndarray[:, np.delete(columns, -1)],
-                    ndarray[:, np.delete(columns, -2)],
-                ),
-                axis=1,
-            )
-    return result
-
-
 def _3d_index_to_2d(array: np.ndarray):
     """Revert _assoc_indices_to_3d."""
     result = array
@@ -253,18 +266,3 @@ def compare_indices(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     where a True value links two cells where all cells are the same
     """
     return (x[..., None] == y.T[None, ...]).all(axis=1)
-
-
-def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """
-    Find those elements of x that are in y.
-
-    Both arrays must be arrays of integer indices,
-    such as (trap_id, cell_id).
-    """
-    x = np.ascontiguousarray(x, dtype=np.int64)
-    y = np.ascontiguousarray(y, dtype=np.int64)
-    xv = x.view(i_dtype)
-    inboth = np.intersect1d(xv, y.view(i_dtype))
-    x_bool = np.isin(xv, inboth)
-    return x_bool

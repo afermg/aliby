@@ -21,7 +21,7 @@ from utils_find_1st import cmp_larger, find_1st
 from postprocessor.core.processes.savgol import non_uniform_savgol
 
 
-def get_joinable(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:
+def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:
     """
     Find all pairs of tracks that should be joined.
 
@@ -106,7 +106,217 @@ def get_joinable(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:
         for trap_tracks in trap_contigs_to_join
         for contigs in trap_tracks
     ]
-    return contigs_to_join
+    merges = np.array(contigs_to_join, dtype=int)
+    return merges
+
+
+def clean_tracks(
+    tracks, min_duration: int = 15, min_gr: float = 1.0
+) -> pd.DataFrame:
+    """Remove small non-growing tracks and return the reduced data frame."""
+    ntps = tracks.apply(max_ntps, axis=1)
+    grs = tracks.apply(get_avg_gr, axis=1)
+    growing_long_tracks = tracks.loc[(ntps >= min_duration) & (grs > min_gr)]
+    return growing_long_tracks
+
+
+def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
+    """
+    Get all pair of contiguous track ids from a tracks data frame.
+
+    For two tracks to be contiguous, they must be exactly adjacent.
+
+    Parameters
+    ----------
+    tracks:  pd.Dataframe
+        A dataframe where rows are cell tracks and columns are time
+        points.
+    """
+    # TODO add support for skipping time points
+    # find time points bounding tracks of non-NaN values
+    mins, maxs = [
+        tracks.notna().apply(np.where, axis=1).apply(fn)
+        for fn in (np.min, np.max)
+    ]
+    # flip so that time points become the index
+    mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
+    maxs_d = maxs.groupby(maxs).apply(lambda x: x.index.tolist())
+    # reduce minimal time point to make a right track overlap with a left track
+    mins_d.index = mins_d.index - 1
+    # find common end points
+    common = sorted(set(mins_d.index).intersection(maxs_d.index), reverse=True)
+    contigs = [(maxs_d[t], mins_d[t]) for t in common]
+    return contigs
+
+
+def get_edge_values(contigs_ids, smoothed_tracks):
+    """Get Signal values for adjacent end points for each contiguous track."""
+    values = [
+        (
+            [get_value(smoothed_tracks.loc[pre_id], -1) for pre_id in pre_ids],
+            [
+                get_value(smoothed_tracks.loc[post_id], 0)
+                for post_id in post_ids
+            ],
+        )
+        for pre_ids, post_ids in contigs_ids
+    ]
+    return values
+
+
+def get_predicted_edge_values(contigs_ids, smoothed_tracks, window):
+    """
+    Find neighbouring values of two contiguous tracks.
+
+    Predict the next value for the leftmost track using window values
+    and find the mean of the initial window values of the rightmost
+    track.
+    """
+    result = []
+    for pre_ids, post_ids in contigs_ids:
+        pre_res = []
+        # left contiguous tracks
+        for pre_id in pre_ids:
+            # get last window values of a track
+            y = get_values_i(smoothed_tracks.loc[pre_id], -window)
+            # predict next value
+            pre_res.append(
+                np.poly1d(np.polyfit(range(len(y)), y, 1))(len(y) + 1),
+            )
+        # right contiguous tracks
+        pos_res = [
+            # mean value of initial window values of a track
+            get_mean_value_i(smoothed_tracks.loc[post_id], window)
+            for post_id in post_ids
+        ]
+        result.append([pre_res, pos_res])
+    return result
+
+
+def get_dMetric_wrap(lst: List, **kwargs):
+    """Calculate dMetric on a list."""
+    return [get_dMetric(*sublist, **kwargs) for sublist in lst]
+
+
+def get_dMetric(pre_values: List[float], post_values: List[float]):
+    """
+    Calculate a scoring matrix based on the difference between two Signal
+    values.
+
+    We generate one score per pair of contiguous tracks.
+
+    Lower scores are better.
+
+    Parameters
+    ----------
+    pre_values: list of floats
+        Values of the Signal for left contiguous tracks.
+    post_values: list of floats
+        Values of the Signal for right contiguous tracks.
+    """
+    if len(pre_values) > len(post_values):
+        dMetric = np.abs(np.subtract.outer(post_values, pre_values))
+    else:
+        dMetric = np.abs(np.subtract.outer(pre_values, post_values))
+    # replace NaNs with maximal values
+    dMetric[np.isnan(dMetric)] = 1 + np.nanmax(dMetric)
+    return dMetric
+
+
+def find_best_from_scores_wrap(dMetric: List, edges: List, **kwargs):
+    """Calculate solve_matrices on a list."""
+    return [
+        find_best_from_scores(mat, edgeset, **kwargs)
+        for mat, edgeset in zip(dMetric, edges)
+    ]
+
+
+def find_best_from_scores(
+    scores: np.ndarray, actual_edge_values: List, tol: Union[float, int] = 1
+):
+    """Find indices for left and right contiguous tracks with scores below a tolerance."""
+    ids = find_best_indices(scores)
+    if len(ids[0]):
+        pre_value, post_value = actual_edge_values
+        # score with relative or absolute distance
+        norm = (
+            np.array(pre_value)[ids[len(pre_value) > len(post_value)]]
+            if tol < 1
+            else 1
+        )
+        best_scores = scores[ids] / norm
+        ids = ids if len(pre_value) < len(post_value) else ids[::-1]
+        # keep only indices with best_score less than the tolerance
+        indices = [
+            idx for idx, score in zip(zip(*ids), best_scores) if score <= tol
+        ]
+        return indices
+    else:
+        return []
+
+
+def find_best_indices(dMetric):
+    """Find indices for left and right contiguous tracks with minimal scores."""
+    glob_is = []
+    glob_js = []
+    if (~np.isnan(dMetric)).any():
+        lMetric = copy(dMetric)
+        sortedMetric = sorted(lMetric[~np.isnan(lMetric)])
+        while (~np.isnan(sortedMetric)).any():
+            # indices of point with the lowest score
+            i_s, j_s = np.where(lMetric == sortedMetric[0])
+            i = i_s[0]
+            j = j_s[0]
+            # store this point
+            glob_is.append(i)
+            glob_js.append(j)
+            # remove from lMetric
+            lMetric[i, :] += np.nan
+            lMetric[:, j] += np.nan
+            sortedMetric = sorted(lMetric[~np.isnan(lMetric)])
+    indices = (np.array(glob_is), np.array(glob_js))
+    return indices
+
+
+def get_value(x, n):
+    """Get value from an array ignoring NaN."""
+    val = x[~np.isnan(x)][n] if len(x[~np.isnan(x)]) else np.nan
+    return val
+
+
+def get_mean_value_i(x, i):
+    """Get track's mean Signal value from values either from or up to an index."""
+    if not len(x[~np.isnan(x)]):
+        return np.nan
+    else:
+        if i > 0:
+            v = x[~np.isnan(x)][:i]
+        else:
+            v = x[~np.isnan(x)][i:]
+        return np.nanmean(v)
+
+
+def get_values_i(x, i):
+    """Get track's Signal values either from or up to an index."""
+    if not len(x[~np.isnan(x)]):
+        return np.nan
+    else:
+        if i > 0:
+            v = x[~np.isnan(x)][:i]
+        else:
+            v = x[~np.isnan(x)][i:]
+        return v
+
+
+def get_avg_gr(track: pd.Series) -> float:
+    """Get average growth rate for a track."""
+    ntps = max_ntps(track)
+    vals = track.dropna().values
+    gr = (vals[-1] - vals[0]) / ntps
+    return gr
+
+
+######################################################################
 
 
 def get_joinable_original(
@@ -216,24 +426,6 @@ def max_nonstop_ntps(track: pd.Series) -> int:
     return max(consecutive_nonas_grouped)
 
 
-def get_avg_gr(track: pd.Series) -> float:
-    """Get average growth rate for a track."""
-    ntps = max_ntps(track)
-    vals = track.dropna().values
-    gr = (vals[-1] - vals[0]) / ntps
-    return gr
-
-
-def clean_tracks(
-    tracks, min_duration: int = 15, min_gr: float = 1.0
-) -> pd.DataFrame:
-    """Remove small non-growing tracks and return the reduced data frame."""
-    ntps = tracks.apply(max_ntps, axis=1)
-    grs = tracks.apply(get_avg_gr, axis=1)
-    growing_long_tracks = tracks.loc[(ntps >= min_duration) & (grs > min_gr)]
-    return growing_long_tracks
-
-
 def merge_tracks(
     tracks, drop=False, **kwargs
 ) -> t.Tuple[pd.DataFrame, t.Collection]:
@@ -337,80 +529,6 @@ def join_track_pair(target, source):
     return tgt_copy
 
 
-def get_edge_values(contigs_ids, smoothed_tracks):
-    """Get Signal values for adjacent end points for each contiguous track."""
-    values = [
-        (
-            [get_value(smoothed_tracks.loc[pre_id], -1) for pre_id in pre_ids],
-            [
-                get_value(smoothed_tracks.loc[post_id], 0)
-                for post_id in post_ids
-            ],
-        )
-        for pre_ids, post_ids in contigs_ids
-    ]
-    return values
-
-
-def get_predicted_edge_values(contigs_ids, smoothed_tracks, window):
-    """
-    Find neighbouring values of two contiguous tracks.
-
-    Predict the next value for the leftmost track using window values
-    and find the mean of the initial window values of the rightmost
-    track.
-    """
-    result = []
-    for pre_ids, post_ids in contigs_ids:
-        pre_res = []
-        # left contiguous tracks
-        for pre_id in pre_ids:
-            # get last window values of a track
-            y = get_values_i(smoothed_tracks.loc[pre_id], -window)
-            # predict next value
-            pre_res.append(
-                np.poly1d(np.polyfit(range(len(y)), y, 1))(len(y) + 1),
-            )
-        # right contiguous tracks
-        pos_res = [
-            # mean value of initial window values of a track
-            get_mean_value_i(smoothed_tracks.loc[post_id], window)
-            for post_id in post_ids
-        ]
-        result.append([pre_res, pos_res])
-    return result
-
-
-def get_value(x, n):
-    """Get value from an array ignoring NaN."""
-    val = x[~np.isnan(x)][n] if len(x[~np.isnan(x)]) else np.nan
-    return val
-
-
-def get_mean_value_i(x, i):
-    """Get track's mean Signal value from values either from or up to an index."""
-    if not len(x[~np.isnan(x)]):
-        return np.nan
-    else:
-        if i > 0:
-            v = x[~np.isnan(x)][:i]
-        else:
-            v = x[~np.isnan(x)][i:]
-        return np.nanmean(v)
-
-
-def get_values_i(x, i):
-    """Get track's Signal values either from or up to an index."""
-    if not len(x[~np.isnan(x)]):
-        return np.nan
-    else:
-        if i > 0:
-            v = x[~np.isnan(x)][:i]
-        else:
-            v = x[~np.isnan(x)][i:]
-        return v
-
-
 def localid_to_idx(local_ids, contig_trap):
     """
     Fetch the original ids from a nested list with joinable local_ids.
@@ -436,68 +554,6 @@ def get_vec_closest_pairs(lst: List, **kwargs):
     return [get_closest_pairs(*sublist, **kwargs) for sublist in lst]
 
 
-def get_dMetric_wrap(lst: List, **kwargs):
-    """Calculate dMetric on a list."""
-    return [get_dMetric(*sublist, **kwargs) for sublist in lst]
-
-
-def find_best_from_scores_wrap(dMetric: List, edges: List, **kwargs):
-    """Calculate solve_matrices on a list."""
-    return [
-        find_best_from_scores(mat, edgeset, **kwargs)
-        for mat, edgeset in zip(dMetric, edges)
-    ]
-
-
-def get_dMetric(pre_values: List[float], post_values: List[float]):
-    """
-    Calculate a scoring matrix based on the difference between two Signal
-    values.
-
-    We generate one score per pair of contiguous tracks.
-
-    Lower scores are better.
-
-    Parameters
-    ----------
-    pre_values: list of floats
-        Values of the Signal for left contiguous tracks.
-    post_values: list of floats
-        Values of the Signal for right contiguous tracks.
-    """
-    if len(pre_values) > len(post_values):
-        dMetric = np.abs(np.subtract.outer(post_values, pre_values))
-    else:
-        dMetric = np.abs(np.subtract.outer(pre_values, post_values))
-    # replace NaNs with maximal values
-    dMetric[np.isnan(dMetric)] = 1 + np.nanmax(dMetric)
-    return dMetric
-
-
-def find_best_from_scores(
-    scores: np.ndarray, actual_edge_values: List, tol: Union[float, int] = 1
-):
-    """Find indices for left and right contiguous tracks with scores below a tolerance."""
-    ids = find_best_indices(scores)
-    if len(ids[0]):
-        pre_value, post_value = actual_edge_values
-        # score with relative or absolute distance
-        norm = (
-            np.array(pre_value)[ids[len(pre_value) > len(post_value)]]
-            if tol < 1
-            else 1
-        )
-        best_scores = scores[ids] / norm
-        ids = ids if len(pre_value) < len(post_value) else ids[::-1]
-        # keep only indices with best_score less than the tolerance
-        indices = [
-            idx for idx, score in zip(zip(*ids), best_scores) if score <= tol
-        ]
-        return indices
-    else:
-        return []
-
-
 def get_closest_pairs(
     pre: List[float], post: List[float], tol: Union[float, int] = 1
 ):
@@ -516,29 +572,6 @@ def get_closest_pairs(
     """
     dMetric = get_dMetric(pre, post, tol)
     return find_best_from_scores(dMetric, pre, post, tol)
-
-
-def find_best_indices(dMetric):
-    """Find indices for left and right contiguous tracks with minimal scores."""
-    glob_is = []
-    glob_js = []
-    if (~np.isnan(dMetric)).any():
-        lMetric = copy(dMetric)
-        sortedMetric = sorted(lMetric[~np.isnan(lMetric)])
-        while (~np.isnan(sortedMetric)).any():
-            # indices of point with the lowest score
-            i_s, j_s = np.where(lMetric == sortedMetric[0])
-            i = i_s[0]
-            j = j_s[0]
-            # store this point
-            glob_is.append(i)
-            glob_js.append(j)
-            # remove from lMetric
-            lMetric[i, :] += np.nan
-            lMetric[:, j] += np.nan
-            sortedMetric = sorted(lMetric[~np.isnan(lMetric)])
-    indices = (np.array(glob_is), np.array(glob_js))
-    return indices
 
 
 def plot_joinable(tracks, joinable_pairs):
@@ -561,32 +594,3 @@ def plot_joinable(tracks, joinable_pairs):
                 #     pass
                 ax.plot(post_srs.index, post_srs.values, "g")
     plt.show()
-
-
-def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
-    """
-    Get all pair of contiguous track ids from a tracks data frame.
-
-    For two tracks to be contiguous, they must be exactly adjacent.
-
-    Parameters
-    ----------
-    tracks:  pd.Dataframe
-        A dataframe where rows are cell tracks and columns are time
-        points.
-    """
-    # TODO add support for skipping time points
-    # find time points bounding tracks of non-NaN values
-    mins, maxs = [
-        tracks.notna().apply(np.where, axis=1).apply(fn)
-        for fn in (np.min, np.max)
-    ]
-    # flip so that time points become the index
-    mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
-    maxs_d = maxs.groupby(maxs).apply(lambda x: x.index.tolist())
-    # reduce minimal time point to make a right track overlap with a left track
-    mins_d.index = mins_d.index - 1
-    # find common end points
-    common = sorted(set(mins_d.index).intersection(maxs_d.index), reverse=True)
-    contigs = [(maxs_d[t], mins_d[t]) for t in common]
-    return contigs

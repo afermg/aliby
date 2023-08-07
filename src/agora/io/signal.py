@@ -165,27 +165,21 @@ class Signal(BridgeH5):
         picks: t.Union[t.Collection, bool] = True,
     ):
         """
-        Apply modifier operations (picker or merger) to a dataframe.
+        Apply picking and merging to a Signal data frame.
 
         Parameters
         ----------
         data : t.Union[str, pd.DataFrame]
-            DataFrame or path to one.
+            A data frame or a path to one.
         merges : t.Union[np.ndarray, bool]
-            (optional) 2-D array with three columns: the tile id, the mother label, and the daughter id.
+            (optional) An array of pairs of (trap, cell) indices to merge.
             If True, fetch merges from file.
         picks : t.Union[np.ndarray, bool]
-            (optional) 2-D array with two columns: the tiles and
-            the cell labels.
+            (optional) An array of (trap, cell) indices.
             If True, fetch picks from file.
-
-        Examples
-        --------
-        FIXME: Add docs.
-
         """
         if isinstance(merges, bool):
-            merges: np.ndarray = self.load_merges() if merges else np.array([])
+            merges = self.load_merges() if merges else np.array([])
         if merges.any():
             merged = apply_merges(data, merges)
         else:
@@ -196,6 +190,8 @@ class Signal(BridgeH5):
                 if picks
                 else set(merged.index)
             )
+        # TODO : the following needs clarifying
+        breakpoint()
         with h5py.File(self.filename, "r") as f:
             if "modifiers/picks" in f and picks:
                 if picks:

@@ -14,7 +14,7 @@ from agora.utils.indexing import (
     _3d_index_to_2d,
     _assoc_indices_to_3d,
 )
-from agora.utils.merge import merge_association
+from agora.utils.merge import merge_lineage
 from postprocessor.core.abc import get_parameters, get_process
 from postprocessor.core.lineageprocess import (
     LineageProcess,
@@ -168,7 +168,7 @@ class PostProcessor(ProcessABC):
         """
         # run merger
         record = self._signal.get_raw(self.targets["prepost"]["merger"])
-        merges = np.array(self.merger.run(record), dtype=int)
+        merges = self.merger.run(record)
         self._writer.write(
             "modifiers/merges", data=[np.array(x) for x in merges]
         )
@@ -177,7 +177,7 @@ class PostProcessor(ProcessABC):
         lineage_merged = []
         if merges.any():
             # update lineages after merge events
-            merged_indices = merge_association(lineage, merges)
+            merged_indices = merge_lineage(lineage, merges)
             # remove repeated labels post-merging
             lineage_merged = np.unique(merged_indices, axis=0)
         self.lineage = _3d_index_to_2d(
