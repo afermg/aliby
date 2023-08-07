@@ -27,6 +27,10 @@ from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
 from postprocessor.core.processor import PostProcessor, PostProcessorParameters
 
+# stop warnings from TensorFlow
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
+
 
 class PipelineParameters(ParametersABC):
     """Define parameters for the steps of the pipeline."""

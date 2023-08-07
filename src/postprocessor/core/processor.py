@@ -177,9 +177,7 @@ class PostProcessor(ProcessABC):
         lineage_merged = []
         if merges.any():
             # update lineages after merge events
-            merged_indices = merge_lineage(lineage, merges)
-            # remove repeated labels post-merging
-            lineage_merged = np.unique(merged_indices, axis=0)
+            lineage_merged = merge_lineage(lineage, merges)
         self.lineage = _3d_index_to_2d(
             lineage_merged if len(lineage_merged) else lineage
         )
@@ -194,9 +192,7 @@ class PostProcessor(ProcessABC):
             self._writer.write(
                 "modifiers/picks",
                 data=pd.MultiIndex.from_arrays(
-                    picked_indices.T,
-                    # names=["trap", "cell_label", "mother_label"],
-                    names=["trap", "cell_label"],
+                    picked_indices.T, names=["trap", "cell_label"]
                 ),
                 overwrite="overwrite",
             )

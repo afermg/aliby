@@ -186,31 +186,19 @@ class Signal(BridgeH5):
             merged = copy(data)
         if isinstance(picks, bool):
             picks = (
-                self.get_picks(names=merged.index.names)
+                self.get_picks(
+                    names=merged.index.names, path="modifiers/picks/"
+                )
                 if picks
-                else set(merged.index)
+                else merged.index
             )
-        # TODO : the following needs clarifying
-        with h5py.File(self.filename, "r") as f:
-            if "modifiers/picks" in f and picks:
-                if picks:
-                    return merged.loc[
-                        set(picks).intersection(
-                            [tuple(x) for x in merged.index]
-                        )
-                    ]
-                else:
-                    if isinstance(merged.index, pd.MultiIndex):
-                        empty_lvls = [[] for i in merged.index.names]
-                        index = pd.MultiIndex(
-                            levels=empty_lvls,
-                            codes=empty_lvls,
-                            names=merged.index.names,
-                        )
-                    else:
-                        index = pd.Index([], name=merged.index.name)
-                    merged = pd.DataFrame([], index=index)
-        return merged
+        if picks:
+            picked_indices = set(picks).intersection(
+                [tuple(x) for x in merged.index]
+            )
+            return merged.loc[picked_indices]
+        else:
+            return merged
 
     @cached_property
     def p_available(self):
@@ -272,8 +260,9 @@ class Signal(BridgeH5):
         dataset: str or list of strs
             The name of the h5 file or a list of h5 file names.
         in_minutes: boolean
-            If True,
+            If True, convert column headings to times in minutes.
         lineage: boolean
+            If True, add mother_label to index.
         """
         try:
             if isinstance(dataset, str):
@@ -316,13 +305,14 @@ class Signal(BridgeH5):
         names: t.Tuple[str, ...] = ("trap", "cell_label"),
         path: str = "modifiers/picks/",
     ) -> t.Set[t.Tuple[int, str]]:
-        """Get the relevant picks based on names."""
+        """Get picks from the h5 file."""
         with h5py.File(self.filename, "r") as f:
-            picks = set()
             if path in f:
                 picks = set(
                     zip(*[f[path + name] for name in names if name in f[path]])
                 )
+            else:
+                picks = set()
             return picks
 
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
