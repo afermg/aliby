@@ -3,18 +3,10 @@
 Functions to efficiently merge rows in DataFrames.
 """
 import typing as t
-from copy import copy
 
 import numpy as np
 import pandas as pd
-
 from utils_find_1st import cmp_larger, find_1st
-
-# from agora.utils.indexing import (
-#     index_isin,
-#     compare_indices,
-#     validate_association,
-# )
 
 from agora.utils.indexing import index_isin
 

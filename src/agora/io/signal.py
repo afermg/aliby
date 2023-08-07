@@ -191,7 +191,6 @@ class Signal(BridgeH5):
                 else set(merged.index)
             )
         # TODO : the following needs clarifying
-        breakpoint()
         with h5py.File(self.filename, "r") as f:
             if "modifiers/picks" in f and picks:
                 if picks:

@@ -10,7 +10,6 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-import pandas as pd
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
@@ -18,11 +17,7 @@ from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
-from agora.io.writer import (
-    LinearBabyWriter,
-    StateWriter,
-    TilerWriter,
-)
+from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
 from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
 from aliby.io.dataset import dispatch_dataset
