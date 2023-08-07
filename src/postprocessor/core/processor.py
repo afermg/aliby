@@ -169,20 +169,20 @@ class PostProcessor(ProcessABC):
         # run merger
         record = self._signal.get_raw(self.targets["prepost"]["merger"])
         merges = self.merger.run(record)
-        self._writer.write(
-            "modifiers/merges", data=[np.array(x) for x in merges]
-        )
         # get lineages from picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
-        lineage_merged = []
         if merges.any():
-            # update lineages after merge events
-            lineage_merged = merge_lineage(lineage, merges)
-        self.lineage = _3d_index_to_2d(
-            lineage_merged if len(lineage_merged) else lineage
+            # update lineages and merges after merging
+            new_lineage, new_merges = merge_lineage(lineage, merges)
+        else:
+            new_lineage = lineage
+            new_merges = merges
+        self.lineage = _3d_index_to_2d(new_lineage)
+        self._writer.write(
+            "modifiers/merges", data=[np.array(x) for x in new_merges]
         )
         self._writer.write(
-            "modifiers/lineage_merged", _3d_index_to_2d(lineage_merged)
+            "modifiers/lineage_merged", _3d_index_to_2d(new_lineage)
         )
         # run picker
         picked_indices = self.picker.run(

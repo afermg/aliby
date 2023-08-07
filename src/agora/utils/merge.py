@@ -37,8 +37,17 @@ def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
     return res
 
 
-def merge_lineage(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
-    """Use merges to update lineage information."""
+def merge_lineage(
+    lineage: np.ndarray, merges: np.ndarray
+) -> (np.ndarray, np.ndarray):
+    """
+    Use merges to update lineage information.
+
+    Check if merging causes any buds to have multiple mothers and discard
+    those incorrect merges.
+
+    Return updated lineage and merge arrays.
+    """
     flat_lineage = lineage.reshape(-1, 2)
     bud_mother_dict = {
         tuple(bud): mother for bud, mother in zip(lineage[:, 1], lineage[:, 0])
@@ -68,9 +77,19 @@ def merge_lineage(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
                 bud_mother_dict[tuple(replacement_dict[key])],
             )
         ]
-        # reassign incorrect merges so that they have no affect
-        for key in incorrect_merges:
-            replacement_dict[key] = key
+        if incorrect_merges:
+            # reassign incorrect merges so that they have no affect
+            for key in incorrect_merges:
+                replacement_dict[key] = key
+            # find only correct merges
+            new_merges = merges[
+                ~index_isin(
+                    merges[:, 0], np.array(incorrect_merges)
+                ).flatten(),
+                ...,
+            ]
+        else:
+            new_merges = merges
         # correct lineage information
         # replace mother or bud index with index of rightmost track
         flat_lineage[valid_lineages] = [
@@ -81,14 +100,12 @@ def merge_lineage(lineage: np.ndarray, merges: np.ndarray) -> np.ndarray:
     new_lineage = flat_lineage.reshape(-1, 2, 2)
     # remove any duplicates
     new_lineage = np.unique(new_lineage, axis=0)
-    return new_lineage
+    return new_lineage, new_merges
 
 
 def apply_merges(data: pd.DataFrame, merges: np.ndarray):
     """
     Generate a new data frame containing merged tracks.
-
-    TODO: what about the incorrect merges?
 
     Parameters
     ----------
