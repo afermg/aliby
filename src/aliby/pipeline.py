@@ -141,7 +141,7 @@ class PipelineParameters(ParametersABC):
         # define defaults and update with any inputs
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
 
-        # Generate a backup channel, for when logfile meta is available
+        # generate a backup channel, for when logfile meta is available
         # but not image metadata.
         backup_ref_channel = None
         if "channels" in meta_d and isinstance(
@@ -384,7 +384,7 @@ class Pipeline(ProcessABC):
         session = None
         filename = None
         #
-        run_kwargs = {"extraction": {"labels": None, "masks": None}}
+        run_kwargs = {"extraction": {"cell_labels": None, "masks": None}}
         try:
             (
                 filename,
@@ -507,7 +507,7 @@ class Pipeline(ProcessABC):
                                         )
                                     elif step == "extraction":
                                         # remove masks and labels after extraction
-                                        for k in ["masks", "labels"]:
+                                        for k in ["masks", "cell_labels"]:
                                             run_kwargs[step][k] = None
                             # check and report clogging
                             frac_clogged_traps = self.check_earlystop(

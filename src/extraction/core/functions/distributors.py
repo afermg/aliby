@@ -44,5 +44,6 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     elif isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
         return fun.reduce(trap_image, axis=axis)
-    else:  # WARNING: Very slow, only use when no alternatives exist
+    else:
+        # WARNING: Very slow, only use when no alternatives exist
         return np.apply_along_axis(fun, axis, trap_image)

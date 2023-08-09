@@ -344,7 +344,7 @@ class Tiler(StepABC):
         return tiler
 
     @lru_cache(maxsize=2)
-    def get_tc(self, t: int, c: int) -> np.ndarray:
+    def get_tc(self, tp: int, c: int) -> np.ndarray:
         """
         Load image using dask.
 
@@ -357,7 +357,7 @@ class Tiler(StepABC):
 
         Parameters
         ----------
-        t: integer
+        tp: integer
             An index for a time point
         c: integer
             An index for a channel
@@ -366,7 +366,7 @@ class Tiler(StepABC):
         -------
         full: an array of images
         """
-        full = self.image[t, c]
+        full = self.image[tp, c]
         if hasattr(full, "compute"):
             # if using dask fetch images
             full = full.compute(scheduler="synchronous")
@@ -570,9 +570,8 @@ class Tiler(StepABC):
         Returns
         -------
         res: array
-            Data arranged as (tiles, channels, time points, X, Y, Z)
+            Data arranged as (tiles, channels, Z, X, Y)
         """
-        # FIXME add support for sub-tiling a tile
         # FIXME can we ignore z
         if channels is None:
             channels = [0]
@@ -583,8 +582,7 @@ class Tiler(StepABC):
         for c in channels:
             # only return requested z
             val = self.get_tp_data(tp, c)[:, z]
-            # starts with the order: tiles, z, y, x
-            # returns the order: tiles, C, T, Z, X, Y
+            # starts with the order: tiles, Z, Y, X
             val = np.expand_dims(val, axis=1)
             res.append(val)
         if tile_shape is not None:
@@ -596,7 +594,10 @@ class Tiler(StepABC):
                     for tile_size, ax in zip(tile_shape, res[0].shape[-3:-2])
                 ]
             )
-        return np.stack(res, axis=1)
+        # convert to array with channels as first column
+        # final has dimensions (tiles, channels, 1, Z, X, Y)
+        final = np.stack(res, axis=1)
+        return final
 
     @property
     def ref_channel_index(self):
