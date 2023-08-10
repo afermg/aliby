@@ -387,6 +387,9 @@ class Extractor(StepABC):
         ------
         Dict of dataframes with the corresponding reductions and metrics nested.
         """
+        # FIXME hack to pass tests
+        if "labels" in kwargs:
+            kwargs["cell_labels"] = kwargs.pop("labels")
         # create dict with keys naming the reduction in the z-direction
         # and the reduced data as values
         reduced_tiles_data = {}
