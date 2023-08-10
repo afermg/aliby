@@ -125,6 +125,24 @@ class Extractor(StepABC):
             self.meta = {"channel": parameters.to_dict()["tree"].keys()}
         if tiler:
             self.tiler = tiler
+            available_channels = set((*tiler.channels, "general"))
+            # only extract for channels available
+            self.params.tree = {
+                k: v
+                for k, v in self.params.tree.items()
+                if k in available_channels
+            }
+            self.params.sub_bg = available_channels.intersection(
+                self.params.sub_bg
+            )
+            # add background subtracted channels to those available
+            available_channels_bgsub = available_channels.union(
+                [c + "_bgsub" for c in self.params.sub_bg]
+            )
+            # remove any multichannel operations requiring a missing channel
+            for op, (input_ch, _, _) in dict(self.params.multichannel_ops):
+                if not set(input_ch).issubset(available_channels_bgsub):
+                    self.params.multichannel_ops.pop(op)
         self.load_funs()
 
     @classmethod
@@ -479,7 +497,8 @@ class Extractor(StepABC):
 
         Apply first without and then with background subtraction.
 
-        Return the extraction results and a dict of background corrected images.
+        Return the extraction results and a dict of background
+        corrected images.
         """
         d = {}
         img_bgsub = {}
@@ -722,10 +741,10 @@ class Extractor(StepABC):
             d[k].index.names = idx
         # save
         if save:
-            self.save_to_hdf(d)
+            self.save_to_h5(d)
         return d
 
-    def save_to_hdf(self, dict_series, path=None):
+    def save_to_h5(self, dict_series, path=None):
         """
         Save the extracted data for one position to the h5 file.
 

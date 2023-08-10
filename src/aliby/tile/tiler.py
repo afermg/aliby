@@ -181,7 +181,7 @@ class TileLocations:
         return cls(initial_location, tile_size, max_size, drifts=[])
 
     @classmethod
-    def read_hdf5(cls, file):
+    def read_h5(cls, file):
         """Instantiate from a h5 file."""
         with h5py.File(file, "r") as hfile:
             tile_info = hfile["trap_info"]
@@ -328,7 +328,7 @@ class Tiler(StepABC):
             Path to a directory of h5 files
         parameters: an instance of TileParameters (optional)
         """
-        tile_locs = TileLocations.read_hdf5(filepath)
+        tile_locs = TileLocations.read_h5(filepath)
         metadata = BridgeH5(filepath).meta_h5
         metadata["channels"] = image.metadata["channels"]
         if parameters is None:
