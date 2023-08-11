@@ -1,8 +1,9 @@
-""" How to do the nuc Est Conv from MATLAB
+"""
+How to do the nuc Est Conv from MATLAB
 Based on the code in MattSegCode/Matt Seg
 GUI/@timelapseTraps/extractCellDataStacksParfor.m
 
-Especially lines 342 to  399.
+Especially lines 342 to 399.
 This part only replicates the method to get the nuc_est_conv values
 """
 import typing as t

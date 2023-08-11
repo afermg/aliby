@@ -193,3 +193,39 @@ def min_maj_approximation(cell_mask) -> t.Tuple[int]:
     # + distance from the center of cone top to edge of cone top
     maj_ax = np.round(np.max(dn) + np.sum(cone_top) / 2)
     return min_ax, maj_ax
+
+
+def moment_of_inertia(cell_mask, trap_image):
+    """
+    Find moment of inertia - a measure of homogeneity.
+
+    From iopscience.iop.org/article/10.1088/1742-6596/1962/1/012028
+    which cites ieeexplore.ieee.org/document/1057692.
+    """
+    # set pixels not in cell to zero
+    trap_image[~cell_mask] = 0
+    x = trap_image
+    if np.any(x):
+        # x-axis : column=x-axis
+        columnvec = np.arange(1, x.shape[1] + 1, 1)[:, None].T
+        # y-axis : row=y-axis
+        rowvec = np.arange(1, x.shape[0] + 1, 1)[:, None]
+        # find raw moments
+        M00 = np.sum(x)
+        M10 = np.sum(np.multiply(x, columnvec))
+        M01 = np.sum(np.multiply(x, rowvec))
+        # find centroid
+        Xm = M10 / M00
+        Ym = M01 / M00
+        # find central moments
+        Mu00 = M00
+        Mu20 = np.sum(np.multiply(x, (columnvec - Xm) ** 2))
+        Mu02 = np.sum(np.multiply(x, (rowvec - Ym) ** 2))
+        # find invariants
+        Eta20 = Mu20 / Mu00 ** (1 + (2 + 0) / 2)
+        Eta02 = Mu02 / Mu00 ** (1 + (0 + 2) / 2)
+        # find moments of inertia
+        moi = Eta20 + Eta02
+        return moi
+    else:
+        return np.nan

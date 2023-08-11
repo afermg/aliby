@@ -126,7 +126,7 @@ class PipelineParameters(ParametersABC):
                 use_explog=True,
             )
         }
-        # update default values using inputs
+        # update default values for general using inputs
         for k, v in general.items():
             if k not in defaults["general"]:
                 defaults["general"][k] = v
@@ -306,7 +306,7 @@ class Pipeline(ProcessABC):
         # extract from configuration
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
-        pos_filter = config["general"]["filter"]
+        position_filter = config["general"]["filter"]
         root_dir = Path(config["general"]["directory"])
         self.server_info = {
             k: config["general"].get(k)
@@ -329,15 +329,15 @@ class Pipeline(ProcessABC):
         config["general"]["directory"] = directory
         self.setLogger(directory)
         # pick particular positions if desired
-        if pos_filter is not None:
-            if isinstance(pos_filter, list):
+        if position_filter is not None:
+            if isinstance(position_filter, list):
                 position_ids = {
                     k: v
-                    for filt in pos_filter
+                    for filt in position_filter
                     for k, v in self.apply_filter(position_ids, filt).items()
                 }
             else:
-                position_ids = self.apply_filter(position_ids, pos_filter)
+                position_ids = self.apply_filter(position_ids, position_filter)
         if not len(position_ids):
             raise Exception("No images to segment.")
         # create and run pipelines
@@ -356,26 +356,26 @@ class Pipeline(ProcessABC):
             ]
         return results
 
-    def apply_filter(self, position_ids: dict, pos_filter: int or str):
+    def apply_filter(self, position_ids: dict, position_filter: int or str):
         """
         Select positions.
 
-        Either pick a particular one or use a regular expression to parse
-        their file names.
+        Either pick a particular position or use a regular expression
+        to parse their file names.
         """
-        if isinstance(pos_filter, str):
+        if isinstance(position_filter, str):
             # pick positions using a regular expression
             position_ids = {
                 k: v
                 for k, v in position_ids.items()
-                if re.search(pos_filter, k)
+                if re.search(position_filter, k)
             }
-        elif isinstance(pos_filter, int):
+        elif isinstance(position_filter, int):
             # pick a particular position
             position_ids = {
                 k: v
                 for i, (k, v) in enumerate(position_ids.items())
-                if i == pos_filter
+                if i == position_filter
             }
         return position_ids
 

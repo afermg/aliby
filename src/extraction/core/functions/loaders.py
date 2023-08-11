@@ -11,8 +11,8 @@ from extraction.core.functions.math_utils import div0
 
 """
 Load functions for analysing cells and their background.
-Note that inspect.getmembers returns a list of function names and functions,
-and inspect.getfullargspec returns a function's arguments.
+Note that inspect.getmembers returns a list of function names and
+functions, and inspect.getfullargspec returns a function's arguments.
 """
 
 
