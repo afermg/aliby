@@ -11,8 +11,10 @@ from extraction.core.functions.math_utils import div0
 
 """
 Load functions for analysing cells and their background.
-Note that inspect.getmembers returns a list of function names and
-functions, and inspect.getfullargspec returns a function's arguments.
+
+Note that inspect.getmembers returns a list of function names
+and functions, and inspect.getfullargspec returns a
+function's arguments.
 """
 
 
@@ -66,7 +68,7 @@ def load_cellfuns():
     # create dict of the core functions from cell.py - these functions apply to a single mask
     cell_funs = load_cellfuns_core()
     # create a dict of functions that apply the core functions to an array of cell_masks
-    CELLFUNS = {}
+    CELL_FUNS = {}
     for f_name, f in cell_funs.items():
         if isfunction(f):
 
@@ -79,27 +81,27 @@ def load_cellfuns():
                     # function that applies f to m and img, the trap_image
                     return lambda m, img: trap_apply(f, m, img)
 
-            CELLFUNS[f_name] = tmp(f)
-    return CELLFUNS
+            CELL_FUNS[f_name] = tmp(f)
+    return CELL_FUNS
 
 
 def load_trapfuns():
     """Load functions that are applied to an entire tile."""
-    TRAPFUNS = {
+    TRAP_FUNS = {
         f[0]: f[1]
         for f in getmembers(trap)
         if isfunction(f[1])
         and f[1].__module__.startswith("extraction.core.functions")
     }
-    return TRAPFUNS
+    return TRAP_FUNS
 
 
 def load_funs():
     """Combine all automatically loaded functions."""
-    CELLFUNS = load_cellfuns()
-    TRAPFUNS = load_trapfuns()
+    CELL_FUNS = load_cellfuns()
+    TRAP_FUNS = load_trapfuns()
     # return dict of cell funs, dict of trap funs, and dict of both
-    return CELLFUNS, TRAPFUNS, {**TRAPFUNS, **CELLFUNS}
+    return CELL_FUNS, TRAP_FUNS, {**TRAP_FUNS, **CELL_FUNS}
 
 
 def load_redfuns(
