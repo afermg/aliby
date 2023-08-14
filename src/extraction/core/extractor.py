@@ -140,7 +140,7 @@ class Extractor(StepABC):
                 [c + "_bgsub" for c in self.params.sub_bg]
             )
             # remove any multichannel operations requiring a missing channel
-            for op, (input_ch, _, _) in dict(self.params.multichannel_ops):
+            for op, (input_ch, _, _) in self.params.multichannel_ops.items():
                 if not set(input_ch).issubset(available_channels_bgsub):
                     self.params.multichannel_ops.pop(op)
         self.load_funs()
@@ -306,8 +306,6 @@ class Extractor(StepABC):
         cell_labels: dict
             A dict of cell labels with trap_ids as keys and a list
             of cell labels as values.
-        pos_info: bool
-            Whether to add the position as an index or not.
 
         Returns
         -------
@@ -557,19 +555,18 @@ class Extractor(StepABC):
         """
         Extract using all metrics requiring multiple channels.
         """
+        available_chs = set(self.img_bgsub.keys()).union(
+            tree_bits["tree_channels"]
+        )
         d = {}
         for name, (
             chs,
-            merge_fun,
-            red_metrics,
+            reduction_fun,
+            op,
         ) in self.params.multichannel_ops.items():
-            if len(
-                set(chs).intersection(
-                    set(self.img_bgsub.keys()).union(
-                        tree_bits["tree_channels"]
-                    )
-                )
-            ) == len(chs):
+            common_chs = set(chs).intersection(available_chs)
+            # all required channels should be available
+            if len(common_chs) == len(chs):
                 channels_stack = np.stack(
                     [
                         self.get_imgs(ch, tiles, tree_bits["tree_channels"])
@@ -577,13 +574,18 @@ class Extractor(StepABC):
                     ],
                     axis=-1,
                 )
-                merged = RED_FUNS[merge_fun](channels_stack, axis=-1)
-                d[name] = self.reduce_extract(
-                    red_metrics=red_metrics,
-                    traps=merged,
-                    masks=masks,
-                    cell_labels=cell_labels,
-                    **kwargs,
+                # reduce in Z
+                traps = RED_FUNS[reduction_fun](channels_stack, axis=1)
+                # evaluate multichannel op
+                if name not in d:
+                    d[name] = {}
+                if reduction_fun not in d[name]:
+                    d[name][reduction_fun] = {}
+                d[name][reduction_fun][op] = self.extract_traps(
+                    traps,
+                    masks,
+                    op,
+                    cell_labels,
                 )
         return d
 
@@ -652,10 +654,10 @@ class Extractor(StepABC):
         res_one, self.img_bgsub = self.extract_one_channel(
             tree_bits, cell_labels, tiles, masks, bgs, **kwargs
         )
-        res_two = self.extract_multiple_channels(
+        res_multiple = self.extract_multiple_channels(
             tree_bits, cell_labels, tiles, masks, **kwargs
         )
-        res = {**res_one, **res_two}
+        res = {**res_one, **res_multiple}
         return res
 
     def get_imgs(self, channel: t.Optional[str], tiles, channels=None):

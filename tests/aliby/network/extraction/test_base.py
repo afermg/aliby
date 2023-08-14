@@ -56,9 +56,9 @@ def test_extractor(imgs, masks, tree):
     for ch_branches in extractor.params.tree.values():
         print(
             extractor.reduce_extract(
-                red_metrics=ch_branches,
-                traps=[traps],
-                masks=[masks],
+                [traps],
+                [masks],
+                ch_branches,
                 labels={0: labels},
             )
         )
