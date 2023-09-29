@@ -96,6 +96,8 @@ def merge_lineage(
             replacement_dict[tuple(index)]
             for index in flat_lineage[valid_lineages]
         ]
+    else:
+        new_merges = merges
     # reverse flattening
     new_lineage = flat_lineage.reshape(-1, 2, 2)
     # remove any duplicates
