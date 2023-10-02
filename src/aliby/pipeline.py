@@ -340,6 +340,10 @@ class Pipeline(ProcessABC):
                 position_ids = self.apply_filter(position_ids, position_filter)
         if not len(position_ids):
             raise Exception("No images to segment.")
+        else:
+            print("Positions:")
+            for pos in position_ids:
+                print("\t" + pos.split(".")[0])
         # create and run pipelines
         if distributed != 0:
             # multiple cores
