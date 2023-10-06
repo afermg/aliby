@@ -107,35 +107,38 @@ class Grouper(ABC):
         if path.startswith("/"):
             path = path.strip("/")
         good_chains = self.filter_chains(path)
-        if standard:
-            fn_pos = concat_standard
-        else:
-            fn_pos = concat_one_signal
-            kwargs["mode"] = mode
-        records = self.pool_function(
-            path=path,
-            f=fn_pos,
-            pool=pool,
-            chainers=good_chains,
-            **kwargs,
-        )
-        # check for errors
-        errors = [
-            k for kymo, k in zip(records, self.chainers.keys()) if kymo is None
-        ]
-        records = [record for record in records if record is not None]
-        if len(errors):
-            print("Warning: Positions contain errors {errors}")
-        assert len(records), "All data sets contain errors"
-        # combine into one dataframe
-        concat = pd.concat(records, axis=0)
-        if len(concat.index.names) > 4:
-            # reorder levels in the multi-index dataframe when mother_label is present
-            concat = concat.reorder_levels(
-                ("group", "position", "trap", "cell_label", "mother_label")
+        if good_chains:
+            if standard:
+                fn_pos = concat_standard
+            else:
+                fn_pos = concat_one_signal
+                kwargs["mode"] = mode
+            records = self.pool_function(
+                path=path,
+                f=fn_pos,
+                pool=pool,
+                chainers=good_chains,
+                **kwargs,
             )
-        concat_sorted = concat.sort_index()
-        return concat_sorted
+            # check for errors
+            errors = [
+                k
+                for kymo, k in zip(records, self.chainers.keys())
+                if kymo is None
+            ]
+            records = [record for record in records if record is not None]
+            if len(errors):
+                print("Warning: Positions contain errors {errors}")
+            assert len(records), "All data sets contain errors"
+            # combine into one dataframe
+            concat = pd.concat(records, axis=0)
+            if len(concat.index.names) > 4:
+                # reorder levels in the multi-index dataframe when mother_label is present
+                concat = concat.reorder_levels(
+                    ("group", "position", "trap", "cell_label", "mother_label")
+                )
+            concat_sorted = concat.sort_index()
+            return concat_sorted
 
     def filter_chains(self, path: str) -> t.Dict[str, Chainer]:
         """Filter chains to those whose data is available in the h5 file."""
@@ -150,9 +153,6 @@ class Grouper(ABC):
                 f"Grouper:Warning: {nchains_dif} chains do not contain"
                 f" channel {path}"
             )
-        assert len(
-            good_chains
-        ), f"No valid dataset to use. Valid datasets are {self.available}"
         return good_chains
 
     def pool_function(
