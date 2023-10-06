@@ -72,14 +72,7 @@ class PostProcessorParameters(ParametersABC):
             },
             "processes": [
                 ["buddings", ["/extraction/general/None/volume"]],
-                # ["dsignal", ["/extraction/general/None/volume"]],
                 ["bud_metric", ["/extraction/general/None/volume"]],
-                # [
-                #     "dsignal",
-                #     [
-                #         "/postprocessing/bud_metric/extraction_general_None_volume"
-                #     ],
-                # ],
             ],
         }
         param_sets = {
@@ -89,29 +82,6 @@ class PostProcessorParameters(ParametersABC):
             }
         }
         outpaths = {}
-        outpaths["aggregate"] = "/postprocessing/experiment_wide/aggregated/"
-        # pHlourin experiments are special
-        if "ph_batman" in kind:
-            targets["processes"]["dsignal"].append(
-                [
-                    "/extraction/em_ratio/np_max/mean",
-                    "/extraction/em_ratio/np_max/median",
-                    "/extraction/em_ratio_bgsub/np_max/mean",
-                    "/extraction/em_ratio_bgsub/np_max/median",
-                ]
-            )
-            targets["processes"]["aggregate"].append(
-                [
-                    [
-                        "/extraction/em_ratio/np_max/mean",
-                        "/extraction/em_ratio/np_max/median",
-                        "/extraction/em_ratio_bgsub/np_max/mean",
-                        "/extraction/em_ratio_bgsub/np_max/median",
-                        "/extraction/gsum/np_max/median",
-                        "/extraction/gsum/np_max/mean",
-                    ]
-                ],
-            )
         return cls(targets=targets, param_sets=param_sets, outpaths=outpaths)
 
 
@@ -128,9 +98,9 @@ class PostProcessor(ProcessABC):
             An instance of PostProcessorParameters.
         """
         super().__init__(parameters)
-        self._filename = filename
-        self._signal = Signal(filename)
-        self._writer = Writer(filename)
+        self.filename = filename
+        self.signal = Signal(filename)
+        self.writer = Writer(filename)
         # parameters for merger and picker
         dicted_params = {
             i: parameters["param_sets"]["prepost"][i]
@@ -167,7 +137,7 @@ class PostProcessor(ProcessABC):
         Necessary before any processes can run.
         """
         # run merger
-        record = self._signal.get_raw(self.targets["prepost"]["merger"])
+        record = self.signal.get_raw(self.targets["prepost"]["merger"])
         merges = self.merger.run(record)
         # get lineages from picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
@@ -178,18 +148,18 @@ class PostProcessor(ProcessABC):
             new_lineage = lineage
             new_merges = merges
         self.lineage = _3d_index_to_2d(new_lineage)
-        self._writer.write(
+        self.writer.write(
             "modifiers/merges", data=[np.array(x) for x in new_merges]
         )
-        self._writer.write(
+        self.writer.write(
             "modifiers/lineage_merged", _3d_index_to_2d(new_lineage)
         )
         # run picker
         picked_indices = self.picker.run(
-            self._signal[self.targets["prepost"]["picker"][0]]
+            self.signal[self.targets["prepost"]["picker"][0]]
         )
         if picked_indices.any():
-            self._writer.write(
+            self.writer.write(
                 "modifiers/picks",
                 data=pd.MultiIndex.from_arrays(
                     picked_indices.T, names=["trap", "cell_label"]
@@ -213,9 +183,9 @@ class PostProcessor(ProcessABC):
                     self.parameters[process]
                 )
             else:
-                # assign parameters
+                # assign default parameters
                 parameters = self.parameters_classfun[process].default()
-            # load process
+            # load process - instantiate an object in the class
             loaded_process = self.classfun[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
                 loaded_process.lineage = self.lineage
@@ -227,9 +197,9 @@ class PostProcessor(ProcessABC):
         """Run process to obtain a single dataset and write the result."""
         # get pre-processed data
         if isinstance(dataset, list):
-            signal = [self._signal[d] for d in dataset]
+            signal = [self.signal[d] for d in dataset]
         elif isinstance(dataset, str):
-            signal = self._signal[dataset]
+            signal = self.signal[dataset]
         else:
             raise ("Incorrect dataset")
         # run process on signal
@@ -292,7 +262,7 @@ class PostProcessor(ProcessABC):
         result: t.Union[t.List, pd.DataFrame, np.ndarray],
         metadata: t.Dict,
     ):
-        self._writer.write(path, result, meta=metadata, overwrite="overwrite")
+        self.writer.write(path, result, meta=metadata, overwrite="overwrite")
 
     @staticmethod
     def pick_mother(a, b):

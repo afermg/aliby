@@ -46,18 +46,16 @@ def get_process(process, suffix="") -> PostProcessABC or ParametersABC or None:
         _to_snake_case(process),
         _to_pascal_case(_to_snake_case(process)),
     )
-
     found = None
     for possible_location, process_syntax in product(
         possible_locations, valid_syntaxes
     ):
-
         location = f"{base_location}.{possible_location}.{_to_snake_case(process)}.{process_syntax}{suffix}"
+        # instantiate class but not a class object
         found = locate(location)
         if found is not None:
             break
     else:
-
         raise Exception(
             f"{process} not found in locations {possible_locations} at {base_location}"
         )

@@ -324,6 +324,9 @@ class Pipeline(ProcessABC):
                 directory.mkdir(parents=True)
             # download logs to use for metadata
             conn.cache_logs(directory)
+        print("Positions available:")
+        for i, pos in enumerate(position_ids.keys()):
+            print("\t" + f"{i}: " + pos.split(".")[0])
         # update configuration
         self.parameters.general["directory"] = str(directory)
         config["general"]["directory"] = directory
@@ -341,7 +344,7 @@ class Pipeline(ProcessABC):
         if not len(position_ids):
             raise Exception("No images to segment.")
         else:
-            print("Positions:")
+            print("\nPositions selected:")
             for pos in position_ids:
                 print("\t" + pos.split(".")[0])
         # create and run pipelines
