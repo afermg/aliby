@@ -39,7 +39,12 @@ class PipelineParameters(ParametersABC):
     _pool_index = None
 
     def __init__(
-        self, general, tiler, baby, extraction, postprocessing, reporting
+        self,
+        general,
+        tiler,
+        baby,
+        extraction,
+        postprocessing,
     ):
         """Initialise, but called by a class method - not directly."""
         self.general = general
@@ -47,7 +52,6 @@ class PipelineParameters(ParametersABC):
         self.baby = baby
         self.extraction = extraction
         self.postprocessing = postprocessing
-        self.reporting = reporting
 
     @classmethod
     def default(
@@ -155,8 +159,6 @@ class PipelineParameters(ParametersABC):
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
         ).to_dict()
-        # TODO reporting
-        defaults["reporting"] = {}
         return cls(**{k: v for k, v in defaults.items()})
 
     def load_logs(self):

@@ -132,15 +132,17 @@ class PostProcessor(ProcessABC):
 
     def run_prepost(self):
         """
-        Run picker and merger and get lineages.
+        Run merger, get lineages, and then run picker.
 
         Necessary before any processes can run.
         """
         # run merger
         record = self.signal.get_raw(self.targets["prepost"]["merger"])
         merges = self.merger.run(record)
-        # get lineages from picker
+        # get lineages from cells object attached to picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
+        if not np.any(lineage):
+            breakpoint()
         if merges.any():
             # update lineages and merges after merging
             new_lineage, new_merges = merge_lineage(lineage, merges)

@@ -53,8 +53,10 @@ class Picker(LineageProcess):
         mothers_daughters: t.Optional[np.ndarray] = None,
     ) -> pd.MultiIndex:
         """
-        Return rows of a signal corresponding to either mothers, daughters,
-        or mother-daughter pairs using lineage information.
+        Return rows of a signal using lineage information.
+
+        Rows correspond to either mothers, daughters, or mother-daughter
+        pairs.
         """
         cells_present = drop_mother_label(signal.index)
         mothers_daughters = self.get_lineage_information(signal)
@@ -65,10 +67,10 @@ class Picker(LineageProcess):
 
     def run(self, signal):
         """
-        Pick indices from the index of a signal's dataframe and return
-        as an array.
+        Pick indices from the index of a signal's dataframe.
 
         Typically, we first pick by lineage, then by condition.
+        The indices are returned as an array.
         """
         self.orig_signal = signal
         indices = set(signal.index)
