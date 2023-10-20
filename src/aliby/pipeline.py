@@ -14,6 +14,7 @@ import numpy as np
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
+import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
@@ -119,13 +120,7 @@ class PipelineParameters(ParametersABC):
                 tps=tps,
                 directory=str(directory.parent),
                 filter="",
-                earlystop=dict(
-                    min_tp=100,
-                    thresh_pos_clogged=0.4,
-                    thresh_trap_ncells=8,
-                    thresh_trap_area=0.9,
-                    ntps_to_eval=5,
-                ),
+                earlystop=global_parameters.earlystop,
                 logfile_level="INFO",
                 use_explog=True,
             )
@@ -162,8 +157,23 @@ class PipelineParameters(ParametersABC):
         return cls(**{k: v for k, v in defaults.items()})
 
     def load_logs(self):
+        """Load and parse log files."""
         parsed_flattened = parse_logfiles(self.log_dir)
         return parsed_flattened
+
+
+def find_channels_by_group(meta):
+    """Parse meta data to find which imaging channels are used for each group."""
+    channels_dict = {group_no: [] for group_no in meta["positions/group"]}
+    imaging_channels = global_parameters.possible_imaging_channels
+    for i, group_no in enumerate(meta["positions/group"]):
+        for imaging_channel in imaging_channels:
+            if (
+                "positions/" + imaging_channel in meta
+                and meta["positions/" + imaging_channel][i]
+            ):
+                channels_dict[group_no].append(imaging_channel)
+    return channels_dict
 
 
 class Pipeline(ProcessABC):
@@ -223,11 +233,6 @@ class Pipeline(ProcessABC):
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-
-    @classmethod
-    def from_yaml(cls, fpath):
-        # an unfinished convenience function
-        return cls(parameters=PipelineParameters.from_yaml(fpath))
 
     @classmethod
     def from_folder(cls, dir_path):
@@ -324,7 +329,7 @@ class Pipeline(ProcessABC):
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # download logs to use for metadata
+            # get logs to use for metadata
             conn.cache_logs(directory)
         print("Positions available:")
         for i, pos in enumerate(position_ids.keys()):

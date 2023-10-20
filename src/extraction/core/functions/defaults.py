@@ -4,6 +4,7 @@ from pathlib import Path
 
 import h5py
 
+import aliby.global_parameters as global_parameters
 from aliby.tile.tiler import find_channel_name
 
 
@@ -21,26 +22,10 @@ def exparams_from_meta(
         "tree": {"general": {"None": ["area", "volume", "eccentricity"]}},
         "multichannel_ops": {},
     }
-    candidate_channels = {
-        "Citrine",
-        "GFP",
-        "GFPFast",
-        "mCherry",
-        "pHluorin405",
-        "pHluorin488",
-        "Flavin",
-        "Cy5",
-        "mKO2",
-    }
+    candidate_channels = set(global_parameters.possible_imaging_channels)
     default_reductions = {"max"}
-    default_metrics = {
-        "mean",
-        "median",
-        "std",
-        "imBackground",
-        "max5px_median",
-        # "nuc_est_conv",
-    }
+    default_metrics = set(global_parameters.fluorescence_functions)
+
     # define ratiometric combinations
     # key is numerator and value is denominator
     # add more to support additional channel names

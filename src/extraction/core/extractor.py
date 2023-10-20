@@ -16,6 +16,7 @@ from extraction.core.functions.loaders import (
     load_funs,
     load_redfuns,
 )
+import aliby.global_parameters as global_parameters
 
 # define types
 reduction_method = t.Union[t.Callable, str, None]
@@ -89,12 +90,7 @@ class Extractor(StepABC):
     or leaf level.
     """
 
-    # TODO Move this to a location with the SwainLab defaults
-    default_meta = {
-        "pixel_size": 0.236,
-        "z_size": 0.6,
-        "spacing": 0.6,
-    }
+    default_meta = global_parameters.imaging_specifications
 
     def __init__(
         self,

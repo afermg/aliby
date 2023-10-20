@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+import aliby.global_parameters as global_parameters
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_lineage
@@ -36,16 +37,7 @@ class Signal(BridgeH5):
             "cell_label",
             "mother_label",
         )
-        self.candidate_channels = (
-            "GFP",
-            "GFPFast",
-            "mCherry",
-            "Flavin",
-            "Citrine",
-            "mKO2",
-            "Cy5",
-            "pHluorin405",
-        )
+        self.candidate_channels = global_parameters.possible_imaging_channels
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
         """Get and potentially pre-process data from h5 file and return as a dataframe."""
