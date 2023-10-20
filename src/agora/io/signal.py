@@ -107,7 +107,9 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             return list(f.attrs["channels"])
 
-    def retained(self, signal, cutoff=0.8):
+    def retained(
+        self, signal, cutoff=global_parameters.signal_retained_cutoff
+    ):
         """
         Load data (via decorator) and reduce the resulting dataframe.
 
