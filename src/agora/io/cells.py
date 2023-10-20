@@ -16,6 +16,9 @@ class Cells:
     """
     Extract information from an h5 file.
 
+    Use output from BABY to find cells detected, get, and fill, edge masks
+    and retrieve mother-bud relationships.
+
     This class accesses in the h5 file:
 
     'cell_info', which contains 'angles', 'cell_label', 'centres',
@@ -25,11 +28,11 @@ class Cells:
 
     'trap_info', which contains 'drifts', and 'trap_locations'.
 
-    The "timepoint", "cell_label", and "trap" variables are consistent 1D lists.
+    The "timepoint", "cell_label", and "trap" variables are mutually consistent
+    1D lists.
 
     Examples are self["timepoint"][self.get_idx(1, 3)] to find the time points
     where cell 1 was present in trap 3.
-
     """
 
     def __init__(self, filename, path="cell_info"):
