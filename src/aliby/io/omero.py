@@ -131,7 +131,6 @@ class BridgeOmero:
         FIXME: Add docs.
 
         """
-        # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
         meta = safe_load(bridge.meta_h5["parameters"])["general"]
         server_info = {k: meta[k] for k in ("host", "username", "password")}
@@ -268,7 +267,6 @@ class Dataset(BridgeOmero):
         FIXME: Add docs.
 
         """
-        # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
         dataset_keys = ("omero_id", "omero_id,", "dataset_id")
         for k in dataset_keys:
@@ -301,21 +299,21 @@ class Image(BridgeOmero):
         cls,
         filepath: t.Union[str, Path],
     ):
-        """Instatiate Image from a hdf5 file.
+        """
+        Instantiate Image from a h5 file.
 
         Parameters
         ----------
         cls : Image
             Image class
         filepath : t.Union[str, Path]
-            Location of hdf5 file.
+            Location of h5 file.
 
         Examples
         --------
         FIXME: Add docs.
 
         """
-        # metadata = load_attributes(filepath)
         bridge = BridgeH5(filepath)
         image_id = bridge.meta_h5["image_id"]
         return cls(image_id, **cls.server_info_from_h5(filepath))

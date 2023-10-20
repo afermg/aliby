@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 
 from agora.io.bridge import groupsort
-from agora.io.writer import load_attributes
+from agora.io.writer import load_meta
 
 
 class DynamicReader:
@@ -13,7 +13,7 @@ class DynamicReader:
 
     def __init__(self, file: str):
         self.file = file
-        self.metadata = load_attributes(file)
+        self.metadata = load_meta(file)
 
 
 class StateReader(DynamicReader):

@@ -15,9 +15,10 @@ from agora.io.bridge import BridgeH5
 #################### Dynamic version ##################################
 
 
-def load_attributes(file: str, group="/"):
+def load_meta(file: str, group="/"):
     """
-    Load the metadata from an h5 file and convert to a dictionary, including the "parameters" field which is stored as YAML.
+    Load the metadata from an h5 file and convert to a dictionary, including
+    the "parameters" field which is stored as YAML.
 
     Parameters
     ----------
@@ -26,8 +27,9 @@ def load_attributes(file: str, group="/"):
     group: str, optional
         The group in the h5 file from which to read the data
     """
-    # load the metadata, stored as attributes, from the h5 file and return as a dictionary
+    # load the metadata, stored as attributes, from the h5 file
     with h5py.File(file, "r") as f:
+        # return as a dict
         meta = dict(f[group].attrs.items())
     if "parameters" in meta:
         # convert from yaml format into dict
@@ -51,7 +53,7 @@ class DynamicWriter:
         self.file = file
         # the metadata is stored as attributes in the h5 file
         if Path(file).exists():
-            self.metadata = load_attributes(file)
+            self.metadata = load_meta(file)
 
     def _log(self, message: str, level: str = "warn"):
         # Log messages in the corresponding level

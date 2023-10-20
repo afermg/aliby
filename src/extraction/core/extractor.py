@@ -7,7 +7,7 @@ import pandas as pd
 
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.writer import Writer, load_attributes
+from agora.io.writer import Writer, load_meta
 from aliby.tile.tiler import Tiler
 from extraction.core.functions.defaults import exparams_from_meta
 from extraction.core.functions.distributors import reduce_z, trap_apply
@@ -89,7 +89,7 @@ class Extractor(StepABC):
     or leaf level.
     """
 
-    # TODO Alan: Move this to a location with the SwainLab defaults
+    # TODO Move this to a location with the SwainLab defaults
     default_meta = {
         "pixel_size": 0.236,
         "z_size": 0.6,
@@ -119,10 +119,11 @@ class Extractor(StepABC):
         self.params = parameters
         if store:
             self.local = store
-            self.load_meta()
+            self.meta = load_meta(self.local)
         else:
             # if no h5 file, use the parameters directly
             self.meta = {"channel": parameters.to_dict()["tree"].keys()}
+
         if tiler:
             self.tiler = tiler
             available_channels = set((*tiler.channels, "general"))
@@ -235,10 +236,6 @@ class Extractor(StepABC):
         self._all_cell_funs = set(self._custom_funs.keys()).union(CELL_FUNS)
         # merge the two dicts
         self._all_funs = {**self._custom_funs, **ALL_FUNS}
-
-    def load_meta(self):
-        """Load metadata from h5 file."""
-        self.meta = load_attributes(self.local)
 
     def get_tiles(
         self,

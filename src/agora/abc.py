@@ -190,8 +190,8 @@ class ProcessABC(ABC):
         """
         self._parameters = parameters
         # convert parameters to dictionary
-        # and then define each parameter as an attribute
         for k, v in parameters.to_dict().items():
+            # define each parameter as an attribute
             setattr(self, k, v)
 
     @property
