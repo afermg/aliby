@@ -482,7 +482,7 @@ class Pipeline(ProcessABC):
                                         and i == min_process_from
                                     ):
                                         logging.getLogger("aliby").info(
-                                            f"Found {pipe['steps']['tiler'].n_tiles} traps in {image.name}"
+                                            f"Found {pipe['steps']['tiler'].no_tiles} traps in {image.name}"
                                         )
                                     elif step == "baby":
                                         # write state

@@ -106,7 +106,11 @@ def max5px_median(cell_mask, trap_image) -> float:
     top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
     # find mean of five brightest pixels
     max5px = np.mean(top_values)
-    return max5px / np.median(pixels)
+    med = np.median(pixels)
+    if med == 0:
+        return np.nan
+    else:
+        return max5px / np.median(pixels)
 
 
 def std(cell_mask, trap_image):

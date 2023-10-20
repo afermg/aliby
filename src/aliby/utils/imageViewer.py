@@ -169,7 +169,7 @@ class RemoteImageViewer(BaseImageViewer):
 
         with self._image_class(self.image_id, **server_info) as image:
             self.tiler.image = image.data
-            return self.tiler.get_tc(tp, channel)
+            return self.tiler.load_image(tp, channel)
 
     def _find_channels(self, channels: str, guess: bool = True):
         channels = channels or self.tiler.ref_channel

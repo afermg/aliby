@@ -123,7 +123,6 @@ class Extractor(StepABC):
         else:
             # if no h5 file, use the parameters directly
             self.meta = {"channel": parameters.to_dict()["tree"].keys()}
-
         if tiler:
             self.tiler = tiler
             available_channels = set((*tiler.channels, "general"))
@@ -242,7 +241,6 @@ class Extractor(StepABC):
         tp: int,
         channels: t.Optional[t.List[t.Union[str, int]]] = None,
         z: t.Optional[t.List[str]] = None,
-        **kwargs,
     ) -> t.Optional[np.ndarray]:
         """
         Find tiles for a given time point, channels, and z-stacks.
@@ -273,9 +271,7 @@ class Extractor(StepABC):
             z = list(range(self.tiler.shape[-3]))
         # get the image data via tiler
         res = (
-            self.tiler.get_tiles_timepoint(
-                tp, channels=channel_ids, z=z, **kwargs
-            )
+            self.tiler.get_tiles_timepoint(tp, channels=channel_ids, z=z)
             if channel_ids
             else None
         )
@@ -642,9 +638,7 @@ class Extractor(StepABC):
         masks = self.get_masks(tp, masks, cells)
         # find image data at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
-        tiles = self.get_tiles(
-            tp, tile_shape=tile_size, channels=tree_bits["tree_channels"]
-        )
+        tiles = self.get_tiles(tp, channels=tree_bits["tree_channels"])
         # generate boolean masks for background for each trap
         bgs = self.get_background_masks(masks, tile_size)
         # perform extraction

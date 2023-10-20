@@ -38,7 +38,7 @@ def exparams_from_meta(
         "median",
         "std",
         "imBackground",
-        "max5px",
+        "max5px_median",
         # "nuc_est_conv",
     }
     # define ratiometric combinations

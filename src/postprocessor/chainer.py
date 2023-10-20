@@ -21,9 +21,7 @@ class Chainer(Signal):
     them when called.
     """
 
-    _synonyms = {
-        "m5m": ("extraction/GFP/max/max5px", "extraction/GFP/max/median")
-    }
+    _synonyms = {}
 
     def __init__(self, *args, **kwargs):
         """Initialise chainer."""
