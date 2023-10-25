@@ -35,7 +35,7 @@ class ParametersABC(ABC):
         """
         Return a nested dictionary of the attributes of the class instance.
 
-        Uses recursion.
+        Use recursion.
         """
         if isinstance(iterable, dict):
             if any(
@@ -115,7 +115,6 @@ class ParametersABC(ABC):
 
         If a leaf node that is to be changed is a collection, it adds the new elements.
         """
-
         assert name not in (
             "parameters",
             "params",

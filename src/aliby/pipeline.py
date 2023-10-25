@@ -162,20 +162,6 @@ class PipelineParameters(ParametersABC):
         return parsed_flattened
 
 
-def find_channels_by_group(meta):
-    """Parse meta data to find which imaging channels are used for each group."""
-    channels_dict = {group_no: [] for group_no in meta["positions/group"]}
-    imaging_channels = global_parameters.possible_imaging_channels
-    for i, group_no in enumerate(meta["positions/group"]):
-        for imaging_channel in imaging_channels:
-            if (
-                "positions/" + imaging_channel in meta
-                and meta["positions/" + imaging_channel][i]
-            ):
-                channels_dict[group_no].append(imaging_channel)
-    return channels_dict
-
-
 class Pipeline(ProcessABC):
     """
     Initialise and run tiling, segmentation, extraction and post-processing.
@@ -360,13 +346,16 @@ class Pipeline(ProcessABC):
             with Pool(distributed) as p:
                 results = p.map(
                     lambda x: self.run_one_position(*x),
-                    [(k, i) for i, k in enumerate(position_ids.items())],
+                    [
+                        (position_id, i)
+                        for i, position_id in enumerate(position_ids.items())
+                    ],
                 )
         else:
             # single core
             results = [
-                self.run_one_position((k, v), 1)
-                for k, v in tqdm(position_ids.items())
+                self.run_one_position((position_id, position_id_path), 1)
+                for position_id, position_id_path in tqdm(position_ids.items())
             ]
         return results
 
@@ -406,7 +395,7 @@ class Pipeline(ProcessABC):
         session = None
         run_kwargs = {"extraction": {"cell_labels": None, "masks": None}}
         try:
-            pipe, session = self.setup_pipeline(image_id)
+            pipe, session = self.setup_pipeline(image_id, name)
             loaded_writers = {
                 name: writer(pipe["filename"])
                 for k in self.step_sequence
@@ -426,6 +415,9 @@ class Pipeline(ProcessABC):
             ) as image:
                 # initialise steps
                 if "tiler" not in pipe["steps"]:
+                    pipe["config"]["tiler"]["position_name"] = name.split(".")[
+                        0
+                    ]
                     pipe["steps"]["tiler"] = Tiler.from_image(
                         image,
                         TilerParameters.from_dict(pipe["config"]["tiler"]),
@@ -545,7 +537,9 @@ class Pipeline(ProcessABC):
             close_session(session)
 
     def setup_pipeline(
-        self, image_id: int
+        self,
+        image_id: int,
+        name: str,
     ) -> t.Tuple[
         Path,
         MetaData,
@@ -626,8 +620,11 @@ class Pipeline(ProcessABC):
             if pipe["filename"].exists():
                 self._log("Result file exists.", "info")
                 if not overwrite["tiler"]:
+                    tiler_params_dict = TilerParameters.default().to_dict()
+                    tiler_params_dict["position_name"] = name.split(".")[0]
+                    tiler_params = TilerParameters.from_dict(tiler_params_dict)
                     pipe["steps"]["tiler"] = Tiler.from_h5(
-                        image, pipe["filename"]
+                        image, pipe["filename"], tiler_params
                     )
                     try:
                         (
