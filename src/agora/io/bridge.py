@@ -23,20 +23,19 @@ class BridgeH5:
         """Initialise with the name of the h5 file."""
         self.filename = filename
         if flag is not None:
-            self._hdf = h5py.File(filename, flag)
-            self._filecheck
+            self.hdf = h5py.File(filename, flag)
+            assert (
+                "cell_info" in self.hdf
+            ), "Invalid file. No 'cell_info' found."
 
     def _log(self, message: str, level: str = "warn"):
         # Log messages in the corresponding level
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
-    def _filecheck(self):
-        assert "cell_info" in self._hdf, "Invalid file. No 'cell_info' found."
-
     def close(self):
         """Close the h5 file."""
-        self._hdf.close()
+        self.hdf.close()
 
     @property
     def meta_h5(self) -> t.Dict[str, t.Any]:
@@ -83,7 +82,7 @@ class BridgeH5:
     def get_npairs_over_time(self, nstepsback=2):
         tree = self.cell_tree
         npairs = []
-        for tp in self._hdf["cell_info"]["processed_timepoints"][()]:
+        for tp in self.hdf["cell_info"]["processed_timepoints"][()]:
             tmp_tree = {
                 k: {k2: v2 for k2, v2 in v.items() if k2 <= tp}
                 for k, v in tree.items()
@@ -115,7 +114,7 @@ class BridgeH5:
         ----------
         Nested dictionary where keys (or branches) are the upper levels and the leaves are the last element of :fields:.
         """
-        zipped_info = (*zip(*[self._hdf["cell_info"][f][()] for f in fields]),)
+        zipped_info = (*zip(*[self.hdf["cell_info"][f][()] for f in fields]),)
         return recursive_groupsort(zipped_info)
 
 
