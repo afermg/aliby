@@ -10,8 +10,8 @@ from agora.io.cells import Cells
 from agora.io.signal import Signal
 from agora.io.writer import Writer
 from agora.utils.indexing import (
-    _3d_index_to_2d,
-    _assoc_indices_to_3d,
+    assoc_indices_to_2d,
+    assoc_indices_to_3d,
 )
 from agora.utils.merge import merge_lineage
 from postprocessor.core.abc import get_parameters, get_process
@@ -133,19 +133,19 @@ class PostProcessor(ProcessABC):
         record = self.signal.get_raw(self.targets["merging_picking"]["merger"])
         merges = self.merger.run(record)
         # get lineages from cells object attached to picker
-        lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
+        lineage = assoc_indices_to_3d(self.picker.cells.mothers_daughters)
         if merges.any():
             # update lineages and merges after merging
             new_lineage, new_merges = merge_lineage(lineage, merges)
         else:
             new_lineage = lineage
             new_merges = merges
-        self.lineage = _3d_index_to_2d(new_lineage)
+        self.lineage = assoc_indices_to_2d(new_lineage)
         self.writer.write(
             "modifiers/merges", data=[np.array(x) for x in new_merges]
         )
         self.writer.write(
-            "modifiers/lineage_merged", _3d_index_to_2d(new_lineage)
+            "modifiers/lineage_merged", assoc_indices_to_2d(new_lineage)
         )
         # run picker
         picked_indices = self.picker.run(

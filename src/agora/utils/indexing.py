@@ -73,7 +73,7 @@ def validate_lineage(
     """
     if lineage.ndim == 2:
         # [trap, mother, daughter] becomes [[trap, mother], [trap, daughter]]
-        lineage = _assoc_indices_to_3d(lineage)
+        lineage = assoc_indices_to_3d(lineage)
     if how == "mothers":
         c_index = 0
     elif how == "daughters":
@@ -123,7 +123,7 @@ def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return x_bool
 
 
-def _assoc_indices_to_3d(ndarray: np.ndarray):
+def assoc_indices_to_3d(ndarray: np.ndarray):
     """
     Convert the last column to a new row and repeat first column's values.
 
@@ -150,6 +150,16 @@ def _assoc_indices_to_3d(ndarray: np.ndarray):
                 ),
                 axis=1,
             )
+    return result
+
+
+def assoc_indices_to_2d(array: np.ndarray):
+    """Convert indices to 2d."""
+    result = array
+    if len(array):
+        result = np.concatenate(
+            (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
+        )
     return result
 
 
@@ -248,16 +258,6 @@ def validate_association(
         ).any(axis=1)
 
     return valid_association, valid_indices
-
-
-def _3d_index_to_2d(array: np.ndarray):
-    """Revert _assoc_indices_to_3d."""
-    result = array
-    if len(array):
-        result = np.concatenate(
-            (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
-        )
-    return result
 
 
 def compare_indices(x: np.ndarray, y: np.ndarray) -> np.ndarray:
