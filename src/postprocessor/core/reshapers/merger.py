@@ -37,9 +37,11 @@ class Merger(PostProcessABC):
     """Find array of pairs of (trap, cell) indices to be merged."""
 
     def __init__(self, parameters):
+        """Initialise with PostProcessABC."""
         super().__init__(parameters)
 
     def run(self, signal):
+        """Merge."""
         if signal.shape[1] > 4:
             merges = get_merges(
                 signal,

@@ -27,7 +27,10 @@ from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
 from extraction.core.extractor import Extractor, ExtractorParameters
 from extraction.core.functions.defaults import exparams_from_meta
-from postprocessor.core.processor import PostProcessor, PostProcessorParameters
+from postprocessor.core.postprocessing import (
+    PostProcessor,
+    PostProcessorParameters,
+)
 
 # stop warnings from TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"

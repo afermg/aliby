@@ -1,4 +1,3 @@
-# change "prepost" to "preprocess"; change filename to postprocessor_engine.py ??
 import typing as t
 from itertools import takewhile
 
@@ -26,17 +25,9 @@ from postprocessor.core.reshapers.picker import Picker, PickerParameters
 
 class PostProcessorParameters(ParametersABC):
     """
-    Anthology of parameters used for postprocessing
-    :merger:
-    :picker: parameters for picker
-    :processes: list processes:[objectives], 'processes' are defined in ./processes/
-        while objectives are relative or absolute paths to datasets. If relative paths the
-        post-processed addresses are used. The order of processes matters.
+    Parameters used for post-processing.
 
-    Supply parameters for picker, merger, and processes.
-    The order of processes matters.
-
-    'processes' are defined in ./processes/ while objectives are relative or absolute paths to datasets. If relative paths the post-processed addresses are used.
+    Define defaults for picker, merger, and bud metrics.
     """
 
     def __init__(
@@ -50,6 +41,7 @@ class PostProcessorParameters(ParametersABC):
         self.outpaths = outpaths
 
     def __getitem__(self, item):
+        """Access attributes like dict keys."""
         return getattr(self, item)
 
     @classmethod
@@ -64,11 +56,10 @@ class PostProcessorParameters(ParametersABC):
         """
         # each subitem specifies the function to be called
         # and the h5-file location for the results
-        #: why does merger have a string and picker a list?
         targets = {
-            "prepost": {
+            "merging_picking": {
                 "merger": "/extraction/general/None/area",
-                "picker": ["/extraction/general/None/area"],
+                "picker": "/extraction/general/None/area",
             },
             "processes": [
                 ["buddings", ["/extraction/general/None/volume"]],
@@ -76,7 +67,7 @@ class PostProcessorParameters(ParametersABC):
             ],
         }
         param_sets = {
-            "prepost": {
+            "merging_picking": {
                 "merger": MergerParameters.default(),
                 "picker": PickerParameters.default(),
             }
@@ -86,6 +77,8 @@ class PostProcessorParameters(ParametersABC):
 
 
 class PostProcessor(ProcessABC):
+    """Process data from h5 files."""
+
     def __init__(self, filename, parameters):
         """
         Initialise PostProcessor.
@@ -94,7 +87,7 @@ class PostProcessor(ProcessABC):
         ----------
         filename: str or PosixPath
             Name of h5 file.
-        parameters: PostProcessorParameters object
+        parameters: object
             An instance of PostProcessorParameters.
         """
         super().__init__(parameters)
@@ -103,7 +96,7 @@ class PostProcessor(ProcessABC):
         self.writer = Writer(filename)
         # parameters for merger and picker
         dicted_params = {
-            i: parameters["param_sets"]["prepost"][i]
+            i: parameters["param_sets"]["merging_picking"][i]
             for i in ["merger", "picker"]
         }
         for k in dicted_params.keys():
@@ -130,14 +123,14 @@ class PostProcessor(ProcessABC):
         # locations to be written in the h5 file
         self.targets = parameters["targets"]
 
-    def run_prepost(self):
+    def run_merging_picking(self):
         """
         Run merger, get lineages, and then run picker.
 
         Necessary before any processes can run.
         """
         # run merger
-        record = self.signal.get_raw(self.targets["prepost"]["merger"])
+        record = self.signal.get_raw(self.targets["merging_picking"]["merger"])
         merges = self.merger.run(record)
         # get lineages from cells object attached to picker
         lineage = _assoc_indices_to_3d(self.picker.cells.mothers_daughters)
@@ -156,7 +149,7 @@ class PostProcessor(ProcessABC):
         )
         # run picker
         picked_indices = self.picker.run(
-            self.signal[self.targets["prepost"]["picker"][0]]
+            self.signal[self.targets["merging_picking"]["picker"]]
         )
         if picked_indices.any():
             self.writer.write(
@@ -174,7 +167,7 @@ class PostProcessor(ProcessABC):
         Processes include identifying buddings and finding bud metrics.
         """
         # run merger, picker, and find lineages
-        self.run_prepost()
+        self.run_merging_picking()
         # run processes: process is a str; datasets is a list of str
         for process, datasets in tqdm(self.targets["processes"]):
             if process in self.parameters["param_sets"].get("processes", {}):
@@ -262,14 +255,15 @@ class PostProcessor(ProcessABC):
         result: t.Union[t.List, pd.DataFrame, np.ndarray],
         metadata: t.Dict,
     ):
+        """Write to h5 file."""
         self.writer.write(path, result, meta=metadata, overwrite="overwrite")
 
     @staticmethod
     def pick_mother(a, b):
         """
-        Update the mother id following this priorities:
+        Update the mother id.
 
-        The mother has a lower id
+        Ensure the mother has a lower id.
         """
         x = max(a, b)
         if min([a, b]):
