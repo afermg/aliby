@@ -45,15 +45,8 @@ class PostProcessorParameters(ParametersABC):
         return getattr(self, item)
 
     @classmethod
-    def default(cls, kind=[]):
-        """
-        Include buddings and bud_metric and estimates of their time derivatives.
-
-        Parameters
-        ----------
-        kind: list of str
-            If "ph_batman" included, add targets for experiments using pHlourin.
-        """
+    def default(cls):
+        """Include buddings and bud volumes."""
         # each subitem specifies the function to be called
         # and the h5-file location for the results
         targets = {

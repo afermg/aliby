@@ -1,22 +1,22 @@
 import typing as t
+from pathlib import Path
 
 import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
 
+import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_meta
-from aliby.tile.tiler import Tiler
-from extraction.core.functions.defaults import exparams_from_meta
+from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
     load_custom_args,
     load_funs,
     load_redfuns,
 )
-import aliby.global_parameters as global_parameters
 
 # define types
 reduction_method = t.Union[t.Callable, str, None]
@@ -68,6 +68,7 @@ class ExtractorParameters(ParametersABC):
 
     @classmethod
     def from_meta(cls, meta):
+        """Instantiate using meta data."""
         return cls(**exparams_from_meta(meta))
 
 
@@ -182,8 +183,7 @@ class Extractor(StepABC):
 
     def load_custom_funs(self):
         """
-        Incorporate the extra arguments of custom functions into their
-        definitions.
+        Incorporate the extra arguments of custom functions into their definitions.
 
         Normal functions only have cell_masks and trap_image as their
         arguments, and here custom functions are made the same by
@@ -354,7 +354,7 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, t.Dict[reduction_method, t.Dict[str, pd.Series]]]:
         """
-        Wrapper to reduce to a 2D image and then extract.
+        Reduce to a 2D image and then extract.
 
         Parameters
         ----------
@@ -374,9 +374,6 @@ class Extractor(StepABC):
         ------
         Dict of dataframes with the corresponding reductions and metrics nested.
         """
-        # FIXME hack to pass tests
-        if "labels" in kwargs:
-            kwargs["cell_labels"] = kwargs.pop("labels")
         # create dict with keys naming the reduction in the z-direction
         # and the reduced data as values
         reduced_tiles = {}
@@ -484,7 +481,7 @@ class Extractor(StepABC):
         self, tree_bits, cell_labels, tiles, masks, bgs, **kwargs
     ):
         """
-        Extract using all metrics requiring a single channel.
+        Extract all metrics requiring only a single channel.
 
         Apply first without and then with background subtraction.
 
@@ -496,8 +493,8 @@ class Extractor(StepABC):
         for ch, tree_branch in tree_bits["tree"].items():
             # NB ch != is necessary for threading
             if ch != "general" and tiles is not None and len(tiles):
-                # image data for all traps for a particular channel and time point
-                # arranged as (traps, Z, X, Y)
+                # image data for all traps for a particular channel and
+                # time point arranged as (traps, Z, X, Y)
                 # we use 0 here to access the single time point available
                 img = tiles[:, tree_bits["tree_channels"].index(ch), 0]
             else:
@@ -530,9 +527,9 @@ class Extractor(StepABC):
                 img_bgsub[ch_bs] = np.moveaxis(mapping_result, -1, 1)
                 # apply metrics to background-corrected data
                 d[ch_bs] = self.reduce_extract(
-                    tree_branch=tree_bits["channel_tree"][ch],
                     traps=img_bgsub[ch_bs],
                     masks=masks,
+                    tree_branch=tree_bits["channel_tree"][ch],
                     cell_labels=cell_labels,
                     **kwargs,
                 )
@@ -542,8 +539,9 @@ class Extractor(StepABC):
         self, tree_bits, cell_labels, tiles, masks, **kwargs
     ):
         """
-        Extract using all metrics requiring multiple channels.
+        Extract all metrics requiring multiple channels.
         """
+        # channels and background corrected channels
         available_chs = set(self.img_bgsub.keys()).union(
             tree_bits["tree_channels"]
         )
@@ -767,7 +765,6 @@ class Extractor(StepABC):
         }
 
 
-### Helpers
 def flatten_nesteddict(
     nest: dict, to="series", tp: int = None
 ) -> t.Dict[str, pd.Series]:
@@ -799,3 +796,43 @@ def flatten_nesteddict(
                     pd.Series(*v2, name=tp) if to == "series" else v2
                 )
     return d
+
+
+def extraction_params_from_meta(
+    meta: t.Union[dict, Path, str], extras: t.Collection[str] = ["ph"]
+):
+    """
+    Obtain parameters from metadata of the h5 file.
+
+    Compares a list of candidate channels using case-insensitive
+    regex to identify valid channels.
+    """
+    meta = meta if isinstance(meta, dict) else load_metadata(meta)
+    base = {
+        "tree": {"general": {"None": ["area", "volume", "eccentricity"]}},
+        "multichannel_ops": {},
+    }
+    candidate_channels = set(global_parameters.possible_imaging_channels)
+    default_reductions = {"max"}
+    default_metrics = set(global_parameters.fluorescence_functions)
+    default_reduction_metrics = {
+        r: default_metrics for r in default_reductions
+    }
+    # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
+    extant_fluorescence_ch = []
+    for av_channel in candidate_channels:
+        # find matching channels in metadata
+        found_channel = find_channel_name(meta.get("channels", []), av_channel)
+        if found_channel is not None:
+            extant_fluorescence_ch.append(found_channel)
+    for ch in extant_fluorescence_ch:
+        base["tree"][ch] = default_reduction_metrics
+    base["sub_bg"] = extant_fluorescence_ch
+    return base
+
+
+def load_metadata(file: t.Union[str, Path], group="/"):
+    """Get meta data from an h5 file."""
+    with h5py.File(file, "r") as f:
+        meta = dict(f[group].attrs.items())
+    return meta
