@@ -25,8 +25,11 @@ from aliby.haystack import initialise_tf
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
-from extraction.core.extractor import Extractor, ExtractorParameters
-from extraction.core.functions.defaults import exparams_from_meta
+from extraction.core.extractor import (
+    Extractor,
+    ExtractorParameters,
+    extraction_params_from_meta,
+)
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
@@ -152,7 +155,7 @@ class PipelineParameters(ParametersABC):
         # default BABY parameters
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
         # default Extraction parmeters
-        defaults["extraction"] = exparams_from_meta(meta_d)
+        defaults["extraction"] = extraction_params_from_meta(meta_d)
         # default PostProcessing parameters
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing

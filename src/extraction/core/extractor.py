@@ -69,7 +69,7 @@ class ExtractorParameters(ParametersABC):
     @classmethod
     def from_meta(cls, meta):
         """Instantiate using meta data."""
-        return cls(**exparams_from_meta(meta))
+        return cls(**extraction_params_from_meta(meta))
 
 
 class Extractor(StepABC):
