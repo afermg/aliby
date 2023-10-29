@@ -239,9 +239,12 @@ def moment_of_inertia(cell_mask, trap_image):
 def ratio(cell_mask, trap_image):
     """Find the median ratio between two fluorescence channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
-        fl_1 = trap_image[..., 0][cell_mask]
-        fl_2 = trap_image[..., 1][cell_mask]
-        div = np.median(fl_1 / fl_2)
+        fl_0 = trap_image[..., 0][cell_mask]
+        fl_1 = trap_image[..., 1][cell_mask]
+        if np.any(fl_1 == 0):
+            div = np.nan
+        else:
+            div = np.median(fl_0 / fl_1)
     else:
         div = np.nan
     return div
