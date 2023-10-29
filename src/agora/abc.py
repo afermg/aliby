@@ -118,7 +118,7 @@ class ParametersABC(ABC):
         assert name not in (
             "parameters",
             "params",
-        ), "Attribute can't be named params or parameters"
+        ), "Attribute cannot be named params or parameters."
 
         if name in self.__dict__:
             if check_type_recursive(getattr(self, name), new_value):
