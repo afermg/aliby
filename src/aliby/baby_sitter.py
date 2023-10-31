@@ -15,45 +15,24 @@ class BabyParameters(ParametersABC):
     def __init__(
         self,
         modelset_name,
-        tracker_params,
         clogging_thresh,
         min_bud_tps,
         isbud_thresh,
-        session,
-        graph,
-        print_info,
-        suppress_errors,
-        error_dump_dir,
-        tf_version: int,
     ):
         """Initialise parameters for BABY."""
         self.modelset_name = modelset_name
-        self.tracker_params = tracker_params
         self.clogging_thresh = clogging_thresh
         self.min_bud_tps = min_bud_tps
         self.isbud_thresh = isbud_thresh
-        self.session = session
-        self.graph = graph
-        self.print_info = print_info
-        self.suppress_errors = suppress_errors
-        self.error_dump_dir = error_dump_dir
-        self.tf_version = tf_version
 
     @classmethod
     def default(cls, **kwargs):
         """Define default parameters; kwargs choose BABY model set."""
         return cls(
             modelset_name=get_modelset_name_from_params(**kwargs),
-            tracker_params=dict(ctrack_params=dict(), budtrack_params=dict()),
-            clogging_thresh=1,
+            clogging_thresh=0.75,
             min_bud_tps=3,
             isbud_thresh=0.5,
-            session=None,
-            graph=None,
-            print_info=False,
-            suppress_errors=False,
-            error_dump_dir=None,
-            tf_version=2,
         )
 
     def update_baby_modelset(self, path: t.Union[str, Path, t.Dict[str, str]]):
@@ -94,8 +73,16 @@ class BabyRunner(StepABC):
                 f"Tiler z-stack ({tiler_z}) and model"
                 f" ({modelset_name}) do not match."
             )
-        self.brain = modelsets.get(modelset_name)
-        self.crawler = BabyCrawler(self.brain)
+        if parameters is None:
+            brain = modelsets.get(modelset_name)
+        else:
+            brain = modelsets.get(
+                modelset_name,
+                clogging_thresh=parameters.clogging_thresh,
+                min_bud_tps=parameters.min_bud_tps,
+                isbud_thresh=parameters.isbud_thresh,
+            )
+        self.crawler = BabyCrawler(brain)
         self.brightfield_channel = self.tiler.ref_channel_index
 
     @classmethod

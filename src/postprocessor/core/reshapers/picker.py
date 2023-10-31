@@ -33,8 +33,10 @@ class PickerParameters(ParametersABC):
 
 class Picker(LineageProcess):
     """
-    Picker selects cells using lineage information and by
-    how and for how long they are retained in the data set.
+    Picker selects cells.
+
+    Cells are selected using lineage information and by how
+    and for how long they are retained in the data set.
     """
 
     def __init__(

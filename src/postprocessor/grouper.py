@@ -137,8 +137,8 @@ class Grouper(ABC):
         no_positions_dif = len(self.positions) - len(good_positions)
         if no_positions_dif:
             print(
-                f"Grouper: Warning: {no_positions_dif} positions do not contain"
-                f" {path}."
+                f"Grouper:Warning: some positions ({no_positions_dif}) do not"
+                f" contain {path}."
             )
         return good_positions
 
