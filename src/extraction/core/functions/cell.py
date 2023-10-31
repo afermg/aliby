@@ -92,6 +92,8 @@ def max2p5pc(cell_mask, trap_image) -> float:
 
 def max5px_median(cell_mask, trap_image) -> float:
     """
+    Estimate the degree of localisation.
+
     Find the mean of the five brightest pixels in the cell divided by the
     median of all pixels.
 
@@ -103,14 +105,17 @@ def max5px_median(cell_mask, trap_image) -> float:
     """
     # sort pixels in cell
     pixels = trap_image[cell_mask]
-    top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
-    # find mean of five brightest pixels
-    max5px = np.mean(top_values)
-    med = np.median(pixels)
-    if med == 0:
-        return np.nan
+    if len(pixels) > 5:
+        top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
+        # find mean of five brightest pixels
+        max5px = np.mean(top_values)
+        med = np.median(pixels)
+        if med == 0:
+            return np.nan
+        else:
+            return max5px / np.median(pixels)
     else:
-        return max5px / np.median(pixels)
+        return np.nan
 
 
 def std(cell_mask, trap_image):

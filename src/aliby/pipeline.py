@@ -14,13 +14,20 @@ import numpy as np
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
+import baby
+
+try:
+    if baby.__version__ == "v0.30.1":
+        from aliby.baby_sitter import BabyParameters, BabyRunner
+except AttributeError:
+    from aliby.baby_client import BabyParameters, BabyRunner
+
 import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, parse_logfiles
 from agora.io.reader import StateReader
 from agora.io.signal import Signal
 from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
-from aliby.baby_client import BabyParameters, BabyRunner
 from aliby.haystack import initialise_tf
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
@@ -34,6 +41,7 @@ from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+
 
 # stop warnings from TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"

@@ -22,18 +22,16 @@ from requests.exceptions import HTTPError, Timeout
 
 ################### Dask Methods ################################
 def format_segmentation(segmentation, tp):
-    """Format a single timepoint into a dictionary.
+    """
+    Format BABY's results from a single time point into a dictionary.
 
     Parameters
     ------------
     segmentation: list
-                  A list of results, each result is the output of the crawler, which is JSON-encoded
+        A list of results, each result is the output of BABY
+        crawler, which is JSON-encoded.
     tp: int
-        the time point considered
-
-    Returns
-    --------
-    A dictionary containing the formatted results of BABY
+        The time point.
     """
     # Segmentation is a list of dictionaries, ordered by trap
     # Add trap information
@@ -179,7 +177,7 @@ class BabyRunner(StepABC):
 
 def choose_model_from_params(
     modelset_filter=None,
-    camera="prime95b",
+    camera="sCMOS",
     channel="brightfield",
     zoom="60x",
     n_stacks="5z",
@@ -204,7 +202,9 @@ def choose_model_from_params(
     -------
     model_name : str
     """
+    # cameras prime95 has become sCMOS and evolve has EMCCD
     valid_models = list(modelsets().keys())
+    breakpoint()
 
     # Apply modelset filter if specified
     if modelset_filter is not None:
@@ -218,6 +218,7 @@ def choose_model_from_params(
     ]
     params_re = re.compile("^" + "_".join(params) + "$")
     valid_models = list(filter(params_re.search, valid_models))
+    breakpoint()
     # Check that there are valid models
     if len(valid_models) == 0:
         raise KeyError(
