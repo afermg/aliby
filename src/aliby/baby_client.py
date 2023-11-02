@@ -204,7 +204,6 @@ def choose_model_from_params(
     """
     # cameras prime95 has become sCMOS and evolve has EMCCD
     valid_models = list(modelsets().keys())
-    breakpoint()
 
     # Apply modelset filter if specified
     if modelset_filter is not None:
@@ -218,7 +217,6 @@ def choose_model_from_params(
     ]
     params_re = re.compile("^" + "_".join(params) + "$")
     valid_models = list(filter(params_re.search, valid_models))
-    breakpoint()
     # Check that there are valid models
     if len(valid_models) == 0:
         raise KeyError(

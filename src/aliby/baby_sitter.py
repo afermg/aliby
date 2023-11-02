@@ -15,15 +15,14 @@ class BabyParameters(ParametersABC):
     def __init__(
         self,
         modelset_name,
-        pixel_size,
         clogging_thresh,
         min_bud_tps,
         isbud_thresh,
         session,
     ):
         """Initialise parameters for BABY."""
+        # pixel_size is specified in BABY's model sets
         self.modelset_name = modelset_name
-        self.pixel_size = pixel_size
         self.clogging_thresh = clogging_thresh
         self.min_bud_tps = min_bud_tps
         self.isbud_thresh = isbud_thresh
@@ -34,7 +33,6 @@ class BabyParameters(ParametersABC):
         """Define default parameters; kwargs choose BABY model set."""
         return cls(
             modelset_name=get_modelset_name_from_params(**kwargs),
-            pixel_size=0.182,
             clogging_thresh=0.75,
             min_bud_tps=3,
             isbud_thresh=0.5,
@@ -84,7 +82,6 @@ class BabyRunner(StepABC):
         else:
             brain = modelsets.get(
                 modelset_name,
-                pixel_size=parameters.pixel_size,
                 clogging_thresh=parameters.clogging_thresh,
                 min_bud_tps=parameters.min_bud_tps,
                 isbud_thresh=parameters.isbud_thresh,

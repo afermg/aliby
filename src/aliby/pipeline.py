@@ -476,7 +476,7 @@ class Pipeline(ProcessABC):
                                     result = pipe["steps"][step].run_tp(
                                         i, **run_kwargs.get(step, {})
                                     )
-                                    # write to h5 file using writers
+                                    # write result to h5 file using writers
                                     # extractor writes to h5 itself
                                     if step in loaded_writers:
                                         loaded_writers[step].write(

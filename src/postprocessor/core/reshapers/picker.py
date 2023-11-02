@@ -24,9 +24,9 @@ class PickerParameters(ParametersABC):
     """
 
     _defaults = {
-        "sequence": [
+        "picker_sequence": [
             ["lineage", "families"],
-            ["condition", "present", 7],
+            ["condition", "present", 3],
         ],
     }
 
@@ -80,9 +80,9 @@ class Picker(LineageProcess):
         if len(lineage):
             self.mothers = lineage[:, [0, 1]]
             self.daughters = lineage[:, [0, 2]]
-            for alg, *params in self.sequence:
+            for method, *params in self.picker_sequence:
                 if indices:
-                    if alg == "lineage":
+                    if method == "lineage":
                         # pick by lineage
                         param1 = params[0]
                         new_indices = self.pick_by_lineage(
@@ -113,7 +113,7 @@ class Picker(LineageProcess):
     ):
         """Pick indices from signal by any_present, present, and growing."""
         if len(threshold) == 1:
-            threshold = [_as_int(*threshold, signal.shape[1])]
+            threshold = [as_int(*threshold, signal.shape[1])]
             #: is this correct for "growing"?
         case_mgr = {
             "any_present": lambda s, threshold: any_present(s, threshold),
@@ -127,7 +127,7 @@ class Picker(LineageProcess):
         return new_indices
 
 
-def _as_int(threshold: t.Union[float, int], ntps: int):
+def as_int(threshold: t.Union[float, int], ntps: int):
     """Convert a fraction of the total experiment duration into a number of time points."""
     if type(threshold) is float:
         threshold = ntps * threshold
