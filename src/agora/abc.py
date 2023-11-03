@@ -7,7 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Union
 
-from flatten_dict import flatten
+from flatten_dict import flatten, unflatten
 from yaml import dump, safe_load
 
 from agora.logging import timer
@@ -17,9 +17,9 @@ atomic = t.Union[int, float, str, bool]
 
 class ParametersABC(ABC):
     """
-    Define parameters as attributes and allow parameters to
-    be converted to either a dictionary or to yaml.
+    Define parameters typically for a step in the pipeline.
 
+    Outputs can be either a dict or yaml.
     No attribute should be called "parameters"!
     """
 
@@ -77,18 +77,19 @@ class ParametersABC(ABC):
 
     @classmethod
     def from_dict(cls, d: dict):
+        """Initialise from a dict of parameters."""
         return cls(**d)
 
     @classmethod
     def from_yaml(cls, source: Union[Path, str]):
-        """Return instance from a yaml filename or stdin."""
+        """Initialise from a yaml filename or stdin."""
         is_buffer = True
         try:
             if Path(source).exists():
                 is_buffer = False
-        except Exception as _:
+        except Exception as e:
+            print(e)
             assert isinstance(source, str), "Invalid source type."
-
         if is_buffer:
             params = safe_load(source)
         else:
@@ -98,80 +99,41 @@ class ParametersABC(ABC):
 
     @classmethod
     def default(cls, **kwargs):
+        """Initialise allowing the default parameters to be potentially replaced."""
         overriden_defaults = copy(cls._defaults)
         for k, v in kwargs.items():
             overriden_defaults[k] = v
         return cls.from_dict(overriden_defaults)
 
     def update(self, name: str, new_value):
-        """
-        Update values recursively.
-
-        if name is a dictionary, replace data where existing found or add if not.
-        It warns against type changes.
-
-        If the existing structure under name is a dictionary,
-        it looks for the first occurrence and modifies it accordingly.
-
-        If a leaf node that is to be changed is a collection, it adds the new elements.
-        """
-        assert name not in (
-            "parameters",
-            "params",
-        ), "Attribute cannot be named params or parameters."
-
-        if name in self.__dict__:
-            if check_type_recursive(getattr(self, name), new_value):
-                print("Warnings:Type changes are risky")
-
-            if isinstance(getattr(self, name), dict):
-                flattened = flatten(self.to_dict())
-                names_found = [k for k in flattened.keys() if name in k]
-                found_idx = [keys.index(name) for keys in names_found]
-
-                assert len(names_found), f"{name} not found as key."
-
-                keys = None
-                if len(names_found) > 1:
-                    for level in zip(found_idx, names_found):
-                        if level == min(found_idx):
-                            keys = level
-                            print(
-                                f"Warning: {name} was found in multiple keys. Selected {keys}"
-                            )
-                            break
-
-                else:
-                    keys = names_found.pop()
-
-                if keys:
-                    current_val = flattened.get(keys, None)
-                    # if isinstance(current_val, t.Collection):
-
-            elif isinstance(getattr(self, name), t.Collection):
-                add_to_collection(getattr(self, name), new_value)
-
-            elif isinstance(getattr(self, name), set):
-                pass  # TODO implement
-
-            new_d = getattr(self, name)
-            new_d.update(new_value)
-            setattr(self, name, new_d)
-
+        """Update a parameter in the nested dict of parameters."""
+        flat_params_dict = flatten(self.to_dict())
+        names_found = [
+            param for param in flat_params_dict.keys() if name in param
+        ]
+        if len(names_found) == 1:
+            keys = names_found.pop()
+            if type(flat_params_dict[keys]) is not type(new_value):
+                print("Warning:Changing type is risky.")
+            flat_params_dict[keys] = new_value
+            params_dict = unflatten(flat_params_dict)
+            # replace all old values
+            for key, value in params_dict.items():
+                setattr(self, key, value)
         else:
-            setattr(self, name, new_value)
+            print(f"Warning:{name} was neither recognised nor updated.")
 
 
 def add_to_collection(
-    collection: t.Collection, value: t.Union[atomic, t.Collection]
+    collection: t.Collection, element: t.Union[atomic, t.Collection]
 ):
-    # Adds element(s) in place.
-    if not isinstance(value, t.Collection):
-        value = [value]
+    """Add elements to a collection, a list or set, in place."""
+    if not isinstance(element, t.Collection):
+        element = [element]
     if isinstance(collection, list):
-        collection += value
+        collection += element
     elif isinstance(collection, set):
-        collection.update(value)
+        collection.update(element)
 
 
 class ProcessABC(ABC):
@@ -205,26 +167,6 @@ class ProcessABC(ABC):
         # Log messages in the corresponding level
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
-
-
-def check_type_recursive(val1, val2):
-    same_types = True
-    if not isinstance(val1, type(val2)) and not all(
-        type(x) in (Path, str) for x in (val1, val2)  # Ignore str->path
-    ):
-        return False
-    if not isinstance(val1, t.Iterable) and not isinstance(val2, t.Iterable):
-        return isinstance(val1, type(val2))
-    elif isinstance(val1, (tuple, list)) and isinstance(val2, (tuple, list)):
-        return bool(
-            sum([check_type_recursive(v1, v2) for v1, v2 in zip(val1, val2)])
-        )
-    elif isinstance(val1, dict) and isinstance(val2, dict):
-        if not len(val1) or not len(val2):
-            return False
-        for k in val2.keys():
-            same_types = same_types and check_type_recursive(val1[k], val2[k])
-    return same_types
 
 
 class StepABC(ProcessABC):

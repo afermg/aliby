@@ -61,8 +61,8 @@ class PostProcessorParameters(ParametersABC):
         }
         param_sets = {
             "merging_picking": {
-                "merger": MergerParameters.default(),
-                "picker": PickerParameters.default(),
+                "merger_params": MergerParameters.default(),
+                "picker_params": PickerParameters.default(),
             }
         }
         outpaths = {}
@@ -89,7 +89,7 @@ class PostProcessor(ProcessABC):
         self.writer = Writer(filename)
         # parameters for merger and picker
         dicted_params = {
-            i: parameters["param_sets"]["merging_picking"][i]
+            i: parameters["param_sets"]["merging_picking"][i + "_params"]
             for i in ["merger", "picker"]
         }
         for k in dicted_params.keys():
