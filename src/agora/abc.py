@@ -107,7 +107,7 @@ class ParametersABC(ABC):
 
     def update(self, name: str, new_value):
         """Update a parameter in the nested dict of parameters."""
-        flat_params_dict = flatten(self.to_dict())
+        flat_params_dict = flatten(self.to_dict(), keep_empty_types=(dict,))
         names_found = [
             param for param in flat_params_dict.keys() if name in param
         ]

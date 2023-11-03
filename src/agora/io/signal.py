@@ -15,6 +15,7 @@ from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_lineage
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
+from postprocessor.core.reshapers.picker import Picker, PickerParameters
 
 
 class Signal(BridgeH5):
@@ -27,8 +28,7 @@ class Signal(BridgeH5):
     """
 
     def __init__(self, file: t.Union[str, Path]):
-        """Define index_names for dataframes, candidate fluorescence channels,
-        and composite statistics."""
+        """Initialise defining index names for the dataframe."""
         super().__init__(file, flag=None)
         self.index_names = (
             "experiment",
@@ -54,11 +54,11 @@ class Signal(BridgeH5):
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
 
     def get(self, dset_name: t.Union[str, t.Collection], **kwargs):
-        """Return pre-processed data as a dataframe."""
+        """Get Signal after merging and picking."""
         if isinstance(dset_name, str):
             dsets = self.get_raw(dset_name, **kwargs)
-            prepost_applied = self.apply_prepost(dsets, **kwargs)
-            return self.add_name(prepost_applied, dset_name)
+            picked_merged = self.apply_merging_picking(dsets, **kwargs)
+            return self.add_name(picked_merged, dset_name)
         else:
             raise Exception("Error in Signal.get")
 
@@ -95,10 +95,25 @@ class Signal(BridgeH5):
                 )
                 return 5
 
+    def retained(
+        self, signal, cutoff=global_parameters.signal_retained_cutoff
+    ):
+        """Get retained cells for a Signal or list of Signals."""
+        if isinstance(signal, str):
+            signal = self.get(signal)
+        if isinstance(signal, pd.DataFrame):
+            return self.get_retained(signal, cutoff)
+        elif isinstance(signal, list):
+            return [self.get_retained(d, cutoff=cutoff) for d in signal]
+
     @staticmethod
     def get_retained(df, cutoff):
-        """Return rows of df with at least cutoff fraction of the total number
-        of time points."""
+        """
+        Return sub data frame with retained cells.
+
+        Cells must be present for at least cutoff fraction of the total number
+        of time points.
+        """
         return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
@@ -106,22 +121,6 @@ class Signal(BridgeH5):
         """Get channels as an array of strings."""
         with h5py.File(self.filename, "r") as f:
             return list(f.attrs["channels"])
-
-    def retained(
-        self, signal, cutoff=global_parameters.signal_retained_cutoff
-    ):
-        """
-        Load data (via decorator) and reduce the resulting dataframe.
-
-        Load data for a signal or a list of signals and reduce the resulting
-        dataframes to rows with sufficient numbers of time points.
-        """
-        if isinstance(signal, str):
-            signal = self.get_raw(signal)
-        if isinstance(signal, pd.DataFrame):
-            return self.get_retained(signal, cutoff)
-        elif isinstance(signal, list):
-            return [self.get_retained(d, cutoff=cutoff) for d in signal]
 
     @lru_cache(2)
     def lineage(
@@ -152,7 +151,7 @@ class Signal(BridgeH5):
         return lineage
 
     @_first_arg_str_to_raw_df
-    def apply_prepost(
+    def apply_merging_picking(
         self,
         data: t.Union[str, pd.DataFrame],
         merges: t.Union[np.ndarray, bool] = True,
@@ -186,7 +185,7 @@ class Signal(BridgeH5):
                 if picks
                 else merged.index
             )
-        if picks:
+        if len(picks):
             picked_indices = set(picks).intersection(
                 [tuple(x) for x in merged.index]
             )
@@ -218,8 +217,8 @@ class Signal(BridgeH5):
         return self._available
 
     def get_merged(self, dataset):
-        """Run preprocessing for merges."""
-        return self.apply_prepost(dataset, picks=False)
+        """Run merging."""
+        return self.apply_merging_picking(dataset, picks=False)
 
     @cached_property
     def merges(self) -> np.ndarray:
@@ -245,9 +244,11 @@ class Signal(BridgeH5):
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
+        merges: bool = False,
+        picks: bool = False,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
-        Load data from a h5 file and return as a dataframe.
+        Get raw Signal without merging, picking, and lineage information.
 
         Parameters
         ----------
@@ -257,6 +258,10 @@ class Signal(BridgeH5):
             If True, convert column headings to times in minutes.
         lineage: boolean
             If True, add mother_label to index.
+        merges: boolean
+            If True, apply merges.
+        picks: boolean
+            If True, apply picks.
         """
         try:
             if isinstance(dataset, str):
@@ -269,15 +274,17 @@ class Signal(BridgeH5):
                     self.get_raw(dset, in_minutes=in_minutes, lineage=lineage)
                     for dset in dataset
                 ]
+            # apply merging or picking or both or neither
+            df = self.apply_merging_picking(df, merges, picks)
+            # add mother label to data frame
             if lineage:
-                # assume that df is sorted
                 mother_label = np.zeros(len(df), dtype=int)
                 lineage = self.lineage()
-                # information on buds
+
                 valid_lineage, valid_indices = validate_lineage(
                     lineage,
-                    np.array(df.index.to_list()),
-                    "daughters",
+                    indices=np.array(df.index.to_list()),
+                    how="daughters",
                 )
                 mother_label[valid_indices] = lineage[valid_lineage, 1]
                 df = add_index_levels(df, {"mother_label": mother_label})
@@ -360,62 +367,7 @@ class Signal(BridgeH5):
         if isinstance(obj, h5py.Group) and name.endswith("picks"):
             return obj[()]
 
-    # TODO FUTURE add stages support to fluigent system
     @property
     def ntps(self) -> int:
         """Get number of time points from the metadata."""
         return self.meta_h5["time_settings/ntimepoints"][0]
-
-    @property
-    def stages(self) -> t.List[str]:
-        """Get the contents of the pump with highest flow rate at each stage."""
-        flowrate_name = "pumpinit/flowrate"
-        pumprate_name = "pumprate"
-        switchtimes_name = "switchtimes"
-        main_pump_id = np.concatenate(
-            (
-                (np.argmax(self.meta_h5[flowrate_name]),),
-                np.argmax(self.meta_h5[pumprate_name], axis=0),
-            )
-        )
-        if not self.meta_h5[switchtimes_name][0]:  # Cover for t0 switches
-            main_pump_id = main_pump_id[1:]
-        return [self.meta_h5["pumpinit/contents"][i] for i in main_pump_id]
-
-    @property
-    def nstages(self) -> int:
-        return len(self.switch_times) + 1
-
-    @property
-    def max_span(self) -> int:
-        return int(self.tinterval * self.ntps / 60)
-
-    @property
-    def switch_times(self) -> t.List[int]:
-        switchtimes_name = "switchtimes"
-        switches_minutes = self.meta_h5[switchtimes_name]
-        return [
-            t_min
-            for t_min in switches_minutes
-            if t_min and t_min < self.max_span
-        ]  # Cover for t0 switches
-
-    @property
-    def stages_span(self) -> t.Tuple[t.Tuple[str, int], ...]:
-        """Get consecutive stages and their corresponding number of time points."""
-        transition_tps = (0, *self.switch_times, self.max_span)
-        spans = [
-            end - start
-            for start, end in zip(transition_tps[:-1], transition_tps[1:])
-            if end <= self.max_span
-        ]
-        return tuple((stage, ntps) for stage, ntps in zip(self.stages, spans))
-
-    @property
-    def stages_span_tp(self) -> t.Tuple[t.Tuple[str, int], ...]:
-        return tuple(
-            [
-                (name, (t_min * 60) // self.tinterval)
-                for name, t_min in self.stages_span
-            ]
-        )

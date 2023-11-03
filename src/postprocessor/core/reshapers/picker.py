@@ -6,7 +6,6 @@ import pandas as pd
 from agora.abc import ParametersABC
 from agora.io.cells import Cells
 from agora.utils.indexing import validate_lineage
-from agora.utils.cast import _str_to_int
 from agora.utils.kymograph import drop_mother_label
 from postprocessor.core.lineageprocess import LineageProcess
 
@@ -21,6 +20,12 @@ class PickerParameters(ParametersABC):
     "condition" is further specified by "present", "any_present", or
     "growing" and a threshold, either a number of time points or a
     fraction of the total duration of the experiment.
+
+    Note that to pick most cells, particularly for short movies, use
+        {"picker_sequence": [["condition", "present", 3]]}
+    with no "lineage" condition specified. For short movies, lineage
+    information is only available for a small fraction of the
+    segmented cells.
     """
 
     _defaults = {
@@ -72,7 +77,10 @@ class Picker(LineageProcess):
         Pick indices from the index of a signal's dataframe.
 
         Typically, we first pick by lineage, then by condition.
-        The indices are returned as an array.
+        The indices are returned as a list for use in pd.loc.
+        Converting indices that are a mixture of strings and integers
+         into arrays changes integers into strings, breaking the
+         index convention for Signals.
         """
         self.orig_signal = signal
         indices = set(signal.index)
@@ -101,8 +109,8 @@ class Picker(LineageProcess):
         else:
             self._log("No lineage assignment")
             indices = np.array([])
-        # convert to array
-        indices_arr = np.array([tuple(map(_str_to_int, x)) for x in indices])
+        # return as list
+        indices_arr = [tuple(x) for x in indices]
         return indices_arr
 
     def pick_by_condition(
@@ -153,3 +161,14 @@ def any_present(signal, threshold):
         np.sum(trap_array, axis=0).astype(bool), index=signal.index
     )
     return any_present
+
+
+def str_to_int(x: str or None):
+    """Cast string as int if possible."""
+    if x is None:
+        return x
+    else:
+        try:
+            return int(x)
+        except ValueError:
+            return x

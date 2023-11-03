@@ -54,6 +54,7 @@ class PostProcessorParameters(ParametersABC):
                 "merger": "/extraction/general/None/area",
                 "picker": "/extraction/general/None/area",
             },
+            # lists because bud_metric can be applied to multiple signals
             "processes": [
                 ["buddings", ["/extraction/general/None/volume"]],
                 ["bud_metric", ["/extraction/general/None/volume"]],
@@ -104,12 +105,12 @@ class PostProcessor(ProcessABC):
             cells=Cells.from_source(filename),
         )
         # get processes, such as buddings
-        self.classfun = {
+        self.process_funcs = {
             process: get_process(process)
             for process, _ in parameters["targets"]["processes"]
         }
-        # get parameters for the processes in classfun
-        self.parameters_classfun = {
+        # get parameters for the processes
+        self.parameters_process_funcs = {
             process: get_parameters(process)
             for process, _ in parameters["targets"]["processes"]
         }
@@ -141,8 +142,10 @@ class PostProcessor(ProcessABC):
             "modifiers/lineage_merged", assoc_indices_to_2d(new_lineage)
         )
         # run picker
-        picked_indices = self.picker.run(
-            self.signal[self.targets["merging_picking"]["picker"]]
+        picked_indices = np.array(
+            self.picker.run(
+                self.signal[self.targets["merging_picking"]["picker"]]
+            )
         )
         if picked_indices.any():
             self.writer.write(
@@ -161,26 +164,26 @@ class PostProcessor(ProcessABC):
         """
         # run merger, picker, and find lineages
         self.run_merging_picking()
-        # run processes: process is a str; datasets is a list of str
+        # run processes: process is a str; data sets is a list of str
         for process, datasets in tqdm(self.targets["processes"]):
             if process in self.parameters["param_sets"].get("processes", {}):
                 # parameters already assigned
-                parameters = self.parameters_classfun[process](
+                parameters = self.parameters_process_funcs[process](
                     self.parameters[process]
                 )
             else:
                 # assign default parameters
-                parameters = self.parameters_classfun[process].default()
+                parameters = self.parameters_process_funcs[process].default()
             # load process - instantiate an object in the class
-            loaded_process = self.classfun[process](parameters)
+            loaded_process = self.process_funcs[process](parameters)
             if isinstance(parameters, LineageProcessParameters):
                 loaded_process.lineage = self.lineage
-            # apply process to each dataset
+            # apply process to each data set
             for dataset in datasets:
                 self.run_process(dataset, process, loaded_process)
 
     def run_process(self, dataset, process, loaded_process):
-        """Run process to obtain a single dataset and write the result."""
+        """Run processes to obtain single data sets and write the results."""
         # get pre-processed data
         if isinstance(dataset, list):
             signal = [self.signal[d] for d in dataset]
@@ -212,11 +215,8 @@ class PostProcessor(ProcessABC):
                     lambda x: all(x[0] == y for y in x), zip(*dataset)
                 )
             )
-            outpath = (
-                prefix
-                + "_".join(  # TODO check that it always finishes in '/'
-                    [d[len(prefix) :].replace("/", "_") for d in dataset]
-                )
+            outpath = prefix + "_".join(
+                [d[len(prefix) :].replace("/", "_") for d in dataset]
             )
         elif isinstance(dataset, str):
             outpath = dataset[1:].replace("/", "_")

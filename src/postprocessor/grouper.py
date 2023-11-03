@@ -90,6 +90,17 @@ class Grouper(ABC):
         pool : int
            Number of threads used; if 0 or None only one core is used.
         mode: str
+           If "retained" (default), return Signal with merging, picking, and lineage
+            information applied but only for cells present for at least some
+            cutoff fraction of the movie.
+           If "raw", return Signal without merging, picking, lineage information,
+            or a cutoff applied. Each of the first three options can be
+            re-selected. A raw Signal with all three selected is the same as a
+            retained Signal with a 0 cutoff.
+           If "daughters", return Signal with only daughters - cells with an
+            identified mother.
+           If "families", get Signal with merging, picking, and lineage
+            information applied.
         **kwargs : key, value pairings
            Named arguments for concat_ind_function
 
@@ -111,9 +122,9 @@ class Grouper(ABC):
             )
             # check for errors
             errors = [
-                k
-                for kymo, k in zip(records, self.positions.keys())
-                if kymo is None
+                position
+                for record, position in zip(records, self.positions.keys())
+                if record is None
             ]
             records = [record for record in records if record is not None]
             if len(errors):
@@ -122,7 +133,8 @@ class Grouper(ABC):
             # combine into one dataframe
             concat = pd.concat(records, axis=0)
             if len(concat.index.names) > 4:
-                # reorder levels in the multi-index dataframe when mother_label is present
+                # reorder levels in the multi-index dataframe
+                # when mother_label is present
                 concat = concat.reorder_levels(
                     ("group", "position", "trap", "cell_label", "mother_label")
                 )
