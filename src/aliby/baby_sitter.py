@@ -33,7 +33,7 @@ class BabyParameters(ParametersABC):
         """Define default parameters; kwargs choose BABY model set."""
         return cls(
             modelset_name=get_modelset_name_from_params(**kwargs),
-            clogging_thresh=0.75,
+            clogging_thresh=1,
             min_bud_tps=3,
             isbud_thresh=0.5,
             session=None,

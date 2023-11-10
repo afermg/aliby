@@ -177,7 +177,7 @@ class BabyRunner(StepABC):
 
 def choose_model_from_params(
     modelset_filter=None,
-    camera="sCMOS",
+    camera="prime95b",
     channel="brightfield",
     zoom="60x",
     n_stacks="5z",

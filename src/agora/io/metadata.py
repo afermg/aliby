@@ -148,9 +148,9 @@ def parse_logfiles(
     return parsed_flattened
 
 
-def get_meta_swainlab(parsed_metadata: dict):
+def get_channels_swainlab(parsed_metadata: dict):
     """
-    Convert raw parsing of Swainlab logfile to the metadata interface.
+    Extract channels from parsed metadata.
 
     Parameters
     --------
@@ -180,7 +180,7 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     if filepath:
         # new log files ending in .log
         raw_parse = parse_from_swainlab_grammar(filepath)
-        minimal_meta = get_meta_swainlab(raw_parse)
+        minimal_meta = get_channels_swainlab(raw_parse)
     else:
         # old log files ending in .txt
         if filedir.is_file() or str(filedir).endswith(".zarr"):

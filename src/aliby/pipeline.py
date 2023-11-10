@@ -15,6 +15,7 @@ from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
 import baby
+import baby.errors
 
 try:
     if baby.__version__ == "v0.30.1":
@@ -169,11 +170,6 @@ class PipelineParameters(ParametersABC):
             **postprocessing
         ).to_dict()
         return cls(**{k: v for k, v in defaults.items()})
-
-    def load_logs(self):
-        """Load and parse log files."""
-        parsed_flattened = parse_logfiles(self.log_dir)
-        return parsed_flattened
 
 
 class Pipeline(ProcessABC):
@@ -456,14 +452,14 @@ class Pipeline(ProcessABC):
                         tiler=pipe["steps"]["tiler"],
                     )
                     # initiate progress bar
-                    pbar = tqdm(
+                    progress_bar = tqdm(
                         range(min_process_from, pipe["tps"]),
                         desc=image.name,
                         initial=min_process_from,
                         total=pipe["tps"],
                     )
                     # run through time points
-                    for i in pbar:
+                    for i in progress_bar:
                         if (
                             frac_clogged_traps
                             < pipe["earlystop"]["thresh_pos_clogged"]
@@ -473,9 +469,14 @@ class Pipeline(ProcessABC):
                             for step in self.pipeline_steps:
                                 if i >= pipe["process_from"][step]:
                                     # perform step
-                                    result = pipe["steps"][step].run_tp(
-                                        i, **run_kwargs.get(step, {})
-                                    )
+                                    try:
+                                        result = pipe["steps"][step].run_tp(
+                                            i, **run_kwargs.get(step, {})
+                                        )
+                                    except baby.errors.Clogging:
+                                        logging.getLogger("aliby").warn(
+                                            "WARNING:Clogging threshold exceeded in BABY."
+                                        )
                                     # write result to h5 file using writers
                                     # extractor writes to h5 itself
                                     if step in loaded_writers:
@@ -521,7 +522,7 @@ class Pipeline(ProcessABC):
                                     f"{name}:Clogged_traps:{frac_clogged_traps}"
                                 )
                                 frac = np.round(frac_clogged_traps * 100)
-                                pbar.set_postfix_str(f"{frac} Clogged")
+                                progress_bar.set_postfix_str(f"{frac} Clogged")
                         else:
                             # stop if too many traps are clogged
                             self._log(

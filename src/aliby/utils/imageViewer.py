@@ -4,7 +4,7 @@ ImageViewer class, used to look at individual or multiple traps over time.
 
 Example of usage:
 
-fpath = "/home/alan/Documents/dev/skeletons/scripts/data/16543_2019_07_16_aggregates_CTP_switch_2_0glu_0_0glu_URA7young_URA8young_URA8old_01/URA8_young018.h5"
+fpath = "/home/alan/data/16543/URA8_young018.h5"
 
 tile_id = 9
 trange = list(range(0, 10))
