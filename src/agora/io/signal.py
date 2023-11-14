@@ -15,7 +15,6 @@ from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_lineage
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
-from postprocessor.core.reshapers.picker import Picker, PickerParameters
 
 
 class Signal(BridgeH5):
@@ -57,8 +56,11 @@ class Signal(BridgeH5):
         """Get Signal after merging and picking."""
         if isinstance(dset_name, str):
             dsets = self.get_raw(dset_name, **kwargs)
-            picked_merged = self.apply_merging_picking(dsets, **kwargs)
-            return self.add_name(picked_merged, dset_name)
+            if dsets is not None:
+                picked_merged = self.apply_merging_picking(dsets, **kwargs)
+                return self.add_name(picked_merged, dset_name)
+            else:
+                return None
         else:
             raise Exception("Error in Signal.get")
 
@@ -266,32 +268,37 @@ class Signal(BridgeH5):
         try:
             if isinstance(dataset, str):
                 with h5py.File(self.filename, "r") as f:
-                    df = self.dataset_to_df(f, dataset).sort_index()
-                    if in_minutes:
-                        df = self.cols_in_mins(df)
+                    df = self.dataset_to_df(f, dataset)
+                    if df is not None:
+                        df = df.sort_index()
+                        if in_minutes:
+                            df = self.cols_in_mins(df)
+                        # apply merging or picking or both or neither
+                        df = self.apply_merging_picking(df, merges, picks)
+                        # add mother label to data frame
+                        if lineage:
+                            mother_label = np.zeros(len(df), dtype=int)
+                            lineage = self.lineage()
+                            valid_lineage, valid_indices = validate_lineage(
+                                lineage,
+                                indices=np.array(df.index.to_list()),
+                                how="daughters",
+                            )
+                            mother_label[valid_indices] = lineage[
+                                valid_lineage, 1
+                            ]
+                            df = add_index_levels(
+                                df, {"mother_label": mother_label}
+                            )
+                    return df
             elif isinstance(dataset, list):
                 return [
                     self.get_raw(dset, in_minutes=in_minutes, lineage=lineage)
                     for dset in dataset
                 ]
-            # apply merging or picking or both or neither
-            df = self.apply_merging_picking(df, merges, picks)
-            # add mother label to data frame
-            if lineage:
-                mother_label = np.zeros(len(df), dtype=int)
-                lineage = self.lineage()
-
-                valid_lineage, valid_indices = validate_lineage(
-                    lineage,
-                    indices=np.array(df.index.to_list()),
-                    how="daughters",
-                )
-                mother_label[valid_indices] = lineage[valid_lineage, 1]
-                df = add_index_levels(df, {"mother_label": mother_label})
-            return df
         except Exception as e:
-            self._log(f"Could not fetch dataset {dataset}: {e}", "error")
-            raise e
+            message = f"Signal could not find data {dataset}: {e}."
+            self._log(message)
 
     def load_merges(self):
         """Get merge events going up to the first level."""
@@ -318,21 +325,25 @@ class Signal(BridgeH5):
 
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
         """Get data from h5 file as a dataframe."""
-        assert path in f, f"{path} not in {f}"
-        dset = f[path]
-        values, index, columns = [], [], []
-        index_names = copy(self.index_names)
-        valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
-        if valid_names:
-            index = pd.MultiIndex.from_arrays(
-                [dset[lbl] for lbl in valid_names], names=valid_names
-            )
-            columns = dset.attrs.get("columns", None)
-            if "timepoint" in dset:
-                columns = f[path + "/timepoint"][()]
-            values = f[path + "/values"][()]
-        df = pd.DataFrame(values, index=index, columns=columns)
-        return df
+        if path not in f:
+            message = f"{path} not in {f}."
+            self._log(message)
+            return None
+        else:
+            dset = f[path]
+            values, index, columns = [], [], []
+            index_names = copy(self.index_names)
+            valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
+            if valid_names:
+                index = pd.MultiIndex.from_arrays(
+                    [dset[lbl] for lbl in valid_names], names=valid_names
+                )
+                columns = dset.attrs.get("columns", None)
+                if "timepoint" in dset:
+                    columns = f[path + "/timepoint"][()]
+                values = f[path + "/values"][()]
+            df = pd.DataFrame(values, index=index, columns=columns)
+            return df
 
     @property
     def stem(self):

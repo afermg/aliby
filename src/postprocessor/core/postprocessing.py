@@ -192,7 +192,9 @@ class PostProcessor(ProcessABC):
         else:
             raise ("Incorrect dataset")
         # run process on signal
-        if len(signal) and (
+        if signal is None:
+            return None
+        elif len(signal) and (
             not isinstance(loaded_process, LineageProcess)
             or len(loaded_process.lineage)
         ):

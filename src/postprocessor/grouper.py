@@ -128,7 +128,7 @@ class Grouper(ABC):
             ]
             records = [record for record in records if record is not None]
             if len(errors):
-                print("Warning: Positions contain errors {errors}")
+                print(f"Warning: Positions ({errors}) contain errors.")
             assert len(records), "All data sets contain errors"
             # combine into one dataframe
             concat = pd.concat(records, axis=0)
