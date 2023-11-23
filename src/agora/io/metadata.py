@@ -195,11 +195,13 @@ def get_minimal_meta_swainlab(parsed_metadata: dict):
     """
     channels_dict = find_channels_by_position(parsed_metadata["group_config"])
     channels = parsed_metadata["image_config"]["Image config"].values.tolist()
-    ntps = parsed_metadata["group_time"].to_numpy().astype(int).max()
+    ntps = parsed_metadata["group_time"]["frames"].max()
+    timeinterval = parsed_metadata["group_time"]["interval"].min()
     minimal_meta = {
         "channels_by_group": channels_dict,
         "channels": channels,
-        "ntps": ntps,
+        "time_settings/ntimepoints": int(ntps),
+        "time_settings/timeinterval": int(timeinterval),
     }
     return minimal_meta
 
