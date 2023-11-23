@@ -126,7 +126,7 @@ def get_bud_metric(
         # initialise as all NaNs and then update for cells with buds
         bud_signal = pd.DataFrame(columns=signal.columns, index=signal.index)
         bud_signal.update(mini_df)
-    return bud_signal
+        return bud_signal
 
 
 def combine_daughter_tracks(tracks: pd.DataFrame):
