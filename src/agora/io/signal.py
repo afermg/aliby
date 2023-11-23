@@ -86,16 +86,16 @@ class Signal(BridgeH5):
 
     @cached_property
     def tinterval(self) -> int:
-        """Find the interval between time points (minutes)."""
+        """Find the interval between time points (seconds)."""
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
             if tinterval_location in f.attrs:
                 return f.attrs[tinterval_location][0]
             else:
                 logging.getLogger("aliby").warn(
-                    f"{str(self.filename).split('/')[-1]}: using default time interval of 5 minutes"
+                    f"{str(self.filename).split('/')[-1]}: using default time interval of 300 seconds."
                 )
-                return 5
+                return 300
 
     def retained(
         self, signal, cutoff=global_parameters.signal_retained_cutoff

@@ -428,6 +428,7 @@ class Pipeline(ProcessABC):
                     pipe["config"]["tiler"]["position_name"] = name.split(".")[
                         0
                     ]
+                    # loads local meta data from image
                     pipe["steps"]["tiler"] = Tiler.from_image(
                         image,
                         TilerParameters.from_dict(pipe["config"]["tiler"]),
@@ -600,7 +601,7 @@ class Pipeline(ProcessABC):
         """
         pipe = {}
         config = self.parameters.to_dict()
-        # TODO Alan: Verify if session must be passed
+        # TODO Verify if session must be passed
         session = None
         pipe["earlystop"] = config["general"].get("earlystop", None)
         pipe["process_from"] = {k: 0 for k in self.pipeline_steps}

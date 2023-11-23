@@ -37,9 +37,9 @@ import h5py
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
-import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
+from agora.io.metadata import find_channels_by_position
 from aliby.tile.traps import segment_traps
 
 
@@ -219,22 +219,6 @@ class TilerParameters(ParametersABC):
     }
 
 
-def find_channels_by_position(meta):
-    """Parse metadata to find the imaging channels used for each group."""
-    channels_dict = {
-        position_name: [] for position_name in meta["positions/posname"]
-    }
-    imaging_channels = meta["channels"]
-    for i, position_name in enumerate(meta["positions/posname"]):
-        for imaging_channel in imaging_channels:
-            if (
-                "positions/" + imaging_channel in meta
-                and meta["positions/" + imaging_channel][i]
-            ):
-                channels_dict[position_name].append(imaging_channel)
-    return channels_dict
-
-
 class Tiler(StepABC):
     """
     Divide images into smaller tiles for faster processing.
@@ -267,11 +251,25 @@ class Tiler(StepABC):
         self.image = image
         self.position_name = parameters.to_dict()["position_name"]
         # get channels for this position
-        channel_dict = find_channels_by_position(metadata)
-        self.channels = channel_dict.get(
-            self.position_name,
-            list(range(metadata.get("size_c", 0))),
-        )
+        if "channels_by_group" in metadata:
+            channel_dict = metadata["channels_by_group"]
+        elif "positions/posname" in metadata:
+            # old meta data from image
+            channel_dict = find_channels_by_position(
+                metadata["positions/posname"]
+            )
+        else:
+            channel_dict = {}
+        if channel_dict:
+            self.channels = channel_dict.get(
+                self.position_name,
+                list(range(metadata.get("size_c", 0))),
+            )
+        else:
+            # new image meta data contains channels for that image
+            self.channels = metadata.get(
+                "channels", list(range(metadata.get("size_c", 0)))
+            )
         # get reference channel - used for segmentation
         self.ref_channel = self.get_channel_index(parameters.ref_channel)
         if self.ref_channel is None:

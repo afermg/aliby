@@ -450,7 +450,6 @@ class Writer(BridgeH5):
         """
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
-            # Alan, haven't we already opened the h5 file through BridgeH5's init?
             if overwrite == "overwrite":  # TODO refactor overwriting
                 if path in f:
                     del f[path]
@@ -492,7 +491,12 @@ class Writer(BridgeH5):
     def write_meta(self, f: h5py.File, path: str, attr: str, data: Iterable):
         """Write metadata to an open h5 file."""
         obj = f.require_group(path)
-        obj.attrs[attr] = data
+        if type(data) is dict:
+            # necessary for channels_dict from find_channels_by_position
+            for key, vlist in data.items():
+                obj.attrs[attr + key] = vlist
+        else:
+            obj.attrs[attr] = data
 
     @staticmethod
     def write_arraylike(f: h5py.File, path: str, data: Iterable, **kwargs):
@@ -537,7 +541,6 @@ class Writer(BridgeH5):
             path + "values" if path.endswith("/") else path + "/values"
         )
         if path not in f:
-
             # create dataset and write data
             max_ncells = 2e5
             max_tps = 1e3
@@ -583,7 +586,6 @@ class Writer(BridgeH5):
             else:
                 f[path].attrs["columns"] = df.columns.tolist()
         else:
-
             # path exists
             dset = f[values_path]
 

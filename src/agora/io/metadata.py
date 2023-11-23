@@ -17,6 +17,7 @@ repository.
 """
 import glob
 import logging
+import numpy as np
 import os
 import typing as t
 from datetime import datetime
@@ -148,7 +149,37 @@ def parse_logfiles(
     return parsed_flattened
 
 
-def get_channels_swainlab(parsed_metadata: dict):
+def find_channels_by_position(meta):
+    """
+    Parse metadata to find the imaging channels for each group.
+
+    Return a dict with groups as keys and channels as values.
+    """
+    if isinstance(meta, pd.DataFrame):
+        imaging_channels = list(meta.columns)
+        channels_dict = {group: [] for group in meta.index}
+        for group in channels_dict:
+            for channel in imaging_channels:
+                if meta.loc[group, channel]:
+                    channels_dict[group].append(channel)
+    elif isinstance(meta, dict):
+        channels_dict = {
+            position_name: [] for position_name in meta["positions/posname"]
+        }
+        imaging_channels = meta["channels"]
+        for i, position_name in enumerate(meta["positions/posname"]):
+            for imaging_channel in imaging_channels:
+                if (
+                    "positions/" + imaging_channel in meta
+                    and meta["positions/" + imaging_channel][i]
+                ):
+                    channels_dict[position_name].append(imaging_channel)
+    else:
+        channels_dict = {}
+    return channels_dict
+
+
+def get_minimal_meta_swainlab(parsed_metadata: dict):
     """
     Extract channels from parsed metadata.
 
@@ -162,8 +193,15 @@ def get_channels_swainlab(parsed_metadata: dict):
     --------
     Dict with channels metadata
     """
+    channels_dict = find_channels_by_position(parsed_metadata["group_config"])
     channels = parsed_metadata["image_config"]["Image config"].values.tolist()
-    return {"channels": channels}
+    ntps = parsed_metadata["group_time"].to_numpy().astype(int).max()
+    minimal_meta = {
+        "channels_by_group": channels_dict,
+        "channels": channels,
+        "ntps": ntps,
+    }
+    return minimal_meta
 
 
 def get_meta_from_legacy(parsed_metadata: dict):
@@ -180,7 +218,7 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     if filepath:
         # new log files ending in .log
         raw_parse = parse_from_swainlab_grammar(filepath)
-        minimal_meta = get_channels_swainlab(raw_parse)
+        minimal_meta = get_minimal_meta_swainlab(raw_parse)
     else:
         # old log files ending in .txt
         if filedir.is_file() or str(filedir).endswith(".zarr"):
