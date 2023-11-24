@@ -90,7 +90,11 @@ class Signal(BridgeH5):
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
             if tinterval_location in f.attrs:
-                return f.attrs[tinterval_location][0]
+                res = f.attrs[tinterval_location]
+                if type(res) is list:
+                    return res[0]
+                else:
+                    return res
             else:
                 logging.getLogger("aliby").warn(
                     f"{str(self.filename).split('/')[-1]}: using default time interval of 300 seconds."
