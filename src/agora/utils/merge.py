@@ -130,8 +130,8 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
     # merge tracks
     if valid_merges.any():
         to_merge = data.loc[valid_indices].copy()
-        left_indices = merges[:, 0]
-        right_indices = merges[:, 1]
+        left_indices = merges[valid_merges, 0]
+        right_indices = merges[valid_merges, 1]
         # join left track with right track
         for left_index, right_index in zip(left_indices, right_indices):
             to_merge.loc[tuple(left_index)] = join_two_tracks(
