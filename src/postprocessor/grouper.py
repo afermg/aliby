@@ -49,7 +49,7 @@ class Grouper(ABC):
     def tinterval(self) -> float:
         """Find the time interval for all positions."""
         tintervals = list(
-            set([s.tinterval / 60 for s in self.positions.values()])
+            np.unique([s.tinterval / 60 for s in self.positions.values()])
         )
         assert (
             len(tintervals) == 1
