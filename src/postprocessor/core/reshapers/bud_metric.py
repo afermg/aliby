@@ -114,18 +114,16 @@ def get_bud_metric(
     mother_labels = md_signal.index.get_level_values("mother_label")
     daughter_df = md_signal.loc[mother_labels > 0]
     # join data for daughters with the same mother
-    mini_df = daughter_df.groupby(["trap", "mother_label"]).apply(
+    bud_signal = daughter_df.groupby(["trap", "mother_label"]).apply(
         combine_daughter_tracks
     )
-    mini_df.columns = md_signal.columns
+    bud_signal.columns = md_signal.columns
     # daughter data is indexed by mothers, which themselves have no mothers
-    mini_df["temp_mother_label"] = 0
-    mini_df.set_index("temp_mother_label", append=True, inplace=True)
-    if len(mini_df):
-        mini_df.index.names = md_signal.index.names
-        # initialise as all NaNs and then update for cells with buds
-        bud_signal = pd.DataFrame(columns=signal.columns, index=signal.index)
-        bud_signal.update(mini_df)
+    bud_signal["temp_mother_label"] = 0
+    bud_signal.set_index("temp_mother_label", append=True, inplace=True)
+    if len(bud_signal):
+        bud_signal.index.names = md_signal.index.names
+        bud_signal = bud_signal.droplevel("mother_label")
         return bud_signal
 
 
