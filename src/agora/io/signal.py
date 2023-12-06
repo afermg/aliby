@@ -39,7 +39,7 @@ class Signal(BridgeH5):
         self.candidate_channels = global_parameters.possible_imaging_channels
 
     def __getitem__(self, dsets: t.Union[str, t.Collection]):
-        """Get and potentially pre-process data from h5 file and return as a dataframe."""
+        """Get and potentially pre-process data from h5 file and return as a data frame."""
         if isinstance(dsets, str):
             return self.get(dsets)
         elif isinstance(dsets, list):
@@ -47,7 +47,7 @@ class Signal(BridgeH5):
             # Check we are not comparing tile-indexed and cell-indexed data
             assert sum(is_bgd) == 0 or sum(is_bgd) == len(
                 dsets
-            ), "Tile data and cell data can't be mixed"
+            ), "Tile data and cell data cannot be mixed."
             return [self.get(dset) for dset in dsets]
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
@@ -66,12 +66,12 @@ class Signal(BridgeH5):
 
     @staticmethod
     def add_name(df, name):
-        """Add name of the Signal as an attribute to its corresponding dataframe."""
+        """Add name of the Signal as an attribute to its data frame."""
         df.name = name
         return df
 
     def cols_in_mins(self, df: pd.DataFrame):
-        """Convert numerical columns in a dataframe to minutes."""
+        """Convert numerical columns in a data frame to minutes."""
         try:
             df.columns = (df.columns * self.tinterval // 60).astype(int)
         except Exception as e:
@@ -251,6 +251,7 @@ class Signal(BridgeH5):
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
+        **kwargs,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Get raw Signal without merging, picking, and lineage information.
