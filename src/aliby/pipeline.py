@@ -306,6 +306,10 @@ class Pipeline(ProcessABC):
             print("\n---\n" + step + "\n---")
             pprint(config[step])
         print()
+        try:
+            print(f"Using Baby {baby.__version}")
+        except AttributeError:
+            pass
         # extract from configuration
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]

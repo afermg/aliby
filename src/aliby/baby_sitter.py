@@ -121,7 +121,8 @@ class BabyRunner(StepABC):
             with_edgemasks=with_edgemasks,
             **kwargs,
         )
-        return format_segmentation(segmentation, tp)
+        res = format_segmentation(segmentation, tp)
+        return res
 
 
 def get_modelset_name_from_params(
