@@ -52,12 +52,12 @@ class Signal(BridgeH5):
         else:
             raise Exception(f"Invalid type {type(dsets)} to get datasets")
 
-    def get(self, dset_name: t.Union[str, t.Collection], **kwargs):
+    def get(self, dset_name: t.Union[str, t.Collection]):
         """Get Signal after merging and picking."""
         if isinstance(dset_name, str):
-            dsets = self.get_raw(dset_name, **kwargs)
+            dsets = self.get_raw(dset_name)
             if dsets is not None:
-                picked_merged = self.apply_merging_picking(dsets, **kwargs)
+                picked_merged = self.apply_merging_picking(dsets)
                 return self.add_name(picked_merged, dset_name)
             else:
                 return None
@@ -106,6 +106,7 @@ class Signal(BridgeH5):
     ):
         """Get retained cells for a Signal or list of Signals."""
         if isinstance(signal, str):
+            # get data frame
             signal = self.get(signal)
         if isinstance(signal, pd.DataFrame):
             return self.get_retained(signal, cutoff)
@@ -156,7 +157,7 @@ class Signal(BridgeH5):
                 ).T
         return lineage
 
-    @_first_arg_str_to_raw_df
+    # @_first_arg_str_to_raw_df
     def apply_merging_picking(
         self,
         data: t.Union[str, pd.DataFrame],
@@ -184,13 +185,13 @@ class Signal(BridgeH5):
         else:
             merged = copy(data)
         if isinstance(picks, bool):
-            picks = (
-                self.get_picks(
+            if picks is True:
+                # load picks from h5
+                picks = self.get_picks(
                     names=merged.index.names, path="modifiers/picks/"
                 )
-                if picks
-                else merged.index
-            )
+            else:
+                return merged
         if len(picks):
             picked_indices = set(picks).intersection(
                 [tuple(x) for x in merged.index]
@@ -250,8 +251,6 @@ class Signal(BridgeH5):
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
-        merges: bool = False,
-        picks: bool = False,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Get raw Signal without merging, picking, and lineage information.
@@ -264,10 +263,6 @@ class Signal(BridgeH5):
             If True, convert column headings to times in minutes.
         lineage: boolean
             If True, add mother_label to index.
-        merges: boolean
-            If True, apply merges.
-        picks: boolean
-            If True, apply picks.
         """
         try:
             if isinstance(dataset, str):
@@ -277,8 +272,6 @@ class Signal(BridgeH5):
                         df = df.sort_index()
                         if in_minutes:
                             df = self.cols_in_mins(df)
-                        # apply merging or picking or both or neither
-                        df = self.apply_merging_picking(df, merges, picks)
                         # add mother label to data frame
                         if lineage:
                             mother_label = np.zeros(len(df), dtype=int)
