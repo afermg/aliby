@@ -36,6 +36,3 @@ fluorescence_functions = [
     "imBackground",
     "max5px_median",
 ]
-
-# default fraction of time a cell must be in the experiment to be kept by Signal
-signal_retained_cutoff = 0.8

@@ -101,9 +101,7 @@ class Signal(BridgeH5):
                 )
                 return 300
 
-    def retained(
-        self, signal, cutoff=global_parameters.signal_retained_cutoff
-    ):
+    def retained(self, signal, cutoff=0):
         """Get retained cells for a Signal or list of Signals."""
         if isinstance(signal, str):
             # get data frame
