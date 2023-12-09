@@ -253,7 +253,8 @@ class Dataset(BridgeOmero):
         cls,
         filepath: t.Union[str, Path],
     ):
-        """Instatiate Dataset from a hdf5 file.
+        """
+        Instantiate data set from a h5 file.
 
         Parameters
         ----------

@@ -320,7 +320,7 @@ class Tiler(StepABC):
             image.data,
             metadata,
             parameters,
-            tile_locs=tile_locs,
+            tile_locations=tile_locs,
         )
         if hasattr(tile_locs, "drifts"):
             tiler.no_processed = len(tile_locs.drifts)

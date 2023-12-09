@@ -52,7 +52,7 @@ def plot_in_square(data: t.Iterable):
 
 def stretch_clip(image, clip=True):
     """
-    Performs contrast stretching on an input image.
+    Perform contrast stretching on an input image.
 
     This function takes an array-like input image and enhances its contrast by adjusting
     the dynamic range of pixel values. It first scales the pixel values between 0 and 255,

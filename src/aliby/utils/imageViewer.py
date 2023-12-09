@@ -17,17 +17,22 @@ riv.plot_labelled_trap(tile_id, trange, [0], ncols=ncols)
 
 import re
 import typing as t
+from abc import ABC
 
 import h5py
-from abc import ABC
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from PIL import Image
 from skimage.morphology import dilation
 
 from agora.io.cells import Cells
 from agora.io.metadata import dispatch_metadata_parser
+from aliby.io.image import ImageDir, ImageZarr, dispatch_image
+
+try:
+    from aliby.io.omero import UnsafeImage as OImage
+except ModuleNotFoundError:
+    print("Viewing available only for local files.")
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.utils.plot import stretch_clip
 
@@ -40,9 +45,7 @@ default_colours = {
 
 
 def custom_imshow(a, norm=None, cmap=None, *args, **kwargs):
-    """
-    Wrapper on plt.imshow function.
-    """
+    """Wrap plt.imshow."""
     if cmap is None:
         cmap = "Greys_r"
     return plt.imshow(
@@ -57,16 +60,13 @@ def custom_imshow(a, norm=None, cmap=None, *args, **kwargs):
 
 class BaseImageViewer(ABC):
     def __init__(self, fpath):
-
         self._fpath = fpath
-        attrs = dispatch_metadata_parser(fpath.parent)
+        self.attrs = dispatch_metadata_parser(fpath.parent)
         self._logfiles_meta = {}
-
-        self.image_id = attrs.get("image_id")
+        self.image_id = self.attrs.get("image_id")
         if self.image_id is None:
             with h5py.File(fpath, "r") as f:
                 self.image_id = f.attrs.get("image_id")
-
         assert self.image_id is not None, "No valid image_id found in metadata"
 
     @property
@@ -75,42 +75,39 @@ class BaseImageViewer(ABC):
 
     @property
     def ntraps(self):
+        """Find the number of traps available."""
         return self.cells.ntraps
 
     @property
     def max_labels(self):
-        # Print max cell label in whole experiment
+        """Find maximum cell label in whole experiment."""
         return [max(x) for x in self.cells.labels]
 
     def labels_at_time(self, tp: int):
-        # Print  cell label at a given time-point
+        """Find cell label at a given time point."""
         return self.cells.labels_at_time(tp)
 
 
 class LocalImageViewer(BaseImageViewer):
     """
-    Tool to generate figures from local files, either zarr or files organised
-    in directories.
+    Generate figures from local files.
+
+    File are either zarr or organised in directories.
     TODO move common functionality from RemoteImageViewer to BaseImageViewer
     """
 
-    def __init__(self, results_path: str, data_path: str):
-        super().__init__(results_path)
-
-        from aliby.io.image import ImageDir, ImageZarr
-
+    def __init__(self, h5file_path: str, data_path: str):
+        super().__init__(h5file_path)
         self._image_class = (
-            ImageZarr if data_path.endswith(".zar") else ImageDir
+            ImageZarr if str(data_path).endswith(".zarr") else ImageDir
         )
-
-        with dispatch_image(data_path)(data_path) as image:
-            self.tiler = Tiler(
-                image.data,
-                self._meta if hasattr(self, "_meta") else self._logfiles_meta,
-                TilerParameters.default(),
-            )
-
-        self.cells = Cells.from_source(results_path)
+        image = ImageZarr(data_path)
+        self.tiler = Tiler(
+            image.data,
+            self._meta if hasattr(self, "_meta") else self._logfiles_meta,
+            TilerParameters.default(),
+        )
+        self.cells = Cells.from_source(h5file_path)
 
 
 class RemoteImageViewer(BaseImageViewer):
@@ -126,16 +123,12 @@ class RemoteImageViewer(BaseImageViewer):
         server_info: t.Dict[str, str],
     ):
         super().__init__(results_path)
-
-        from aliby.io.omero import UnsafeImage as OImage
-
         self._server_info = server_info or {
-            k: attrs["parameters"]["general"][k] for k in self._credentials
+            k: self.attrs["parameters"]["general"][k]
+            for k in self._credentials
         }
-
         self._image_instance = OImage(self.image_id, **self._server_info)
         self.tiler = Tiler.from_h5(self._image_instance, results_path)
-
         self.cells = Cells.from_source(results_path)
 
     def random_valid_trap_tp(
@@ -194,7 +187,6 @@ class RemoteImageViewer(BaseImageViewer):
         z: int = None,
         server_info=None,
     ):
-
         if tps and not isinstance(tps, t.Collection):
             tps = range(tps)
 

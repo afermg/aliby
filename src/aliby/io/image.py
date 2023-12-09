@@ -29,15 +29,11 @@ from tifffile import TiffFile
 from agora.io.metadata import dir_to_meta, dispatch_metadata_parser
 
 
-def get_examples_dir():
-    """Get examples directory that stores dummy image for tiler."""
-    return files("aliby").parent.parent / "examples" / "tiler"
-
-
 def instantiate_image(
     source: t.Union[str, int, t.Dict[str, str], Path], **kwargs
 ):
-    """Wrapper to instantiate the appropriate image
+    """
+    Instantiate the image.
 
     Parameters
     ----------
@@ -46,10 +42,9 @@ def instantiate_image(
 
     Examples
     --------
-    image_path = "path/to/image"]
+    image_path = "path/to/image"
     with instantiate_image(image_path) as img:
         print(imz.data, img.metadata)
-
     """
     return dispatch_image(source)(source, **kwargs)
 
@@ -63,14 +58,12 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     elif isinstance(source, dict) or (
         isinstance(source, (str, Path)) and Path(source).is_dir()
     ):
+        # zarr files are considered directories
         if Path(source).suffix == ".zarr":
             instantiator = ImageZarr
         else:
             instantiator = ImageDir
-    elif isinstance(source, Path) and source.is_file():
-        # my addition
-        instantiator = ImageLocalOME
-    elif isinstance(source, str) and Path(source).is_file():
+    elif isinstance(source, (str, Path)) and Path(source).is_file():
         instantiator = ImageLocalOME
     else:
         raise Exception(f"Invalid data source at {source}")
@@ -78,9 +71,7 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
 
 
 class BaseLocalImage(ABC):
-    """
-    Base Image class to set path and provide context management method.
-    """
+    """Set path and provide method for context management."""
 
     # default image order
     _default_dimorder = "tczyx"
@@ -112,29 +103,34 @@ class BaseLocalImage(ABC):
         )
         return self._rechunked_img
 
-    @abstractmethod
-    def get_data_lazy(self) -> da.Array:
-        pass
-
-    @abstractproperty
-    def name(self):
-        pass
-
-    @abstractproperty
-    def dimorder(self):
-        pass
-
     @property
     def data(self):
+        """Get data."""
         return self.get_data_lazy()
 
     @property
     def metadata(self):
+        """Get metadata."""
         return self._meta
 
     def set_meta(self):
-        """Load metadata using parser dispatch"""
+        """Load metadata using parser dispatch."""
         self._meta = dispatch_metadata_parser(self.path)
+
+    @abstractmethod
+    def get_data_lazy(self) -> da.Array:
+        """Define in child class."""
+        pass
+
+    @abstractproperty
+    def name(self):
+        """Define in child class."""
+        pass
+
+    @abstractproperty
+    def dimorder(self):
+        """Define in child class."""
+        pass
 
 
 class ImageLocalOME(BaseLocalImage):
@@ -146,11 +142,13 @@ class ImageLocalOME(BaseLocalImage):
     """
 
     def __init__(self, path: str, dimorder=None, **kwargs):
+        """Initialise using file name."""
         super().__init__(path)
         self._id = str(path)
         self.set_meta(str(path))
 
     def set_meta(self, path):
+        """Get metadata from the associated tiff file."""
         meta = dict()
         try:
             with TiffFile(path) as f:
@@ -194,7 +192,7 @@ class ImageLocalOME(BaseLocalImage):
 
     @property
     def dimorder(self):
-        """Order of dimensions in image"""
+        """Return order of dimensions in the image."""
         if not hasattr(self, "_dimorder"):
             self._dimorder = self._meta["Image"]["Pixels"]["@DimensionOrder"]
         return self._dimorder
@@ -205,16 +203,16 @@ class ImageLocalOME(BaseLocalImage):
         return self._dimorder
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading  multidimensional tiff files"""
-
+        """Return 5D dask array via lazy-loading of tiff files."""
         if not hasattr(self, "formatted_img"):
-            if not hasattr(self, "ids"):  # Standard dimension order
+            if not hasattr(self, "ids"):
+                # standard order of image dimensions
                 img = (imread(str(self.path))[0],)
-            else:  # Custom dimension order, we rearrange the axes for compatibility
+            else:
+                # bespoke order, so rearrange axes for compatibility
                 img = imread(str(self.path))[0]
                 for i, d in enumerate(self._dimorder):
                     self._meta["size_" + d.lower()] = img.shape[i]
-
                 target_order = (
                     *self.ids,
                     *[
@@ -233,12 +231,13 @@ class ImageLocalOME(BaseLocalImage):
                 img = da.moveaxis(
                     reshaped, range(len(reshaped.shape)), target_order
                 )
-
         return self.rechunk_data(img)
 
 
 class ImageDir(BaseLocalImage):
     """
+    Standard image class for tiff files.
+
     Image class for the case in which all images are split in one or
     multiple folders with time-points and channels as independent files.
     It inherits from BaseLocalImage so we only override methods that are critical.
@@ -247,28 +246,23 @@ class ImageDir(BaseLocalImage):
     - One folder per position.
     - Images are flat.
     - Channel, Time, z-stack and the others are determined by filenames.
-    - Provides Dimorder as it is set in the filenames, or expects order during instatiation
+    - Provides Dimorder as it is set in the filenames, or expects order
     """
 
     def __init__(self, path: t.Union[str, Path], **kwargs):
+        """Initialise using file name."""
         super().__init__(path)
         self.image_id = str(self.path.stem)
-
         self._meta = dir_to_meta(self.path)
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array. For lazy-loading local multidimensional tiff files"""
-
+        """Return 5D dask array."""
         img = imread(str(self.path / "*.tiff"))
-
         # If extra channels, pick the first stack of the last dimensions
-
         while len(img.shape) > 3:
             img = img[..., 0]
-
         if self._meta:
             self._meta["size_x"], self._meta["size_y"] = img.shape[-2:]
-
             # Reshape using metadata
             # img = da.reshape(img, (*self._meta, *img.shape[1:]))
             img = da.reshape(img, self._meta.values())
@@ -289,6 +283,7 @@ class ImageDir(BaseLocalImage):
 
     @property
     def name(self):
+        """Return name of image directory."""
         return self.path.stem
 
     @property
@@ -302,24 +297,27 @@ class ImageDir(BaseLocalImage):
 class ImageZarr(BaseLocalImage):
     """
     Read zarr compressed files.
-    These are outputed by the script
+
+    These files are generated by the script
     skeletons/scripts/howto_omero/convert_clone_zarr_to_tiff.py
     """
 
     def __init__(self, path: t.Union[str, Path], **kwargs):
+        """Initialise using file name."""
         super().__init__(path)
         self.set_meta()
         try:
             self._img = zarr.open(self.path)
             self.add_size_to_meta()
         except Exception as e:
-            print(f"Could not add size info to metadata: {e}")
+            print(f"ImageZarr: Could not add size info to metadata: {e}.")
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array for lazy-loading local multidimensional zarr files."""
         return self._img
 
     def add_size_to_meta(self):
+        """Add shape of image array to metadata."""
         self._meta.update(
             {
                 f"size_{dim}": shape
@@ -329,16 +327,13 @@ class ImageZarr(BaseLocalImage):
 
     @property
     def name(self):
+        """Return name of zarr directory."""
         return self.path.stem
 
     @property
     def dimorder(self):
-        # FIXME hardcoded order based on zarr compression/cloning script
+        """Impose a hard-coded order of dimensions based on the zarr compression script."""
         return "TCZYX"
-        # Assumes only dimensions start with "size"
-        # return [
-        #     k.split("_")[-1] for k in self._meta.keys() if k.startswith("size")
-        # ]
 
 
 class ImageDummy(BaseLocalImage):
