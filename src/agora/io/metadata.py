@@ -98,9 +98,6 @@ def find_file(root_dir, regex):
         if Path(f).name != "aliby.log"
     ]
     if len(file) == 0:
-        logging.getLogger("aliby").log(
-            logging.WARNING, "Metadata: No valid swainlab .log found."
-        )
         return None
     elif len(file) > 1:
         print(
@@ -124,9 +121,7 @@ def parse_logfiles(
     """
     log_parser = Parser(log_grammar)
     acq_parser = Parser(acq_grammar)
-    # an example acq file is 'flavin_htb2_glucose_long_ramp_DelftAcq.txt'
     log_file = find_file(root_dir, "*log.txt")
-    # an example log file is 'flavin_htb2_glucose_long_ramp_Delftlog.txt'
     acq_file = find_file(root_dir, "*[Aa]cq.txt")
     # parse into a single dict
     parsed = {}
