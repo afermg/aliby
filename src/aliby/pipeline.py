@@ -305,9 +305,9 @@ class Pipeline(ProcessABC):
             pprint(config[step])
         print()
         try:
-            print(f"Using Baby {baby.__version__}.\n")
+            logging.getLogger("aliby").info(f"Using Baby {baby.__version__}.")
         except AttributeError:
-            print("Using Baby - no version specified.\n")
+            logging.getLogger("aliby").info("Using original Baby.")
         # extract from configuration
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
