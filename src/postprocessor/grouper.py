@@ -289,15 +289,17 @@ def concat_one_signal(
         combined = position.get_raw(path, **kwargs)
     elif mode == "daughters":
         combined = position.get_raw(path, lineage=True, **kwargs)
-        combined = combined.loc[
-            combined.index.get_level_values("mother_label") > 0
-        ]
+        if combined is not None:
+            combined = combined.loc[
+                combined.index.get_level_values("mother_label") > 0
+            ]
     elif mode == "mothers":
         combined = position.get_raw(path, lineage=True, **kwargs)
-        combined = combined.loc[
-            combined.index.get_level_values("mother_label") == 0
-        ]
-        combined = combined.droplevel("mother_label")
+        if combined is not None:
+            combined = combined.loc[
+                combined.index.get_level_values("mother_label") == 0
+            ]
+            combined = combined.droplevel("mother_label")
     elif mode == "families":
         combined = position[path]
     else:
