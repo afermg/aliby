@@ -95,9 +95,7 @@ def validate_lineage(
     else:
         test_mismatch = (
             indices[flat_valid_indices, :].size
-            != np.unique(
-                lineage[flat_valid_lineage, c_index, :].reshape(-1, 2), axis=0
-            ).size
+            != lineage[flat_valid_lineage, c_index, :].size
         )
     if test_mismatch:
         # all unique indices in valid_lineages should be in valid_indices

@@ -293,7 +293,7 @@ class Signal(BridgeH5):
                     for dset in dataset
                 ]
         except Exception as e:
-            message = f"Signal could not find data {dataset}: {e}."
+            message = f"Signal could not obtain data {dataset}: {e}."
             self._log(message)
 
     def load_merges(self):
