@@ -249,7 +249,7 @@ class Signal(BridgeH5):
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
-        run_lineage_check: bool = True,
+        stop_on_lineage_check: bool = True,
         **kwargs,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
@@ -282,7 +282,7 @@ class Signal(BridgeH5):
                                 lineage,
                                 indices=np.array(df.index.to_list()),
                                 how="daughters",
-                                run_lineage_check=run_lineage_check,
+                                stop_on_lineage_check=stop_on_lineage_check,
                             )
                             mother_label[valid_indices] = lineage[
                                 valid_lineage, 1
