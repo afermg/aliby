@@ -142,15 +142,15 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
-            tile_mo_da = f[lineage_location]
-            if isinstance(tile_mo_da, h5py.Dataset):
-                lineage = tile_mo_da[()]
+            traps_mothers_daughters = f[lineage_location]
+            if isinstance(traps_mothers_daughters, h5py.Dataset):
+                lineage = traps_mothers_daughters[()]
             else:
                 lineage = np.array(
                     (
-                        tile_mo_da["trap"],
-                        tile_mo_da["mother_label"],
-                        tile_mo_da["daughter_label"],
+                        traps_mothers_daughters["trap"],
+                        traps_mothers_daughters["mother_label"],
+                        traps_mothers_daughters["daughter_label"],
                     )
                 ).T
         return lineage
@@ -249,6 +249,7 @@ class Signal(BridgeH5):
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
+        run_lineage_check: bool = True,
         **kwargs,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
@@ -262,6 +263,8 @@ class Signal(BridgeH5):
             If True, convert column headings to times in minutes.
         lineage: boolean
             If True, add mother_label to index.
+        run_lineage_check: boolean
+            If True, raise exception if a likely error in the lineage assignment.
         """
         try:
             if isinstance(dataset, str):
@@ -279,6 +282,7 @@ class Signal(BridgeH5):
                                 lineage,
                                 indices=np.array(df.index.to_list()),
                                 how="daughters",
+                                run_lineage_check=run_lineage_check,
                             )
                             mother_label[valid_indices] = lineage[
                                 valid_lineage, 1

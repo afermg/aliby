@@ -5,7 +5,10 @@ i_dtype = {"names": ["trap_id", "cell_id"], "formats": [np.int64, np.int64]}
 
 
 def validate_lineage(
-    lineage: np.ndarray, indices: np.ndarray, how: str = "families"
+    lineage: np.ndarray,
+    indices: np.ndarray,
+    how: str = "families",
+    run_lineage_check: bool = True,
 ):
     """
     Identify mother-bud pairs both in lineage and a Signal's indices.
@@ -28,6 +31,9 @@ def validate_lineage(
         If "mothers", matches indicate mothers from mother-bud pairs;
         If "daughters", matches indicate daughters from mother-bud pairs;
         If "families", matches indicate mothers and daughters in mother-bud pairs.
+    run_lineage_check: bool
+        If True, check for errors in the lineage assignment such as a daughter
+        being assigned two mothers.
 
     Returns
     -------
@@ -85,24 +91,25 @@ def validate_lineage(
         valid_indices = index_isin(indices, selected_lineages[:, c_index, :])
     flat_valid_indices = valid_indices.flatten()
     # test for mismatch
-    if how == "families":
-        test_mismatch = (
-            indices[flat_valid_indices, :].size
-            != np.unique(
-                lineage[flat_valid_lineage, :].reshape(-1, 2), axis=0
-            ).size
-        )
-    else:
-        test_mismatch = (
-            indices[flat_valid_indices, :].size
-            != lineage[flat_valid_lineage, c_index, :].size
-        )
-    if test_mismatch:
-        # all unique indices in valid_lineages should be in valid_indices
-        raise Exception(
-            "Error in validate_lineage: "
-            "lineage information is likely not unique."
-        )
+    if run_lineage_check:
+        if how == "families":
+            test_mismatch = (
+                indices[flat_valid_indices, :].size
+                != np.unique(
+                    lineage[flat_valid_lineage, :].reshape(-1, 2), axis=0
+                ).size
+            )
+        else:
+            test_mismatch = (
+                indices[flat_valid_indices, :].size
+                != lineage[flat_valid_lineage, c_index, :].size
+            )
+        if test_mismatch:
+            # all unique indices in valid_lineages should be in valid_indices
+            raise Exception(
+                "Error in validate_lineage: "
+                "lineage information is likely not unique."
+            )
     return flat_valid_lineage, flat_valid_indices
 
 
