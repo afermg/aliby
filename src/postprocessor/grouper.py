@@ -76,6 +76,7 @@ class Grouper(ABC):
         path: str,
         pool: t.Optional[int] = None,
         mode: str = "retained",
+        selected_positions: t.List[str] = None,
         **kwargs,
     ):
         """
@@ -101,6 +102,8 @@ class Grouper(ABC):
             identified mother.
            If "families", get Signal with merging, picking, and lineage
             information applied.
+        selected_positions: list[str]
+            If defined, get signals for only these positions.
         **kwargs : key, value pairings
            Named arguments for concat_ind_function
 
@@ -111,6 +114,12 @@ class Grouper(ABC):
         if path.startswith("/"):
             path = path.strip("/")
         good_positions = self.filter_positions(path)
+        if selected_positions is not None:
+            good_positions = {
+                key: value
+                for key, value in good_positions.items()
+                if key in selected_positions
+            }
         if good_positions:
             kwargs["mode"] = mode
             records = self.pool_function(
@@ -189,7 +198,7 @@ class Grouper(ABC):
                     position_name=name,
                     **kwargs,
                 )
-                for name, position in self.positions.items()
+                for name, position in positions.items()
             ]
         return records
 
@@ -283,6 +292,7 @@ def concat_one_signal(
     if position_name is None:
         # name of h5 file
         position_name = position.stem
+    print(f"Finding signal for {position_name}.")
     if mode == "retained":
         combined = position.retained(path, **kwargs)
     elif mode == "raw":
