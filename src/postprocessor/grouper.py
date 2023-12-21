@@ -33,7 +33,7 @@ class Grouper(ABC):
 
     def load_positions(self) -> None:
         """Load a Signal for each position, or h5 file."""
-        self.positions = {f.name[:-3]: Signal(f) for f in self.files}
+        self.positions = {f.name[:-3]: Signal(f) for f in sorted(self.files)}
 
     @property
     def first_signal(self) -> Signal:
@@ -132,23 +132,25 @@ class Grouper(ABC):
             # check for errors
             errors = [
                 position
-                for record, position in zip(records, self.positions.keys())
+                for record, position in zip(records, good_positions.keys())
                 if record is None
             ]
             records = [record for record in records if record is not None]
             if len(errors):
                 print(f"Warning: Positions ({errors}) contain errors.")
             assert len(records), "All data sets contain errors"
-            # combine into one dataframe
+            # combine into one data frame
             concat = pd.concat(records, axis=0)
             if len(concat.index.names) > 4:
-                # reorder levels in the multi-index dataframe
+                # reorder levels in the multi-index data frame
                 # when mother_label is present
                 concat = concat.reorder_levels(
                     ("group", "position", "trap", "cell_label", "mother_label")
                 )
             concat_sorted = concat.sort_index()
             return concat_sorted
+        else:
+            print("No data found.")
 
     def filter_positions(self, path: str) -> t.Dict[str, Signal]:
         """Filter positions to those whose data is available in the h5 file."""
@@ -267,13 +269,8 @@ class Grouper(ABC):
 
     @property
     def groups(self) -> t.Tuple[str]:
-        """Get groups, sorted alphabetically, as a tuple."""
-        return tuple(sorted(set(self.positions_groups.values())))
-
-    @property
-    def positions(self) -> t.Tuple[str]:
-        """Get positions, sorted alphabetically, as a tuple."""
-        return tuple(sorted(set(self.positions_groups.keys())))
+        """Get groups, sorted alphabetically, as a list."""
+        return list(sorted(set(self.positions_groups.values())))
 
 
 def concat_one_signal(
@@ -282,29 +279,39 @@ def concat_one_signal(
     group: str,
     mode: str = "retained",
     position_name=None,
+    tmax_in_mins_dict=None,
     **kwargs,
 ) -> pd.DataFrame:
-    """
-    Retrieve an individual signal.
-
-    Applies filtering if requested and adjusts indices.
-    """
+    """Retrieve a signal for one position."""
+    if tmax_in_mins_dict and position_name in tmax_in_mins_dict:
+        tmax_in_mins = tmax_in_mins_dict[position_name]
+    else:
+        tmax_in_mins = None
     if position_name is None:
         # name of h5 file
         position_name = position.stem
-    print(f"Finding signal for {position_name}.")
+    if tmax_in_mins:
+        print(
+            f" Loading {path} for {position_name} up to time {tmax_in_mins}."
+        )
+    else:
+        print(f" Loading {path} for {position_name}.")
     if mode == "retained":
-        combined = position.retained(path, **kwargs)
+        combined = position.retained(path, tmax_in_mins=tmax_in_mins, **kwargs)
     elif mode == "raw":
-        combined = position.get_raw(path, **kwargs)
+        combined = position.get_raw(path, tmax_in_mins=tmax_in_mins, **kwargs)
     elif mode == "daughters":
-        combined = position.get_raw(path, lineage=True, **kwargs)
+        combined = position.get_raw(
+            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
+        )
         if combined is not None:
             combined = combined.loc[
                 combined.index.get_level_values("mother_label") > 0
             ]
     elif mode == "mothers":
-        combined = position.get_raw(path, lineage=True, **kwargs)
+        combined = position.get_raw(
+            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
+        )
         if combined is not None:
             combined = combined.loc[
                 combined.index.get_level_values("mother_label") == 0
