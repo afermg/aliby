@@ -77,6 +77,7 @@ class Grouper(ABC):
         pool: t.Optional[int] = None,
         mode: str = "retained",
         selected_positions: t.List[str] = None,
+        tmax_in_mins_dict: dict = None,
         **kwargs,
     ):
         """
@@ -88,7 +89,7 @@ class Grouper(ABC):
         ----------
         path : str
            Signal location within h5 file.
-        pool : int
+        pool : int (optional)
            Number of threads used; if 0 or None only one core is used.
         mode: str
            If "retained" (default), return Signal with merging, picking, and lineage
@@ -102,8 +103,13 @@ class Grouper(ABC):
             identified mother.
            If "families", get Signal with merging, picking, and lineage
             information applied.
-        selected_positions: list[str]
+        selected_positions: list[str] (optional)
             If defined, get signals for only these positions.
+        tmax_in_mins_dict: dict (optional)
+            A dictionary with positions as keys and maximum times in minutes as
+            values. For example: { "PDR5_GFP_001": 6 * 60}.
+            Data will only be include up to this time point, which is a way to
+            avoid errors in assigning lineages because of clogging.
         **kwargs : key, value pairings
            Named arguments for concat_ind_function
 
@@ -127,6 +133,7 @@ class Grouper(ABC):
                 f=concat_one_signal,
                 pool=pool,
                 positions=good_positions,
+                tmax_in_mins_dict=tmax_in_mins_dict,
                 **kwargs,
             )
             # check for errors
@@ -171,6 +178,7 @@ class Grouper(ABC):
         f: t.Callable,
         pool: t.Optional[int] = None,
         positions: t.Dict[str, Signal] = None,
+        tmax_in_mins_dict: dict = None,
         **kwargs,
     ):
         """
@@ -187,6 +195,7 @@ class Grouper(ABC):
                         position=x[1],
                         group=self.positions_groups[x[0]],
                         position_name=x[0],
+                        tmax_in_mins_dict=tmax_in_mins_dict,
                         **kwargs,
                     ),
                     positions.items(),
@@ -198,6 +207,7 @@ class Grouper(ABC):
                     position=position,
                     group=self.positions_groups[name],
                     position_name=name,
+                    tmax_in_mins_dict=tmax_in_mins_dict,
                     **kwargs,
                 )
                 for name, position in positions.items()
@@ -280,7 +290,7 @@ def concat_one_signal(
     mode: str = "retained",
     position_name=None,
     tmax_in_mins_dict=None,
-    **kwargs,
+    cutoff: float = 0,
 ) -> pd.DataFrame:
     """Retrieve a signal for one position."""
     if tmax_in_mins_dict and position_name in tmax_in_mins_dict:
@@ -297,20 +307,24 @@ def concat_one_signal(
     else:
         print(f" Loading {path} for {position_name}.")
     if mode == "retained":
-        combined = position.retained(path, tmax_in_mins=tmax_in_mins, **kwargs)
+        # applies picking and merging via Signal.get
+        combined = position.retained(
+            path, tmax_in_mins=tmax_in_mins, cutoff=cutoff
+        )
     elif mode == "raw":
-        combined = position.get_raw(path, tmax_in_mins=tmax_in_mins, **kwargs)
-    elif mode == "daughters":
+        # no picking and merging
+        combined = position.get_raw(path, tmax_in_mins=tmax_in_mins)
+    elif mode == "raw_daughters":
         combined = position.get_raw(
-            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
+            path, lineage=True, tmax_in_mins=tmax_in_mins
         )
         if combined is not None:
             combined = combined.loc[
                 combined.index.get_level_values("mother_label") > 0
             ]
-    elif mode == "mothers":
+    elif mode == "raw_mothers":
         combined = position.get_raw(
-            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
+            path, lineage=True, tmax_in_mins=tmax_in_mins
         )
         if combined is not None:
             combined = combined.loc[
@@ -318,6 +332,7 @@ def concat_one_signal(
             ]
             combined = combined.droplevel("mother_label")
     elif mode == "families":
+        # applies picking and merging via Signal.__getitem__
         combined = position[path]
     else:
         raise Exception(f"concat_one_signal: {mode} not recognised.")

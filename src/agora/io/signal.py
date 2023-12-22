@@ -59,7 +59,7 @@ class Signal(BridgeH5):
     ):
         """Get Signal after merging and picking."""
         if isinstance(dset_name, str):
-            dsets = self.get_raw(dset_name, tmax_in_mins)
+            dsets = self.get_raw(dset_name, tmax_in_mins=tmax_in_mins)
             if dsets is not None:
                 picked_merged = self.apply_merging_picking(dsets)
                 return self.add_name(picked_merged, dset_name)
@@ -76,10 +76,7 @@ class Signal(BridgeH5):
 
     def cols_in_mins(self, df: pd.DataFrame):
         """Convert numerical columns in a data frame to minutes."""
-        try:
-            df.columns = (df.columns * self.tinterval // 60).astype(int)
-        except Exception as e:
-            self._log(f"Unable to convert columns to minutes: {e}", "debug")
+        df.columns = (df.columns * self.tinterval // 60).astype(int)
         return df
 
     @cached_property
@@ -105,7 +102,7 @@ class Signal(BridgeH5):
                 )
                 return 300
 
-    def retained(self, signal, cutoff=0, tmax_in_mins: int = None):
+    def retained(self, signal, cutoff: float = 0, tmax_in_mins: int = None):
         """Get retained cells for a Signal or list of Signals."""
         if isinstance(signal, str):
             # get data frame
@@ -284,8 +281,12 @@ class Signal(BridgeH5):
                         if in_minutes:
                             df = self.cols_in_mins(df)
                         # limit data by time and discard NaNs
-                        if tmax_in_mins and type(tmax_in_mins) is int:
-                            df = df[df.columns[df.columns < tmax_in_mins]]
+                        if (
+                            in_minutes
+                            and tmax_in_mins
+                            and type(tmax_in_mins) is int
+                        ):
+                            df = df[df.columns[df.columns <= tmax_in_mins]]
                             df = df.dropna(how="all")
                         # add mother label to data frame
                         if lineage:
@@ -303,7 +304,7 @@ class Signal(BridgeH5):
                             df = add_index_levels(
                                 df, {"mother_label": mother_label}
                             )
-                    return df
+                        return df
             elif isinstance(dataset, list):
                 return [
                     self.get_raw(
@@ -315,7 +316,7 @@ class Signal(BridgeH5):
                     for dset in dataset
                 ]
         except Exception as e:
-            message = f"Signal could not obtain data {dataset}: {e}."
+            message = f"Signal could not obtain data {dataset}: {e}"
             self._log(message)
 
     def load_merges(self):
