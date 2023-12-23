@@ -38,33 +38,19 @@ class Signal(BridgeH5):
         )
         self.candidate_channels = global_parameters.possible_imaging_channels
 
-    def __getitem__(self, dsets: t.Union[str, t.Collection]):
-        """Get and potentially pre-process data from h5 file and return as a data frame."""
-        if isinstance(dsets, str):
-            return self.get(dsets)
-        elif isinstance(dsets, list):
-            is_bgd = [dset.endswith("imBackground") for dset in dsets]
-            # Check we are not comparing tile-indexed and cell-indexed data
-            assert sum(is_bgd) == 0 or sum(is_bgd) == len(
-                dsets
-            ), "Tile data and cell data cannot be mixed."
-            return [self.get(dset) for dset in dsets]
-        else:
-            raise Exception(f"Invalid type {type(dsets)} to get datasets")
-
     def get(
         self,
-        dset_name: t.Union[str, t.Collection],
+        dset: t.Union[str, t.Collection],
         tmax_in_mins: int = None,
     ):
         """Get Signal after merging and picking."""
-        if isinstance(dset_name, str):
-            dsets = self.get_raw(dset_name, tmax_in_mins=tmax_in_mins)
-            if dsets is not None:
-                picked_merged = self.apply_merging_picking(dsets)
-                return self.add_name(picked_merged, dset_name)
-            else:
-                return None
+        if isinstance(dset, str):
+            record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
+            if record is not None:
+                picked_merged = self.apply_merging_picking(record)
+                return self.add_name(picked_merged, dset)
+        elif isinstance(dset, list):
+            return [self.get(d) for d in dset]
         else:
             raise Exception("Error in Signal.get")
 
