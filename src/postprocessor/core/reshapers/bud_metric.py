@@ -19,7 +19,7 @@ class BudMetricParameters(LineageProcessParameters):
 
 class BudMetric(LineageProcess):
     """
-    Create a dataframe with indices mother IDs and values from buds.
+    Create a data frame with indices mother IDs and values from buds.
 
     Requires mother-bud information.
     """
