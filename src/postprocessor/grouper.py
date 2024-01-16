@@ -291,8 +291,13 @@ def concat_one_signal(
     position_name=None,
     tmax_in_mins_dict=None,
     cutoff: float = 0,
+    **kwargs,
 ) -> pd.DataFrame:
-    """Retrieve a signal for one position."""
+    """
+    Retrieve a signal for one position.
+
+    kwargs passed to signal.get_raw.
+    """
     if tmax_in_mins_dict and position_name in tmax_in_mins_dict:
         tmax_in_mins = tmax_in_mins_dict[position_name]
     else:
@@ -313,10 +318,10 @@ def concat_one_signal(
         )
     elif mode == "raw":
         # no picking and merging
-        combined = position.get_raw(path, tmax_in_mins=tmax_in_mins)
+        combined = position.get_raw(path, tmax_in_mins=tmax_in_mins, **kwargs)
     elif mode == "raw_daughters":
         combined = position.get_raw(
-            path, lineage=True, tmax_in_mins=tmax_in_mins
+            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
         )
         if combined is not None:
             combined = combined.loc[
@@ -324,7 +329,7 @@ def concat_one_signal(
             ]
     elif mode == "raw_mothers":
         combined = position.get_raw(
-            path, lineage=True, tmax_in_mins=tmax_in_mins
+            path, lineage=True, tmax_in_mins=tmax_in_mins, **kwargs
         )
         if combined is not None:
             combined = combined.loc[
