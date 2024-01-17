@@ -144,7 +144,7 @@ class PostProcessor(ProcessABC):
         # run picker
         picked_indices = np.array(
             self.picker.run(
-                self.signal[self.targets["merging_picking"]["picker"]]
+                self.signal.get(self.targets["merging_picking"]["picker"])
             )
         )
         if picked_indices.any():
@@ -186,9 +186,9 @@ class PostProcessor(ProcessABC):
         """Run processes to obtain single data sets and write the results."""
         # get pre-processed data
         if isinstance(dataset, list):
-            signal = [self.signal[d] for d in dataset]
+            signal = [self.signal.get(d) for d in dataset]
         elif isinstance(dataset, str):
-            signal = self.signal[dataset]
+            signal = self.signal.get(dataset)
         else:
             raise ("Incorrect dataset")
         # run process on signal
