@@ -155,7 +155,7 @@ def find_channels_by_position(meta):
         channels_dict = {group: [] for group in meta.index}
         for group in channels_dict:
             for channel in imaging_channels:
-                if meta.loc[group, channel]:
+                if meta.loc[group, channel] is not None:
                     channels_dict[group].append(channel)
     elif isinstance(meta, dict):
         channels_dict = {

@@ -300,14 +300,15 @@ class Pipeline(ProcessABC):
         """Run separate pipelines for all positions in an experiment."""
         # display configuration
         config = self.parameters.to_dict()
-        for step in config:
-            print("\n---\n" + step + "\n---")
-            pprint(config[step])
-        print()
+        print("\nalibylite\n")
         try:
             logging.getLogger("aliby").info(f"Using Baby {baby.__version__}.")
         except AttributeError:
             logging.getLogger("aliby").info("Using original Baby.")
+        for step in config:
+            print("\n---\n" + step + "\n---")
+            pprint(config[step])
+        print()
         # extract from configuration
         expt_id = config["general"]["id"]
         distributed = config["general"]["distributed"]
