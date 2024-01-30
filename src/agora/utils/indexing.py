@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 # data type to link together trap and cell ids
 i_dtype = {"names": ["trap_id", "cell_id"], "formats": [np.int64, np.int64]}
@@ -8,13 +9,15 @@ def validate_lineage(
     lineage: np.ndarray,
     indices: np.ndarray,
     how: str = "families",
-    stop_on_lineage_check: bool = True,
 ):
     """
     Identify mother-bud pairs both in lineage and a Signal's indices.
 
     We expect the lineage information to be unique: a bud should not have
     two mothers.
+
+    Lineage is returned with buds assigned only to their first mother if they
+    have multiple.
 
     Parameters
     ----------
@@ -31,9 +34,6 @@ def validate_lineage(
         If "mothers", matches indicate mothers from mother-bud pairs;
         If "daughters", matches indicate daughters from mother-bud pairs;
         If "families", matches indicate mothers and daughters in mother-bud pairs.
-    stop_on_lineage_check: bool
-        If True, raise an Exception for any errors in the lineage assignment such
-        as a daughter being assigned two mothers.
 
     Returns
     -------
@@ -41,6 +41,9 @@ def validate_lineage(
         1D array indicating matched elements in lineage.
     valid_indices: boolean np.ndarray
         1D array indicating matched elements in indices.
+    lineage: np.ndarray
+        Any bud already having a mother that is assigned to another has that
+        second assignment discarded.
 
     Examples
     --------
@@ -50,7 +53,7 @@ def validate_lineage(
     >>> lineage = np.array([ [[0, 1], [0, 3]], [[0, 1], [0, 4]], [[0, 1], [0, 6]], [[0, 4], [0, 7]] ])
     >>> indices = np.array([ [0, 1], [0, 2], [0, 3]])
 
-    >>> valid_lineage, valid_indices = validate_lineage(lineage, indices)
+    >>> valid_lineage, valid_indices, lineage = validate_lineage(lineage, indices)
 
     >>> print(valid_lineage)
      array([ True, False, False, False])
@@ -61,7 +64,7 @@ def validate_lineage(
 
     >>> lineage = np.array([[[0,3], [0,1]], [[0,2], [0,4]]])
     >>> indices = np.array([[0,1], [0,2], [0,3]])
-    >>> valid_lineage, valid_indices = validate_lineage(lineage, indices)
+    >>> valid_lineage, valid_indices, lineage = validate_lineage(lineage, indices)
     >>> print(valid_lineage)
      array([ True, False])
     >>> print(valid_indices)
@@ -70,10 +73,16 @@ def validate_lineage(
     if lineage.ndim == 2:
         # [trap, mother, daughter] becomes [[trap, mother], [trap, daughter]]
         lineage = assoc_indices_to_3d(lineage)
+        invert_lineage = True
     if how == "mothers":
         c_index = 0
     elif how == "daughters":
         c_index = 1
+
+    # if buds have two mothers, pick the first one
+    lineage = lineage[
+        ~pd.DataFrame(lineage[:, 1, :]).duplicated().values, :, :
+    ]
     # find valid lineage
     valid_lineages = index_isin(lineage, indices)
     if how == "families":
@@ -90,29 +99,10 @@ def validate_lineage(
     else:
         valid_indices = index_isin(indices, selected_lineages[:, c_index, :])
     flat_valid_indices = valid_indices.flatten()
-    # test for mismatch
-    if how == "families":
-        test_mismatch = (
-            indices[flat_valid_indices, :].size
-            != np.unique(
-                lineage[flat_valid_lineage, :].reshape(-1, 2), axis=0
-            ).size
-        )
-    else:
-        test_mismatch = (
-            indices[flat_valid_indices, :].size
-            != lineage[flat_valid_lineage, c_index, :].size
-        )
-    if test_mismatch:
-        # all unique indices in valid_lineages should be in valid_indices
-        if stop_on_lineage_check:
-            raise Exception(
-                "Error in validate_lineage: "
-                "lineage information is likely not unique."
-            )
-        else:
-            print("Warning: error in validate_lineage.")
-    return flat_valid_lineage, flat_valid_indices
+    # put the corrected lineage in the right format
+    if invert_lineage:
+        lineage = assoc_indices_to_2d(lineage)
+    return flat_valid_lineage, flat_valid_indices, lineage
 
 
 def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:

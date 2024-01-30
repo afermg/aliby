@@ -67,7 +67,7 @@ class Picker(LineageProcess):
         """
         cells_present = drop_mother_label(signal.index)
         mothers_daughters = self.get_lineage_information(signal)
-        _, valid_indices = validate_lineage(
+        _, valid_indices, mothers_daughters = validate_lineage(
             mothers_daughters, cells_present, how
         )
         return signal.index[valid_indices]

@@ -337,8 +337,8 @@ def concat_one_signal(
             ]
             combined = combined.droplevel("mother_label")
     elif mode == "families":
-        # applies picking and merging via Signal.__getitem__
-        combined = position[path]
+        # applies picking and merging
+        combined = position.get(path, tmax_in_mins=tmax_in_mins)
     else:
         raise Exception(f"concat_one_signal: {mode} not recognised.")
     if combined is not None:
