@@ -293,17 +293,14 @@ class Pipeline(ProcessABC):
             # multiple cores
             with Pool(distributed) as p:
                 results = p.map(
-                    lambda x: self.run_one_position(*x),
-                    [
-                        (position_id, i)
-                        for i, position_id in enumerate(position_ids.items())
-                    ],
+                    self.run_one_position,
+                    [position_id for position_id in position_ids.items()],
                 )
         else:
             # single core
             results = [
-                self.run_one_position((position_id, position_id_path), 1)
-                for position_id, position_id_path in tqdm(position_ids.items())
+                self.run_one_position(position_id)
+                for position_id in tqdm(position_ids.items())
             ]
         # results is binary giving the success for each position
         return results
@@ -323,9 +320,7 @@ class Pipeline(ProcessABC):
         return out_file
 
     def run_one_position(
-        self,
-        name_image_id: t.Tuple[str, str or Path or int],
-        index: t.Optional[int] = None,
+        self, name_image_id: t.Tuple[str, str or Path or int]
     ):
         """Run a pipeline for one position."""
         name, image_id = name_image_id
