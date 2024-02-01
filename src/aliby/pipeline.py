@@ -300,7 +300,7 @@ class Pipeline(ProcessABC):
             # single core
             results = [
                 self.run_one_position(position_id)
-                for position_id in tqdm(position_ids.items())
+                for position_id in position_ids.items()
             ]
         # results is binary giving the success for each position
         return results
