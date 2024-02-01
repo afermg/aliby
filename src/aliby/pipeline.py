@@ -312,7 +312,8 @@ class Pipeline(ProcessABC):
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             out_file = Path(f"{out_dir}/{image.name}.h5")
         # remove existing h5 file if overwriting
-        os.remove(out_file)
+        if out_file.exists():
+            os.remove(out_file)
         # generate h5 file using meta data from logs
         meta = MetaData(out_dir, out_file)
         if config["general"]["use_explog"]:
