@@ -214,7 +214,6 @@ class TilerParameters(ParametersABC):
         "tile_size": 117,
         "ref_channel": "Brightfield",
         "ref_z": 0,
-        "backup_ref_channel": None,
         "position_name": None,
     }
 
@@ -236,6 +235,7 @@ class Tiler(StepABC):
         metadata: dict,
         parameters: TilerParameters,
         tile_locations=None,
+        OMERO_channels=None,
     ):
         """
         Initialise.
@@ -246,6 +246,8 @@ class Tiler(StepABC):
         metadata: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
+        OMERO_channels: list of str
+            A definitive list of channels from OMERO to order channels in tiler.
         """
         super().__init__(parameters)
         self.image = image
@@ -261,19 +263,23 @@ class Tiler(StepABC):
         else:
             channel_dict = {}
         if channel_dict:
-            self.channels = channel_dict.get(
+            channels = channel_dict.get(
                 self.position_name,
                 list(range(metadata.get("size_c", 0))),
             )
         else:
             # new image meta data contains channels for that image
-            self.channels = metadata.get(
+            channels = metadata.get(
                 "channels", list(range(metadata.get("size_c", 0)))
             )
+        # sort channels based on OMERO's channel order
+        if OMERO_channels is not None:
+            channels = [
+                ch for och in OMERO_channels for ch in channels if ch == och
+            ]
+        self.channels = channels
         # get reference channel - used for segmentation
-        self.ref_channel = self.get_channel_index(parameters.ref_channel)
-        if self.ref_channel is None:
-            self.ref_channel = self.backup_ref_channel
+        self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
         if "zsections" in metadata:
             self.z_perchannel = {
@@ -283,7 +289,12 @@ class Tiler(StepABC):
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     @classmethod
-    def from_image(cls, image, parameters: TilerParameters):
+    def from_image(
+        cls,
+        image,
+        parameters: TilerParameters,
+        OMERO_channels: t.List[str] = None,
+    ):
         """
         Instantiate from an Image instance.
 
@@ -292,7 +303,12 @@ class Tiler(StepABC):
         image: an instance of Image
         parameters: an instance of TilerPameters
         """
-        return cls(image.data, image.metadata, parameters)
+        return cls(
+            image.data,
+            image.metadata,
+            parameters,
+            OMERO_channels=OMERO_channels,
+        )
 
     @classmethod
     def from_h5(
@@ -300,6 +316,7 @@ class Tiler(StepABC):
         image,
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
+        OMERO_channels: t.List[str] = None,
     ):
         """
         Instantiate from an h5 file.
@@ -321,6 +338,7 @@ class Tiler(StepABC):
             metadata,
             parameters,
             tile_locations=tile_locs,
+            OMERO_channels=OMERO_channels,
         )
         if hasattr(tile_locs, "drifts"):
             tiler.no_processed = len(tile_locs.drifts)
@@ -393,7 +411,7 @@ class Tiler(StepABC):
         tile_size: integer
             The size of a tile.
         """
-        initial_image = self.image[0, self.ref_channel, self.ref_z]
+        initial_image = self.image[0, self.ref_channel_index, self.ref_z]
         if tile_size:
             half_tile = tile_size // 2
             # max_size is the minimum of the numbers of x and y pixels
@@ -433,8 +451,8 @@ class Tiler(StepABC):
         prev_tp = max(0, tp - 1)
         # cross-correlate
         drift, _, _ = phase_cross_correlation(
-            self.image[prev_tp, self.ref_channel, self.ref_z],
-            self.image[tp, self.ref_channel, self.ref_z],
+            self.image[prev_tp, self.ref_channel_index, self.ref_z],
+            self.image[tp, self.ref_channel_index, self.ref_z],
         )
         # store drift
         if 0 < tp < len(self.tile_locs.drifts):
@@ -566,17 +584,12 @@ class Tiler(StepABC):
         for c in channels:
             # only return requested z
             tiles = self.get_tp_data(tp, c)[:, z]
-            # insert new axis at index 1 for missing channel
+            # insert new axis at index 1 for missing time point
             tiles = np.expand_dims(tiles, axis=1)
             res.append(tiles)
-        # stack over channels if more than one
+        # stack at time-point axis if more than one channel
         final = np.stack(res, axis=1)
         return final
-
-    @property
-    def ref_channel_index(self):
-        """Return index of reference channel."""
-        return self.get_channel_index(self.parameters.ref_channel)
 
     def get_channel_index(self, channel: str or int) -> int or None:
         """

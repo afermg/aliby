@@ -207,6 +207,13 @@ class Dataset(BridgeOmero):
             im.getName(): im.getId() for im in self.ome_class.listChildren()
         }
 
+    def get_channels(self):
+        """Get channels from OMERO."""
+        for im in self.ome_class.listChildren():
+            channels = [ch.getLabel() for ch in im.getChannels()]
+            break
+        return channels
+
     @property
     def files(self):
         if not hasattr(self, "_files"):

@@ -172,6 +172,12 @@ class Pipeline(ProcessABC):
             store = Path(store)
         # h5 file
         self.store = store
+        config = self.parameters.to_dict()
+        self.server_info = {
+            k: config["general"].get(k)
+            for k in ("host", "username", "password")
+        }
+        self.expt_id = config["general"]["id"]
 
     @staticmethod
     def setLogger(
@@ -209,13 +215,8 @@ class Pipeline(ProcessABC):
             pprint(config[step])
         print()
         # extract from configuration
-        expt_id = config["general"]["id"]
         root_dir = Path(config["general"]["directory"])
-        self.server_info = {
-            k: config["general"].get(k)
-            for k in ("host", "username", "password")
-        }
-        dispatcher = dispatch_dataset(expt_id, **self.server_info)
+        dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
         logging.getLogger("aliby").info(
             f"Fetching data using {dispatcher.__class__.__name__}."
         )
@@ -234,6 +235,16 @@ class Pipeline(ProcessABC):
         self.parameters.general["directory"] = str(directory)
         self.setLogger(directory)
         return position_ids
+
+    def channels_from_OMERO(self):
+        """Get a definitive list of channels from OMERO."""
+        dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
+        with dispatcher as conn:
+            if hasattr(conn, "get_channels"):
+                channels = conn.get_channels()
+            else:
+                channels = None
+        return channels
 
     def filter_positions(self, position_filter, position_ids):
         """Select particular positions."""
@@ -272,6 +283,7 @@ class Pipeline(ProcessABC):
 
     def run(self):
         """Run separate pipelines for all positions in an experiment."""
+        self.OMERO_channels = self.channels_from_OMERO()
         config = self.parameters.to_dict()
         position_ids = self.setup()
         # pick particular positions if desired
@@ -336,7 +348,9 @@ class Pipeline(ProcessABC):
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             # initialise tiler; load local meta data from image
             tiler = Tiler.from_image(
-                image, TilerParameters.from_dict(config["tiler"])
+                image,
+                TilerParameters.from_dict(config["tiler"]),
+                OMERO_channels=self.OMERO_channels,
             )
             # initialise Baby
             babyrunner = BabyRunner.from_tiler(
