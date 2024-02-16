@@ -554,6 +554,13 @@ class Tiler(StepABC):
             channels = [0]
         elif isinstance(channels, str):
             channels = [channels]
+        # convert to indices
+        channels = [
+            self.channels.index(channel)
+            if isinstance(channel, str)
+            else channel
+            for channel in channels
+        ]
         # get the data as a list of length of the number of channels
         res = []
         for c in channels:
