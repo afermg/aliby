@@ -1,4 +1,5 @@
 """Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
+
 import logging
 import os
 import re
@@ -15,7 +16,7 @@ from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
 try:
-    if baby.__version__ == "v0.30.1":
+    if baby.__version__:
         from aliby.baby_sitter import BabyParameters, BabyRunner
 except AttributeError:
     from aliby.baby_client import BabyParameters, BabyRunner
@@ -178,6 +179,7 @@ class Pipeline(ProcessABC):
             for k in ("host", "username", "password")
         }
         self.expt_id = config["general"]["id"]
+        self.setLogger(config["general"]["directory"])
 
     @staticmethod
     def setLogger(
@@ -233,7 +235,6 @@ class Pipeline(ProcessABC):
             print("\t" + f"{i}: " + pos.split(".")[0])
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
-        self.setLogger(directory)
         return position_ids
 
     def channels_from_OMERO(self):
@@ -464,8 +465,7 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     )
     # find tiles with cells covering too great a fraction of the tiles' area
     traps_above_athresh = (
-        cells_used.groupby("trap").sum().apply(np.mean, axis=1)
-        / tile_size**2
+        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
         > es_parameters["thresh_trap_area"]
     )
     return (traps_above_nthresh & traps_above_athresh).mean()

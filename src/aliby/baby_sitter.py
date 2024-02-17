@@ -10,7 +10,7 @@ from agora.abc import ParametersABC, StepABC
 
 
 class BabyParameters(ParametersABC):
-    """Parameters used for analysing the results from BABY."""
+    """Parameters used for running BABY."""
 
     def __init__(
         self,
@@ -18,7 +18,6 @@ class BabyParameters(ParametersABC):
         clogging_thresh,
         min_bud_tps,
         isbud_thresh,
-        session,
     ):
         """Initialise parameters for BABY."""
         # pixel_size is specified in BABY's model sets
@@ -26,7 +25,6 @@ class BabyParameters(ParametersABC):
         self.clogging_thresh = clogging_thresh
         self.min_bud_tps = min_bud_tps
         self.isbud_thresh = isbud_thresh
-        self.session = session
 
     @classmethod
     def default(cls, **kwargs):
@@ -36,7 +34,6 @@ class BabyParameters(ParametersABC):
             clogging_thresh=1,
             min_bud_tps=3,
             isbud_thresh=0.5,
-            session=None,
         )
 
     def update_baby_modelset(self, path: t.Union[str, Path, t.Dict[str, str]]):
@@ -85,7 +82,6 @@ class BabyRunner(StepABC):
                 clogging_thresh=parameters.clogging_thresh,
                 min_bud_tps=parameters.min_bud_tps,
                 isbud_thresh=parameters.isbud_thresh,
-                session=parameters.session,
             )
         self.crawler = BabyCrawler(brain)
         self.brightfield_channel = self.tiler.ref_channel_index
@@ -98,10 +94,8 @@ class BabyRunner(StepABC):
     def get_data(self, tp):
         """Get image and re-arrange axes."""
         img_from_tiler = self.tiler.get_tp_data(tp, self.brightfield_channel)
-        # move z axis to the last axis
-        img_z_at_end = np.moveaxis(img_from_tiler, 1, destination=-1)
-        # move y axis before the x axis
-        img = np.moveaxis(img_z_at_end, 2, destination=1)
+        # move z axis to the last axis; Baby expects (n, x, y, z)
+        img = np.moveaxis(img_from_tiler, 1, destination=-1)
         return img
 
     def _run_tp(
