@@ -183,13 +183,13 @@ class Pipeline(ProcessABC):
 
     @staticmethod
     def setLogger(
-        folder, file_level: str = "INFO", stream_level: str = "WARNING"
+        folder, file_level: str = "INFO", stream_level: str = "INFO"
     ):
         """Initialise and format logger."""
         logger = logging.getLogger("aliby")
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s:%(message)s",
+            "%(asctime)s - %(levelname)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
         # for streams - stdout, files, etc.
@@ -207,7 +207,7 @@ class Pipeline(ProcessABC):
         """Get meta data and identify each position."""
         config = self.parameters.to_dict()
         # print configuration
-        print("\nalibylite\n")
+        logging.getLogger("aliby").info(f"Using alibylite.")
         try:
             logging.getLogger("aliby").info(f"Using Baby {baby.__version__}.")
         except AttributeError:
