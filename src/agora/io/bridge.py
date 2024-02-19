@@ -1,6 +1,7 @@
 """
 Tools to interact with h5 files and handle data consistently.
 """
+
 import collections
 import logging
 import typing as t
@@ -28,7 +29,7 @@ class BridgeH5:
                 "cell_info" in self.hdf
             ), "Invalid file. No 'cell_info' found."
 
-    def _log(self, message: str, level: str = "warn"):
+    def log(self, message: str, level: str = "warn"):
         # Log messages in the corresponding level
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")

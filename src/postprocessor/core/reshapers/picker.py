@@ -107,7 +107,7 @@ class Picker(LineageProcess):
                 # number of indices reduces for each iteration of the loop
                 indices = indices.intersection(new_indices)
         else:
-            self._log("No lineage assignment")
+            self.log("No lineage assignment")
             indices = np.array([])
         # return as list
         indices_arr = [tuple(x) for x in indices]

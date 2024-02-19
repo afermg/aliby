@@ -55,7 +55,7 @@ class DynamicWriter:
         if Path(file).exists():
             self.metadata = load_meta(file)
 
-    def _log(self, message: str, level: str = "warn"):
+    def log(self, message: str, level: str = "warn"):
         # Log messages in the corresponding level
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
@@ -104,9 +104,11 @@ class DynamicWriter:
                 maxshape=max_shape,
                 dtype=dtype,
                 compression=self.compression,
-                compression_opts=self.compression_opts
-                if self.compression is not None
-                else None,
+                compression_opts=(
+                    self.compression_opts
+                    if self.compression is not None
+                    else None
+                ),
             )
             # write all data, signified by the empty tuple
             hgroup[key][()] = data
@@ -174,7 +176,7 @@ class DynamicWriter:
                             # append or create new dataset
                             self._append(value, key, hgroup)
                     except Exception as e:
-                        self._log(
+                        self.log(
                             f"{key}:{value} could not be written: {e}", "error"
                         )
             # write metadata
@@ -622,9 +624,9 @@ class Writer(BridgeH5):
 
                 # sort indices for h5 indexing
                 incremental_existing = np.argsort(found_indices)
-                self.id_cache[df.index.nlevels][
-                    "found_indices"
-                ] = found_indices[incremental_existing]
+                self.id_cache[df.index.nlevels]["found_indices"] = (
+                    found_indices[incremental_existing]
+                )
                 self.id_cache[df.index.nlevels]["found_multi"] = found_multis[
                     incremental_existing
                 ]

@@ -204,7 +204,7 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_path)
         except Exception as e:
-            self._log("Exception when visiting h5: {}".format(e), "exception")
+            self.log("Exception when visiting h5: {}".format(e), "exception")
         return self._available
 
     def get_merged(self, dataset):
@@ -329,8 +329,7 @@ class Signal(BridgeH5):
     def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
         """Get data from h5 file as a dataframe."""
         if path not in f:
-            message = f"{path} not in {f}."
-            self._log(message)
+            self.log(f"{path} not in {f}.")
             return None
         else:
             dset = f[path]

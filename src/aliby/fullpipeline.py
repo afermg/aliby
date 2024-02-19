@@ -1,4 +1,5 @@
 """Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
+
 import logging
 import os
 import re
@@ -293,7 +294,7 @@ class Pipeline(ProcessABC):
         return cls(pipeline_parameters, store=directory)
 
     @property
-    def _logger(self):
+    def logger(self):
         return logging.getLogger("aliby")
 
     def run(self):
@@ -522,14 +523,14 @@ class Pipeline(ProcessABC):
                                 pipe["steps"]["tiler"].tile_size,
                             )
                             if frac_clogged_traps > 0.3:
-                                self._log(
+                                self.log(
                                     f"{name}:Clogged_traps:{frac_clogged_traps}"
                                 )
                                 frac = np.round(frac_clogged_traps * 100)
                                 progress_bar.set_postfix_str(f"{frac} Clogged")
                         else:
                             # stop if too many traps are clogged
-                            self._log(
+                            self.log(
                                 f"{name}:Stopped early at time {i} with {frac_clogged_traps} clogged traps"
                             )
                             pipe["meta"].add_fields({"end_status": "Clogged"})
@@ -541,7 +542,7 @@ class Pipeline(ProcessABC):
                         pipe["config"]["postprocessing"]
                     )
                     PostProcessor(pipe["filename"], post_proc_params).run()
-                    self._log("Analysis finished successfully.", "info")
+                    self.log("Analysis finished successfully.", "info")
                     return 1
         except Exception as e:
             # catch bugs during setup or run time
@@ -637,7 +638,7 @@ class Pipeline(ProcessABC):
                 os.remove(pipe["filename"])
             # if the file exists with no previous segmentation use its tiler
             if pipe["filename"].exists():
-                self._log("Result file exists.", "info")
+                self.log("Result file exists.", "info")
                 if not overwrite["tiler"]:
                     tiler_params_dict = TilerParameters.default().to_dict()
                     tiler_params_dict["position_name"] = name.split(".")[0]
@@ -668,7 +669,7 @@ class Pipeline(ProcessABC):
                             "tiler"
                         ].parameters.to_dict()
                     except Exception:
-                        self._log("Overwriting tiling data")
+                        self.log("Overwriting tiling data")
 
             if config["general"]["use_explog"]:
                 pipe["meta"].run()
@@ -679,9 +680,11 @@ class Pipeline(ProcessABC):
                     "aliby_version": version("aliby"),
                     "baby_version": version("aliby-baby"),
                     "omero_id": config["general"]["id"],
-                    "image_id": image_id
-                    if isinstance(image_id, int)
-                    else str(image_id),
+                    "image_id": (
+                        image_id
+                        if isinstance(image_id, int)
+                        else str(image_id)
+                    ),
                     "parameters": PipelineParameters.from_dict(
                         config
                     ).to_yaml(),
@@ -727,8 +730,7 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     )
     # find tiles with cells covering too great a fraction of the tiles' area
     traps_above_athresh = (
-        cells_used.groupby("trap").sum().apply(np.mean, axis=1)
-        / tile_size**2
+        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
         > es_parameters["thresh_trap_area"]
     )
     return (traps_above_nthresh & traps_above_athresh).mean()

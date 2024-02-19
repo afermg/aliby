@@ -335,7 +335,7 @@ class Extractor(StepABC):
             the tile_id and cell labels
         """
         if cell_labels is None:
-            self._log("No cell labels given. Sorting cells using index.")
+            self.log("No cell labels given. Sorting cells using index.")
         cell_fun = True if cell_function in self.all_cell_funs else False
         idx = []
         results = []
@@ -501,9 +501,11 @@ class Extractor(StepABC):
                 list(
                     map(
                         # sum over masks for each cell
-                        lambda x: np.sum(x, axis=0)
-                        if np.any(x)
-                        else np.zeros((tile_size, tile_size)),
+                        lambda x: (
+                            np.sum(x, axis=0)
+                            if np.any(x)
+                            else np.zeros((tile_size, tile_size))
+                        ),
                         masks,
                     )
                 )

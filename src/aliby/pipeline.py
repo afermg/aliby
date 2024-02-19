@@ -1,6 +1,7 @@
 """Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
 
 import logging
+import multiprocessing
 import os
 import re
 import typing as t
@@ -10,7 +11,6 @@ from pprint import pprint
 import baby
 import baby.errors
 import numpy as np
-import multiprocessing
 import tensorflow as tf
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
@@ -207,20 +207,16 @@ class Pipeline(ProcessABC):
         """Get meta data and identify each position."""
         config = self.parameters.to_dict()
         # print configuration
-        logging.getLogger("aliby").info(f"Using alibylite.")
+        self.log("Using alibylite.", "info")
         try:
-            logging.getLogger("aliby").info(f"Using Baby {baby.__version__}.")
+            self.log(f"Using Baby {baby.__version__}.", "info")
         except AttributeError:
-            logging.getLogger("aliby").info("Using original Baby.")
-        for step in config:
-            print("\n---\n" + step + "\n---")
-            pprint(config[step])
-        print()
+            self.log("Using original Baby.", "info")
         # extract from configuration
         root_dir = Path(config["general"]["directory"])
         dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
-        logging.getLogger("aliby").info(
-            f"Fetching data using {dispatcher.__class__.__name__}."
+        self.log(
+            f"Fetching data using {dispatcher.__class__.__name__}.", "info"
         )
         # get log files, either locally or via OMERO
         with dispatcher as conn:
@@ -294,7 +290,7 @@ class Pipeline(ProcessABC):
         if not len(position_ids):
             raise Exception("No images to segment.")
         else:
-            print("\nPositions selected:")
+            print("Positions selected:")
             for pos in position_ids:
                 print("\t" + pos.split(".")[0])
         print(f"Number of CPU cores available: {multiprocessing.cpu_count()}")
@@ -381,14 +377,15 @@ class Pipeline(ProcessABC):
                         meta={"last_processed:": i},
                     )
                     if i == 0:
-                        logging.getLogger("aliby").info(
-                            f"Found {tiler.no_tiles} traps in {image.name}"
+                        self.log(
+                            f"Found {tiler.no_tiles} traps in {image.name}.",
+                            "info",
                         )
                     # run Baby
                     try:
                         result = babyrunner.run_tp(i)
                     except baby.errors.Clogging:
-                        logging.getLogger("aliby").warn(
+                        self.log(
                             "WARNING:Clogging threshold exceeded in BABY."
                         )
                     baby_writer.write(
@@ -411,12 +408,12 @@ class Pipeline(ProcessABC):
                         tiler.tile_size,
                     )
                     if frac_clogged_traps > 0.3:
-                        self._log(f"{name}:Clogged_traps:{frac_clogged_traps}")
+                        self.log(f"{name}:Clogged_traps:{frac_clogged_traps}")
                         frac = np.round(frac_clogged_traps * 100)
                         progress_bar.set_postfix_str(f"{frac} Clogged")
                 else:
                     # stop if too many clogged traps
-                    self._log(
+                    self.log(
                         f"{name}:Stopped early at time {i} with {frac_clogged_traps} clogged traps"
                     )
                     break
@@ -425,8 +422,17 @@ class Pipeline(ProcessABC):
                 out_file,
                 PostProcessorParameters.from_dict(config["postprocessing"]),
             ).run()
-            self._log("Analysis finished successfully.", "info")
+            self.log("Analysis finished successfully.", "info")
             return 1
+
+    @property
+    def display_config(self):
+        """Show all parameters for each step of the pipeline."""
+        config = self.parameters.to_dict()
+        for step in config:
+            print("\n---\n" + step + "\n---")
+            pprint(config[step])
+        print()
 
 
 def check_earlystop(filename: str, es_parameters: dict, tile_size: int):

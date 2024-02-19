@@ -64,7 +64,7 @@ class Cells:
         """Ensure initiating file is a Path object."""
         return cls(Path(source))
 
-    def _log(self, message: str, level: str = "warn"):
+    def log(self, message: str, level: str = "warn"):
         """Log messages in the corresponding level."""
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
@@ -273,9 +273,9 @@ class Cells:
             (self.ntraps, self["cell_label"].max(), self.ntimepoints),
             dtype=bool,
         )
-        ncells_mat[
-            self["trap"], self["cell_label"] - 1, self["timepoint"]
-        ] = True
+        ncells_mat[self["trap"], self["cell_label"] - 1, self["timepoint"]] = (
+            True
+        )
         return ncells_mat
 
     def cell_tp_where(
@@ -350,7 +350,7 @@ class Cells:
             )
         else:
             mothers_daughters = np.array([])
-            self._log("No mother-daughters assigned")
+            self.log("No mother-daughters assigned")
         return mothers_daughters
 
     @staticmethod

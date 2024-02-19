@@ -46,9 +46,11 @@ class ParametersABC(ABC):
                 ]
             ):
                 return {
-                    k: v.to_dict()
-                    if hasattr(v, "to_dict")
-                    else self.to_dict(v)
+                    k: (
+                        v.to_dict()
+                        if hasattr(v, "to_dict")
+                        else self.to_dict(v)
+                    )
                     for k, v in iterable.items()
                 }
             else:
@@ -163,8 +165,8 @@ class ProcessABC(ABC):
     def run(self):
         pass
 
-    def _log(self, message: str, level: str = "warning"):
-        # Log messages in the corresponding level
+    def log(self, message: str, level: str = "warning"):
+        """Log messages at the corresponding level."""
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
