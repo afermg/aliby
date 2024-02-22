@@ -386,7 +386,11 @@ class Pipeline(ProcessABC):
                         result = babyrunner.run_tp(i)
                     except baby.errors.Clogging:
                         self.log(
-                            "WARNING:Clogging threshold exceeded in BABY."
+                            "WARNING: Clogging threshold exceeded in BABY."
+                        )
+                    except baby.errors.BadOutput:
+                        self.log(
+                            "WARNING: Bud has been assigned as its own mother."
                         )
                     baby_writer.write(
                         data=result,
@@ -471,7 +475,8 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     )
     # find tiles with cells covering too great a fraction of the tiles' area
     traps_above_athresh = (
-        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
+        cells_used.groupby("trap").sum().apply(np.mean, axis=1)
+        / tile_size**2
         > es_parameters["thresh_trap_area"]
     )
     return (traps_above_nthresh & traps_above_athresh).mean()
