@@ -339,6 +339,7 @@ class Pipeline(ProcessABC):
         tiler_writer = TilerWriter(out_file)
         baby_writer = LinearBabyWriter(out_file)
         babystate_writer = StateWriter(out_file)
+        breakpoint()
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
@@ -394,9 +395,9 @@ class Pipeline(ProcessABC):
                         )
                     baby_writer.write(
                         data=result,
-                        tp=i,
                         overwrite=["mother_assign"],
                         meta={"last_processed": i},
+                        tp=i,
                     )
                     babystate_writer.write(
                         data=babyrunner.crawler.tracker_states,

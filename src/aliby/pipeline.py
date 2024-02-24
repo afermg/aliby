@@ -420,7 +420,6 @@ class Pipeline(ProcessABC):
                 "state": loaded_writers["state"].datatypes.keys(),
                 "baby": ["mother_assign"],
             }
-            breakpoint()
 
             # START PIPELINE
             frac_clogged_traps = 0.0
