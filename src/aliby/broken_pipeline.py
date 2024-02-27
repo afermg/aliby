@@ -339,7 +339,6 @@ class Pipeline(ProcessABC):
         tiler_writer = TilerWriter(out_file)
         baby_writer = LinearBabyWriter(out_file)
         babystate_writer = StateWriter(out_file)
-        breakpoint()
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
