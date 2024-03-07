@@ -268,7 +268,9 @@ class Tiler(StepABC):
                 list(range(metadata.get("size_c", 0))),
             )
         else:
-            # new image meta data contains channels for that image
+            channels = []
+        if not channels:
+            # image meta data contains channels for that image
             channels = metadata.get(
                 "channels", list(range(metadata.get("size_c", 0)))
             )

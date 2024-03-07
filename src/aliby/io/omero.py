@@ -4,7 +4,6 @@ Tools to manage I/O using a remote OMERO server.
 
 import re
 import typing as t
-from abc import abstractmethod
 from pathlib import Path
 
 import dask.array as da

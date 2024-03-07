@@ -50,8 +50,9 @@ def instantiate_image(
 
 
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
-    """Pick the appropriate Image class depending on the source of data."""
+    """Pick the appropriate Image class for the source of data."""
     if isinstance(source, (int, np.int64)):
+        # requires omero module
         from aliby.io.omero import Image
 
         instantiator = Image

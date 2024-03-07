@@ -224,7 +224,7 @@ class Pipeline(ProcessABC):
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # get logs to use for metadata
+            # copy logs to h5 directory
             conn.cache_logs(directory)
         print("Positions available:")
         for i, pos in enumerate(position_ids.keys()):
@@ -280,7 +280,8 @@ class Pipeline(ProcessABC):
 
     def run(self):
         """Run separate pipelines for all positions in an experiment."""
-        self.OMERO_channels = self.channels_from_OMERO()
+        if not hasattr(self, "OMERO_channels"):
+            self.OMERO_channels = self.channels_from_OMERO()
         config = self.parameters.to_dict()
         position_ids = self.setup()
         # pick particular positions if desired

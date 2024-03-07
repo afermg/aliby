@@ -211,6 +211,9 @@ def get_meta_from_legacy(parsed_metadata: dict):
 def parse_swainlab_metadata(filedir: t.Union[str, Path]):
     """Parse new, .log, and old, .txt, files in a directory into a dict."""
     filedir = Path(filedir)
+    if filedir.is_file() or str(filedir).endswith(".zarr"):
+        # log file is in parent directory
+        filedir = filedir.parent
     filepath = find_file(filedir, "*.log")
     if filepath:
         # new log files ending in .log
@@ -218,9 +221,6 @@ def parse_swainlab_metadata(filedir: t.Union[str, Path]):
         minimal_meta = get_minimal_meta_swainlab(raw_parse)
     else:
         # old log files ending in .txt
-        if filedir.is_file() or str(filedir).endswith(".zarr"):
-            # log file is in parent directory
-            filedir = filedir.parent
         legacy_parse = parse_logfiles(filedir)
         minimal_meta = (
             get_meta_from_legacy(legacy_parse) if legacy_parse else {}
