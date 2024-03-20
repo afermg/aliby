@@ -291,7 +291,7 @@ class RemoteImageViewer(BaseImageViewer):
 
         h5file_path = Path(h5file)
         super().__init__(h5file_path)
-        self.server_info = server_info or {
+        self._server_info = server_info or {
             k: self.attrs["parameters"]["general"][k] for k in self.credentials
         }
         image = OImage(self.image_id, **self._server_info)
