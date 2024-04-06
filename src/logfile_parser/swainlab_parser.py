@@ -104,7 +104,7 @@ class HeaderEndNotFound(Exception):
 
 def extract_header(filepath: Path):
     """Extract content of log file before the experiment starts."""
-    with (filepath, "r", errors="ignore", encoding = 'unicode_escape') as f:
+    with open(filepath, "r", errors="ignore", encoding = 'unicode_escape') as f:
         try:
             header = ""
             for _ in range(MAX_NLINES):
