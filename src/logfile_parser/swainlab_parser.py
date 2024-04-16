@@ -104,7 +104,7 @@ class HeaderEndNotFound(Exception):
 
 def extract_header(filepath: Path):
     """Extract content of log file before the experiment starts."""
-    with open(filepath, "r", errors="ignore", encoding = 'unicode_escape') as f:
+    with open(filepath, "r", errors="ignore", encoding="unicode_escape") as f:
         try:
             header = ""
             for _ in range(MAX_NLINES):
@@ -146,9 +146,44 @@ def parse_from_grammar(filepath: str, grammar: t.Dict):
 
 
 def parse_x(string, data_type, **kwargs):
-    """Parse a string for data of a specified type."""
+    """Parse a string using a function specifed by data_type."""
     res_dict = eval(f"parse_{data_type}(string, **kwargs)")
     return res_dict
+
+
+def parse_fields(
+    string: str, start_trigger, end_trigger=None
+) -> t.Union[pd.DataFrame, t.Dict[str, atomic]]:
+    """
+    Parse fields as key-value pairs.
+
+    By default the end is an empty newline.
+
+    For example
+
+    group: YST_1510 field: time
+    start: 0
+    interval: 300
+    frames: 180
+    """
+    EOL = LineEnd().suppress()
+    if end_trigger is None:
+        end_trigger = EOL
+    elif isinstance(end_trigger, str):
+        end_trigger = Literal(end_trigger)
+    field = OneOrMore(CharsNotIn(":\n"))
+    line = (
+        LineStart()
+        + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
+        + EOL
+    )
+    parser = (
+        start_trigger + EOL + Group(OneOrMore(line))
+    )  # + end_trigger.suppress()
+    parser_result = parser.search_string(string)
+    results = parser_result.as_list()
+    assert len(results), "Parsing returned nothing"
+    return fields_to_dict_or_table(results)
 
 
 def parse_table(
@@ -193,41 +228,6 @@ def parse_table(
     ), f"Table {start_trigger} has unequal number of columns"
     assert len(parser_result), f"Parsing is empty. {parser}"
     return table_to_df(parser_result.as_list())
-
-
-def parse_fields(
-    string: str, start_trigger, end_trigger=None
-) -> t.Union[pd.DataFrame, t.Dict[str, atomic]]:
-    """
-    Fields are parsed as key: value
-
-    By default the end is an empty newline.
-
-    For example
-
-    group: YST_1510 field: time
-    start: 0
-    interval: 300
-    frames: 180
-    """
-    EOL = LineEnd().suppress()
-    if end_trigger is None:
-        end_trigger = EOL
-    elif isinstance(end_trigger, str):
-        end_trigger = Literal(end_trigger)
-    field = OneOrMore(CharsNotIn(":\n"))
-    line = (
-        LineStart()
-        + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
-        + EOL
-    )
-    parser = (
-        start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
-    )
-    parser_result = parser.search_string(string)
-    results = parser_result.as_list()
-    assert len(results), "Parsing returned nothing"
-    return fields_to_dict_or_table(results)
 
 
 def table_to_df(result: t.List[t.List]):
