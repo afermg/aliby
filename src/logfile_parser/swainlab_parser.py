@@ -34,7 +34,7 @@ New grammar
 
 import logging
 import typing as t
-from pathlib import Path
+from pathlib import PosixPath
 
 import pandas as pd
 from pyparsing import (
@@ -53,20 +53,20 @@ from pyparsing import (
 
 atomic = t.Union[str, int, float, bool]
 
-# specify grammar for the Swain lab
-sl_grammar = {
+# Grammar specification
+grammar = {
     "general": {
         "start_trigger": Literal("Swain Lab microscope experiment log file"),
-        "data_type": "fields",
+        "type": "fields",
         "end_trigger": "-----Acquisition settings-----",
     },
     "image_config": {
         "start_trigger": "Image Configs:",
-        "data_type": "table",
+        "type": "table",
     },
     "device_properties": {
         "start_trigger": "Device properties:",
-        "data_type": "table",
+        "type": "table",
     },
     "group": {
         "position": {
@@ -74,7 +74,7 @@ sl_grammar = {
                 Group(Literal("group:") + Word(printables))
                 + Group(Literal("field:") + "position")
             ),
-            "data_type": "table",
+            "type": "table",
         },
         **{
             key: {
@@ -82,29 +82,24 @@ sl_grammar = {
                     Group(Literal("group:") + Word(printables))
                     + Group(Literal("field:") + key)
                 ),
-                "data_type": "fields",
+                "type": "fields",
             }
             for key in ("time", "config")
         },
     },
 }
 
-ACQ_START = "-----Acquisition settings-----"
+
 HEADER_END = "-----Experiment started-----"
 MAX_NLINES = 2000  # In case of malformed logfile
 
 ParserElement.setDefaultWhitespaceChars(" \t")
 
 
-class HeaderEndNotFound(Exception):
-    def __init__(self, message, errors):
-        super().__init__(message)
-        self.errors = errors
-
-
-def extract_header(filepath: Path):
-    """Extract content of log file before the experiment starts."""
-    with open(filepath, "r", errors="ignore", encoding="unicode_escape") as f:
+def extract_header(filepath: PosixPath):
+    """Extract content of log file upto HEADER_END."""
+    with open(filepath, "r", encoding="latin1") as f:
+        # with open(filepath, "r", errors="ignore", encoding="unicode_escape") as f:
         try:
             header = ""
             for _ in range(MAX_NLINES):
@@ -112,15 +107,9 @@ def extract_header(filepath: Path):
                 header += line
                 if HEADER_END in line:
                     break
-        except HeaderEndNotFound as e:
-            print(f"{MAX_NLINES} checked and no header found.")
-            raise (e)
+        except Exception as e:
+            raise e(f"{MAX_NLINES} checked and no header found")
         return header
-
-
-def parse_from_swainlab_grammar(filepath: t.Union[str, Path]):
-    """Parse using a grammar for the Swain lab."""
-    return parse_from_grammar(filepath, sl_grammar)
 
 
 def parse_from_grammar(filepath: str, grammar: t.Dict):
@@ -129,61 +118,28 @@ def parse_from_grammar(filepath: str, grammar: t.Dict):
     d = {}
     for key, values in grammar.items():
         try:
-            if "data_type" in values:
-                # data_type for parse_x defined in values
+            if "type" in values:
                 d[key] = parse_x(header, **values)
-            else:
-                # use sub keys to parse groups
+            else:  # Use subkeys to parse groups
                 for subkey, subvalues in values.items():
                     subkey = "_".join((key, subkey))
                     d[subkey] = parse_x(header, **subvalues)
         except Exception as e:
             logging.getLogger("aliby").critical(
-                f"Parsing failed for key {key} and values {values}."
+                f"Parsing failed for key {key} and values {values}"
             )
             raise (e)
     return d
 
 
-def parse_x(string, data_type, **kwargs):
+def parse_x(string: str, type: str, **kwargs):
     """Parse a string using a function specifed by data_type."""
-    res_dict = eval(f"parse_{data_type}(string, **kwargs)")
-    return res_dict
+    return eval(f"parse_{type}(string, **kwargs)")
 
 
-def parse_fields(
-    string: str, start_trigger, end_trigger=None
-) -> t.Union[pd.DataFrame, t.Dict[str, atomic]]:
-    """
-    Parse fields as key-value pairs.
-
-    By default the end is an empty newline.
-
-    For example
-
-    group: YST_1510 field: time
-    start: 0
-    interval: 300
-    frames: 180
-    """
-    EOL = LineEnd().suppress()
-    if end_trigger is None:
-        end_trigger = EOL
-    elif isinstance(end_trigger, str):
-        end_trigger = Literal(end_trigger)
-    field = OneOrMore(CharsNotIn(":\n"))
-    line = (
-        LineStart()
-        + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
-        + EOL
-    )
-    parser = (
-        start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
-    )
-    parser_result = parser.search_string(string)
-    results = parser_result.as_list()
-    assert len(results), "Parsing returned nothing"
-    return fields_to_dict_or_table(results)
+def parse_from_swainlab_grammar(filepath: t.Union[str, PosixPath]):
+    """Parse using a grammar for the Swain lab."""
+    return parse_from_grammar(filepath, grammar)
 
 
 def parse_table(
@@ -230,11 +186,43 @@ def parse_table(
     return table_to_df(parser_result.as_list())
 
 
+def parse_fields(
+    string: str, start_trigger, end_trigger=None
+) -> t.Union[pd.DataFrame, t.Dict[str, atomic]]:
+    """
+    Parse fields are parsed as key-value pairs.
+
+    By default the end is an empty newline.
+
+    For example
+
+    group: YST_1510 field: time
+    start: 0
+    interval: 300
+    frames: 180
+    """
+    EOL = LineEnd().suppress()
+    if end_trigger is None:
+        end_trigger = EOL
+    elif isinstance(end_trigger, str):
+        end_trigger = Literal(end_trigger)
+    field = OneOrMore(CharsNotIn(":\n"))
+    line = (
+        LineStart()
+        + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
+        + EOL
+    )
+    parser = (
+        start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
+    )
+    parser_result = parser.search_string(string)
+    results = parser_result.as_list()
+    assert len(results), "Parsing returned nothing"
+    return fields_to_dict_or_table(results)
+
+
 def table_to_df(result: t.List[t.List]):
     if len(result) > 1:  # Multiple tables with ids to append
-        # Generate multiindex from "Name column"
-        # index = [row[1][0][1] for table in result for row in table]
-        # table[1][0].index("Name") # for automatic indexing
         from itertools import product
 
         group_name = [
@@ -251,7 +239,6 @@ def table_to_df(result: t.List[t.List]):
         df.name = result[0][0][1][1]
     else:  # If it is a single table
         df = pd.DataFrame(result[0][1][1:], columns=result[0][1][0])
-
     return df
 
 
@@ -264,7 +251,6 @@ def fields_to_dict_or_table(result: t.List[t.List]):
         )
 
         formatted.name = result[0][0][1][1]
-
     else:  # If it is a single table
         formatted = {k: _cast_type(v) for k, v in dict(result[0][1]).items()}
 

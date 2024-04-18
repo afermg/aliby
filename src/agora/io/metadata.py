@@ -46,7 +46,7 @@ class MetaData:
 
     def load_logs(self):
         """Load log using a hierarchy of parsers."""
-        parsed_flattened = dispatch_metadata_parser(self.log_dir)
+        parsed_flattened = parse_metadata(self.log_dir)
         return parsed_flattened
 
     def run(self, overwrite=False):
@@ -70,23 +70,36 @@ class MetaData:
             self.add_field(field, value)
 
 
-def flatten_dict(nested_dict, separator="/"):
+def parse_metadata(filedir: t.Union[str, Path]):
     """
-    Flatten nested dictionary because h5 attributes cannot be dicts.
+    Dispatch different metadata parsers that convert logfiles into a dictionary.
 
-    If empty return as-is.
+    Currently only contains the swainlab log parsers.
+
+    Parameters
+    --------
+    filepath: str
+        File containing metadata or folder containing naming conventions.
     """
-    flattened = {}
-    if nested_dict:
-        df = pd.json_normalize(nested_dict, sep=separator)
-        flattened = df.to_dict(orient="records")[0] or {}
-    return flattened
-
-
-def datetime_to_timestamp(time, locale="Europe/London"):
-    """Convert datetime object to UNIX timestamp."""
-    # h5 attributes do not support datetime objects
-    return timezone(locale).localize(time).timestamp()
+    filedir = Path(filedir)
+    if filedir.is_file() or str(filedir).endswith(".zarr"):
+        # log file is in parent directory
+        filedir = filedir.parent
+    filepath = find_file(filedir, "*.log")
+    if filepath:
+        # new log files ending in .log
+        raw_parse = parse_from_swainlab_grammar(filepath)
+        minimal_meta = get_minimal_meta_swainlab(raw_parse)
+    else:
+        # legacy log files ending in .txt
+        legacy_parse = parse_legacy_logfiles(filedir)
+        minimal_meta = (
+            get_meta_from_legacy(legacy_parse) if legacy_parse else {}
+        )
+    if minimal_meta is None:
+        raise Exception("No metadata found.")
+    else:
+        return minimal_meta
 
 
 def find_file(root_dir, regex):
@@ -109,7 +122,67 @@ def find_file(root_dir, regex):
         return file[0]
 
 
-def parse_logfiles(
+def get_minimal_meta_swainlab(parsed_metadata: dict):
+    """
+    Extract channels from parsed metadata.
+
+    Parameters
+    --------
+    parsed_metadata: dict[str, str or int or DataFrame or Dict]
+        default['general', 'image_config', 'device_properties',
+                'group_position', 'group_time', 'group_config']
+
+    Returns
+    --------
+    Dict with channels metadata
+    """
+    channels_dict = find_channels_by_position(parsed_metadata["group_config"])
+    channels = parsed_metadata["image_config"]["Image config"].values.tolist()
+    ntps = parsed_metadata["group_time"]["frames"].max()
+    timeinterval = parsed_metadata["group_time"]["interval"].min()
+    minimal_meta = {
+        "channels_by_group": channels_dict,
+        "channels": channels,
+        "time_settings/ntimepoints": int(ntps),
+        "time_settings/timeinterval": int(timeinterval),
+    }
+    return minimal_meta
+
+
+def find_channels_by_position(meta):
+    """
+    Parse metadata to find the imaging channels for each group.
+
+    Return a dict with groups as keys and channels as values.
+    """
+    if isinstance(meta, pd.DataFrame):
+        imaging_channels = list(meta.columns)
+        channels_dict = {group: [] for group in meta.index}
+        for group in channels_dict:
+            for channel in imaging_channels:
+                if meta.loc[group, channel] is not None:
+                    channels_dict[group].append(channel)
+    elif isinstance(meta, dict) and "positions/posname" in meta:
+        channels_dict = {
+            position_name: [] for position_name in meta["positions/posname"]
+        }
+        imaging_channels = meta["channels"]
+        for i, position_name in enumerate(meta["positions/posname"]):
+            for imaging_channel in imaging_channels:
+                if (
+                    "positions/" + imaging_channel in meta
+                    and meta["positions/" + imaging_channel][i]
+                ):
+                    channels_dict[position_name].append(imaging_channel)
+    else:
+        channels_dict = {}
+    return channels_dict
+
+
+### legacy code for acq and log files ###
+
+
+def parse_legacy_logfiles(
     root_dir,
     acq_grammar="multiDGUI_acq_format.json",
     log_grammar="multiDGUI_log_format.json",
@@ -144,63 +217,6 @@ def parse_logfiles(
     return parsed_flattened
 
 
-def find_channels_by_position(meta):
-    """
-    Parse metadata to find the imaging channels for each group.
-
-    Return a dict with groups as keys and channels as values.
-    """
-    if isinstance(meta, pd.DataFrame):
-        imaging_channels = list(meta.columns)
-        channels_dict = {group: [] for group in meta.index}
-        for group in channels_dict:
-            for channel in imaging_channels:
-                if meta.loc[group, channel] is not None:
-                    channels_dict[group].append(channel)
-    elif isinstance(meta, dict):
-        channels_dict = {
-            position_name: [] for position_name in meta["positions/posname"]
-        }
-        imaging_channels = meta["channels"]
-        for i, position_name in enumerate(meta["positions/posname"]):
-            for imaging_channel in imaging_channels:
-                if (
-                    "positions/" + imaging_channel in meta
-                    and meta["positions/" + imaging_channel][i]
-                ):
-                    channels_dict[position_name].append(imaging_channel)
-    else:
-        channels_dict = {}
-    return channels_dict
-
-
-def get_minimal_meta_swainlab(parsed_metadata: dict):
-    """
-    Extract channels from parsed metadata.
-
-    Parameters
-    --------
-    parsed_metadata: dict[str, str or int or DataFrame or Dict]
-        default['general', 'image_config', 'device_properties',
-                'group_position', 'group_time', 'group_config']
-
-    Returns
-    --------
-    Dict with channels metadata
-    """
-    channels_dict = find_channels_by_position(parsed_metadata["group_config"])
-    channels = parsed_metadata["image_config"]["Image config"].values.tolist()
-    ntps = parsed_metadata["group_time"]["frames"].max()
-    timeinterval = parsed_metadata["group_time"]["interval"].min()
-    minimal_meta = {
-        "channels_by_group": channels_dict,
-        "channels": channels,
-        "time_settings/ntimepoints": int(ntps),
-        "time_settings/timeinterval": int(timeinterval),
-    }
-    return minimal_meta
-
-
 def get_meta_from_legacy(parsed_metadata: dict):
     """Fix naming convention for channels in legacy .txt log files."""
     result = parsed_metadata
@@ -208,78 +224,20 @@ def get_meta_from_legacy(parsed_metadata: dict):
     return result
 
 
-def parse_swainlab_metadata(filedir: t.Union[str, Path]):
-    """Parse new, .log, and old, .txt, files in a directory into a dict."""
-    filedir = Path(filedir)
-    if filedir.is_file() or str(filedir).endswith(".zarr"):
-        # log file is in parent directory
-        filedir = filedir.parent
-    filepath = find_file(filedir, "*.log")
-    if filepath:
-        # new log files ending in .log
-        raw_parse = parse_from_swainlab_grammar(filepath)
-        minimal_meta = get_minimal_meta_swainlab(raw_parse)
-    else:
-        # old log files ending in .txt
-        legacy_parse = parse_logfiles(filedir)
-        minimal_meta = (
-            get_meta_from_legacy(legacy_parse) if legacy_parse else {}
-        )
-    return minimal_meta
-
-
-def dispatch_metadata_parser(filepath: t.Union[str, Path]):
+def flatten_dict(nested_dict, separator="/"):
     """
-    Dispatch different metadata parsers that convert logfiles into a dictionary.
+    Flatten nested dictionary because h5 attributes cannot be dicts.
 
-    Currently only contains the swainlab log parsers.
-
-    Parameters
-    --------
-    filepath: str
-        File containing metadata or folder containing naming conventions.
+    If empty return as-is.
     """
-    parsed_meta = parse_swainlab_metadata(filepath)
-    if parsed_meta is None:
-        # try to deduce metadata
-        parsed_meta = dir_to_meta
-    return parsed_meta
+    flattened = {}
+    if nested_dict:
+        df = pd.json_normalize(nested_dict, sep=separator)
+        flattened = df.to_dict(orient="records")[0] or {}
+    return flattened
 
 
-def dir_to_meta(path: Path, suffix="tiff"):
-    """Deduce meta data from the naming convention of tiff files."""
-    filenames = list(path.glob(f"*.{suffix}"))
-    try:
-        # deduce order from filenames
-        dim_order = "".join(
-            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
-        )
-        dim_value = list(
-            map(
-                lambda f: filename_to_dict_indices(f.stem),
-                path.glob("*.tiff"),
-            )
-        )
-        maxs = [max(map(lambda x: x[dim], dim_value)) for dim in dim_order]
-        mins = [min(map(lambda x: x[dim], dim_value)) for dim in dim_order]
-        dim_shapes = [
-            max_val - min_val + 1 for max_val, min_val in zip(maxs, mins)
-        ]
-        meta = {
-            "size_" + dim: shape for dim, shape in zip(dim_order, dim_shapes)
-        }
-    except Exception as e:
-        print(
-            "Warning:Metadata: Cannot extract dimensions from filenames."
-            f" Empty meta set {e}"
-        )
-        meta = {}
-    return meta
-
-
-def filename_to_dict_indices(stem: str):
-    """Convert a file name into a dict by splitting."""
-    return {
-        dim_number[0]: int(dim_number[1:])
-        for dim_number in stem.split("_")[1:]
-    }
+def datetime_to_timestamp(time, locale="Europe/London"):
+    """Convert datetime object to UNIX timestamp."""
+    # h5 attributes do not support datetime objects
+    return timezone(locale).localize(time).timestamp()

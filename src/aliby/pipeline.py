@@ -115,17 +115,16 @@ class PipelineParameters(ParametersABC):
             )
             minimal_default_meta = {
                 "channels": ["Brightfield"],
-                "ntps": [2000],
+                "time_settings/ntimepoints": [2000],
             }
             # set minimal metadata
             meta_d = minimal_default_meta
         # define default values for general parameters
-        tps = meta_d.get("ntps", 2000)
         defaults = {
             "general": dict(
                 id=expt_id,
                 distributed=0,
-                tps=tps,
+                tps=meta_d["time_settings/ntimepoints"],
                 directory=str(directory.parent),
                 filter="",
                 earlystop=global_parameters.earlystop,
