@@ -204,7 +204,7 @@ class Pipeline(ProcessABC):
         logger.addHandler(fh)
 
     def setup(self):
-        """Get meta data and identify each position."""
+        """Copy logfile and identify each position."""
         config = self.parameters.to_dict()
         # print configuration
         self.log("Using alibylite.", "info")

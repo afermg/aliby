@@ -27,6 +27,16 @@ Data to extract:
 * Basic information
  -
 
+{'channels_by_group': {'PDR5_GFP': ['Brightfield', 'GFP', 'cy5', 'mCherry'],
+'Ilv3_mCherry': ['Brightfield', 'GFP', 'cy5', 'mCherry'], '
+Yor1_GFP': ['Brightfield', 'GFP', 'cy5', 'mCherry'],
+'Snq2_GFP': ['Brightfield', 'GFP', 'cy5', 'mCherry'],
+'Pdr5_mCherry_pdr1_pdr3': ['Brightfield', 'GFP', 'cy5', 'mCherry']},
+'channels': ['Brightfield', 'GFP', 'cy5', 'mCherry'],
+'time_settings/ntimepoints': 240,
+'time_settings/timeinterval': 300}
+
+
 New grammar
 
 - Tables are assumed to end with an empty line.
@@ -55,19 +65,6 @@ atomic = t.Union[str, int, float, bool]
 
 # specify grammar for the Swain lab
 sl_grammar = {
-    "general": {
-        "start_trigger": Literal("Swain Lab microscope experiment log file"),
-        "data_type": "fields",
-        "end_trigger": "-----Acquisition settings-----",
-    },
-    "image_config": {
-        "start_trigger": "Image Configs:",
-        "data_type": "table",
-    },
-    "device_properties": {
-        "start_trigger": "Device properties:",
-        "data_type": "table",
-    },
     "group": {
         "position": {
             "start_trigger": Group(
@@ -109,7 +106,8 @@ def extract_header(filepath: Path):
             header = ""
             for _ in range(MAX_NLINES):
                 line = f.readline()
-                header += line
+                if ":" in line:
+                    header += line
                 if HEADER_END in line:
                     break
         except HeaderEndNotFound as e:
@@ -181,6 +179,7 @@ def parse_fields(
         start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
     )
     parser_result = parser.search_string(string)
+    breakpoint()
     results = parser_result.as_list()
     assert len(results), "Parsing returned nothing"
     return fields_to_dict_or_table(results)
