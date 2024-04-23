@@ -120,11 +120,15 @@ class PipelineParameters(ParametersABC):
             # set minimal metadata
             meta_d = minimal_default_meta
         # define default values for general parameters
+        if isinstance(meta_d["time_settings/ntimepoints"], list):
+            tps = meta_d["time_settings/ntimepoints"][0]
+        else:
+            tps = meta_d["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
                 id=expt_id,
                 distributed=0,
-                tps=meta_d["time_settings/ntimepoints"],
+                tps=tps,
                 directory=str(directory.parent),
                 filter="",
                 earlystop=global_parameters.earlystop,
