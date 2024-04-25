@@ -169,13 +169,17 @@ class PipelineParameters(ParametersABC):
 class Pipeline(ProcessABC):
     """Initialise and run tiling, segmentation, extraction and post-processing."""
 
-    def __init__(self, parameters: PipelineParameters, store=None):
+    def __init__(
+        self, parameters: PipelineParameters, store=None, OMERO_channels=None
+    ):
         """Initialise using Pipeline parameters."""
         super().__init__(parameters)
         if store is not None:
             store = Path(store)
         # h5 file
         self.store = store
+        if OMERO_channels is not None:
+            self.OMERO_channels = OMERO_channels
         config = self.parameters.to_dict()
         self.server_info = {
             k: config["general"].get(k)
