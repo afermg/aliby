@@ -420,13 +420,13 @@ class Pipeline(ProcessABC):
                         tiler.tile_size,
                     )
                     if frac_clogged_traps > 0.3:
-                        self.log(f"{name}:Clogged_traps:{frac_clogged_traps}")
+                        self.log(f"{name}: Clogged_traps:{frac_clogged_traps}")
                         frac = np.round(frac_clogged_traps * 100)
                         progress_bar.set_postfix_str(f"{frac} Clogged")
                 else:
                     # stop if too many clogged traps
                     self.log(
-                        f"{name}:Stopped early at time {i} with {frac_clogged_traps} clogged traps"
+                        f"{name}: Stopped early at time {i} with {frac_clogged_traps} clogged traps"
                     )
                     break
             # run post-processing
@@ -434,7 +434,10 @@ class Pipeline(ProcessABC):
                 out_file,
                 PostProcessorParameters.from_dict(config["postprocessing"]),
             ).run()
-            self.log("Analysis finished successfully.", "info")
+            self.log(
+                f"{config['tiler']['position_name']}: Analysis finished successfully.",
+                "info",
+            )
             return 1
 
     @property

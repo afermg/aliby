@@ -10,7 +10,7 @@ from typing import Union
 from flatten_dict import flatten, unflatten
 from yaml import dump, safe_load
 
-from agora.logging import timer
+from agora.logging_timer import timer
 
 atomic = t.Union[int, float, str, bool]
 
