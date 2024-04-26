@@ -215,6 +215,8 @@ class Pipeline(ProcessABC):
         # create file handler that logs even debug messages
         if logfile_root_name is None:
             logfile_root_name = "aliby"
+        elif isinstance(logfile_root_name, int):
+            logfile_root_name = str(logfile_root_name)
         fh = logging.FileHandler(
             Path(folder) / f"{logfile_root_name}.log", "w+"
         )
@@ -412,7 +414,7 @@ class Pipeline(ProcessABC):
                         self.log(
                             "WARNING: Bud has been assigned as its own mother."
                         )
-                        raise Exception("Catastrophic Baby error")
+                        raise Exception("Catastrophic Baby error!")
                     baby_writer.write(
                         data=result,
                         overwrite=["mother_assign"],
