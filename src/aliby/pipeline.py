@@ -188,7 +188,7 @@ class Pipeline(ProcessABC):
         self.expt_id = config["general"]["id"]
         self.setLogger(
             config["general"]["directory"],
-            logfile_root_name=config["general"]["id"]
+            logfile_root_name=str(config["general"]["id"])
             .split("/")[-1]
             .split(".")[0],
         )
@@ -215,8 +215,6 @@ class Pipeline(ProcessABC):
         # create file handler that logs even debug messages
         if logfile_root_name is None:
             logfile_root_name = "aliby"
-        elif isinstance(logfile_root_name, int):
-            logfile_root_name = str(logfile_root_name)
         fh = logging.FileHandler(
             Path(folder) / f"{logfile_root_name}.log", "w+"
         )
