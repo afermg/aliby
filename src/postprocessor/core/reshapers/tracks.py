@@ -18,7 +18,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from utils_find_1st import cmp_larger, find_1st
 
-from postprocessor.core.processes.savgol import non_uniform_savgol
+from postprocessor.core.reshapers.nusavgol import non_uniform_savgol
 
 
 def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:

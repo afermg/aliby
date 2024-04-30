@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
-# from agora.utils.indexing import validate_association
 
 index_row = t.Tuple[str, str, int, int]
 

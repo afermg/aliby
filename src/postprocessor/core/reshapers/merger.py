@@ -2,7 +2,7 @@ import numpy as np
 
 from agora.abc import ParametersABC
 from postprocessor.core.abc import PostProcessABC
-from postprocessor.core.functions.tracks import get_merges
+from postprocessor.core.reshapers.tracks import get_merges
 
 
 class MergerParameters(ParametersABC):
