@@ -62,7 +62,9 @@ def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:
     # remove traps with no contiguous tracks
     contigs = contigs.loc[contigs.apply(len) > 0]
     # flatten to (trap, cell_id) pairs
-    flat = set([k for v in contigs.values for i in v for j in i for k in j])
+    flat = list(
+        set([k for v in contigs.values for i in v for j in i for k in j])
+    )
     # make a data frame of contiguous tracks with the tracks as arrays
     if smooth:
         smoothed_tracks = clean.loc[flat].apply(

@@ -595,7 +595,7 @@ class Writer(BridgeH5):
             new_tps = set(df.columns)
             if path + "/timepoint" in f:
                 new_tps = new_tps.difference(f[path + "/timepoint"][()])
-            df = df[new_tps]
+            df = df[list(new_tps)]
 
             if (
                 not hasattr(self, "id_cache")

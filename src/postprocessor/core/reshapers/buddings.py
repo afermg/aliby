@@ -57,7 +57,7 @@ class buddings(LineageProcess):
                 traps_mothers[(trap, mother)].append(daughter)
         # a new dataframe with dimensions (n_mother_cells * n_tps)
         mothers = signal.loc[
-            set(signal.index).intersection(traps_mothers.keys())
+            list(set(signal.index).intersection(traps_mothers.keys()))
         ]
         buddings = pd.DataFrame(
             np.zeros(mothers.shape).astype(bool),
@@ -76,6 +76,6 @@ class buddings(LineageProcess):
                 fvi.index.intersection(trap_daughter_ids)
             ].values
             # ignore zeros - buds in first image are not budding events
-            daughters_idx = set(times_of_bud_appearance).difference({0})
+            daughters_idx = list(set(times_of_bud_appearance).difference({0}))
             buddings.loc[trap_mother_id, daughters_idx] = True
         return buddings

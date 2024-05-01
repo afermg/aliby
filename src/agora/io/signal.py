@@ -178,8 +178,8 @@ class Signal(BridgeH5):
             else:
                 return merged
         if len(picks):
-            picked_indices = set(picks).intersection(
-                [tuple(x) for x in merged.index]
+            picked_indices = list(
+                set(picks).intersection([tuple(x) for x in merged.index])
             )
             return merged.loc[picked_indices]
         else:
