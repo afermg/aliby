@@ -1,5 +1,11 @@
 #!/usr/bin/env jupyter
-from importlib_resources import files
+
+try:
+    from importlib_resources import files
+except ModuleNotFoundError:
+    from importlib.resources import files
+
+
 from logfile_parser import Parser
 
 grammars_dir = files("logfile_parser") / "grammars"

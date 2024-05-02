@@ -23,10 +23,14 @@ import numpy as np
 import xmltodict
 import zarr
 from dask.array.image import imread
-from importlib_resources import files
-from tifffile import TiffFile
+
+try:
+    from importlib_resources import files
+except ModuleNotFoundError:
+    from importlib.resources import files
 
 from agora.io.metadata import parse_metadata
+from tifffile import TiffFile
 
 
 def instantiate_image(

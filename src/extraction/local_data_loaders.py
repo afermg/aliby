@@ -9,7 +9,11 @@ The most basic functions were copied from Swain Lab's baby module,
 specifically baby/io.py
 """
 
-from importlib_resources import files
+try:
+    from importlib_resources import files
+except ModuleNotFoundError:
+    from importlib.resources import files
+
 import json
 import re
 from itertools import groupby
