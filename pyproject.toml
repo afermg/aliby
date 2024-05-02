@@ -38,10 +38,12 @@ zarr = ">=2.14.0"
 
 tensorflow-io-gcs-filesystem = "0.34.0"
 chardet = "^5.2.0"
+grpcio = "1.62.2"
 tensorflow = "2.13.1"
 
 baby-seg = ">=0.30.4"
 omero-py = { version = ">=5.6.2", optional = true }
+
 
 
 [tool.black]
