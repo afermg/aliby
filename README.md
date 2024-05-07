@@ -26,13 +26,13 @@ conda create -n alibylite python=3.10
 conda activate alibylite
  ```
 
-- Git clone alibylite, change to the alibylite directory, and use poetry to install:
+- Git clone alibylite, change to the alibylite directory with the poetry.lock file, and use poetry to install:
 
 ```bash 
 poetry install
  ```
 
-- Git clone wela, change to the wela directory, and use poetry to install:
+- Git clone wela, change to the wela directory with the poetry.lock file, and use poetry to install:
 
 ```bash 
 poetry install
