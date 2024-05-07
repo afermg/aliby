@@ -56,7 +56,7 @@ conda install omero-py
  For everything else, use:
 
  ```bash 
-poetry --all-extras
+poetry install --all-extras
  ```
 
 - You may have an issue with Matlablib crashing.
