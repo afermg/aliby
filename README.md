@@ -59,7 +59,7 @@ conda install omero-py
 poetry install --all-extras
  ```
 
-- You may have an issue with Matlablib crashing.
+- You may have an issue with Matplotlib crashing.
 Use conda to install a different version:
 
 ```bash 
