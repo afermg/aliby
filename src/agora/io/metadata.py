@@ -15,6 +15,7 @@ for tiler, segmentation, and extraction.
 WARNING: grammars depend on the directory structure of a local log-file_parser
 repository.
 """
+
 import glob
 import logging
 import numpy as np
@@ -185,6 +186,37 @@ def find_channels_by_position(meta):
     else:
         channels_dict = {}
     return channels_dict
+
+
+def dir_to_meta(path: Path, suffix="tiff"):
+    filenames = list(path.glob(f"*.{suffix}"))
+    try:
+        # Deduct order from filenames
+        dimorder = "".join(
+            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
+        )
+        dim_value = list(
+            map(
+                lambda f: filename_to_dict_indices(f.stem),
+                path.glob("*.tiff"),
+            )
+        )
+        maxes = [max(map(lambda x: x[dim], dim_value)) for dim in dimorder]
+        mins = [min(map(lambda x: x[dim], dim_value)) for dim in dimorder]
+        _dim_shapes = [
+            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
+        ]
+
+        meta = {
+            "size_" + dim: shape for dim, shape in zip(dimorder, _dim_shapes)
+        }
+    except Exception as e:
+        print(
+            f"Warning:Metadata: Cannot extract dimensions from filenames. Empty meta set {e}"
+        )
+        meta = {}
+
+    return meta
 
 
 ### legacy code for acq and log files ###
