@@ -146,13 +146,13 @@ class DatasetLocalOME(DatasetLocalABC):
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
         assert len(
-            self.get_images()
+            self.get_position_ids()
         ), f"No valid files found. Formats are {self._valid_suffixes}"
 
     @property
     def date(self):
         """Get the date from the metadata of the first position."""
-        return ImageLocalOME(list(self.get_images().values())[0]).date
+        return ImageLocalOME(list(self.get_position_ids().values())[0]).date
 
     def get_images(self):
         """Return a dictionary with the names of the image files."""

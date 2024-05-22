@@ -83,20 +83,21 @@ class BridgeOmero:
     def ome_class(self):
         """Initialise Omero Object Wrapper for instances when applicable."""
         if not hasattr(self, "_ome_class"):
-            assert (
-                self.conn.isConnected() and self.ome_id is not None
-            ), "No Blitz connection or valid omero id"
-            ome_type = [
-                valid_name
-                for valid_name in ("Dataset", "Image")
-                if re.match(
-                    f".*{ valid_name }.*",
-                    self.__class__.__name__,
-                    re.IGNORECASE,
-                )
-            ][0]
-            self._ome_class = self.conn.getObject(ome_type, self.ome_id)
-            assert self._ome_class, f"{ome_type} {self.ome_id} not found."
+            if self.conn.isConnected() and self.ome_id is not None:
+                ome_type = [
+                    valid_name
+                    for valid_name in ("Dataset", "Image")
+                    if re.match(
+                        f".*{ valid_name }.*",
+                        self.__class__.__name__,
+                        re.IGNORECASE,
+                    )
+                ][0]
+                # load data
+                self._ome_class = self.conn.getObject(ome_type, self.ome_id)
+                assert self._ome_class, f"{ome_type} {self.ome_id} not found."
+            else:
+                raise Exception("No Blitz connection or valid omero id.")
         return self._ome_class
 
     def create_gate(self) -> bool:
@@ -181,17 +182,17 @@ class Dataset(BridgeOmero):
 
     @property
     def name(self):
-        """Get name."""
+        """Get name of experiment."""
         return self.ome_class.getName()
 
     @property
     def date(self):
-        """Get date."""
+        """Get date of experiment."""
         return self.ome_class.getDate()
 
     @property
     def unique_name(self):
-        """Create unique name."""
+        """Get full name of experiment including its date."""
         return "_".join(
             (
                 str(self.ome_id),
@@ -200,7 +201,7 @@ class Dataset(BridgeOmero):
             )
         )
 
-    def get_images(self):
+    def get_position_ids(self):
         """Get dict of image names and IDs from OMERO."""
         return {
             im.getName(): im.getId() for im in self.ome_class.listChildren()
@@ -215,7 +216,7 @@ class Dataset(BridgeOmero):
 
     @property
     def files(self):
-        """Get files from OMERO."""
+        """Get a dict of FileAnnotationWrappers, typically for log files."""
         if not hasattr(self, "_files"):
             self._files = {
                 x.getFileName(): x
@@ -232,10 +233,10 @@ class Dataset(BridgeOmero):
 
     @property
     def tags(self):
-        """Get tags from OMERO."""
-        if self._tags is None:
+        """Get a dict of TagAnnotationWrapper from OMERO for each position."""
+        if not hasattr(self, "_tags"):
             self._tags = {
-                x.getname(): x
+                x.getId(): x
                 for x in self.ome_class.listAnnotations()
                 if isinstance(x, omero.gateway.TagAnnotationWrapper)
             }

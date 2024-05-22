@@ -239,7 +239,7 @@ class Pipeline(ProcessABC):
         )
         # get log files, either locally or via OMERO
         with dispatcher as conn:
-            position_ids = conn.get_images()
+            position_ids = conn.get_position_ids()
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
