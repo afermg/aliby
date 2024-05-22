@@ -1,6 +1,4 @@
-"""
-Tools to manage I/O using a remote OMERO server.
-"""
+"""Tools to manage I/O using a remote OMERO server."""
 
 import re
 import typing as t
@@ -31,7 +29,8 @@ PIXEL_TYPES = {
 
 class BridgeOmero:
     """
-    Core to interact with OMERO, using credentials or fetching them from h5 file (temporary trick).
+    Interact with OMERO.
+
     See
     https://docs.openmicroscopy.org/omero/5.6.0/developers/Python.html
     """
@@ -44,6 +43,8 @@ class BridgeOmero:
         ome_id: int = None,
     ):
         """
+        Initialise with OMERO login details.
+
         Parameters
         ----------
         host : string
@@ -51,33 +52,40 @@ class BridgeOmero:
         username: string
         password : string
         ome_id: Optional int
-            Unique identifier on Omero database. Used to fetch specific objects.
+            Unique identifier on Omero database.
+            Used to fetch specific objects.
         """
-        # assert all((host, username, password)), str(f"Invalid credentials host:{host}, user:{username}, pass:{pass}")
-        assert all(
-            (host, username, password)
-        ), f"Invalid credentials. host: {host}, user: {username}, pwd: {password}"
-
+        if host is None or username is None or password is None:
+            raise Exception(
+                f"Invalid credentials. host: {host}, user: {username},"
+                f" pwd: {password}"
+            )
         self.conn = None
         self.host = host
         self.username = username
         self.password = password
         self.ome_id = ome_id
 
-    # standard method required for Python's with statement
     def __enter__(self):
+        """For Python's with statement."""
         self.create_gate()
-
         return self
+
+    def __exit__(self, *exc) -> bool:
+        """For Python's with statement."""
+        for e in exc:
+            if e is not None:
+                print(e)
+        self.conn.close()
+        return False
 
     @property
     def ome_class(self):
-        # Initialise Omero Object Wrapper for instances when applicable.
+        """Initialise Omero Object Wrapper for instances when applicable."""
         if not hasattr(self, "_ome_class"):
             assert (
                 self.conn.isConnected() and self.ome_id is not None
             ), "No Blitz connection or valid omero id"
-
             ome_type = [
                 valid_name
                 for valid_name in ("Dataset", "Image")
@@ -88,35 +96,22 @@ class BridgeOmero:
                 )
             ][0]
             self._ome_class = self.conn.getObject(ome_type, self.ome_id)
-
             assert self._ome_class, f"{ome_type} {self.ome_id} not found."
-
         return self._ome_class
 
     def create_gate(self) -> bool:
+        """Connect to OMERO."""
         self.conn = BlitzGateway(
             host=self.host, username=self.username, passwd=self.password
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
-
         self.conn.isConnected()
 
-    # standard method required for Python's with statement
-    def __exit__(self, *exc) -> bool:
-        for e in exc:
-            if e is not None:
-                print(e)
-
-        self.conn.close()
-        return False
-
     @classmethod
-    def server_info_from_h5(
-        cls,
-        filepath: t.Union[str, Path],
-    ):
-        """Return server info from hdf5 file.
+    def server_info_from_h5(cls, filepath: t.Union[str, Path]):
+        """
+        Return server info from hdf5 file.
 
         Parameters
         ----------
@@ -124,11 +119,6 @@ class BridgeOmero:
             BridgeOmero class
         filepath : t.Union[str, Path]
             Location of hdf5 file.
-
-        Examples
-        --------
-        FIXME: Add docs.
-
         """
         bridge = BridgeH5(filepath)
         meta = safe_load(bridge.meta_h5["parameters"])["general"]
@@ -136,10 +126,12 @@ class BridgeOmero:
         return server_info
 
     def set_id(self, ome_id: int):
+        """Set ome_id attribute."""
         self.ome_id = ome_id
 
     @property
     def file_annotations(self):
+        """Get file annotations."""
         valid_annotations = [
             ann.getFileName()
             for ann in self.ome_class.listAnnotations()
@@ -150,7 +142,10 @@ class BridgeOmero:
     def add_file_as_annotation(
         self, file_to_upload: t.Union[str, Path], **kwargs
     ):
-        """Upload annotation to object on OMERO server. Only valid in subclasses.
+        """
+        Upload annotation to object on OMERO server.
+
+        Only valid in subclasses.
 
         Parameters
         ----------
@@ -158,7 +153,6 @@ class BridgeOmero:
         **kwargs: Additional keyword arguments passed on
             to BlitzGateway.createFileAnnfromLocalFile
         """
-
         file_annotation = self.conn.createFileAnnfromLocalFile(
             file_to_upload,
             mimetype="text/plain",
@@ -169,30 +163,35 @@ class BridgeOmero:
 
 class Dataset(BridgeOmero):
     """
-    Tool to interact with Omero Datasets remotely, access their
-    metadata and associated files and images.
+    Interact with Omero Datasets remotely.
 
+    Access their metadata and associated files and images.
 
     Parameters
     ----------
-    expt_id: int Dataset id on server
-    server_info: dict host, username and password
-
+    expt_id: int
+        Dataset id on server
+    server_info: dict
+        Host, username and password
     """
 
     def __init__(self, expt_id: int, **server_info):
+        """Initialise with experiment OMERO ID and server details."""
         super().__init__(ome_id=expt_id, **server_info)
 
     @property
     def name(self):
+        """Get name."""
         return self.ome_class.getName()
 
     @property
     def date(self):
+        """Get date."""
         return self.ome_class.getDate()
 
     @property
     def unique_name(self):
+        """Create unique name."""
         return "_".join(
             (
                 str(self.ome_id),
@@ -202,12 +201,13 @@ class Dataset(BridgeOmero):
         )
 
     def get_images(self):
+        """Get dict of image names and IDs from OMERO."""
         return {
             im.getName(): im.getId() for im in self.ome_class.listChildren()
         }
 
     def get_channels(self):
-        """Get channels from OMERO."""
+        """Get list of channels from OMERO."""
         for im in self.ome_class.listChildren():
             channels = [ch.getLabel() for ch in im.getChannels()]
             break
@@ -215,6 +215,7 @@ class Dataset(BridgeOmero):
 
     @property
     def files(self):
+        """Get files from OMERO."""
         if not hasattr(self, "_files"):
             self._files = {
                 x.getFileName(): x
@@ -227,11 +228,11 @@ class Dataset(BridgeOmero):
             )
         elif len(self.file_annotations) != len(self._files):
             raise Exception("Number of files and annotations do not match")
-
         return self._files
 
     @property
     def tags(self):
+        """Get tags from OMERO."""
         if self._tags is None:
             self._tags = {
                 x.getname(): x
@@ -241,6 +242,7 @@ class Dataset(BridgeOmero):
         return self._tags
 
     def cache_logs(self, root_dir):
+        """Save the log files for an experiment."""
         valid_suffixes = ("txt", "log")
         for _, annotation in self.files.items():
             filepath = root_dir / annotation.getFileName().replace("/", "_")
@@ -268,11 +270,6 @@ class Dataset(BridgeOmero):
             Image class
         filepath : t.Union[str, Path]
             Location of hdf5 file.
-
-        Examples
-        --------
-        FIXME: Add docs.
-
         """
         bridge = BridgeH5(filepath)
         dataset_keys = ("omero_id", "omero_id,", "dataset_id")
@@ -284,14 +281,11 @@ class Dataset(BridgeOmero):
 
 
 class Image(BridgeOmero):
-    """
-    Loads images from OMERO and gives access to the data and metadata.
-    """
+    """Load images from OMERO and their data and metadata."""
 
     def __init__(self, image_id: int, **server_info):
         """
-        Establishes the connection to the OMERO server via the Argo
-        base class.
+        Connect to the OMERO server.
 
         Parameters
         ----------
@@ -315,11 +309,6 @@ class Image(BridgeOmero):
             Image class
         filepath : t.Union[str, Path]
             Location of h5 file.
-
-        Examples
-        --------
-        FIXME: Add docs.
-
         """
         bridge = BridgeH5(filepath)
         image_id = bridge.meta_h5["image_id"]
@@ -327,17 +316,21 @@ class Image(BridgeOmero):
 
     @property
     def name(self):
+        """Get name."""
         return self.ome_class.getName()
 
     @property
     def data(self):
+        """Get image data as a 5D dask array - TCXYZ."""
         return get_data_lazy(self.ome_class)
 
     @property
     def metadata(self):
         """
-        Store metadata saved in OMERO: image size, number of time points,
-        labels of channels, and image name.
+        Get metadata from OMERO as a dict.
+
+        Get image size, number of time points, labels of channels,
+        and image name.
         """
         meta = dict()
         meta["size_x"] = self.ome_class.getSizeX()
@@ -352,17 +345,16 @@ class Image(BridgeOmero):
 
 class UnsafeImage(Image):
     """
-    Loads images from OMERO and gives access to the data and metadata.
-    This class is a temporary solution while we find a way to use
-    context managers inside napari. It risks resulting in zombie connections
-    and producing freezes in an OMERO server.
+    Load images from OMERO and gives access to the data and metadata.
 
+    This class is a temporary solution while we find a way to use
+    context managers inside napari. It risks resulting in zombie
+    connections and producing freezes in an OMERO server.
     """
 
     def __init__(self, image_id, **server_info):
         """
-        Establishes the connection to the OMERO server via the Argo
-        base class.
+        Connect to the OMERO server.
 
         Parameters
         ----------
@@ -375,6 +367,7 @@ class UnsafeImage(Image):
 
     @property
     def data(self):
+        """Get image data as a 5D dask array - TCXYZ."""
         try:
             return get_data_lazy(self.ome_class)
         except Exception as e:
@@ -384,26 +377,26 @@ class UnsafeImage(Image):
 
 def get_data_lazy(image) -> da.Array:
     """
-    Get 5D dask array, with delayed reading from OMERO image.
+    Get 5D dask array - TCXYZ.
+
+    Use delayed reading from OMERO image.
     """
     nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
     pixels = image.getPrimaryPixels()
     dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
     # using dask
     get_plane = delayed(lambda idx: pixels.getPlane(*idx))
-
-    def get_lazy_plane(zct):
-        return da.from_delayed(get_plane(zct), shape=(ny, nx), dtype=dtype)
-
     # 5D stack: TCZXY
     t_stacks = []
-    for t in range(nt):
+    for tpt in range(nt):
         c_stacks = []
         for c in range(nc):
             z_stack = []
             for z in range(nz):
-                z_stack.append(get_lazy_plane((z, c, t)))
+                plane = da.from_delayed(
+                    get_plane((z, c, tpt)), shape=(ny, nx), dtype=dtype
+                )
+                z_stack.append(plane)
             c_stacks.append(da.stack(z_stack))
         t_stacks.append(da.stack(c_stacks))
-
     return da.stack(t_stacks)
