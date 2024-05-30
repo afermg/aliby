@@ -23,7 +23,7 @@ except AttributeError:
 
 import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.metadata import MetaData
+from agora.io.metadata import MetaData, find_file, parse_from_swainlab_grammar
 from agora.io.signal import Signal
 from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
 from aliby.io.dataset import dispatch_dataset
@@ -237,7 +237,7 @@ class Pipeline(ProcessABC):
         self.log(
             f"Fetching data using {dispatcher.__class__.__name__}.", "info"
         )
-        # get log files, either locally or via OMERO
+        # get positions_ids and save microscopy log files
         with dispatcher as conn:
             position_ids = conn.get_position_ids()
             directory = self.store or root_dir / conn.unique_name
@@ -250,7 +250,33 @@ class Pipeline(ProcessABC):
             print("\t" + f"{i}: " + pos.split(".")[0])
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
+        # find spatial locations on the microscope stage of the positions
+        self.spatial_locations = self.spatial_location_of_positions(
+            position_ids
+        )
         return position_ids
+
+    def spatial_location_of_positions(self, position_ids):
+        """Find spatial location of each position from the microscopy log file."""
+        dir_path = Path(self.parameters.general["directory"])
+        logpath = find_file(dir_path, "*.log")
+        if logpath:
+            raw_meta = parse_from_swainlab_grammar(logpath)
+            location_df = raw_meta["group_position"]
+            locations = {
+                position: (
+                    location_df[location_df.Name == position].X.values.astype(
+                        "float"
+                    )[0],
+                    location_df[location_df.Name == position].Y.values.astype(
+                        "float"
+                    )[0],
+                )
+                for position in position_ids
+            }
+        else:
+            locations = {}
+        return locations
 
     def channels_from_OMERO(self):
         """Get a definitive list of channels from OMERO."""
@@ -369,6 +395,8 @@ class Pipeline(ProcessABC):
                 TilerParameters.from_dict(config["tiler"]),
                 OMERO_channels=self.OMERO_channels,
             )
+            # add location of position on the microscope stage
+            tiler.spatial_location = self.spatial_locations.get(name, None)
             # initialise Baby
             babyrunner = BabyRunner.from_tiler(
                 BabyParameters.from_dict(config["baby"]), tiler=tiler

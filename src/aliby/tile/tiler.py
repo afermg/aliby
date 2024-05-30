@@ -25,6 +25,7 @@ the most tiles.
 The experiment is stored as an array with a standard indexing order of
 (Time, Channels, Z-stack, X, Y).
 """
+
 import logging
 import re
 import typing as t
@@ -576,9 +577,11 @@ class Tiler(StepABC):
             channels = [channels]
         # convert to indices
         channels = [
-            self.channels.index(channel)
-            if isinstance(channel, str)
-            else channel
+            (
+                self.channels.index(channel)
+                if isinstance(channel, str)
+                else channel
+            )
             for channel in channels
         ]
         # get the data as a list of length of the number of channels
