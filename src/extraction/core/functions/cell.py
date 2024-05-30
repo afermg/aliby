@@ -254,3 +254,31 @@ def ratio(cell_mask, trap_image):
     else:
         div = np.nan
     return div
+
+
+def centroid(cell_mask):
+    """Find the cell's centroid."""
+    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
+        1, cell_mask.shape[1]
+    )
+    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(
+        cell_mask.shape[0], 1
+    )
+    # moments
+    M00 = np.sum(cell_mask)
+    M10 = np.sum(np.multiply(cell_mask, weights_c))
+    M01 = np.sum(np.multiply(cell_mask, weights_v))
+    # centroid
+    Xm = M10 / M00
+    Ym = M01 / M00
+    return (Xm, Ym)
+
+
+def centroid_x(cell_mask):
+    """Return x coordinate of a cell's centroid."""
+    return centroid(cell_mask)[0]
+
+
+def centroid_y(cell_mask):
+    """Return y coordinate of a cell's centroid."""
+    return centroid(cell_mask)[1]

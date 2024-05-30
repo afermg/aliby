@@ -45,7 +45,17 @@ def extraction_params_from_meta(
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
     base = {
-        "tree": {"general": {"None": ["area", "volume", "eccentricity"]}},
+        "tree": {
+            "general": {
+                "None": [
+                    "area",
+                    "volume",
+                    "eccentricity",
+                    "centroid_x",
+                    "centroid_y",
+                ]
+            }
+        },
         "multichannel_ops": {},
     }
     candidate_channels = set(global_parameters.possible_imaging_channels)
@@ -693,33 +703,6 @@ class Extractor(StepABC):
                 img_bgsub[ch] = None
         return img, img_bgsub
 
-    def get_imgs_old(self, channel: t.Optional[str], tiles, channels=None):
-        """
-        Return image from a correct source, either raw or bgsub.
-
-        Parameters
-        ----------
-        channel: str
-            Name of channel to get.
-        tiles: ndarray
-            An array of the image data having dimensions of
-            (tile_id, channel, tp, tile_size, tile_size, n_zstacks).
-        channels: list of str (optional)
-            t.List of available channels.
-
-        Returns
-        -------
-        img: ndarray
-            An array of image data with dimensions
-            (no tiles, X, Y, no Z channels)
-        """
-        if channels is None:
-            channels = (*self.params.tree,)
-        if channel in channels:  # TODO start here to fetch channel using regex
-            return tiles[:, channels.index(channel), 0]
-        elif channel in self.img_bgsub:
-            return self.img_bgsub[channel]
-
     def _run_tp(
         self,
         tps: t.List[int] = None,
@@ -781,10 +764,40 @@ class Extractor(StepABC):
                 else [indices[-2]]
             )
             extract_dict[k].index.names = idx
+        # add cells' spatial locations within the image
+        self.add_spatial_locations_of_cells(extract_dict)
         # save
         if save:
             self.save_to_h5(extract_dict)
         return extract_dict
+
+    def add_spatial_locations_of_cells(self, extract_dict):
+        """Add spatial location within image of each cell to extract_dict."""
+        x_df = extract_dict["general/None/centroid_x"]
+        y_df = extract_dict["general/None/centroid_y"]
+        extract_dict["general/None/image_x"] = x_df.copy()
+        extract_dict["general/None/image_y"] = y_df.copy()
+        half_width = (self.tiler.tile_size - 1) / 2
+        traps = np.array(x_df.index.get_level_values("trap"))
+        for tp in x_df.columns:
+            tile_locs = self.tiler.tile_locs.centres_at_time(tp)
+            centroid_coords = np.column_stack(
+                (x_df[tp].values, y_df[tp].values)
+            )
+            coords_in_image = (
+                centroid_coords + tile_locs[traps][:, ::-1] - half_width
+            )
+            extract_dict["general/None/image_x"][tp] = coords_in_image[:, 0]
+            extract_dict["general/None/image_y"][tp] = coords_in_image[:, 1]
+        if self.tiler.spatial_location is not None:
+            extract_dict["general/None/absolute_x"] = (
+                extract_dict["general/None/image_x"].copy()
+                + self.tiler.spatial_location[0]
+            )
+            extract_dict["general/None/absolute_y"] = (
+                extract_dict["general/None/image_y"].copy()
+                + self.tiler.spatial_location[1]
+            )
 
     def save_to_h5(self, dict_series, path=None):
         """
