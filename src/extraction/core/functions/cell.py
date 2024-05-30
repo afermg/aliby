@@ -8,9 +8,10 @@ must return only one value.
 They assume that there are no NaNs in the image.
 
 We use the module bottleneck when it performs faster than numpy:
-- Median
-- values containing NaNs (but we make sure this does not happen)
+- median
+- values containing NaNs (but we make sure this never happens).
 """
+
 import math
 import typing as t
 

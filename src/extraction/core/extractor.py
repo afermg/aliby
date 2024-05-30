@@ -122,6 +122,7 @@ class Extractor(StepABC):
     or leaf level.
     """
 
+    # get pixel_size; z_size; spacing
     default_meta = global_parameters.imaging_specifications
 
     def __init__(
@@ -758,7 +759,7 @@ class Extractor(StepABC):
         elif isinstance(tps, int):
             tps = [tps]
         # store results in dict
-        d = {}
+        extract_dict = {}
         for tp in tps:
             # extract for each time point and convert to dict of pd.Series
             new = flatten_nesteddict(
@@ -767,21 +768,23 @@ class Extractor(StepABC):
                 tp=tp,
             )
             # concatenate with data extracted from earlier time points
-            for k in new.keys():
-                d[k] = pd.concat((d.get(k, None), new[k]), axis=1)
+            for key in new.keys():
+                extract_dict[key] = pd.concat(
+                    (extract_dict.get(key, None), new[key]), axis=1
+                )
         # add indices to pd.Series containing the extracted data
-        for k in d.keys():
+        for k in extract_dict.keys():
             indices = ["experiment", "position", "trap", "cell_label"]
             idx = (
-                indices[-d[k].index.nlevels :]
-                if d[k].index.nlevels > 1
+                indices[-extract_dict[k].index.nlevels :]
+                if extract_dict[k].index.nlevels > 1
                 else [indices[-2]]
             )
-            d[k].index.names = idx
+            extract_dict[k].index.names = idx
         # save
         if save:
-            self.save_to_h5(d)
-        return d
+            self.save_to_h5(extract_dict)
+        return extract_dict
 
     def save_to_h5(self, dict_series, path=None):
         """

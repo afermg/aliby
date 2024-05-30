@@ -3,29 +3,31 @@
 Dataset is a group of classes to manage multiple types of experiments:
  - Remote experiments on an OMERO server (located in src/aliby/io/omero.py)
  - Local experiments in a multidimensional OME-TIFF image containing the metadata
- - Local experiments in a directory containing multiple positions in independent images with or without metadata
+ - Local experiments in a directory containing multiple positions in independent
+images with or without metadata
 """
 import os
 import shutil
 import time
 import typing as t
-from abc import ABC, abstractproperty, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from pathlib import Path
 
-from agora.io.bridge import BridgeH5
 from aliby.io.image import ImageLocalOME
+from aliby.io.omero import Dataset
 
 
 def dispatch_dataset(expt_id: int or str, **kwargs):
     """
     Find paths to the data.
 
-    Connects to OMERO if data is remotely available.
+    Connect to OMERO if data is remotely available.
 
     Parameters
     ----------
     expt_id: int or str
-        To identify the data, either an OMERO ID or an OME-TIFF file or a local directory.
+        To identify the data, either an OMERO ID or an OME-TIFF file
+        or a local directory.
 
     Returns
     -------
@@ -33,20 +35,18 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     """
     if isinstance(expt_id, int):
         # data available online
-        from aliby.io.omero import Dataset
-
         return Dataset(expt_id, **kwargs)
     elif isinstance(expt_id, str):
         # data available locally
         expt_path = Path(expt_id)
         if expt_path.is_dir():
-            # data in multiple folders
+            # data in multiple folders, such as zarr
             return DatasetLocalDir(expt_path)
         else:
             # data in one folder as OME-TIFF files
             return DatasetLocalOME(expt_path)
     else:
-        raise Warning(f"{expt_id} is an invalid expt_id")
+        raise Warning(f"{expt_id} is an invalid expt_id.")
 
 
 class DatasetLocalABC(ABC):
@@ -103,7 +103,7 @@ class DatasetLocalABC(ABC):
         pass
 
     @abstractmethod
-    def get_images(self):
+    def get_position_ids(self):
         pass
 
 
@@ -120,12 +120,13 @@ class DatasetLocalDir(DatasetLocalABC):
             "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
         )
 
-    def get_images(self):
-        """Return a dictionary of folder or file names and their paths.
+    def get_position_ids(self):
+        """
+        Return a dict of file paths for each position.
 
         FUTURE 3.12 use pathlib is_junction to pick Dir or File
         """
-        images = {
+        position_ids_dict = {
             item.name: item
             for item in self.path.glob("*/")
             if item.is_dir()
@@ -136,8 +137,7 @@ class DatasetLocalDir(DatasetLocalABC):
             )
             or item.suffix[1:] in self._valid_suffixes
         }
-
-        return images
+        return position_ids_dict
 
 
 class DatasetLocalOME(DatasetLocalABC):
@@ -154,7 +154,7 @@ class DatasetLocalOME(DatasetLocalABC):
         """Get the date from the metadata of the first position."""
         return ImageLocalOME(list(self.get_position_ids().values())[0]).date
 
-    def get_images(self):
+    def get_position_ids(self):
         """Return a dictionary with the names of the image files."""
         return {
             f.name: str(f)

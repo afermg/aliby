@@ -16,7 +16,7 @@ class Cells:
     """
     Extract information from an h5 file.
 
-    Use output from BABY to find cells detected, get, and fill, edge masks
+    Use output from BABY to find cells detected, get and fill edge masks,
     and retrieve mother-bud relationships.
 
     This class accesses in the h5 file:
