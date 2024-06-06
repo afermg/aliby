@@ -71,3 +71,17 @@ conda search -f matplotlib
  ```bash 
 conda install matplotlib=3.8.0 
  ```
+
+ - On an M1 Mac, these commands proved helpful
+
+ ```bash 
+conda install openblas
+conda uninstall numpy
+conda install numpy    
+ ```
+
+ and reinstalling tensorflow
+
+ ```bash 
+python -m pip install tensorflow-macos==2.9.0 tensorflow-metal==0.5.0 --force-reinstall
+```
