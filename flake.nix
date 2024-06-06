@@ -45,6 +45,7 @@
                   # Add needed packages here
                   cudaPackages.cudatoolkit
                   linuxPackages.nvidia_x11
+                  pkgs.libz # for numpy
                   pkgs.stdenv.cc.cc
                   pkgs.libGL
                   ]);
