@@ -39,8 +39,10 @@ zarr = ">=2.14.0"
 tensorflow = "2.13.1"
 baby-seg = ">=0.30.4"
 
-[tool.poetry.extras]
 omero-py = { version = ">=5.6.2", optional = true }
+
+[tool.poetry.extras]
+omero = ["omero-py"]
 
 [tool.black]
 line-length = 79
