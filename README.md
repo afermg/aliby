@@ -97,11 +97,10 @@ nix develop . --impure
 ```
 For convenience, to start the environment every time you access the project you automatically set the environment
 ```bash
-direnv allow . --impure
+direnv allow . 
 ```
 
-
-### Integration to IDE
+### IDE Integration
 #### Doom Emacs
 Activate the `direnv` module (under `:tools`) on [Doom](https://github.com/doomemacs/doomemacs)'s `init.el`. Then add this to your `config.el`.
 ```elisp
