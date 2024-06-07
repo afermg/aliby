@@ -1,19 +1,19 @@
+import copy
 import typing as t
 from pathlib import Path
 
+import aliby.global_parameters as global_parameters
 import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
-
-import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_meta
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
-    load_custom_args,
+    load_custom_funs_and_args,
     load_funs,
     load_redfuns,
 )
@@ -32,13 +32,11 @@ extraction_result = t.Dict[
 # to be stored in a dictionary for access only on demand and to be
 # defined simply in extraction/core/functions.
 CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_funs()
-CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
+CUSTOM_FUNS, CUSTOM_ARGS = load_custom_funs_and_args()
 REDUCTION_FUNS = load_redfuns()
 
 
-def extraction_params_from_meta(
-    meta: t.Union[dict, Path, str], extras: t.Collection[str] = ["ph"]
-):
+def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
     """Obtain parameters for extraction from meta data."""
     if not isinstance(meta, dict):
         # load meta data
@@ -60,11 +58,14 @@ def extraction_params_from_meta(
     }
     candidate_channels = set(global_parameters.possible_imaging_channels)
     default_reductions = {"max"}
-    default_metrics = set(global_parameters.fluorescence_functions)
-    default_reduction_metrics = {
-        r: default_metrics for r in default_reductions
+    default_fluorescence_metrics = set(
+        global_parameters.fluorescence_functions
+    )
+    default_reduction_and_fluorescence_metrics = {
+        r: default_fluorescence_metrics for r in default_reductions
     }
-    # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
+    # Uncomment to add nuc_conv_3d (slow)
+    # default_reduction_metrics["None"] = ["nuc_conv_3d"]
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
         # find matching channels in metadata
@@ -72,7 +73,9 @@ def extraction_params_from_meta(
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
     for ch in extant_fluorescence_ch:
-        base["tree"][ch] = default_reduction_metrics
+        base["tree"][ch] = copy.deepcopy(
+            default_reduction_and_fluorescence_metrics
+        )
     base["sub_bg"] = extant_fluorescence_ch
     return base
 
@@ -256,24 +259,26 @@ class Extractor(StepABC):
         funs = funs.intersection(CUSTOM_FUNS.keys())
         # find their arguments
         self.custom_arg_vals = {
-            k: {k2: self.get_meta(k2) for k2 in v}
-            for k, v in CUSTOM_ARGS.items()
+            func_name: {farg: self.get_meta(farg) for farg in func_args}
+            for func_name, func_args in CUSTOM_ARGS.items()
+            if func_name in funs
         }
         # define custom functions
         self.custom_funs = {}
-        for k, f in CUSTOM_FUNS.items():
+        for func_name, func in CUSTOM_FUNS.items():
+            if func_name in funs:
 
-            def tmp(f):
-                # pass extra arguments to custom function
-                # return a function of cell_masks and trap_image
-                return lambda cell_masks, trap_image: trap_apply(
-                    f,
-                    cell_masks,
-                    trap_image,
-                    **self.custom_arg_vals.get(k, {}),
-                )
+                def tmp(func):
+                    # pass extra arguments to custom function
+                    # return a function of cell_masks and trap_image
+                    return lambda cell_masks, trap_image: trap_apply(
+                        func,
+                        cell_masks,
+                        trap_image,
+                        **self.custom_arg_vals.get(func_name, {}),
+                    )
 
-            self.custom_funs[k] = tmp(f)
+                self.custom_funs[func_name] = tmp(func)
 
     def get_tiles(
         self,

@@ -6,6 +6,7 @@ GUI/@timelapseTraps/extractCellDataStacksParfor.m
 Especially lines 342 to 399.
 This part only replicates the method to get the nuc_est_conv values
 """
+
 import typing as t
 import numpy as np
 import skimage
@@ -95,10 +96,8 @@ def nuc_est_conv(
     """
     if alpha is None:
         alpha = 0.95
-
     if object_radius_estimation is None:
         object_radius_estimation = 0.085
-
     cell_loc = cell_mask  # np.where(cell_mask)[0]
     cell_fluo = trap_image[cell_mask]
     num_cell_fluo = len(np.nonzero(cell_fluo)[0])
@@ -108,10 +107,8 @@ def nuc_est_conv(
     approx_nuc_radius = np.sqrt(
         object_radius_estimation * num_cell_fluo / np.pi
     )
-
     if gaussian_sigma is None:
         gaussian_sigma = float(approx_nuc_radius / np.sqrt(chi2inv))
-
     # Nuc Est Conv
     filter_size = int(np.ceil(2 * approx_nuc_radius))
     gaussian_filter_shape = (2 * filter_size + 1,) * 2
@@ -147,7 +144,5 @@ def nuc_conv_3d(cell_mask, trap_image, pixel_size=0.23, spacing=0.6):
     cell_image[~cell_mask] = 0
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
-    nuc_est_conv /= (
-        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * sd_est**2
-    )
+    nuc_est_conv /= np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * sd_est**2
     return nuc_est_conv

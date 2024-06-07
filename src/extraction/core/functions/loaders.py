@@ -28,11 +28,13 @@ def load_cellfuns_core():
     }
 
 
-def load_custom_args() -> t.Tuple[
-    (t.Dict[str, t.Callable], t.Dict[str, t.List[str]])
-]:
+def load_custom_funs_and_args() -> (
+    t.Tuple[(t.Dict[str, t.Callable], t.Dict[str, t.List[str]])]
+):
     """
-    Load custom functions from the localisation module.
+    Load custom functions.
+
+    Typically there are for nuclear localisation.
 
     Return the functions and any additional arguments other
     than cell_mask and trap_image as dictionaries.

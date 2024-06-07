@@ -29,6 +29,7 @@ from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
+from extraction.core.recursive_merge import recursive_merge_extractor
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
@@ -145,7 +146,7 @@ class PipelineParameters(ParametersABC):
                     defaults["general"][k][k2] = v2
             else:
                 defaults["general"][k] = v
-        # default Tiler parameters
+        # default Tiler parameters and update with any input tiler
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         # generate a backup channel for when logfile meta is available
         # but not image metadata.
@@ -157,9 +158,15 @@ class PipelineParameters(ParametersABC):
                 defaults["tiler"]["ref_channel"]
             )
         defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
-        # default parameters
-        defaults["baby"] = BabyParameters.default(**baby).to_dict()
+        # defaults for extraction
         defaults["extraction"] = extraction_params_from_meta(meta_d)
+        # merge any input, a nested dict
+        if extraction:
+            defaults["extraction"] = recursive_merge_extractor(
+                defaults["extraction"], extraction
+            )
+        # default parameters updated with any inputs
+        defaults["baby"] = BabyParameters.default(**baby).to_dict()
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
         ).to_dict()
