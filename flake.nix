@@ -47,6 +47,7 @@
                   linuxPackages.nvidia_x11
                   pkgs.libz # for numpy
                   pkgs.stdenv.cc.cc
+                  "${pkgs.stdenv.cc.cc.lib}/lib" # for skimage.io.imread
                   pkgs.libGL
                   ]);
                   # https://devenv.sh/reference/options/
