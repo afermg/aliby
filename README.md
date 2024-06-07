@@ -85,3 +85,27 @@ conda install numpy
  ```bash 
 python -m pip install tensorflow-macos==2.9.0 tensorflow-metal==0.5.0 --force-reinstall
 ```
+
+## Nix installation (experimental)
+This is still under works and it is not guaranteed to work as-is on MacOS, but in Linux running the Nix package manager it should make the setup trivial.
+
+For reproducible environments using [Nix](https://github.com/NixOS/nix) flakes and [envrc](https://github.com/numtide/devshell).
+
+To run a self-contained virtual environment shell session
+```bash
+nix develop . --impure
+```
+For convenience, to start the environment every time you access the project you automatically set the environment
+```bash
+direnv allow . --impure
+```
+
+
+### Integration to IDE
+#### Doom Emacs
+Activate the `direnv` module (under `:tools`) on [Doom](https://github.com/doomemacs/doomemacs)'s `init.el`. Then add this to your `config.el`.
+```elisp
+(require 'envrc)
+(add-hook! (add-hook 'change-major-mode-after-body-hook 'envrc-mode))
+```
+That should ensure that Emacs finds the activated environment when running `(run-python)` from a Python file inside the environment.
