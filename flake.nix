@@ -45,21 +45,26 @@
                   # Add needed packages here
                   cudaPackages.cudatoolkit
                   linuxPackages.nvidia_x11
-                  pkgs.libz # for numpy
                   pkgs.stdenv.cc.cc
-                  "${pkgs.stdenv.cc.cc.lib}/lib" # for skimage.io.imread
+                  pkgs.libz # for numpy
+                  # "${pkgs.stdenv.cc.cc.lib}/lib" # for skimage.io.imread
                   pkgs.libGL
                   ]);
                   # https://devenv.sh/reference/options/
                   packages = with pkgs; [
-                    poetry
+                    mpkgs.poetry
                     python310
                     # python310Packages.cupy
                   ];
                   enterShell = ''
                     export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
                     export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
-                    poetry install -vv --with dev
+                    export VIRTUAL_ENV=.venv
+                    if [ ! -d $VIRTUAL_ENV ]; then
+                       export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
+                       poetry install -vvv --with dev --no-root
+                    fi
+                    source $VIRTUAL_ENV/bin/activate
                   '';
                 }
               ];
