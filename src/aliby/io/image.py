@@ -17,6 +17,7 @@ import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
 from pathlib import Path
+import re
 
 import dask.array as da
 import numpy as np
@@ -375,3 +376,98 @@ class ImageZarr(BaseLocalImage):
     def dimorder(self):
         """Impose a hard-coded order of dimensions based on the zarr compression script."""
         return "TCZYX"
+
+class ImageChannelDir(BaseLocalImage):
+    """
+    Standard image class for tiff files.
+
+    Image class for the case in which all images are split in one or
+    multiple folders with positions and time-points as independent files.
+    It inherits from BaseLocalImage so we only override methods that are critical.
+    The target use-case of this class is when we create virtual staining channels in
+    independent folders.
+
+    Assumptions:
+    - One folder per channel.
+    - Images are flat.
+    - Position, Time, z-stack and the others are determined by filenames.
+    - Provides Dimorder as it is set in the filenames, or expects order
+
+    Metadata necessary
+    dimorder (str): 
+    Meta (dict): size_x,y; channels,
+    Maybe name and type
+    """
+
+    def __init__(self, path: t.Union[str, Path], **kwargs):
+        """Initialise using file name."""
+        super().__init__(path)
+        self.image_id = str(self.path.stem)
+        self.meta = filename_to_meta_gsk(self.path)
+
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array."""
+        # img = imread(str(self.path / "*.tiff"))
+        # If extra channels, pick the first stack of the last dimensions
+        while len(img.shape) > 3:
+            img = img[..., 0]
+        if self.meta:
+            self.meta["size_x"], self.meta["size_y"] = img.shape[-2:]
+            # Reshape using metadata
+            img = da.reshape(img, self.meta.values())
+            original_order = [
+                i[-1] for i in self.meta.keys() if i.startswith("size")
+            ]
+            # Swap axis to conform with normal order
+            target_order = [
+                self.default_dimorder.index(x) for x in original_order
+            ]
+            img = da.moveaxis(
+                img,
+                list(range(len(original_order))),
+                target_order,
+            )
+            pixels = self.rechunk_data(img)
+        return pixels
+
+    @property
+    def name(self):
+        """Return name of image directory."""
+        return self.path.stem
+
+    @property
+    def dimorder(self):
+        # Assumes only dimensions start with "size"
+        return [
+            k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")
+        ]
+
+def filename_to_meta(path:Path, regex:re.Pattern or None=None):
+    """Split string into a dict. Use formatting and spaces based on the arguments.
+    Plate, Time point (T), Field of view (F), Z-stack (Z), Channel (C).
+    """
+
+    if regex is None:
+        regex = re.compile(".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif")
+
+
+     sorted_paths = list( map(str, sorted( path.rglob("*.tif") ) ) )
+
+     # from joblib import Parallel, delayed
+     # parallel = Parallel()
+     # %timeit output = parallel(delayed(regex.findall)(i) for i in sorted_paths)
+
+     output = list(map(lambda x: regex.findall(x), sorted_paths))
+     valid = [x[0] for x in output if len(x)] 
+     # Combine W and F into a single level (F)
+     # Sort indices to CFTZ
+     well_field_together = [(x[0], '_'.join((x[1], x[3])), x[2], x[4]) for x in valid] 
+
+     from itertools import groupby
+     iterator = groupby(well_field_together, lambda x: x[:2])
+     d = {key: [x for x in group] for key, group in iterator}
+     max_val = {k:[len(v[i]) for i in range(4)] for k,v in d.items()}
+     # For each well get the number of C, T, F and Z
+      
+    # Channel, Plate, time, field of view, z-stack
+    return map(lambda x: regex.findall(str(x)), path.glob("*/*tif"))

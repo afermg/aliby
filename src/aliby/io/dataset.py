@@ -11,6 +11,7 @@ import shutil
 import time
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
+from itertools import groupby
 from pathlib import Path
 
 from aliby.io.image import ImageLocalOME
@@ -161,3 +162,60 @@ class DatasetLocalOME(DatasetLocalABC):
             for suffix in self._valid_suffixes
             for f in self.path.glob(f"*.{suffix}")
         }
+
+class DatasetLocalDir(DatasetLocalABC):
+    """Find paths to a data set, comprising multiple images in different folders."""
+
+    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
+        super().__init__(dpath)
+
+    @property
+    def date(self):
+        """Find date when a folder was created."""
+        return time.strftime(
+            "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
+        )
+
+    def get_position_ids(self) -> dict[str, list[str]]:
+        """
+        Return a dict of a list for filepaths that define each position.
+
+        """
+
+        position_ids_dict = {
+            item.name: item
+            for item in self.path.glob("*/")
+            if item.is_dir()
+            and any(
+                path
+                for suffix in self._valid_suffixes
+                for path in item.glob(f"*.{suffix}")
+            )
+            or item.suffix[1:] in self._valid_suffixes
+        }
+        return position_ids_dict
+
+def groupby_regex(dpath:str, regex:str or None = None) -> groupby:
+    """
+    Use a regex to group filenames of the same field-of-view (or, in
+    some cases, well+field-of-view)
+    """
+    if regex is None:
+        regex = re.compile(".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif")
+    sorted_paths = list( map(str, sorted(dpath.rglob("*.tif") ) ) )
+
+    output = dict( zip(sorted_paths, (map(lambda x: regex.findall(x), sorted_paths))) )
+    valid = {k:v[0] for k,v in output.items() if len(v)} 
+    iterator = groupby(valid.items(), lambda x: (x[1][1],x[1][3]))
+    return iterator
+
+def get_fov_id(dpath) -> dict[str,list[str]]:
+    iterator = groupby_regex(dpath)
+    d = {key: [x for x in group] for key, group in iterator}
+
+    return {k:v[0] for k,v in d.items()}
+
+def get_dimensions(dpath)-> list[int]:
+    iterator = groupby_regex(dpath)
+    d = {key: [x for x in group] for key, group in iterator}
+    pass
