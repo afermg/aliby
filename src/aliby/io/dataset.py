@@ -198,7 +198,7 @@ class DatasetIndFiles(DatasetLocalABC):
 
 
 @cache
-def groupby_regex(path:str, regex:str, capture_group_indices:tuple[int]=(2,3)) -> dict[str,list[str]]:
+def groupby_regex(path:str, regex:str, capture_group_indices:tuple[int]=(2,4)) -> dict[str,list[str]]:
     """
     Use a regex to group filenames of the same field-of-view (or, in
     some cases, well+field-of-view)
