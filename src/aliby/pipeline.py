@@ -15,17 +15,12 @@ import tensorflow as tf
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
-try:
-    if baby.__version__:
-        from aliby.baby_sitter import BabyParameters, BabyRunner
-except AttributeError:
-    from aliby.baby_client import BabyParameters, BabyRunner
 
 import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, find_file, parse_from_swainlab_grammar
 from agora.io.signal import Signal
-from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter, CellPoseWriter
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -251,10 +246,16 @@ class Pipeline(ProcessABC):
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
         # find spatial locations on the microscope stage of the positions
-        self.spatial_locations = self.spatial_location_of_positions(
+
+        return position_ids
+
+
+    @property
+    if not hasattr(self, "_spatial_locations"):
+        self._spatial_locations = self.spatial_location_of_positions(
             position_ids
         )
-        return position_ids
+    return return self._spatial_locations 
 
     def spatial_location_of_positions(self, position_ids):
         """Find spatial location of each position from the microscopy log file."""
@@ -383,24 +384,46 @@ class Pipeline(ProcessABC):
         out_file = self.generate_h5file(image_id)
         # instantiate writers
         tiler_writer = TilerWriter(out_file)
-        baby_writer = LinearBabyWriter(out_file)
-        babystate_writer = StateWriter(out_file)
+        seg_writer = LinearBabyWriter(out_file)
+        state_writer = StateWriter(out_file)
         # start pipeline
-        initialise_tensorflow()
+
+        if "TODO add condition for baby or CellPose":
+            from agora.io.writer import LinearBabyWriter 
+            try:
+                if baby.__version__:
+                    from aliby.baby_sitter import BabyParameters, BabyRunner
+            except AttributeError:
+                from aliby.baby_client import BabyParameters, BabyRunner
+            initialise_tensorflow()
+            segmenter_cls, segmenter_params= BabyRunner, BabyParameters
+        else:
+            from agora.io.writer import CellPoseWriter 
+            from aliby.cellpose import CellposeParameters, CellposeRunner
+
+            segmenter_cls, segmenter_params= CellposeRunner, CellposeParameters
+
         frac_clogged_traps = 0.0
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             # initialise tiler; load local meta data from image
+
+            kwargs = {}
+            if self.config["segmenter"]["name"]=="baby":
+                kwargs = dict(
+                    OMERO_channels=self.OMERO_channels,
+                    spatial_location= self.spatial_locations.get(name, None)
+                )
+
             tiler = Tiler.from_image(
                 image,
                 TilerParameters.from_dict(config["tiler"]),
-                OMERO_channels=self.OMERO_channels,
+                **kwargs,
             )
-            # add location of position on the microscope stage
-            tiler.spatial_location = self.spatial_locations.get(name, None)
-            # initialise Baby
-            babyrunner = BabyRunner.from_tiler(
-                BabyParameters.from_dict(config["baby"]), tiler=tiler
+
+            segmenter = segmenter_cls.from_tiler(
+                segmenter_params.from_dict(config["segmenter"]), tiler=tiler
             )
+
             # initialise extraction
             extraction = Extractor.from_tiler(
                 ExtractorParameters.from_dict(config["extraction"]),
@@ -429,9 +452,9 @@ class Pipeline(ProcessABC):
                             f"Found {tiler.no_tiles} traps in {image.name}.",
                             "info",
                         )
-                    # run Baby
+                    # run segmentation
                     try:
-                        result = babyrunner.run_tp(i)
+                        result = segmenter.run_tp(i)
                     except baby.errors.Clogging:
                         self.log(
                             "WARNING: Clogging threshold exceeded in BABY."
@@ -440,16 +463,16 @@ class Pipeline(ProcessABC):
                         self.log(
                             "WARNING: Bud has been assigned as its own mother."
                         )
-                        raise Exception("Catastrophic Baby error!")
-                    baby_writer.write(
+                        raise Exception("Catastrophic Segmentation error!")
+                    seg_writer.write(
                         data=result,
                         overwrite=["mother_assign"],
                         meta={"last_processed": i},
                         tp=i,
                     )
-                    babystate_writer.write(
-                        data=babyrunner.crawler.tracker_states,
-                        overwrite=babystate_writer.datatypes.keys(),
+                    state_writer.write(
+                        data=segmenter.crawler.tracker_states,
+                        overwrite=seg_state_writer.datatypes.keys(),
                         tp=i,
                     )
                     # run extraction
