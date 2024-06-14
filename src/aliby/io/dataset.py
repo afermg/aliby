@@ -11,14 +11,12 @@ import shutil
 import time
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
-from itertools import groupby
 from pathlib import Path
 
-from aliby.io.image import ImageLocalOME
-from aliby.io.omero import Dataset
+from aliby.io.image import ImageLocalOME, groupby_regex
 
 
-def dispatch_dataset(expt_id: int or str, **kwargs):
+def dispatch_dataset(expt_id: int or str, custom:str or None = None, **kwargs):
     """
     Find paths to the data.
 
@@ -29,23 +27,34 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     expt_id: int or str
         To identify the data, either an OMERO ID or an OME-TIFF file
         or a local directory.
+    custom: str or None
+        Determines whether to use a Omero-based structure or a custom one.
 
     Returns
     -------
     A callable Dataset instance, either network-dependent or local.
     """
-    if isinstance(expt_id, int):
-        # data available online
-        return Dataset(expt_id, **kwargs)
-    elif isinstance(expt_id, str):
-        # data available locally
-        expt_path = Path(expt_id)
-        if expt_path.is_dir():
-            # data in multiple folders, such as zarr
-            return DatasetLocalDir(expt_path)
+    if not custom:
+        if isinstance(expt_id, int):
+            from aliby.io.omero import Dataset
+            # data available online
+            return Dataset(expt_id, **kwargs)
+        elif isinstance(expt_id, str):
+            # data available locally
+            expt_path = Path(expt_id)
+            if expt_path.is_dir():
+                # data in multiple folders, such as zarr
+                return DatasetLocalDir(expt_path)
+            else:
+                # data in one folder as OME-TIFF files
+                return DatasetLocalOME(expt_path)
+            # Data requires a special transformation (e.g., an unusual single-file-structure)
         else:
-            # data in one folder as OME-TIFF files
-            return DatasetLocalOME(expt_path)
+            return DatasetIndFiles(expt_path, **kwargs)
+
+
+
+            
     else:
         raise Warning(f"{expt_id} is an invalid expt_id.")
 
@@ -99,9 +108,12 @@ class DatasetLocalABC(ABC):
             shutil.copy(annotation, root_dir / name.name)
         return True
 
-    @abstractproperty
+    @property
     def date(self):
-        pass
+        """Find date when a folder was created."""
+        return time.strftime(
+            "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
+        )
 
     @abstractmethod
     def get_position_ids(self):
@@ -113,13 +125,6 @@ class DatasetLocalDir(DatasetLocalABC):
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
-
-    @property
-    def date(self):
-        """Find date when a folder was created."""
-        return time.strftime(
-            "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
-        )
 
     def get_position_ids(self):
         """
@@ -155,7 +160,7 @@ class DatasetLocalOME(DatasetLocalABC):
         """Get the date from the metadata of the first position."""
         return ImageLocalOME(list(self.get_position_ids().values())[0]).date
 
-    def get_position_ids(self):
+    def get_position_ids(self) -> dict[str,str]:
         """Return a dictionary with the names of the image files."""
         return {
             f.name: str(f)
@@ -163,59 +168,43 @@ class DatasetLocalOME(DatasetLocalABC):
             for f in self.path.glob(f"*.{suffix}")
         }
 
-class DatasetLocalDir(DatasetLocalABC):
-    """Find paths to a data set, comprising multiple images in different folders."""
+class DatasetIndFiles(DatasetLocalABC):
+    """
+    Find paths to a data set, comprising of individual files. The
+    data can be parsed using a regex and a string to capture the order of dimension.
+    """
 
-    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
+    def __init__(self, dpath: t.Union[str, Path], regex:str=None, re_dimorder:str=None, *args, **kwargs):
+        if regex is None:
+            self.regex =  ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
+        if re_dimorder is None:
+            self.dimorder = "CFTZ"
         super().__init__(dpath)
 
-    @property
-    def date(self):
-        """Find date when a folder was created."""
-        return time.strftime(
-            "%Y%m%d", time.strptime(time.ctime(os.path.getmtime(self.path)))
-        )
 
     def get_position_ids(self) -> dict[str, list[str]]:
         """
         Return a dict of a list for filepaths that define each position.
-
+        The key is the name of the position/field-of-view and the value is
+        a list of stings indicated the associated files.
         """
 
-        position_ids_dict = {
-            item.name: item
-            for item in self.path.glob("*/")
-            if item.is_dir()
-            and any(
-                path
-                for suffix in self._valid_suffixes
-                for path in item.glob(f"*.{suffix}")
-            )
-            or item.suffix[1:] in self._valid_suffixes
-        }
-        return position_ids_dict
+        d = groupby_regex(self.path, self.regex)
 
-def groupby_regex(dpath:str, regex:str or None = None) -> groupby:
+        return d
+
+
+@cache
+def groupby_regex(dpath:str, regex:str) -> groupby:
     """
     Use a regex to group filenames of the same field-of-view (or, in
     some cases, well+field-of-view)
     """
-    if regex is None:
-        regex = re.compile(".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif")
+    regex = re.compile(regex)
     sorted_paths = list( map(str, sorted(dpath.rglob("*.tif") ) ) )
 
     output = dict( zip(sorted_paths, (map(lambda x: regex.findall(x), sorted_paths))) )
     valid = {k:v[0] for k,v in output.items() if len(v)} 
     iterator = groupby(valid.items(), lambda x: (x[1][1],x[1][3]))
-    return iterator
-
-def get_fov_id(dpath) -> dict[str,list[str]]:
-    iterator = groupby_regex(dpath)
     d = {key: [x for x in group] for key, group in iterator}
-
     return {k:v[0] for k,v in d.items()}
-
-def get_dimensions(dpath)-> list[int]:
-    iterator = groupby_regex(dpath)
-    d = {key: [x for x in group] for key, group in iterator}
-    pass
