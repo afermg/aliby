@@ -12,6 +12,7 @@ import shutil
 import time
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
+from functools import cache
 from itertools import groupby
 from pathlib import Path
 
@@ -203,11 +204,11 @@ def groupby_regex(path:str, regex:str, capture_group_indices:tuple[int]=(2,3)) -
     some cases, well+field-of-view)
     """
     regex = re.compile(regex)
-    str_paths =  map(str, sorted(Path(path).rglob("*.tif") ) ) 
+    str_paths =  list(map(str, sorted(Path(path).rglob("*.tif") ) )) 
     captures = list(map(lambda x: regex.findall(x), str_paths))
-    valid = [(pth, *capture[0]) for pth,capture in zip(str_paths, captures) if len(capture)]
+    valid = [(pth, *capture[0]) for pth, capture in zip(str_paths, captures) if len(capture)]
     key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
     sorted_by = sorted(valid, key=key_fn)
     iterator = groupby(sorted_by, key=key_fn)
     d = { key: [x[0] for x in group] for key, group in iterator}
-    return {k:v for k,v in d.items()}
+    return d
