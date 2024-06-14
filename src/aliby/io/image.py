@@ -16,6 +16,8 @@ ImageDummy is a dummy class for silent failure testing.
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
+from functools import cache
+from itertools import groupby
 from pathlib import Path
 import re
 
@@ -118,7 +120,7 @@ class BaseLocalImage(ABC):
     # default image order
     default_dimorder = "tczyx"
 
-    def __init__(self, path: t.Union[str, Path]):
+    def __init__(self, path: t.Union[str, Path, list[str]]):
         # If directory, assume contents are naturally sorted
         self.path = Path(path)
 
@@ -377,7 +379,7 @@ class ImageZarr(BaseLocalImage):
         """Impose a hard-coded order of dimensions based on the zarr compression script."""
         return "TCZYX"
 
-class ImageChannelDir(BaseLocalImage):
+class ImageIndFiles(BaseLocalImage):
     """
     Standard image class for tiff files.
 
@@ -399,21 +401,31 @@ class ImageChannelDir(BaseLocalImage):
     Maybe name and type
     """
 
-    def __init__(self, path: t.Union[str, Path], **kwargs):
-        """Initialise using file name."""
-        super().__init__(path)
+    def __init__(self,
+        img_files: list[str],
+        regex:str,
+        re_dimorder:str,
+        dimorder:str or None=None,
+        **kwargs):
+        """Initialise using a directory and parse the files inside of it using a regex."""
+        super().__init__(img_files)
         self.image_id = str(self.path.stem)
         self.meta = filename_to_meta_gsk(self.path)
+        if regex is None:
+            self.regex =  ".+\/(.+)\/_.+[A-P][0-9]{2}.*_T([0-9]{4})F[0-9]{3}.*Z([0-9]{2}).*[0-9].tif"
+        if re_dimorder is None:
+            self.re_dimorder = "CTZ"
+        if dimorder is None:
+            self.dimorder = "TCZYX"
+        self.meta_shape = get_dimensions(self.image, self.regex, self.re_dimorder)
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
         # img = imread(str(self.path / "*.tiff"))
         # If extra channels, pick the first stack of the last dimensions
-        while len(img.shape) > 3:
-            img = img[..., 0]
-        if self.meta:
-            self.meta["size_x"], self.meta["size_y"] = img.shape[-2:]
-            # Reshape using metadata
+        raw_data = imread(path)
+        dims = get_dimensions()
+
             img = da.reshape(img, self.meta.values())
             original_order = [
                 i[-1] for i in self.meta.keys() if i.startswith("size")
@@ -435,39 +447,45 @@ class ImageChannelDir(BaseLocalImage):
         """Return name of image directory."""
         return self.path.stem
 
-    @property
-    def dimorder(self):
-        # Assumes only dimensions start with "size"
-        return [
-            k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")
-        ]
 
-def filename_to_meta(path:Path, regex:re.Pattern or None=None):
-    """Split string into a dict. Use formatting and spaces based on the arguments.
-    Plate, Time point (T), Field of view (F), Z-stack (Z), Channel (C).
-    """
+# def filename_to_meta(path:Path, regex:re.Pattern or None=None):
+#     """Split string into a dict. Use formatting and spaces based on the arguments.
+#     Plate, Time point (T), Field of view (F), Z-stack (Z), Channel (C).
+#     """
+#     if regex is None:
+#         regex = re.compile(".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif")
 
-    if regex is None:
-        regex = re.compile(".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif")
+#     sorted_paths = list( map(str, sorted( path.rglob("*.tif") ) ) )
 
+#     # from joblib import Parallel, delayed
+#     # parallel = Parallel()
+#     # %timeit output = parallel(delayed(regex.findall)(i) for i in sorted_paths)
 
-     sorted_paths = list( map(str, sorted( path.rglob("*.tif") ) ) )
+#     output = list(map(lambda x: regex.findall(x), sorted_paths))
+#     valid = [x[0] for x in output if len(x)] 
+#     # Combine W and F into a single level (F)
+#     # Sort indices to CFTZ
+#     well_field_together = [(x[0], '_'.join((x[1], x[3])), x[2], x[4]) for x in valid] 
 
-     # from joblib import Parallel, delayed
-     # parallel = Parallel()
-     # %timeit output = parallel(delayed(regex.findall)(i) for i in sorted_paths)
+#     from itertools import groupby
+#     iterator = groupby(well_field_together, lambda x: x[:2])
+#     d = {key: [x for x in group] for key, group in iterator}
+#     max_val = {k:[len(v[i]) for i in range(4)] for k,v in d.items()}
+#     # For each well get the number of C, T, F and Z
 
-     output = list(map(lambda x: regex.findall(x), sorted_paths))
-     valid = [x[0] for x in output if len(x)] 
-     # Combine W and F into a single level (F)
-     # Sort indices to CFTZ
-     well_field_together = [(x[0], '_'.join((x[1], x[3])), x[2], x[4]) for x in valid] 
+#     # Channel, Plate, time, field of view, z-stack
+#     return map(lambda x: regex.findall(str(x)), path.glob("*/*tif"))
 
-     from itertools import groupby
-     iterator = groupby(well_field_together, lambda x: x[:2])
-     d = {key: [x for x in group] for key, group in iterator}
-     max_val = {k:[len(v[i]) for i in range(4)] for k,v in d.items()}
-     # For each well get the number of C, T, F and Z
-      
-    # Channel, Plate, time, field of view, z-stack
-    return map(lambda x: regex.findall(str(x)), path.glob("*/*tif"))
+def get_dimensions(img_files:list[str], regex:str, dim_order:str)-> list[int]:
+    regex = re.compile(regex)
+    matches = [(regex.findall(x)[0]) for x in img_files]
+    dim_size = {dim : len(set([y[i] for y in  matches])) for i, dim in enumerate(dim_order)}
+
+    # Check that the dimensions match the file 
+    n = 1
+    for v in dim_size.values():
+        n *= v
+    assert len(img_files)== n
+
+    return dim_size
+
