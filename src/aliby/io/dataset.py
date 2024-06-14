@@ -7,13 +7,15 @@ Dataset is a group of classes to manage multiple types of experiments:
 images with or without metadata
 """
 import os
+import re
 import shutil
 import time
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
+from itertools import groupby
 from pathlib import Path
 
-from aliby.io.image import ImageLocalOME, groupby_regex
+from aliby.io.image import ImageLocalOME
 
 
 def dispatch_dataset(expt_id: int or str, custom:str or None = None, **kwargs):
@@ -184,7 +186,7 @@ class DatasetIndFiles(DatasetLocalABC):
 
     def get_position_ids(self) -> dict[str, list[str]]:
         """
-        Return a dict of a list for filepaths that define each position.
+        Return a dict of a list for filepaths that define each position sorted alphabetically.
         The key is the name of the position/field-of-view and the value is
         a list of stings indicated the associated files.
         """
@@ -195,16 +197,17 @@ class DatasetIndFiles(DatasetLocalABC):
 
 
 @cache
-def groupby_regex(dpath:str, regex:str) -> groupby:
+def groupby_regex(path:str, regex:str, capture_group_indices:tuple[int]=(2,3)) -> dict[str,list[str]]:
     """
     Use a regex to group filenames of the same field-of-view (or, in
     some cases, well+field-of-view)
     """
     regex = re.compile(regex)
-    sorted_paths = list( map(str, sorted(dpath.rglob("*.tif") ) ) )
-
-    output = dict( zip(sorted_paths, (map(lambda x: regex.findall(x), sorted_paths))) )
-    valid = {k:v[0] for k,v in output.items() if len(v)} 
-    iterator = groupby(valid.items(), lambda x: (x[1][1],x[1][3]))
-    d = {key: [x for x in group] for key, group in iterator}
-    return {k:v[0] for k,v in d.items()}
+    str_paths =  map(str, sorted(Path(path).rglob("*.tif") ) ) 
+    captures = list(map(lambda x: regex.findall(x), str_paths))
+    valid = [(pth, *capture[0]) for pth,capture in zip(str_paths, captures) if len(capture)]
+    key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
+    sorted_by = sorted(valid, key=key_fn)
+    iterator = groupby(sorted_by, key=key_fn)
+    d = { key: [x[0] for x in group] for key, group in iterator}
+    return {k:v for k,v in d.items()}
