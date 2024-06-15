@@ -19,7 +19,9 @@ from pathlib import Path
 from aliby.io.image import ImageLocalOME
 
 
-def dispatch_dataset(expt_id: int or str, custom:str or None = None, **kwargs):
+def dispatch_dataset(
+    expt_id: int or str, custom: str or None = None, **kwargs
+):
     """
     Find paths to the data.
 
@@ -40,6 +42,7 @@ def dispatch_dataset(expt_id: int or str, custom:str or None = None, **kwargs):
     if not custom:
         if isinstance(expt_id, int):
             from aliby.io.omero import Dataset
+
             # data available online
             return Dataset(expt_id, **kwargs)
         elif isinstance(expt_id, str):
@@ -55,9 +58,6 @@ def dispatch_dataset(expt_id: int or str, custom:str or None = None, **kwargs):
         else:
             return DatasetIndFiles(expt_path, **kwargs)
 
-
-
-            
     else:
         raise Warning(f"{expt_id} is an invalid expt_id.")
 
@@ -163,7 +163,7 @@ class DatasetLocalOME(DatasetLocalABC):
         """Get the date from the metadata of the first position."""
         return ImageLocalOME(list(self.get_position_ids().values())[0]).date
 
-    def get_position_ids(self) -> dict[str,str]:
+    def get_position_ids(self) -> dict[str, str]:
         """Return a dictionary with the names of the image files."""
         return {
             f.name: str(f)
@@ -171,19 +171,26 @@ class DatasetLocalOME(DatasetLocalABC):
             for f in self.path.glob(f"*.{suffix}")
         }
 
+
 class DatasetIndFiles(DatasetLocalABC):
     """
     Find paths to a data set, comprising of individual files. The
     data can be parsed using a regex and a string to capture the order of dimension.
     """
 
-    def __init__(self, dpath: t.Union[str, Path], regex:str=None, re_dimorder:str=None, *args, **kwargs):
+    def __init__(
+        self,
+        dpath: t.Union[str, Path],
+        regex: str = None,
+        re_dimorder: str = None,
+        *args,
+        **kwargs,
+    ):
         if regex is None:
-            self.regex =  ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
+            self.regex = ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
         if re_dimorder is None:
             self.dimorder = "CFTZ"
         super().__init__(dpath)
-
 
     def get_position_ids(self) -> dict[str, list[str]]:
         """
@@ -198,17 +205,42 @@ class DatasetIndFiles(DatasetLocalABC):
 
 
 @cache
-def groupby_regex(path:str, regex:str, capture_group_indices:tuple[int]=(2,4)) -> dict[str,list[str]]:
+def groupby_regex(
+    path: str, regex: str, capture_group_indices: tuple[int] = (1, 3)
+) -> dict[str, list[str]]:
     """
     Use a regex to group filenames of the same field-of-view (or, in
-    some cases, well+field-of-view)
+    some cases, well+field-of-view).
+
+    It returns the key, the wildcard and the list of files. The files accelerate
+    search processes down the line, and the wildcard is necessary to load files with dask.
     """
     regex = re.compile(regex)
-    str_paths =  list(map(str, sorted(Path(path).rglob("*.tif") ) )) 
-    captures = list(map(lambda x: regex.findall(x), str_paths))
-    valid = [(pth, *capture[0]) for pth, capture in zip(str_paths, captures) if len(capture)]
+    str_paths = list(map(str, sorted(Path(path).rglob("*.tif"))))
+    captures = list(map(lambda x: regex.match(x), str_paths))
+    valid = [
+        (*capture.groups(), pth)
+        for pth, capture in zip(str_paths, captures)
+        if capture
+    ]
+
     key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
     sorted_by = sorted(valid, key=key_fn)
     iterator = groupby(sorted_by, key=key_fn)
-    d = { key: [x[0] for x in group] for key, group in iterator}
+    # Replace groups (dimensions) with wildcard to be read by dask
+    d = {}
+    for key, group in iterator:
+
+        files = [x[-1] for x in group]
+        as_list = list(files[0])
+        spans = regex.match(files[0]).regs[1:]
+        variable_captures = [
+            span
+            for i, span in enumerate(spans)
+            if i not in capture_group_indices
+        ]
+        for start, end in variable_captures[::-1]:
+            as_list[start:end] = "*"
+
+        d[key] = ("".join(as_list), files)
     return d
