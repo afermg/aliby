@@ -43,7 +43,6 @@ from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
-from agora.io.metadata import find_channels_by_position
 from aliby.tile.traps import segment_traps
 
 
@@ -218,6 +217,7 @@ class TilerParameters(ParametersABC):
         "tile_size": 117,
         "ref_channel": 0,
         "ref_z": 0,
+        "track_drift": True,
     }
 
 
@@ -230,14 +230,14 @@ class TilerABC(StepABC):
 
     def __init__(
         self,
-        image: da.core.Array,
+        pixels: da.core.Array,
         meta: dict,
         parameters: TilerParameters,
     ):
         super().__init__(parameters)
-        self.image = image
+        self.pixels = pixels
 
-        self.channels = meta.get("channels", list(range(image.shape[-4])))
+        self.channels = meta.get("channels", list(range(pixels.shape[-4])))
         # get reference channel - used for segmentation
         ref_channel_index = parameters.ref_channel
         if isinstance(ref_channel_index, str):
@@ -257,7 +257,12 @@ class TilerABC(StepABC):
             The time point to tile.
         """
         if self.no_processed == 0:
-            self.set_areas_of_interest()
+            initial_image = self.pixels[0, self.ref_channel_index, self.ref_z]
+            self.tile_locs = set_areas_of_interest(
+                initial_image,
+                self.tile_size,
+            )
+
         if hasattr(self.tile_locs, "drifts"):
             drift_len = len(self.tile_locs.drifts)
             if self.no_processed != drift_len:
@@ -297,7 +302,7 @@ class TilerABC(StepABC):
         -------
         full: an array of images
         """
-        full = self.image[tp, c]
+        full = self.pixels[tp, c]
         if hasattr(full, "compute"):
             # if using dask fetch images
             full = full.compute(scheduler="synchronous")
@@ -402,8 +407,7 @@ class Tiler(TilerABC):
         meta: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
-        OMERO_channels: list of str
-            A definitive list of channels from OMERO to order channels in tiler.
+        **kwargs
         """
         super().__init__(image, meta, parameters)
 
@@ -420,7 +424,7 @@ class Tiler(TilerABC):
                 ch: zsect
                 for ch, zsect in zip(self.channels, meta["zsections"])
             }
-        self.tile_size = self.tile_size or min(self.image.shape[-2:])
+        self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
 
     @classmethod
     def from_image(
@@ -479,17 +483,7 @@ class Tiler(TilerABC):
         return tiler
 
     @property
-    def shape(self):
-        """
-        Return the shape of the image array.
-
-        The image array is arranged as number of frames, number of channels,
-        number of z sections, and size of the image in y and x.
-        """
-        return self.image.shape
-
-    @property
-    def no_processed(self):
+    def no_processed(self) -> int:
         """Return the number of processed images."""
         if not hasattr(self, "_no_processed"):
             self._no_processed = 0
@@ -498,46 +492,6 @@ class Tiler(TilerABC):
     @no_processed.setter
     def no_processed(self, value):
         self._no_processed = value
-
-    def set_areas_of_interest(self, tile_size: int = None):
-        """
-        Find initial positions of tiles, or determine that the entire image is
-        an area of interest.
-
-        Remove tiles that are too close to the edge of the image
-        so no padding is necessary.
-
-        Parameters
-        ----------
-        tile_size: integer
-            The size of a tile.
-        """
-        initial_image = self.image[0, self.ref_channel_index, self.ref_z]
-        # only tile if the image fits more than one non-overlaping tile
-        if tile_size and tile_size < min(self.image.shape) // 2:
-            half_tile = tile_size // 2
-            # max_size is the minimum of the numbers of x and y pixels
-            max_size = min(self.image.shape[-2:])
-            # find the tiles
-            tile_locs = segment_traps(initial_image, tile_size)
-            # keep only tiles that are not near an edge
-            tile_locs = [
-                [x, y]
-                for x, y in tile_locs
-                if half_tile < x < max_size - half_tile
-                and half_tile < y < max_size - half_tile
-            ]
-            # store tiles in an instance of TileLocations
-            self.tile_locs = TileLocations.from_tiler_init(
-                tile_locs, tile_size
-            )
-        else:
-            # one tile with its centre at the image's centre
-            yx_shape = self.image.shape[-2:]
-            tile_locs = [[x // 2 for x in yx_shape]]
-            self.tile_locs = TileLocations.from_tiler_init(
-                tile_locs, max_size=min(yx_shape)
-            )
 
     def find_drift(self, tp: int):
         """
@@ -553,8 +507,8 @@ class Tiler(TilerABC):
         prev_tp = max(0, tp - 1)
         # cross-correlate
         drift, _, _ = phase_cross_correlation(
-            self.image[prev_tp, self.ref_channel_index, self.ref_z],
-            self.image[tp, self.ref_channel_index, self.ref_z],
+            self.pixels[prev_tp, self.ref_channel_index, self.ref_z],
+            self.pixels[tp, self.ref_channel_index, self.ref_z],
         )
         # store drift
         if 0 < tp < len(self.tile_locs.drifts):
@@ -562,7 +516,12 @@ class Tiler(TilerABC):
         else:
             self.tile_locs.drifts.append(drift.tolist())
 
-    def get_tp_data(self, tp, c) -> np.ndarray:
+    def get_tp_data(
+        self,
+        tp: int,
+        c: int,
+        drift: bool = True,
+    ) -> np.ndarray:
         """
         Return all tiles corrected for drift.
 
@@ -579,13 +538,16 @@ class Tiler(TilerABC):
         """
         tiles = []
         full = self.load_image(tp, c)
+
         for tile in self.tile_locs:
-            # pad tile if necessary
-            ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
-            tiles.append(ndtile)
+            if drift:
+                # pad tile if necessary
+                full = if_out_of_bounds_pad(full, tile.as_range(tp))
+
+            tiles.append(full)
         return np.stack(tiles)
 
-    def get_tile_data(self, tile_id: int, tp: int, c: int):
+    def get_tile_data(self, tile_id: int, tp: int, c: int) -> np.ndarray:
         """
         Return a tile corrected for drift and padding.
 
@@ -605,41 +567,45 @@ class Tiler(TilerABC):
         """
         full = self.load_image(tp, c)
         tile = self.tile_locs.tiles[tile_id]
+
         ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
+
         return ndtile
 
-    def run(self, time_dim=None):
-        """
-        Tile all time points in an experiment at once.
-        If no time dimension is provided it assumes it is the first one.
-        """
-        if time_dim is None:
-            time_dim = 0
-        for frame in range(self.image.shape[time_dim]):
-            self.run_tp(frame)
+
+def run(self, time_dim: int or None = None):
+    """
+    Tile all time points in an experiment at once.
+    If no time dimension is provided it assumes it is the first one.
+    """
+    if time_dim is None:
+        time_dim = 0
+    for frame in range(self.pixels.shape[time_dim]):
+        self.run_tp(frame)
+    return None
+
+
+def get_channel_index(self, channel: str or int) -> int or None:
+    """
+    Find index for channel using regex.
+
+    If channels are strings, return the first matched string.
+    If channels are integers, return channel unchanged if it is
+    an integer.
+
+    Parameters
+    ----------
+    channel: string or int
+        The channel or index to be used.
+    """
+    if isinstance(channel, int) and all(
+        map(lambda x: isinstance(x, int), self.channels)
+    ):
+        return channel
+    elif isinstance(channel, str):
+        return find_channel_index(self.channels, channel)
+    else:
         return None
-
-    def get_channel_index(self, channel: str or int) -> int or None:
-        """
-        Find index for channel using regex.
-
-        If channels are strings, return the first matched string.
-        If channels are integers, return channel unchanged if it is
-        an integer.
-
-        Parameters
-        ----------
-        channel: string or int
-            The channel or index to be used.
-        """
-        if isinstance(channel, int) and all(
-            map(lambda x: isinstance(x, int), self.channels)
-        ):
-            return channel
-        elif isinstance(channel, str):
-            return find_channel_index(self.channels, channel)
-        else:
-            return None
 
 
 def find_channel_index(image_channels: t.List[str], channel_regex: str):
@@ -662,7 +628,7 @@ def find_channel_name(image_channels: t.List[str], channel_regex: str):
         return image_channels[index]
 
 
-def if_out_of_bounds_pad(image_array, slices):
+def if_out_of_bounds_pad(pixels, slices):
     """
     Pad slices if out of bounds.
 
@@ -682,11 +648,11 @@ def if_out_of_bounds_pad(image_array, slices):
         If much padding is needed, a tile of NaN is returned.
     """
     # number of pixels in the y direction
-    max_size = image_array.shape[-1]
+    max_size = pixels.shape[-1]
     # ignore parts of the tile outside of the image
     y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
     # get the tile including all z stacks
-    tile = image_array[:, y, x]
+    tile = pixels[:, y, x]
     # find extent of padding needed in x and y
     padding = np.array(
         [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
@@ -695,41 +661,51 @@ def if_out_of_bounds_pad(image_array, slices):
         tile_size = slices[0].stop - slices[0].start
         if (padding > tile_size / 4).any():
             # fill with NaN because too much of the tile is outside of the image
-            tile = np.full(
-                (image_array.shape[0], tile_size, tile_size), np.nan
-            )
+            tile = np.full((pixels.shape[0], tile_size, tile_size), np.nan)
         else:
             # pad tile with median value of the tile
             tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
     return tile
 
 
-def find_channel_swainlab(meta: dict[str], position_name: str):
+def set_areas_of_interest(
+    pixels: np.ndarray,
+    tile_size: int = None,
+) -> tuple[tuple[int]]:
     """
-    Apply a series of heuristics to find the correct metadata channel.
-    Specific to the Swain Lab metadata structure.
+    Find initial positions of tiles, or determine that the entire image is
+    an area of interest.
+
+    Remove tiles that are too close to the edge of the image
+    so no padding is necessary.
+
+    Parameters
+    ----------
+    tile_size: integer
+        The size of a tile
     """
-    channel_dict = {}
-    # get channels for this position
-    if "channels_by_group" in meta:
-        channel_dict = meta["channels_by_group"]
-    elif "positions/posname" in meta:
-        # old meta data from image
-        channel_dict = find_channels_by_position(meta["positions/posname"])
-    channels = []
-    if channel_dict:
-        # TODO maybe we should use image.shape and image.dimoder instead?
-        channels = channel_dict.get(
-            self.position_name,
-            list(range(meta.get("size_c", 0))),
-        )
-
-    if not channels:
-        # image meta data contains channels for that image
-        channels = meta.get("channels", list(range(meta.get("size_c", 0))))
-
-    # sort channels based on OMERO's channel order
-    if "OMERO_channels" in kwargs:
-        channels = [
-            ch for och in OMERO_channels for ch in channels if ch == och
+    shape = pixels.shape
+    # only tile if the image fits more than one non-overlaping tile
+    if tile_size and tile_size < min(shape) // 2:
+        half_tile = tile_size // 2
+        # max_size is the minimum of the numbers of x and y pixels
+        max_size = min(shape[-2:])
+        # find the tiles
+        tile_locs = segment_traps(pixels, tile_size)
+        # keep only tiles that are not near an edge
+        tile_locs = [
+            [x, y]
+            for x, y in tile_locs
+            if half_tile < x < max_size - half_tile
+            and half_tile < y < max_size - half_tile
         ]
+        # store tiles in an instance of TileLocations
+        tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size)
+    else:
+        # one tile with its centre at the image's centre
+        yx_shape = shape[-2:]
+        tile_locs = (tuple(x // 2 for x in yx_shape),)
+        tile_locs = TileLocations.from_tiler_init(
+            tile_locs, max_size=min(yx_shape)
+        )
+    return tile_locs
