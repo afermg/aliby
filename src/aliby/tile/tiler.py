@@ -30,6 +30,7 @@ import logging
 import re
 import typing as t
 import warnings
+from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
 
@@ -225,21 +226,56 @@ class TilerABC(StepABC):
     def __init__(
         self,
         image: da.core.Array,
-        metadata: dict,
+        meta: dict,
         parameters: TilerParameters,
     ):
         super().__init__(parameters)
         self.image = image
-        self.channels = channels
+
+        self.channels = meta.get("channels", list(range(image.shape[-4])))
         # get reference channel - used for segmentation
-        self.ref_channel_index = self.channels.index(parameters.ref_channel)
-        self.tile_locs = tile_locations
-        if "zsections" in metadata:
-            self.z_perchannel = {
-                ch: zsect
-                for ch, zsect in zip(self.channels, metadata["zsections"])
-            }
-        self.tile_size = self.tile_size or min(self.image.shape[-2:])
+        ref_channel_index = parameters.ref_channel
+        if isinstance(ref_channel_index, str):
+            ref_channel_index = self.channels.index(parameters.ref_channel)
+        self.ref_channel_index = ref_channel_index
+
+        # self.tile_locs = tile_locations
+        # if "zsections" in metadata:
+        #     self.z_perchannel = {
+        #         ch: zsect
+        #         for ch, zsect in zip(self.channels, metadata["zsections"])
+        #     }
+        # self.tile_size = self.tile_size or min(self.image.shape[-2:])
+
+    def _run_tp(self, tp: int):
+        """
+        Find tiles for a given time point.
+
+        Determine any translational drift of the current image from the
+        previous one.
+
+        Arguments
+        ---------
+        tp: integer
+            The time point to tile.
+        """
+        if self.no_processed == 0:
+            self.set_areas_of_interest()
+        if hasattr(self.tile_locs, "drifts"):
+            drift_len = len(self.tile_locs.drifts)
+            if self.no_processed != drift_len:
+                warnings.warn(
+                    "Tiler: the number of processed tiles and the number of drifts"
+                    " calculated do not match."
+                )
+                self.no_processed = drift_len
+
+        # determine drift for this time point and update tile_locs.drifts
+        self.find_drift(tp)
+        # update no_processed
+        self.no_processed = tp + 1
+        # return result for writer
+        return self.tile_locs.to_dict(tp)
 
     @lru_cache(maxsize=2)
     def load_image(self, tp: int, c: int) -> np.ndarray:
@@ -286,7 +322,7 @@ class TilerABC(StepABC):
         """
         return cls(
             image.data,
-            image.metadata,
+            image.meta,
             parameters,
         )
 
@@ -380,7 +416,7 @@ class Tiler(StepABC):
         """
         return cls(
             image.data,
-            image.metadata,
+            image.meta,
             parameters,
             OMERO_channels=OMERO_channels,
         )
@@ -405,7 +441,7 @@ class Tiler(StepABC):
         """
         tile_locs = TileLocations.read_h5(filepath)
         metadata = BridgeH5(filepath).meta_h5
-        metadata["channels"] = image.metadata["channels"]
+        metadata["channels"] = image.meta["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(
@@ -474,7 +510,7 @@ class Tiler(StepABC):
         """Return number of tiles."""
         return len(self.tile_locs)
 
-    def initialise_tiles(self, tile_size: int = None):
+    def set_areas_of_interest(self, tile_size: int = None):
         """
         Find initial positions of tiles.
 
@@ -554,7 +590,7 @@ class Tiler(StepABC):
         full = self.load_image(tp, c)
         for tile in self.tile_locs:
             # pad tile if necessary
-            ndtile = Tiler.if_out_of_bounds_pad(full, tile.as_range(tp))
+            ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
             tiles.append(ndtile)
         return np.stack(tiles)
 
@@ -578,7 +614,7 @@ class Tiler(StepABC):
         """
         full = self.load_image(tp, c)
         tile = self.tile_locs.tiles[tile_id]
-        ndtile = self.if_out_of_bounds_pad(full, tile.as_range(tp))
+        ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
         return ndtile
 
     def _run_tp(self, tp: int):
@@ -594,7 +630,7 @@ class Tiler(StepABC):
             The time point to tile.
         """
         if self.no_processed == 0 or not hasattr(self.tile_locs, "drifts"):
-            self.initialise_tiles(self.tile_size)
+            self.set_areas_of_interest(self.tile_size)
         if hasattr(self.tile_locs, "drifts"):
             drift_len = len(self.tile_locs.drifts)
             if self.no_processed != drift_len:
@@ -611,7 +647,10 @@ class Tiler(StepABC):
         return self.tile_locs.to_dict(tp)
 
     def run(self, time_dim=None):
-        """Tile all time points in an experiment at once."""
+        """
+        Tile all time points in an experiment at once.
+        If no time dimension is provided it assumes it is the first one.
+        """
         if time_dim is None:
             time_dim = 0
         for frame in range(self.image.shape[time_dim]):
@@ -690,48 +729,6 @@ class Tiler(StepABC):
         else:
             return None
 
-    @staticmethod
-    def if_out_of_bounds_pad(image_array, slices):
-        """
-        Pad slices if out of bounds.
-
-        Parameters
-        ----------
-        full: array
-            Slice of image (zstacks, x, y) - the entire position
-            with zstacks as first axis
-        slices: tuple of two slices
-            Delineates indices for the x- and y- ranges of the tile.
-
-        Returns
-        -------
-        tile: array
-            A tile with all z stacks for the given slices.
-            If some padding is needed, the median of the image is used.
-            If much padding is needed, a tile of NaN is returned.
-        """
-        # number of pixels in the y direction
-        max_size = image_array.shape[-1]
-        # ignore parts of the tile outside of the image
-        y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
-        # get the tile including all z stacks
-        tile = image_array[:, y, x]
-        # find extent of padding needed in x and y
-        padding = np.array(
-            [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
-        )
-        if padding.any():
-            tile_size = slices[0].stop - slices[0].start
-            if (padding > tile_size / 4).any():
-                # fill with NaN because too much of the tile is outside of the image
-                tile = np.full(
-                    (image_array.shape[0], tile_size, tile_size), np.nan
-                )
-            else:
-                # pad tile with median value of the tile
-                tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
-        return tile
-
 
 class MonoTiler(TilerABC):
     """
@@ -740,7 +737,32 @@ class MonoTiler(TilerABC):
     This exists as a compatibility layer that may be removed upon refactoring.
     """
 
-    pass
+    def __init__(
+        self,
+        image: da.core.Array,
+        meta: dict,
+        parameters: TilerParameters,
+    ):
+        super().__init__(image, meta, parameters)
+
+    def get_tp_data(self, tp, c) -> np.ndarray:
+        """
+        Return all tiles corrected for drift.
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+
+        Returns
+        ----------
+        Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
+        """
+        full = self.load_image(tp, c)
+        # Return with an extra dimension to match standard tiling
+        return np.stack([full])
 
 
 def find_channel_index(image_channels: t.List[str], channel_regex: str):
@@ -761,3 +783,45 @@ def find_channel_name(image_channels: t.List[str], channel_regex: str):
     index = find_channel_index(image_channels, channel_regex)
     if index is not None:
         return image_channels[index]
+
+
+def if_out_of_bounds_pad(image_array, slices):
+    """
+    Pad slices if out of bounds.
+
+    Parameters
+    ----------
+    full: array
+        Slice of image (zstacks, x, y) - the entire position
+        with zstacks as first axis
+    slices: tuple of two slices
+        Delineates indices for the x- and y- ranges of the tile.
+
+    Returns
+    -------
+    tile: array
+        A tile with all z stacks for the given slices.
+        If some padding is needed, the median of the image is used.
+        If much padding is needed, a tile of NaN is returned.
+    """
+    # number of pixels in the y direction
+    max_size = image_array.shape[-1]
+    # ignore parts of the tile outside of the image
+    y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+    # get the tile including all z stacks
+    tile = image_array[:, y, x]
+    # find extent of padding needed in x and y
+    padding = np.array(
+        [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
+    )
+    if padding.any():
+        tile_size = slices[0].stop - slices[0].start
+        if (padding > tile_size / 4).any():
+            # fill with NaN because too much of the tile is outside of the image
+            tile = np.full(
+                (image_array.shape[0], tile_size, tile_size), np.nan
+            )
+        else:
+            # pad tile with median value of the tile
+            tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
+    return tile

@@ -158,10 +158,9 @@ class BaseLocalImage(ABC):
         """Get data."""
         return self.get_data_lazy()
 
-    @property
-    def metadata(self):
-        """Get metadata."""
-        return self.meta
+    @abstractproperty
+    def meta(self):
+        pass
 
     def set_meta(self):
         """Load metadata using parser dispatch."""
@@ -430,6 +429,10 @@ class ImageIndFiles(BaseLocalImage):
         )  # checksum of all files
         self.capture_order = capture_order or "CTZ"
         self._dimorder = dimorder or "TCZYX"
+
+    @cached_property
+    def meta(self):
+        return {}
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
