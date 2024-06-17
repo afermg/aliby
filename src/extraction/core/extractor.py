@@ -307,7 +307,7 @@ class Extractor(StepABC):
             channel_ids = None
         if z is None:
             # include all Z channels
-            z = list(range(self.tiler.shape[-3]))
+            z = list(range(self.tiler.pixels.shape[-3]))
         # get the image data via tiler
         tiles = (
             self.tiler.get_tiles_timepoint(tp, channels=channel_ids, z=z)
