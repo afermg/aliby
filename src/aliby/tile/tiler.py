@@ -178,8 +178,8 @@ class TileLocations:
         res = dict()
         if tp == 0:
             res["trap_locations"] = self.initial_location
-            res["tile_size"] = self.tile_size
-            res["max_size"] = self.max_size
+            res["attrs/tile_size"] = self.tile_size
+            res["attrs/max_size"] = self.max_size
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         return res
 
@@ -204,8 +204,8 @@ class TileLocations:
             tile_info = hfile["trap_info"]
             initial_locations = tile_info["trap_locations"][()]
             drifts = tile_info["drifts"][()].tolist()
-            max_size = tile_info.attrs["max_size"]
-            tile_size = tile_info.attrs["tile_size"]
+            max_size = tile_info.attrs["attrs/max_size"]
+            tile_size = tile_info.attrs["attrs/tile_size"]
         tile_loc_cls = cls(initial_locations, tile_size, max_size=max_size)
         tile_loc_cls.drifts = drifts
         return tile_loc_cls
