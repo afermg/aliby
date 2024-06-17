@@ -661,6 +661,10 @@ class Tiler(StepABC):
         return tile
 
 
+class MonoTiler(StepABC):
+    pass
+
+
 def find_channel_index(image_channels: t.List[str], channel_regex: str):
     """Use a regex to find the index of a channel."""
     for index, ch in enumerate(image_channels):

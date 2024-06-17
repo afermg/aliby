@@ -17,16 +17,21 @@ import hashlib
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
-from functools import cache
+from functools import cache, cached_property
+from glob import glob
 from itertools import groupby
 from pathlib import Path
 import re
 
+import dask
 import dask.array as da
+import imageio
 import numpy as np
 import xmltodict
 import zarr
 from dask.array.image import imread
+from dask_image.imread import imread as dimread
+from skimage.io import imread_collection
 
 try:
     from importlib_resources import files
@@ -380,6 +385,7 @@ class ImageZarr(BaseLocalImage):
         """Impose a hard-coded order of dimensions based on the zarr compression script."""
         return "TCZYX"
 
+
 class ImageIndFiles(BaseLocalImage):
     """
     Standard image class for tiff files.
@@ -396,52 +402,71 @@ class ImageIndFiles(BaseLocalImage):
     - Position, Time, z-stack and the others are determined by filenames.
     - Provides Dimorder as it is set in the filenames, or expects order
 
-    Metadata necessary
-    dimorder (str): 
-    Meta (dict): size_x,y; channels,
-    Maybe name and type
+    There are some peculiarities:
+    path is a wildcard that encodes all the
+    image_id is the hex md5sum for all the images involved.
+    there is an `image_filenames` directory that encodes both
     """
 
-    def __init__(self,
-        img_files: list[str],
-        regex:str,
-        re_dimorder:str,
-        dimorder:str or None=None,
-        **kwargs):
+    def __init__(
+        self,
+        wildcard: str,
+        regex: str or None = None,
+        image_filenames: list[str] or None = None,
+        capture_order: str or None = None,
+        dimorder: str or None = None,
+        **kwargs,
+    ):
         """Initialise using a directory and parse the files inside of it using a regex."""
         # super().__init__(img_files)
-        self.path = img_files
-        self.image_id = calculate_checksum(img_files) # checksum of all files
+        self.path = wildcard
         # self.meta = filename_to_meta_gsk(self.path)
-        if regex is None:
-            self.regex =  ".+\/(.+)\/_.+[A-P][0-9]{2}.*_T([0-9]{4})F[0-9]{3}.*Z([0-9]{2}).*[0-9].tif"
-        if re_dimorder is None:
-            self.re_dimorder = "CTZ"
-        if dimorder is None: 
-            self.dimorder = "TCZYX"
-        self.meta_shape = get_dimensions(self.image, self.regex, self.re_dimorder)
+        self.regex = regex or self.path.replace("*", "(.*)")
+        self.image_filenames = image_filenames or tuple(
+            re.match(self.regex, x) for x in glob(wildcard)
+        )
+        self.image_id = calculate_checksum(
+            self.image_filenames
+        )  # checksum of all files
+        self.capture_order = capture_order or "CTZ"
+        self._dimorder = dimorder or "TCZYX"
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
-        # img = imread(str(self.path / "*.tiff"))
-        # If extra channels, pick the first stack of the last dimensions
-        raw_data = imread(path)
-        dims = get_dimensions()
+        # Reshape first dimensions based on capture order
+        lazy_arrays = [
+            dask.delayed(imageio.imread)(fn) for fn in self.image_filenames
+        ]
+        sample = lazy_arrays[0].compute()
 
-            # img = da.reshape(img, self.meta.values())
-            # original_order = [
-            #     i[-1] for i in self.meta.keys() if i.startswith("size")
-            # ]
-            # # Swap axis to conform with normal order
-            # target_order = [
-            #     self.default_dimorder.index(x) for x in original_order
-            # ]
-            # img = da.moveaxis(
-            #     img,
-            #     list(range(len(original_order))),
-            #     target_order,
-            # )
-        pixels = self.rechunk_data(img)
+        lazy_arrays = [
+            da.from_delayed(x, shape=sample.shape, dtype=sample.dtype)
+            for x in lazy_arrays
+        ]
+
+        # This has to be done manually because if we load everything
+        # reshaping fails
+        # FIXME: Temporary workaround, something is off when fetching
+        # large chunks of the data
+        order = tuple(self.dimorder_d.values())
+        arr = np.empty(
+            order + (1, 1),
+            dtype=object,
+        )
+        nd_order = np.array(
+            np.where(np.arange(len(lazy_arrays)).reshape(order) + 1)
+        ).transpose()
+
+        for i, (d1, d2, d3) in enumerate(nd_order):
+            arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+
+        # convert to TCZ
+        arr = arr.swapaxes(0, 1)
+        a = da.block(arr.tolist())
+
+        # rechunk to the last 3 dimensions
+        pixels = da.rechunk(a, (1, 1, 9, 1000, 1000))
+
         return pixels
 
     @property
@@ -449,23 +474,49 @@ class ImageIndFiles(BaseLocalImage):
         """Return name of image directory."""
         return self.path.stem
 
+    @property
+    def dimorder(self):
+        return [self.dimorder_d[dim] for dim in self._dimorder]
+
+    @cached_property
+    def dimorder_d(self):
+        return get_dims_from_names(
+            self.image_filenames, self.regex, self.capture_order
+        )
+
+    @cached_property
+    def image_filenames(self):
+        regex = re.compile(self.wildcard)
+        return glob(wildcard)
 
 
-def get_dimensions(img_files:list[str], regex:str, dim_order:str)-> list[int]:
-    regex = re.compile(regex)
-    matches = [(regex.findall(x)[0]) for x in img_files]
-    dim_size = {dim : len(set([y[i] for y in  matches])) for i, dim in enumerate(dim_order)}
+def get_dims_from_names(
+    image_filenames: list[str],
+    regex: str,
+    capture_order: str,
+) -> dict[str, int]:
+    regex_ = re.compile(regex)
+    matches = [regex_.match(x).groups() for x in image_filenames]
+    dim_size = {
+        dim: len(set([y[i] for y in matches]))
+        for i, dim in enumerate(capture_order)
+    }
 
-    # Check that the dimensions match the file 
+    # Check that the dimensions match the file
     n = 1
     for v in dim_size.values():
         n *= v
-    assert len(img_files)== n
+    assert len(image_filenames) == n
 
     return dim_size
 
-def calculate_checksum(files: list[str]) -> bytes:
+
+def calculate_checksum(filenames: list[str]) -> bytes:
+    """
+    This helps to check that images composed of multiple other
+    images are the same.
+    """
     hash = hashlib.md5()
-    for fn in files:
-            hash.update(Path(fn).read_bytes())
-    return hash.digest()
+    for fn in filenames:
+        hash.update(Path(fn).read_bytes())
+    return hash.hexdigest()
