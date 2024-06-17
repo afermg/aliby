@@ -212,11 +212,83 @@ class TilerParameters(ParametersABC):
     """Define default values for tile size and the reference channels."""
 
     _defaults = {
-        "tile_size": 117,
-        "ref_channel": "Brightfield",
+        "ref_channel": 0,
         "ref_z": 0,
-        "position_name": None,
     }
+
+
+class TilerABC(StepABC):
+    """
+    Base interface for Tiler
+    """
+
+    def __init__(
+        self,
+        image: da.core.Array,
+        metadata: dict,
+        parameters: TilerParameters,
+    ):
+        super().__init__(parameters)
+        self.image = image
+        self.channels = channels
+        # get reference channel - used for segmentation
+        self.ref_channel_index = self.channels.index(parameters.ref_channel)
+        self.tile_locs = tile_locations
+        if "zsections" in metadata:
+            self.z_perchannel = {
+                ch: zsect
+                for ch, zsect in zip(self.channels, metadata["zsections"])
+            }
+        self.tile_size = self.tile_size or min(self.image.shape[-2:])
+
+    @lru_cache(maxsize=2)
+    def load_image(self, tp: int, c: int) -> np.ndarray:
+        """
+        Load image using dask.
+
+        Assumes the image is arranged as
+            no of time points
+            no of channels
+            no of z stacks
+            no of pixels in y direction
+            no of pixels in x direction
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+
+        Returns
+        -------
+        full: an array of images
+        """
+        full = self.image[tp, c]
+        if hasattr(full, "compute"):
+            # if using dask fetch images
+            full = full.compute(scheduler="synchronous")
+        return full
+
+    @classmethod
+    def from_image(
+        cls,
+        image,
+        parameters: TilerParameters,
+    ):
+        """
+        Instantiate from an Image instance.
+
+        Parameters
+        ----------
+        image: an instance of Image
+        parameters: an instance of TilerPameters
+        """
+        return cls(
+            image.data,
+            image.metadata,
+            parameters,
+        )
 
 
 class Tiler(StepABC):
@@ -381,7 +453,7 @@ class Tiler(StepABC):
         """
         Return the shape of the image array.
 
-        The image array is arranged as number of images, number of channels,
+        The image array is arranged as number of frames, number of channels,
         number of z sections, and size of the image in y and x.
         """
         return self.image.shape
@@ -661,7 +733,13 @@ class Tiler(StepABC):
         return tile
 
 
-class MonoTiler(StepABC):
+class MonoTiler(TilerABC):
+    """
+    Tiler that assumes that the whole image is a giant tile.
+    It also deals with drift.
+    This exists as a compatibility layer that may be removed upon refactoring.
+    """
+
     pass
 
 
