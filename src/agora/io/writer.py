@@ -191,8 +191,8 @@ class TilerWriter(DynamicWriter):
     datatypes = {
         "trap_locations": ((None, 2), np.uint16),
         "drifts": ((None, 2), np.float32),
-        "attrs/tile_size": ((1,), np.uint16),
-        "attrs/max_size": ((1,), np.uint16),
+        "tile_size": ((1,), np.uint16),
+        "max_size": ((1,), np.uint16),
     }
     group = "trap_info"
 

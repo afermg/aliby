@@ -7,6 +7,8 @@ stage over time, and handling errors and bridging between the image data
 and Aliby’s image-processing steps.
 
 Tiler subclasses deal with either network connections or local files.
+There is a special MonoTile class for the case when the whole
+image is to be processed.
 
 To find tiles, we use a two-step process: we analyse the bright-field image
 to produce the template of a trap, and we fit this template to the image to
@@ -22,7 +24,7 @@ A peak-identifying algorithm recovers the x and y-axis location of traps in
 the original image, and we choose the approach to template that identifies
 the most tiles.
 
-The experiment is stored as an array with a standard indexing order of
+The experiment is stored as an array with our standard indexing order of
 (Time, Channels, Z-stack, X, Y).
 """
 
@@ -176,8 +178,8 @@ class TileLocations:
         res = dict()
         if tp == 0:
             res["trap_locations"] = self.initial_location
-            res["attrs/tile_size"] = self.tile_size
-            res["attrs/max_size"] = self.max_size
+            res["tile_size"] = self.tile_size
+            res["max_size"] = self.max_size
         res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         return res
 
@@ -213,6 +215,7 @@ class TilerParameters(ParametersABC):
     """Define default values for tile size and the reference channels."""
 
     _defaults = {
+        "tile_size": 117,
         "ref_channel": 0,
         "ref_z": 0,
     }
@@ -220,7 +223,9 @@ class TilerParameters(ParametersABC):
 
 class TilerABC(StepABC):
     """
-    Base interface for Tiler
+    Base interface for Tiler. Minimal and simple.
+    This should enable build different types of tilers in the future that
+    make different assumptions to our usual Tiler class.
     """
 
     def __init__(
@@ -238,14 +243,6 @@ class TilerABC(StepABC):
         if isinstance(ref_channel_index, str):
             ref_channel_index = self.channels.index(parameters.ref_channel)
         self.ref_channel_index = ref_channel_index
-
-        # self.tile_locs = tile_locations
-        # if "zsections" in metadata:
-        #     self.z_perchannel = {
-        #         ch: zsect
-        #         for ch, zsect in zip(self.channels, metadata["zsections"])
-        #     }
-        # self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
     def _run_tp(self, tp: int):
         """
@@ -326,8 +323,58 @@ class TilerABC(StepABC):
             parameters,
         )
 
+    def get_tiles_timepoint(
+        self, tp: int, channels=None, z: int = 0
+    ) -> np.ndarray:
+        """
+        Get a multidimensional array with all tiles for a set of channels
+        and z-stacks.
 
-class Tiler(StepABC):
+        Used by extractor.
+
+        Parameters
+        ---------
+        tp: int
+            Index of time point
+        tile_shape: int or tuple of two ints
+            Size of tile in x and y dimensions
+        channels: string or list of strings
+            Names of channels of interest
+        z: int
+            Index of z-channel of interest
+
+        Returns
+        -------
+        res: array
+            Data arranged as (tiles, channels, Z, X, Y)
+        """
+        if channels is None:
+            channels = [0]
+        elif isinstance(channels, str):
+            channels = [channels]
+        # convert to indices
+        channels = [
+            (
+                self.channels.index(channel)
+                if isinstance(channel, str)
+                else channel
+            )
+            for channel in channels
+        ]
+        # get the data as a list of length of the number of channels
+        res = []
+        for c in channels:
+            # only return requested z
+            tiles = self.get_tp_data(tp, c)[:, z]
+            # insert new axis at index 1 for missing time point
+            tiles = np.expand_dims(tiles, axis=1)
+            res.append(tiles)
+        # stack at time-point axis if more than one channel
+        tiles_tp = np.stack(res, axis=1)
+        return tiles_tp
+
+
+class Tiler(TilerABC):
     """
     Divide images into smaller tiles for faster processing.
 
@@ -335,16 +382,16 @@ class Tiler(StepABC):
     Fetch images from an OMERO server if necessary.
 
     Uses an Image instance, which lazily provides the pixel data,
-    and, as an independent argument, metadata.
+    and, as an independent argument, meta.
     """
 
     def __init__(
         self,
         image: da.core.Array,
-        metadata: dict,
+        meta: dict,
         parameters: TilerParameters,
         tile_locations=None,
-        OMERO_channels=None,
+        **kwargs,
     ):
         """
         Initialise.
@@ -352,50 +399,26 @@ class Tiler(StepABC):
         Parameters
         ----------
         image: an instance of Image
-        metadata: dictionary
+        meta: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
         OMERO_channels: list of str
             A definitive list of channels from OMERO to order channels in tiler.
         """
-        super().__init__(parameters)
-        self.image = image
-        self.position_name = parameters.to_dict()["position_name"]
-        # get channels for this position
-        if "channels_by_group" in metadata:
-            channel_dict = metadata["channels_by_group"]
-        elif "positions/posname" in metadata:
-            # old meta data from image
-            channel_dict = find_channels_by_position(
-                metadata["positions/posname"]
+        super().__init__(image, meta, parameters)
+
+        params_d = parameters.to_dict()
+        if "position_name" in params_d:
+            self.channels = find_channel_swainlab(
+                meta, params_d["position_name"]
             )
-        else:
-            channel_dict = {}
-        if channel_dict:
-            channels = channel_dict.get(
-                self.position_name,
-                list(range(metadata.get("size_c", 0))),
-            )
-        else:
-            channels = []
-        if not channels:
-            # image meta data contains channels for that image
-            channels = metadata.get(
-                "channels", list(range(metadata.get("size_c", 0)))
-            )
-        # sort channels based on OMERO's channel order
-        if OMERO_channels is not None:
-            channels = [
-                ch for och in OMERO_channels for ch in channels if ch == och
-            ]
-        self.channels = channels
         # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
-        if "zsections" in metadata:
+        if "zsections" in meta:
             self.z_perchannel = {
                 ch: zsect
-                for ch, zsect in zip(self.channels, metadata["zsections"])
+                for ch, zsect in zip(self.channels, meta["zsections"])
             }
         self.tile_size = self.tile_size or min(self.image.shape[-2:])
 
@@ -404,7 +427,7 @@ class Tiler(StepABC):
         cls,
         image,
         parameters: TilerParameters,
-        OMERO_channels: t.List[str] = None,
+        **kwargs,
     ):
         """
         Instantiate from an Image instance.
@@ -418,7 +441,7 @@ class Tiler(StepABC):
             image.data,
             image.meta,
             parameters,
-            OMERO_channels=OMERO_channels,
+            **kwargs,
         )
 
     @classmethod
@@ -427,7 +450,7 @@ class Tiler(StepABC):
         image,
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
-        OMERO_channels: t.List[str] = None,
+        **kwargs,
     ):
         """
         Instantiate from an h5 file.
@@ -440,49 +463,20 @@ class Tiler(StepABC):
         parameters: an instance of TileParameters (optional)
         """
         tile_locs = TileLocations.read_h5(filepath)
-        metadata = BridgeH5(filepath).meta_h5
-        metadata["channels"] = image.meta["channels"]
+        meta = BridgeH5(filepath).meta_h5
+        meta["channels"] = image.meta["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(
             image.data,
-            metadata,
+            meta,
             parameters,
             tile_locations=tile_locs,
-            OMERO_channels=OMERO_channels,
+            **kwargs,
         )
         if hasattr(tile_locs, "drifts"):
             tiler.no_processed = len(tile_locs.drifts)
         return tiler
-
-    @lru_cache(maxsize=2)
-    def load_image(self, tp: int, c: int) -> np.ndarray:
-        """
-        Load image using dask.
-
-        Assumes the image is arranged as
-            no of time points
-            no of channels
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in x direction
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        c: integer
-            An index for a channel
-
-        Returns
-        -------
-        full: an array of images
-        """
-        full = self.image[tp, c]
-        if hasattr(full, "compute"):
-            # if using dask fetch images
-            full = full.compute(scheduler="synchronous")
-        return full
 
     @property
     def shape(self):
@@ -512,7 +506,8 @@ class Tiler(StepABC):
 
     def set_areas_of_interest(self, tile_size: int = None):
         """
-        Find initial positions of tiles.
+        Find initial positions of tiles, or determine that the entire image is
+        an area of interest.
 
         Remove tiles that are too close to the edge of the image
         so no padding is necessary.
@@ -523,7 +518,8 @@ class Tiler(StepABC):
             The size of a tile.
         """
         initial_image = self.image[0, self.ref_channel_index, self.ref_z]
-        if tile_size:
+        # only tile if the image fits more than one non-overlaping tile
+        if tile_size and tile_size < min(self.image.shape) // 2:
             half_tile = tile_size // 2
             # max_size is the minimum of the numbers of x and y pixels
             max_size = min(self.image.shape[-2:])
@@ -657,56 +653,6 @@ class Tiler(StepABC):
             self.run_tp(frame)
         return None
 
-    def get_tiles_timepoint(
-        self, tp: int, channels=None, z: int = 0
-    ) -> np.ndarray:
-        """
-        Get a multidimensional array with all tiles for a set of channels
-        and z-stacks.
-
-        Used by extractor.
-
-        Parameters
-        ---------
-        tp: int
-            Index of time point
-        tile_shape: int or tuple of two ints
-            Size of tile in x and y dimensions
-        channels: string or list of strings
-            Names of channels of interest
-        z: int
-            Index of z-channel of interest
-
-        Returns
-        -------
-        res: array
-            Data arranged as (tiles, channels, Z, X, Y)
-        """
-        if channels is None:
-            channels = [0]
-        elif isinstance(channels, str):
-            channels = [channels]
-        # convert to indices
-        channels = [
-            (
-                self.channels.index(channel)
-                if isinstance(channel, str)
-                else channel
-            )
-            for channel in channels
-        ]
-        # get the data as a list of length of the number of channels
-        res = []
-        for c in channels:
-            # only return requested z
-            tiles = self.get_tp_data(tp, c)[:, z]
-            # insert new axis at index 1 for missing time point
-            tiles = np.expand_dims(tiles, axis=1)
-            res.append(tiles)
-        # stack at time-point axis if more than one channel
-        final = np.stack(res, axis=1)
-        return final
-
     def get_channel_index(self, channel: str or int) -> int or None:
         """
         Find index for channel using regex.
@@ -728,41 +674,6 @@ class Tiler(StepABC):
             return find_channel_index(self.channels, channel)
         else:
             return None
-
-
-class MonoTiler(TilerABC):
-    """
-    Tiler that assumes that the whole image is a giant tile.
-    It also deals with drift.
-    This exists as a compatibility layer that may be removed upon refactoring.
-    """
-
-    def __init__(
-        self,
-        image: da.core.Array,
-        meta: dict,
-        parameters: TilerParameters,
-    ):
-        super().__init__(image, meta, parameters)
-
-    def get_tp_data(self, tp, c) -> np.ndarray:
-        """
-        Return all tiles corrected for drift.
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        c: integer
-            An index for a channel
-
-        Returns
-        ----------
-        Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
-        """
-        full = self.load_image(tp, c)
-        # Return with an extra dimension to match standard tiling
-        return np.stack([full])
 
 
 def find_channel_index(image_channels: t.List[str], channel_regex: str):
@@ -825,3 +736,34 @@ def if_out_of_bounds_pad(image_array, slices):
             # pad tile with median value of the tile
             tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
     return tile
+
+
+def find_channel_swainlab(meta: dict[str], position_name: str):
+    """
+    Apply a series of heuristics to find the correct metadata channel.
+    Specific to the Swain Lab metadata structure.
+    """
+    channel_dict = {}
+    # get channels for this position
+    if "channels_by_group" in meta:
+        channel_dict = meta["channels_by_group"]
+    elif "positions/posname" in meta:
+        # old meta data from image
+        channel_dict = find_channels_by_position(meta["positions/posname"])
+    channels = []
+    if channel_dict:
+        # TODO maybe we should use image.shape and image.dimoder instead?
+        channels = channel_dict.get(
+            self.position_name,
+            list(range(meta.get("size_c", 0))),
+        )
+
+    if not channels:
+        # image meta data contains channels for that image
+        channels = meta.get("channels", list(range(meta.get("size_c", 0))))
+
+    # sort channels based on OMERO's channel order
+    if "OMERO_channels" in kwargs:
+        channels = [
+            ch for och in OMERO_channels for ch in channels if ch == och
+        ]
