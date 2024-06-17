@@ -499,11 +499,6 @@ class Tiler(TilerABC):
     def no_processed(self, value):
         self._no_processed = value
 
-    @property
-    def no_tiles(self):
-        """Return number of tiles."""
-        return len(self.tile_locs)
-
     def set_areas_of_interest(self, tile_size: int = None):
         """
         Find initial positions of tiles, or determine that the entire image is
@@ -612,35 +607,6 @@ class Tiler(TilerABC):
         tile = self.tile_locs.tiles[tile_id]
         ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
         return ndtile
-
-    def _run_tp(self, tp: int):
-        """
-        Find tiles for a given time point.
-
-        Determine any translational drift of the current image from the
-        previous one.
-
-        Arguments
-        ---------
-        tp: integer
-            The time point to tile.
-        """
-        if self.no_processed == 0 or not hasattr(self.tile_locs, "drifts"):
-            self.set_areas_of_interest(self.tile_size)
-        if hasattr(self.tile_locs, "drifts"):
-            drift_len = len(self.tile_locs.drifts)
-            if self.no_processed != drift_len:
-                warnings.warn(
-                    "Tiler: the number of processed tiles and the number of drifts"
-                    " calculated do not match."
-                )
-                self.no_processed = drift_len
-        # determine drift for this time point and update tile_locs.drifts
-        self.find_drift(tp)
-        # update no_processed
-        self.no_processed = tp + 1
-        # return result for writer
-        return self.tile_locs.to_dict(tp)
 
     def run(self, time_dim=None):
         """

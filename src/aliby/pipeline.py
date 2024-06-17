@@ -449,7 +449,7 @@ class Pipeline(ProcessABC):
                     )
                     if i == 0:
                         self.log(
-                            f"Found {tiler.no_tiles} traps in {image.name}.",
+                            f"Found {len(tiler.tile_locs)} traps in {image.name}.",
                             "info",
                         )
                     # run segmentation

@@ -138,7 +138,7 @@ class BabyRunner(StepABC):
             else parameters.model_config
         )
 
-        tiler_z = self.tiler.shape[-3]
+        tiler_z = self.tiler.image.shape[-3]
         model_name = self.model_config["flattener_file"]
         if tiler_z != 5:
             assert (
