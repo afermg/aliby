@@ -8,15 +8,16 @@ https://cellpose.readthedocs.io/en/latest/models.html#full-built-in-models
 from agora.abc import StepABC
 
 
-def dispatch_segmenter(config, **kwargs) -> callable:
-    if config["model"] == "baby":
+def dispatch_segmenter(kind, **kwargs) -> callable:
+    if kind == "baby":
+        import os
+        import logging
         import tensorflow as tf
+        from aliby.baby_client import BabyParameters, BabyRunner
 
         # stop warnings from TensorFlow
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
         logging.getLogger("tensorflow").setLevel(logging.ERROR)
-
-        from aliby.baby_client import BabyParameters, BabyRunner
 
         initialise_tensorflow()
         segmenter_cls, segmenter_params = BabyRunner, BabyParameters
@@ -29,14 +30,18 @@ def dispatch_segmenter(config, **kwargs) -> callable:
         # It returns a function to segment
         from cellpose.models import CellposeModel
 
-        model_type = config.get("model", "cyto_3")
+        model = kind
         argname = "model_type"
         # use custom models if fullpath is provided
-        if model_type.startswith("/"):
+        if model.startswith("/"):
             argname = "pretrained_model"
-        model = CellPoseModel(**{argname: model_type})
+        model = CellposeModel(**{argname: model})
+
         # ensure it returns only masks
-        segment = lambda x: model.eval(x)[0]
+        def segment(*args):
+            return model.eval(*args, **kwargs)[0]
+
+        return segment
 
     return segment
 
