@@ -11,6 +11,7 @@ import yaml
 from utils_find_1st import cmp_equal, find_1st
 
 from agora.io.bridge import BridgeH5
+from aliby.global_parameters import image_specifications
 
 #################### Dynamic version ##################################
 
@@ -234,7 +235,7 @@ class LinearBabyWriter(DynamicWriter):
     """
 
     compression = "gzip"
-    _default_tile_size = 117
+    _default_tile_size = image_specifications["tile_size"]
     datatypes = {
         "centres": ((None, 2), np.uint16),
         "position": ((None,), np.uint16),

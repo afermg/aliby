@@ -12,6 +12,8 @@ imaging_specifications = {
     "pixel_size": 0.236,
     "z_size": 0.6,
     "spacing": 0.6,
+    "magnification": 60,
+    "tile_size": 117,
 }
 
 # possible imaging channels

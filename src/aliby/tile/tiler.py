@@ -42,6 +42,7 @@ from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
 from agora.io.metadata import find_channels_by_position
 from aliby.tile.traps import segment_traps
+from aliby.global_parameters import imaging_specifications
 
 
 class Tile:
@@ -212,10 +213,11 @@ class TilerParameters(ParametersABC):
     """Define default values for tile size and the reference channels."""
 
     _defaults = {
-        "tile_size": 117,
+        "tile_size": imaging_specifications["tile_size"],
         "ref_channel": "Brightfield",
         "ref_z": 0,
         "position_name": None,
+        "magnification": imaging_specifications["magnification"],
     }
 
 

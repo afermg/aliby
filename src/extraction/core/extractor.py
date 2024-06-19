@@ -596,8 +596,8 @@ class Extractor(StepABC):
     def extract_tp(
         self,
         tp: int,
+        tile_size: int,
         tree: t.Optional[extraction_tree] = None,
-        tile_size: int = 117,
         masks: t.Optional[t.List[np.ndarray]] = None,
         cell_labels: t.Optional[t.List[int]] = None,
         **kwargs,
@@ -751,7 +751,9 @@ class Extractor(StepABC):
         for tp in tps:
             # extract for each time point and convert to dict of pd.Series
             new = flatten_nesteddict(
-                self.extract_tp(tp=tp, tree=tree, **kwargs),
+                self.extract_tp(
+                    tp=tp, tile_size=self.tiler.tile_size, tree=tree, **kwargs
+                ),
                 to="series",
                 tp=tp,
             )
