@@ -186,11 +186,13 @@ class DatasetIndFiles(DatasetLocalABC):
         *args,
         **kwargs,
     ):
-        if regex is None:
-            self.regex = ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
-        if re_dimorder is None:
-            self.dimorder = "CFTZ"
         super().__init__(dpath)
+        if regex is None:
+            regex = ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
+        self.regex = regex
+        if re_dimorder is None:
+            dimorder = "CFTZ"
+        self.dimorder = dimorder
 
     def get_position_ids(self) -> dict[str, list[str]]:
         """
