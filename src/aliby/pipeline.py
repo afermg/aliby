@@ -481,15 +481,15 @@ class Pipeline(ProcessABC):
                             tp=i,
                         )
                     else:
+                        pass
                         # we still need to track
                         # with h5py.File(self.File, "a") as store:
                         #     hgroup = store.require_group(self.group)
                         # TODO track using stitch3D
-                        # TODO write masks
-                        # TODO write tracking state 
                         # TODO adapt extraction to
-                        # use tracking and masks separately 
-                            
+                        # use tracking and masks separately
+                        # TODO write masks
+                        # TODO write tracking state
 
                     # run extraction
                     result = extraction.run_tp(i, cell_labels=None, masks=None)
