@@ -402,7 +402,7 @@ class ImageIndFiles(BaseLocalImage):
     - Provides Dimorder as it is set in the filenames, or expects order
 
     There are some peculiarities:
-    path is a wildcard that encodes all the
+    path is a wildcard that encodes all the dimensional information.
     image_id is the hex md5sum for all the images involved.
     there is an `image_filenames` directory that encodes both
     """
