@@ -36,13 +36,12 @@ from pathlib import Path
 import dask.array as da
 import h5py
 import numpy as np
-from skimage.registration import phase_cross_correlation
-
 from agora.abc import ParametersABC, StepABC
-from agora.io.writer import BridgeH5
 from agora.io.metadata import find_channels_by_position
-from aliby.tile.traps import segment_traps
+from agora.io.writer import BridgeH5
 from aliby.global_parameters import imaging_specifications
+from aliby.tile.traps import segment_traps
+from skimage.registration import phase_cross_correlation
 
 
 class Tile:
@@ -291,7 +290,19 @@ class Tiler(StepABC):
                 ch: zsect
                 for ch, zsect in zip(self.channels, metadata["zsections"])
             }
-        self.tile_size = self.tile_size or min(self.image.shape[-2:])
+        # adjust for non-standard magnification
+        if self.tile_size != imaging_specifications["tile_size"]:
+            print(
+                "Warning: tile_size has been changed."
+                "\nConsider changing magnification instead."
+            )
+        else:
+            # adjust tile_size for any magnification differing from default
+            self.tile_size = int(
+                self.tile_size
+                * self.magnification
+                / imaging_specifications["magnification"]
+            )
 
     @classmethod
     def from_image(

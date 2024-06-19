@@ -1,6 +1,7 @@
 """Functions for identifying and dealing with ALCATRAS traps."""
 
 import numpy as np
+from aliby.global_parameters import imaging_specifications
 from skimage import feature, transform
 from skimage.filters import threshold_otsu
 from skimage.filters.rank import entropy
@@ -62,12 +63,11 @@ def segment_traps(
     traps: an array of pairs of integers
         The coordinates of the centroids of the traps.
     """
-    # for 100X magnification
-    # disk_radius_frac *= 100 / 60
-    # min_frac_tilesize *= 100 / 60
-    # square_size = int(square_size * 100 / 60)
-    # tile_size = int(tile_size * 100 / 60)
-    #
+    # adjust parameters for particular tile size
+    scale_factor = tile_size / imaging_specifications["tile_size"]
+    disk_radius_frac *= scale_factor
+    min_frac_tilesize *= scale_factor
+    square_size = int(square_size * scale_factor)
     # keep a memory of the image in case we need to re-run
     img = image
     # bounds on major axis length of traps

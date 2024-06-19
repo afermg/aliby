@@ -453,6 +453,7 @@ class Pipeline(ProcessABC):
                         overwrite=["mother_assign"],
                         meta={"last_processed": i},
                         tp=i,
+                        tile_size=tiler.tile_size,
                     )
                     babystate_writer.write(
                         data=babyrunner.crawler.tracker_states,

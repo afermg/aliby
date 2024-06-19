@@ -1,19 +1,14 @@
 import logging
 from collections.abc import Iterable
 from pathlib import Path
-from time import perf_counter
 from typing import Dict
 
 import h5py
 import numpy as np
 import pandas as pd
 import yaml
-from utils_find_1st import cmp_equal, find_1st
-
 from agora.io.bridge import BridgeH5
-from aliby.global_parameters import image_specifications
-
-#################### Dynamic version ##################################
+from utils_find_1st import cmp_equal, find_1st
 
 
 def load_meta(file: str, group="/"):
@@ -185,7 +180,6 @@ class DynamicWriter:
                 hgroup.attrs[key] = value
 
 
-##################### Special instances #####################
 class TilerWriter(DynamicWriter):
     """Write data stored in a Tiler instance to h5 files."""
 
@@ -235,13 +229,11 @@ class LinearBabyWriter(DynamicWriter):
     """
 
     compression = "gzip"
-    _default_tile_size = image_specifications["tile_size"]
     datatypes = {
         "centres": ((None, 2), np.uint16),
         "position": ((None,), np.uint16),
         "angles": ((None,), h5py.vlen_dtype(np.float32)),
         "radii": ((None,), h5py.vlen_dtype(np.float32)),
-        "edgemasks": ((None, _default_tile_size, _default_tile_size), bool),
         "ellipse_dims": ((None, 2), np.float32),
         "cell_label": ((None,), np.uint16),
         "trap": ((None,), np.uint16),
@@ -252,7 +244,12 @@ class LinearBabyWriter(DynamicWriter):
     group = "cell_info"
 
     def write(
-        self, data: dict, overwrite: list, tp: int = None, meta: dict = {}
+        self,
+        data: dict,
+        overwrite: list,
+        tp: int = None,
+        tile_size: int = None,
+        meta: dict = {},
     ):
         """
         Check data does not exist before writing.
@@ -268,6 +265,7 @@ class LinearBabyWriter(DynamicWriter):
         meta: dict, optional
             Metadata to be written as attributes of the h5 file
         """
+        self.datatypes["edgemasks"] = ((None, tile_size, tile_size), bool)
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
             available_tps = hgroup.get("timepoint", None)
