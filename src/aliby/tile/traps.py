@@ -11,10 +11,12 @@ from skimage.util import img_as_ubyte
 
 
 def half_floor(x, tile_size):
+    # round down tile_size
     return x - tile_size // 2
 
 
 def half_ceil(x, tile_size):
+    # round up tile_size
     return x + -(tile_size // -2)
 
 
@@ -31,7 +33,8 @@ def segment_traps(
     Use an entropy filter and Otsu thresholding to find a trap template,
     which is then passed to identify_trap_locations.
 
-    To obtain candidate traps the major axis length of a tile must be smaller than tilesize.
+    To obtain candidate traps the major axis length of a tile must be
+    smaller than tilesize.
 
     The hyperparameters have not been optimised.
 
@@ -59,11 +62,16 @@ def segment_traps(
     traps: an array of pairs of integers
         The coordinates of the centroids of the traps.
     """
-    # keep a memory of image in case need to re-run
+    # for 100X magnification
+    # disk_radius_frac *= 100 / 60
+    # min_frac_tilesize *= 100 / 60
+    # square_size = int(square_size * 100 / 60)
+    # tile_size = int(tile_size * 100 / 60)
+    #
+    # keep a memory of the image in case we need to re-run
     img = image
     # bounds on major axis length of traps
-    min_mal = min_frac_tilesize * tile_size
-
+    min_trap_size = min_frac_tilesize * tile_size
     # shrink image
     if downscale != 1:
         img = transform.rescale(image, downscale)
@@ -71,6 +79,7 @@ def segment_traps(
     disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
     entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
     if downscale != 1:
+        # upscale
         entropy_image = transform.rescale(entropy_image, 1 / downscale)
     # find Otsu threshold for entropy image
     thresh = threshold_otsu(entropy_image)
@@ -78,37 +87,38 @@ def segment_traps(
     bw = closing(entropy_image > thresh, square(square_size))
     # remove artifacts connected to image border
     cleared = clear_border(bw)
-
     # label distinct regions of the image
     label_image = label(cleared)
     # find regions likely to contain traps:
     # with a major axis length within a certain range
-    # and a centroid at least tile_size // 2 away from the image edge
+    # and a centroid at least half_tile_size away from the image edge
+    half_tile_size = tile_size // 2
     idx_valid_region = [
         (i, region)
         for i, region in enumerate(regionprops(label_image))
-        if min_mal < region.major_axis_length < tile_size
-        and tile_size // 2
-        < region.centroid[0]
-        < half_floor(image.shape[0], tile_size) - 1
-        and tile_size // 2
-        < region.centroid[1]
-        < half_floor(image.shape[1], tile_size) - 1
+        if (min_trap_size < region.major_axis_length < tile_size)
+        and (
+            half_tile_size
+            < region.centroid[0]
+            < image.shape[0] - half_tile_size - 1
+        )
+        and (
+            half_tile_size
+            < region.centroid[1]
+            < image.shape[1] - half_tile_size - 1
+        )
     ]
-
-    assert idx_valid_region, "No valid tiling regions found"
-
-    _, valid_region = zip(*idx_valid_region)
-
-    # find centroids and minor axes lengths of valid regions
+    if idx_valid_region:
+        _, valid_region = zip(*idx_valid_region)
+    else:
+        raise Exception("No valid tiles found.")
+    # find centroids of valid regions
     centroids = (
-        np.array([x.centroid for x in valid_region]).round().astype(int)
+        np.array([region.centroid for region in valid_region])
+        .round()
+        .astype(int)
     )
-    minals = [region.minor_axis_length for region in valid_region]
-    # coords for best trap
-    x, y = np.round(centroids[np.argmin(minals)]).astype(int)
-
-    # make candidate templates from the other traps found
+    # make candidate templates as tile_size x tile_size image slices
     candidate_templates = [
         image[
             half_floor(x, tile_size) : half_ceil(x, tile_size),
@@ -116,20 +126,17 @@ def segment_traps(
         ]
         for x, y in centroids
     ]
-    # make a mean template from all the found traps
+    # make a mean template by averaging all the candidate templates
     mean_template = np.stack(candidate_templates).astype(int).mean(axis=0)
-
     # find traps using the mean trap template
     traps = identify_trap_locations(
         image, mean_template, **identify_traps_kwargs
     )
-
-    # if there are too few traps, try again
+    # try again if there are too few traps
     traps_retry = []
     if len(traps) < 30 and downscale != 1:
         print("Tiler:TrapIdentification: Trying again.")
         traps_retry = segment_traps(image, tile_size, downscale=1)
-
     # return results with the most number of traps
     if len(traps_retry) < len(traps):
         return traps
@@ -174,7 +181,6 @@ def identify_trap_locations(
     # careful: the image is float16!
     img = transform.rescale(image.astype(float), downscale)
     template = transform.rescale(trap_template, downscale)
-
     # try multiple rotations of template to determine
     # which best matches the image
     # result is squared because the sign of the correlation is unimportant
@@ -192,7 +198,6 @@ def identify_trap_locations(
     best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
     # rotate template by best rotation
     template = transform.rotate(template, best_rotation, cval=np.median(img))
-
     if optimize_scale:
         # try multiple scales appled to template to determine which
         # best matches the image
