@@ -6,6 +6,7 @@ Dataset is a group of classes to manage multiple types of experiments:
  - Local experiments in a directory containing multiple positions in independent
 images with or without metadata
 """
+
 import os
 import re
 import shutil
@@ -19,9 +20,7 @@ from pathlib import Path
 from aliby.io.image import ImageLocalOME
 
 
-def dispatch_dataset(
-    expt_id: int or str, custom: str or None = None, **kwargs
-):
+def dispatch_dataset(expt_id: int or str, custom: str or None = None, **kwargs):
     """
     Find paths to the data.
 
@@ -98,10 +97,7 @@ class DatasetLocalABC(ABC):
             self._files = {
                 f: f
                 for f in self.path.rglob("*")
-                if any(
-                    str(f).endswith(suffix)
-                    for suffix in self._valid_meta_suffixes
-                )
+                if any(str(f).endswith(suffix) for suffix in self._valid_meta_suffixes)
             }
         return self._files
 
@@ -221,9 +217,7 @@ def groupby_regex(
     str_paths = list(map(str, sorted(Path(path).rglob("*.tif"))))
     captures = list(map(lambda x: regex.match(x), str_paths))
     valid = [
-        (*capture.groups(), pth)
-        for pth, capture in zip(str_paths, captures)
-        if capture
+        (*capture.groups(), pth) for pth, capture in zip(str_paths, captures) if capture
     ]
 
     key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
@@ -232,14 +226,11 @@ def groupby_regex(
     # Replace groups (dimensions) with wildcard to be read by dask
     d = {}
     for key, group in iterator:
-
         files = [x[-1] for x in group]
         as_list = list(files[0])
         spans = regex.match(files[0]).regs[1:]
         variable_captures = [
-            span
-            for i, span in enumerate(spans)
-            if i not in capture_group_indices
+            span for i, span in enumerate(spans) if i not in capture_group_indices
         ]
         for start, end in variable_captures[::-1]:
             as_list[start:end] = "*"
