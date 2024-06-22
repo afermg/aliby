@@ -29,7 +29,7 @@ try:
 except ModuleNotFoundError:
     from importlib.resources import files
 
-from agora.io.metadata import parse_metadata
+from agora.io.metadata import parse_logs
 from tifffile import TiffFile
 
 
@@ -156,11 +156,12 @@ class BaseLocalImage(ABC):
 
     def set_meta(self):
         """Load metadata using parser dispatch."""
-        parsed_meta = parse_metadata(self.path)
-        if parsed_meta is None:
+        logs_metadata = parse_logs(self.path)
+        if logs_metadata is None:
             # try to deduce metadata
-            parsed_meta = files_to_image_sizes(self.path)
-        self.meta = parsed_meta
+            self.meta = files_to_image_sizes(self.path)
+        else:
+            self.meta = logs_metadata
 
     @abstractmethod
     def get_data_lazy(self) -> da.Array:

@@ -23,7 +23,11 @@ except AttributeError:
 
 import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.metadata import MetaData, find_file, parse_from_swainlab_grammar
+from agora.io.metadata import (
+    MetaData,
+    find_file,
+    parse_from_swainlab_grammar,
+)
 from agora.io.signal import Signal
 from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
 from aliby.io.dataset import dispatch_dataset
@@ -193,19 +197,14 @@ class Pipeline(ProcessABC):
             for k in ("host", "username", "password")
         }
         self.expt_id = config["general"]["id"]
-        self.setLogger(
-            config["general"]["directory"],
-            logfile_root_name=str(config["general"]["id"])
-            .split("/")[-1]
-            .split(".")[0],
-        )
+        self.setLogger(config["general"]["directory"], config["general"]["id"])
 
     @staticmethod
     def setLogger(
         folder,
+        expt_id: str,
         file_level: str = "INFO",
         stream_level: str = "INFO",
-        logfile_root_name: str = None,
     ):
         """Initialise and format logger."""
         logger = logging.getLogger("aliby")
@@ -219,12 +218,9 @@ class Pipeline(ProcessABC):
         ch.setLevel(getattr(logging, stream_level))
         ch.setFormatter(formatter)
         logger.addHandler(ch)
-        # create file handler that logs even debug messages
-        if logfile_root_name is None:
-            logfile_root_name = "aliby"
-        fh = logging.FileHandler(
-            Path(folder) / f"{logfile_root_name}.log", "w+"
-        )
+        # create file handler to log all messages
+        logfile_name = f"aliby_{expt_id}.log"
+        fh = logging.FileHandler(Path(folder) / logfile_name, "w+")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
@@ -374,8 +370,8 @@ class Pipeline(ProcessABC):
         if out_file.exists():
             os.remove(out_file)
         meta = MetaData(out_dir, out_file)
-        # generate h5 file using meta data from logs
         if config["general"]["use_explog"]:
+            # generate h5 file by writing meta data from logs
             meta.run()
         return out_file
 

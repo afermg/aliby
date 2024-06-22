@@ -17,19 +17,14 @@ repository.
 """
 
 import glob
-import logging
-import numpy as np
 import os
 import typing as t
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from pytz import timezone
-
+from agora.io import metadata_legacy
 from agora.io.writer import Writer
-from logfile_parser import Parser
-from logfile_parser.swainlab_parser import parse_from_swainlab_grammar
+from logfile_parser.swainlab_parser_new import parse_from_swainlab_grammar
 
 
 class MetaData:
@@ -41,39 +36,26 @@ class MetaData:
         self.store = store
         self.metadata_writer = Writer(self.store)
 
-    def __getitem__(self, item):
-        """Load log and access item in resulting meta data dictionary."""
-        return self.load_logs()[item]
-
     def load_logs(self):
         """Load log using a hierarchy of parsers."""
-        parsed_flattened = parse_metadata(self.log_dir)
-        return parsed_flattened
+        logs_metadata = parse_logs(self.log_dir)
+        return logs_metadata
 
     def run(self, overwrite=False):
-        """Load and parse logs and write to h5 file."""
+        """
+        Load and parse logs and write to h5 file.
+
+        Used by pipline.py.
+        """
         metadata_dict = self.load_logs()
         self.metadata_writer.write(
             path="/", meta=metadata_dict, overwrite=overwrite
         )
 
-    def add_field(self, field_name, field_value, **kwargs):
-        """Write a field and its values to the h5 file."""
-        self.metadata_writer.write(
-            path="/",
-            meta={field_name: field_value},
-            **kwargs,
-        )
 
-    def add_fields(self, fields_values: dict, **kwargs):
-        """Write a dict of fields and values to the h5 file."""
-        for field, value in fields_values.items():
-            self.add_field(field, value)
-
-
-def parse_metadata(filedir: t.Union[str, Path]):
+def parse_logs(filedir: t.Union[str, Path]):
     """
-    Dispatch different metadata parsers that convert logfiles into a dictionary.
+    Dispatch metadata parsers to parse logfiles into a dict.
 
     Currently only contains the swainlab log parsers.
 
@@ -88,14 +70,16 @@ def parse_metadata(filedir: t.Union[str, Path]):
         filedir = filedir.parent
     filepath = find_file(filedir, "*.log")
     if filepath:
-        # new log files ending in .log
+        # log files ending in .log
         raw_parse = parse_from_swainlab_grammar(filepath)
         minimal_meta = get_minimal_meta_swainlab(raw_parse)
     else:
         # legacy log files ending in .txt
-        legacy_parse = parse_legacy_logfiles(filedir)
+        legacy_parse = metadata_legacy.parse_legacy_logs(filedir)
         minimal_meta = (
-            get_meta_from_legacy(legacy_parse) if legacy_parse else {}
+            metadata_legacy.get_meta_from_legacy(legacy_parse)
+            if legacy_parse
+            else {}
         )
     if minimal_meta is None:
         raise Exception("No metadata found.")
@@ -109,7 +93,7 @@ def find_file(root_dir, regex):
     file = [
         f
         for f in glob.glob(os.path.join(str(root_dir), regex))
-        if Path(f).name != "aliby.log"
+        if "aliby" not in Path(f).name
     ]
     if len(file) == 0:
         return None
@@ -186,98 +170,3 @@ def find_channels_by_position(meta):
     else:
         channels_dict = {}
     return channels_dict
-
-
-def dir_to_meta(path: Path, suffix="tiff"):
-    filenames = list(path.glob(f"*.{suffix}"))
-    try:
-        # Deduct order from filenames
-        dimorder = "".join(
-            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
-        )
-        dim_value = list(
-            map(
-                lambda f: filename_to_dict_indices(f.stem),
-                path.glob("*.tiff"),
-            )
-        )
-        maxes = [max(map(lambda x: x[dim], dim_value)) for dim in dimorder]
-        mins = [min(map(lambda x: x[dim], dim_value)) for dim in dimorder]
-        _dim_shapes = [
-            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
-        ]
-
-        meta = {
-            "size_" + dim: shape for dim, shape in zip(dimorder, _dim_shapes)
-        }
-    except Exception as e:
-        print(
-            f"Warning:Metadata: Cannot extract dimensions from filenames. Empty meta set {e}"
-        )
-        meta = {}
-
-    return meta
-
-
-### legacy code for acq and log files ###
-
-
-def parse_legacy_logfiles(
-    root_dir,
-    acq_grammar="multiDGUI_acq_format.json",
-    log_grammar="multiDGUI_log_format.json",
-):
-    """
-    Parse acq and log files using the grammar specified.
-
-    Merge results into a single dict.
-    """
-    log_parser = Parser(log_grammar)
-    acq_parser = Parser(acq_grammar)
-    log_file = find_file(root_dir, "*log.txt")
-    acq_file = find_file(root_dir, "*[Aa]cq.txt")
-    # parse into a single dict
-    parsed = {}
-    if log_file and acq_file:
-        with open(log_file, "r") as f:
-            log_parsed = log_parser.parse(f)
-        with open(acq_file, "r") as f:
-            acq_parsed = acq_parser.parse(f)
-        parsed = {**acq_parsed, **log_parsed}
-    # convert data to having time stamps
-    for key, value in parsed.items():
-        if isinstance(value, datetime):
-            parsed[key] = datetime_to_timestamp(value)
-    # flatten dict
-    parsed_flattened = flatten_dict(parsed)
-    for k, v in parsed_flattened.items():
-        if isinstance(v, list):
-            # replace None with 0
-            parsed_flattened[k] = [0 if el is None else el for el in v]
-    return parsed_flattened
-
-
-def get_meta_from_legacy(parsed_metadata: dict):
-    """Fix naming convention for channels in legacy .txt log files."""
-    result = parsed_metadata
-    result["channels"] = result["channels/channel"]
-    return result
-
-
-def flatten_dict(nested_dict, separator="/"):
-    """
-    Flatten nested dictionary because h5 attributes cannot be dicts.
-
-    If empty return as-is.
-    """
-    flattened = {}
-    if nested_dict:
-        df = pd.json_normalize(nested_dict, sep=separator)
-        flattened = df.to_dict(orient="records")[0] or {}
-    return flattened
-
-
-def datetime_to_timestamp(time, locale="Europe/London"):
-    """Convert datetime object to UNIX timestamp."""
-    # h5 attributes do not support datetime objects
-    return timezone(locale).localize(time).timestamp()

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+# only used for legacy log files
 import json
 import pkgutil
 import re
@@ -54,9 +54,11 @@ class Parser(object):
 
         self._triggers = {
             trigger_type: [
-                (k, v[f"trigger_{trigger_type}"])
-                if trigger_type != "re"
-                else (k, re.compile(v[f"trigger_{trigger_type}"]))
+                (
+                    (k, v[f"trigger_{trigger_type}"])
+                    if trigger_type != "re"
+                    else (k, re.compile(v[f"trigger_{trigger_type}"]))
+                )
                 for k, v in self.grammar.items()
                 if f"trigger_{trigger_type}" in v
             ]
