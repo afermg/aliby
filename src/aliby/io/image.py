@@ -14,14 +14,13 @@ ImageDummy is a dummy class for silent failure testing.
 """
 
 import hashlib
+import re
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
-from functools import cache, cached_property
+from functools import cached_property
 from glob import glob
-from itertools import groupby
 from pathlib import Path
-import re
 
 import dask
 import dask.array as da
@@ -29,22 +28,12 @@ import imageio
 import numpy as np
 import xmltodict
 import zarr
-from dask.array.image import imread
-from dask_image.imread import imread as dimread
-from skimage.io import imread_collection
-
-try:
-    from importlib_resources import files
-except ModuleNotFoundError:
-    from importlib.resources import files
-
 from agora.io.metadata import parse_metadata
+from dask.array.image import imread
 from tifffile import TiffFile
 
 
-def instantiate_image(
-    source: t.Union[str, int, t.Dict[str, str], Path], **kwargs
-):
+def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwargs):
     """
     Instantiate the image.
 
@@ -79,6 +68,8 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
             instantiator = ImageDir
     elif isinstance(source, (str, Path)) and Path(source).is_file():
         instantiator = ImageLocalOME
+    elif isinstance(source, str) and not Path(source).is_file():
+        instantiator = ImageIndFiles
     else:
         raise Exception(f"Invalid data source at {source}")
     return instantiator
@@ -89,9 +80,7 @@ def files_to_image_sizes(path: Path, suffix="tiff"):
     filenames = list(path.glob(f"*.{suffix}"))
     try:
         # deduce order from filenames
-        dimorder = "".join(
-            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
-        )
+        dimorder = "".join(map(lambda x: x[0], filenames[0].stem.split("_")[1:]))
         dim_value = list(
             map(
                 lambda f: filename_to_dict_indices(f.stem),
@@ -100,12 +89,8 @@ def files_to_image_sizes(path: Path, suffix="tiff"):
         )
         maxes = [max(map(lambda x: x[dim], dim_value)) for dim in dimorder]
         mins = [min(map(lambda x: x[dim], dim_value)) for dim in dimorder]
-        dim_shapes = [
-            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
-        ]
-        meta = {
-            "size_" + dim: shape for dim, shape in zip(dimorder, dim_shapes)
-        }
+        dim_shapes = [max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)]
+        meta = {"size_" + dim: shape for dim, shape in zip(dimorder, dim_shapes)}
     except Exception as e:
         print("Warning: files_to_image_sizes failed." f"\nError: {e}")
         meta = {}
@@ -114,10 +99,7 @@ def files_to_image_sizes(path: Path, suffix="tiff"):
 
 def filename_to_dict_indices(stem: str):
     """Split string into a dict."""
-    return {
-        dim_number[0]: int(dim_number[1:])
-        for dim_number in stem.split("_")[1:]
-    }
+    return {dim_number[0]: int(dim_number[1:]) for dim_number in stem.split("_")[1:]}
 
 
 class BaseLocalImage(ABC):
@@ -265,11 +247,7 @@ class ImageLocalOME(BaseLocalImage):
                     self.meta["size_" + d.lower()] = img.shape[i]
                 target_order = (
                     *self.ids,
-                    *[
-                        i
-                        for i, d in enumerate(self.base)
-                        if d not in self.dimorder
-                    ],
+                    *[i for i, d in enumerate(self.base) if d not in self.dimorder],
                 )
                 reshaped = da.reshape(
                     img,
@@ -278,9 +256,7 @@ class ImageLocalOME(BaseLocalImage):
                         *[1 for _ in range(5 - len(self.dimorder))],
                     ),
                 )
-                img = da.moveaxis(
-                    reshaped, range(len(reshaped.shape)), target_order
-                )
+                img = da.moveaxis(reshaped, range(len(reshaped.shape)), target_order)
         return self.rechunk_data(img)
 
 
@@ -315,13 +291,9 @@ class ImageDir(BaseLocalImage):
             self.meta["size_x"], self.meta["size_y"] = img.shape[-2:]
             # Reshape using metadata
             img = da.reshape(img, self.meta.values())
-            original_order = [
-                i[-1] for i in self.meta.keys() if i.startswith("size")
-            ]
+            original_order = [i[-1] for i in self.meta.keys() if i.startswith("size")]
             # Swap axis to conform with normal order
-            target_order = [
-                self.default_dimorder.index(x) for x in original_order
-            ]
+            target_order = [self.default_dimorder.index(x) for x in original_order]
             img = da.moveaxis(
                 img,
                 list(range(len(original_order))),
@@ -338,9 +310,7 @@ class ImageDir(BaseLocalImage):
     @property
     def dimorder(self):
         # Assumes only dimensions start with "size"
-        return [
-            k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")
-        ]
+        return [k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")]
 
 
 class ImageZarr(BaseLocalImage):
@@ -368,10 +338,7 @@ class ImageZarr(BaseLocalImage):
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
         self.meta.update(
-            {
-                f"size_{dim}": shape
-                for dim, shape in zip(self.dimorder, self._img.shape)
-            }
+            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
         )
 
     @property
@@ -437,9 +404,7 @@ class ImageIndFiles(BaseLocalImage):
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
         # Reshape first dimensions based on capture order
-        lazy_arrays = [
-            dask.delayed(imageio.imread)(fn) for fn in self.image_filenames
-        ]
+        lazy_arrays = [dask.delayed(imageio.imread)(fn) for fn in self.image_filenames]
         sample = lazy_arrays[0].compute()
 
         lazy_arrays = [
@@ -483,9 +448,7 @@ class ImageIndFiles(BaseLocalImage):
 
     @cached_property
     def dimorder_d(self):
-        return get_dims_from_names(
-            self.image_filenames, self.regex, self.capture_order
-        )
+        return get_dims_from_names(self.image_filenames, self.regex, self.capture_order)
 
     @cached_property
     def image_filenames(self):
@@ -501,8 +464,7 @@ def get_dims_from_names(
     regex_ = re.compile(regex)
     matches = [regex_.match(x).groups() for x in image_filenames]
     dim_size = {
-        dim: len(set([y[i] for y in matches]))
-        for i, dim in enumerate(capture_order)
+        dim: len(set([y[i] for y in matches])) for i, dim in enumerate(capture_order)
     }
 
     # Check that the dimensions match the file
