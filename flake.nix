@@ -61,9 +61,9 @@
                     export VIRTUAL_ENV=.venv
                     if [ ! -d $VIRTUAL_ENV ]; then
                        export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
-                       poetry install -vvv --with dev --no-root
-                    fi
-                    source $VIRTUAL_ENV/bin/activate
+                       poetry install -vvv --with dev
+                   fi
+                   source $VIRTUAL_ENV/bin/activate
                   '';
                 }
               ];
