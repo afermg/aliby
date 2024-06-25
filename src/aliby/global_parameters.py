@@ -1,3 +1,5 @@
+"""Global parameters and settings."""
+
 # parameters to stop the pipeline when exceeded
 earlystop = dict(
     min_tp=100,
@@ -11,13 +13,14 @@ earlystop = dict(
 imaging_specifications = {
     "pixel_size": 0.236,
     "z_size": 0.6,
-    "spacing": 0.6,
+    "z_spacing": 0.6,
     "magnification": 60,
     "tile_size": 117,
 }
 
 # possible imaging channels
 possible_imaging_channels = [
+    "Brightfield",
     "Citrine",
     "GFP",
     "GFPFast",
@@ -26,6 +29,7 @@ possible_imaging_channels = [
     "Citrine",
     "mKO2",
     "Cy5",
+    "cy5",
     "pHluorin405",
     "pHluorin488",
 ]

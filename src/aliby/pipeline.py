@@ -21,28 +21,26 @@ try:
 except AttributeError:
     from aliby.baby_client import BabyParameters, BabyRunner
 
-import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.metadata import (
-    MetaData,
-    find_file,
-    parse_from_swainlab_grammar,
-)
+from agora.io.metadata import MetaData, find_file
+from logfile_parser.swainlab_parser import parse_swainlab_logs
 from agora.io.signal import Signal
-from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
-from aliby.io.dataset import dispatch_dataset
-from aliby.io.image import dispatch_image
-from aliby.tile.tiler import Tiler, TilerParameters
-from extraction.core.recursive_merge import recursive_merge_extractor
+from agora.io.writer import Writer, LinearBabyWriter, StateWriter, TilerWriter
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
     extraction_params_from_meta,
 )
+from extraction.core.recursive_merge import recursive_merge_extractor
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+
+import aliby.global_parameters as global_parameters
+from aliby.io.dataset import dispatch_dataset
+from aliby.io.image import dispatch_image
+from aliby.tile.tiler import Tiler, TilerParameters
 
 # stop warnings from TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -59,6 +57,7 @@ class PipelineParameters(ParametersABC):
         baby,
         extraction,
         postprocessing,
+        metadata=None,
     ):
         """Initialise parameter sets using passed dictionaries."""
         self.general = general
@@ -66,6 +65,7 @@ class PipelineParameters(ParametersABC):
         self.baby = baby
         self.extraction = extraction
         self.postprocessing = postprocessing
+        self.metadata = metadata
 
     @classmethod
     def default(
@@ -98,6 +98,7 @@ class PipelineParameters(ParametersABC):
             isinstance(general["expt_id"], Path)
             and general["expt_id"].exists()
         ):
+            # for zarr files
             expt_id = str(general["expt_id"])
         else:
             expt_id = general["expt_id"]
@@ -110,25 +111,11 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # download logs for metadata
+            # download microscopy logs for posterity
             conn.cache_logs(directory)
-        try:
-            meta_d = MetaData(directory, None).load_logs()
-        except Exception as e:
-            logging.getLogger("aliby").warn(
-                f"WARNING:Metadata: error when loading: {e}"
-            )
-            minimal_default_meta = {
-                "channels": ["Brightfield"],
-                "time_settings/ntimepoints": [2000],
-            }
-            # set minimal metadata
-            meta_d = minimal_default_meta
+        meta = MetaData(directory)
         # define default values for general parameters
-        if isinstance(meta_d["time_settings/ntimepoints"], list):
-            tps = meta_d["time_settings/ntimepoints"][0]
-        else:
-            tps = meta_d["time_settings/ntimepoints"]
+        tps = meta.full["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
                 id=expt_id,
@@ -139,7 +126,8 @@ class PipelineParameters(ParametersABC):
                 earlystop=global_parameters.earlystop,
                 logfile_level="INFO",
                 use_explog=True,
-            )
+            ),
+            "metadata": {"minimal": meta.minimal, "full": meta.full},
         }
         # update default values for general using inputs
         for k, v in general.items():
@@ -155,15 +143,15 @@ class PipelineParameters(ParametersABC):
         # generate a backup channel for when logfile meta is available
         # but not image metadata.
         backup_ref_channel = None
-        if "channels" in meta_d and isinstance(
+        if "channels" in meta.full and isinstance(
             defaults["tiler"]["ref_channel"], str
         ):
-            backup_ref_channel = meta_d["channels"].index(
+            backup_ref_channel = meta.full["channels"].index(
                 defaults["tiler"]["ref_channel"]
             )
         defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
         # defaults for extraction
-        defaults["extraction"] = extraction_params_from_meta(meta_d)
+        defaults["extraction"] = extraction_params_from_meta(meta.minimal)
         # merge any input, a nested dict
         if extraction:
             defaults["extraction"] = recursive_merge_extractor(
@@ -219,7 +207,7 @@ class Pipeline(ProcessABC):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
         # create file handler to log all messages
-        logfile_name = f"aliby_{expt_id}.log"
+        logfile_name = f"aliby_{str(expt_id).split('/')[-1]}.log"
         fh = logging.FileHandler(Path(folder) / logfile_name, "w+")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
@@ -246,7 +234,7 @@ class Pipeline(ProcessABC):
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # copy logs to h5 directory
+            # copy microscopy logs to h5 directory
             conn.cache_logs(directory)
         print("Positions available:")
         for i, pos in enumerate(position_ids.keys()):
@@ -264,7 +252,7 @@ class Pipeline(ProcessABC):
         dir_path = Path(self.parameters.general["directory"])
         logpath = find_file(dir_path, "*.log")
         if logpath:
-            raw_meta = parse_from_swainlab_grammar(logpath)
+            raw_meta = parse_swainlab_logs(logpath)
             location_df = raw_meta["group_position"]
             locations = {
                 position: (
@@ -369,10 +357,11 @@ class Pipeline(ProcessABC):
         # remove existing h5 file
         if out_file.exists():
             os.remove(out_file)
-        meta = MetaData(out_dir, out_file)
+        # write minimal microscopy metadata to h5 file
         if config["general"]["use_explog"]:
-            # generate h5 file by writing meta data from logs
-            meta.run()
+            Writer(out_file).write(
+                path="/", meta=self.parameters.to_dict()["metadata"]["minimal"]
+            )
         return out_file
 
     def run_one_position(

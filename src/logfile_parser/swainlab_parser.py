@@ -1,274 +1,136 @@
-#!/usr/bin/env jupyter
-"""
-Description of new logfile:
+"""To parse microscopy log files generated in the Swain lab."""
 
-All three conditions are concatenated in a single file, in this order:
- - Experiment basic information  (URL in acquisition PC, project, user input)
- - Acquisition settings
- - Experiment start
-
-The section separators are:
------Acquisition settings-----
------Experiment started-----
-
-And for a successfully finished experiment we get:
-
-YYYY-MM-DD HH:mm:ss,ms*3 Image acquisition complete WeekDay Mon Day  HH:mm:ss,ms*3 YYYY
-
-For example:
-2022-09-30 05:40:59,765 Image acquisition complete Fri Sep 30 05:40:59 2022
-
-Data to extract:
-* Basic information
- - Experiment details, which may indicate technical issues
- -  GIT commit
- - (Not working as of 2022/10/03, but projects and tags)
-* Basic information
-"""
-
-import logging
+import re
 import typing as t
-from itertools import product
 from pathlib import PosixPath
 
-import pandas as pd
-from pyparsing import (
-    CharsNotIn,
-    Combine,
-    Group,
-    Keyword,
-    LineEnd,
-    LineStart,
-    Literal,
-    OneOrMore,
-    ParserElement,
-    Word,
-    printables,
-)
-
-atomic = t.Union[str, int, float, bool]
-
-# grammar specification
-sl_grammar = {
-    "general": {
-        "type": "fields",
-        "start_trigger": Literal("Swain Lab microscope experiment log file"),
-        "end_trigger": "-----Acquisition settings-----",
-    },
-    "image_config": {
-        "type": "table",
-        "start_trigger": "Image Configs:",
-    },
-    "device_properties": {
-        "type": "table",
-        "start_trigger": "Device properties:",
-    },
-    "group": {
-        "position": {
-            "type": "table",
-            "start_trigger": Group(
-                Group(Literal("group:") + Word(printables))
-                + Group(Literal("field:") + "position")
-            ),
-        },
-        **{
-            key: {
-                "type": "fields",
-                "start_trigger": Group(
-                    Group(Literal("group:") + Word(printables))
-                    + Group(Literal("field:") + key)
-                ),
-            }
-            for key in ("time", "config")
-        },
-    },
-}
+from aliby.global_parameters import possible_imaging_channels
 
 
-HEADER_END = "-----Experiment started-----"
-MAX_NLINES = 2000  # in case of malformed logfile
-
-ParserElement.setDefaultWhitespaceChars(" \t")
-
-
-def extract_header(filepath: PosixPath, **kwargs):
-    """Extract content of log file upto HEADER_END."""
-    with open(filepath, "r", **kwargs) as f:
-        try:
-            header = ""
-            for _ in range(MAX_NLINES):
-                line = f.readline()
-                header += line
-                if HEADER_END in line:
-                    break
-        except Exception as e:
-            raise e(f"{MAX_NLINES} checked and no header found")
-        return header
-
-
-def parse_from_swainlab_grammar(filepath: t.Union[str, PosixPath]):
-    """Parse using a grammar for the Swain lab."""
-    try:
-        header = extract_header(filepath, encoding="latin1")
-        res = parse_from_grammar(header, sl_grammar)
-    except Exception:
-        # removes unwanted windows characters
-        header = extract_header(
-            filepath, errors="ignore", encoding="unicode_escape"
-        )
-        res = parse_from_grammar(header, sl_grammar)
-    return res
+def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:
+    """Parse and process a Swain lab microscopy log file."""
+    raw_meta = first_parse(filepath)
+    meta = raw_meta.copy()
+    # convert raw_meta values into dict
+    for meta_key in [
+        "exposure",
+        "number_z_sections",
+        "z_spacing",
+        "sectioning_method",
+    ]:
+        meta[meta_key] = {
+            channel: raw_meta[meta_key][i]
+            for i, channel in enumerate(raw_meta["channels"])
+        }
+    meta["spatial_position"] = {
+        position: raw_meta["spatial_position"][i]
+        for i, position in enumerate(raw_meta["group"])
+    }
+    return meta
 
 
-def parse_from_grammar(header: str, grammar: t.Dict):
-    """Parse a string using the specified grammar."""
-    d = {}
-    for key, values in grammar.items():
-        try:
-            if "type" in values:
-                # use values to find parsing function
-                d[key] = parse_x(header, **values)
-            else:
-                # for group, use subkeys to parse
-                for subkey, subvalues in values.items():
-                    subkey = "_".join((key, subkey))
-                    # use subvalues to find parsing function
-                    d[subkey] = parse_x(header, **subvalues)
-        except Exception as e:
-            logging.getLogger("aliby").critical(
-                f"Parsing failed for key {key} and values {values}"
-            )
-            raise (e)
-    return d
+def first_parse(filepath: t.Union[str, PosixPath]) -> t.Dict:
+    """Parse a Swain lab microscopy log file into a dict of lists."""
+    meta: t.Dict[str, t.Union[t.List]] = {
+        "channels": [],
+        "exposure": [],
+        "number_z_sections": [],
+        "z_spacing": [],
+        "sectioning_method": [],
+        "group": [],
+        "spatial_position": [],
+        "device": [],
+    }
+    general_setting = True
+    acquisition_setting = False
+    group_setting = False
+    devices_setting = False
+    with open(filepath, "r", encoding="UTF-8", errors="ignore") as f:
+        for line in f:
+            line = line.rstrip()
+            # general information
+            if general_setting and ":" in line:
+                parse_general(line, meta)
+            # acquisition settings
+            if line == "-----Acquisition settings-----":
+                acquisition_setting = True
+                general_setting = False
+                continue
+            line_bits = [bit.strip() for bit in line.split(",")]
+            if acquisition_setting:
+                parse_acquisition(line_bits, meta)
+            # information on devices
+            if line == "Device properties:":
+                devices_setting = True
+                acquisition_setting = False
+                continue
+            if devices_setting:
+                parse_devices(line_bits, meta)
+            # information on groups
+            if line == "Name,X,Y,Z,Autofocus offset":
+                group_setting = True
+                devices_setting = False
+                continue
+            if group_setting and not line:
+                # blank line
+                group_setting = False
+                continue
+            if group_setting:
+                parse_group(line_bits, meta)
+            # time settings
+            add_to_meta("interval", line, meta, "time_settings/timeinterval")
+            add_to_meta("frames", line, meta, "time_settings/ntimepoints")
+            if line == "-----Experiment started-----":
+                break
+    return meta
 
 
-def parse_x(string_input: str, type: str, **kwargs):
-    """Parse a string using a function specifed by data_type."""
-    return eval(f"parse_{type}(string_input, **kwargs)")
-
-
-def parse_table(
-    string_input: str,
-    start_trigger: t.Union[str, Keyword],
-) -> pd.DataFrame:
+def add_to_meta(search_word: str, line: str, meta: t.Dict, key: str) -> None:
     """
-    Parse csv-like table.
+    Parse line for search_word and add following number to meta dict.
 
-    Parameters
-    ----------
-    string : str
-        contents to parse
-    start_trigger : t.Union[str, t.Collection]
-        string or triggers that indicate section start.
-
-    Returns
-    -------
-    pd.Dataframe or dict of atomic values (int,str,bool,float)
-        DataFrame representing table.
-
-    Examples
-    --------
-    >>> table = parse_table()
+    E.g. interval: 300
     """
-    if isinstance(start_trigger, str):
-        start_trigger: Keyword = Keyword(start_trigger)
-    EOL = LineEnd().suppress()
-    field = OneOrMore(CharsNotIn(":,\n"))
-    line = LineStart() + Group(
-        OneOrMore(field + Literal(",").suppress()) + field + EOL
-    )
-    parser = start_trigger + EOL + Group(OneOrMore(line)) + EOL
-    parser_result = parser.search_string(string_input)
-    assert all(
-        [len(row) == len(parser_result[0]) for row in parser_result]
-    ), f"Table {start_trigger} has unequal number of columns"
-    assert len(parser_result), f"Parsing is empty. {parser}"
-    return table_to_df(parser_result.as_list())
+    values = re.findall(rf"{search_word}:\s*(\d+)", line)
+    if values:
+        value = int(values[0])
+        if key in meta and meta[key] != value:
+            print("Warning - metadata: {key} has different values.")
+        else:
+            meta[key] = value
 
 
-def parse_fields(
-    string_input: str, start_trigger, end_trigger=None
-) -> t.Union[pd.DataFrame, t.Dict[str, atomic]]:
-    """
-    Parse fields are parsed as key-value pairs.
-
-    By default the end is an empty newline.
-
-    For example
-
-    group: YST_1510 field: time
-    start: 0
-    interval: 300
-    frames: 180
-    """
-    EOL = LineEnd().suppress()
-    if end_trigger is None:
-        end_trigger = EOL
-    elif isinstance(end_trigger, str):
-        end_trigger = Literal(end_trigger)
-    field = OneOrMore(CharsNotIn(":\n"))
-    line = (
-        LineStart()
-        + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
-        + EOL
-    )
-    parser = (
-        start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
-    )
-    parser_result = parser.search_string(string_input)
-    results = parser_result.as_list()
-    assert len(results), "Parsing returned nothing"
-    return fields_to_dict_or_df(results)
+def parse_general(line: str, meta: t.Dict) -> None:
+    """Parse general information on the experiment."""
+    bits = [bit.strip() for bit in line.split(":")]
+    if re.search("[a-zA-Z+]", bits[0]):
+        meta_key = bits[0].lower().replace(" ", "_")
+        if meta_key == "omero_tags":
+            meta[meta_key] = bits[1].split(",")
+        else:
+            meta[meta_key] = [":".join(bits[1:])]
 
 
-def table_to_df(result: t.List[t.List]):
-    """Convert table to data frame."""
-    if len(result) > 1:
-        # multiple tables with ids to append
-        group_name = [
-            product((table[0][0][1],), (row[0] for row in table[1][1:]))
-            for table in result
-        ]
-        tmp = [pair for pairset in group_name for pair in pairset]
-        multiindices = pd.MultiIndex.from_tuples(tmp)
-        df = pd.DataFrame(
-            [row for pr in result for row in pr[1][1:]],
-            columns=result[0][1][0],
-            index=multiindices,
-        )
-        df.name = result[0][0][1][1]
-    else:
-        # a single table
-        df = pd.DataFrame(result[0][1][1:], columns=result[0][1][0])
-    return df
+def parse_acquisition(bits: t.List[str], meta: t.Dict) -> None:
+    """Parse information on the imaging channels."""
+    if (
+        bits[0] in possible_imaging_channels
+        and bits[1] in possible_imaging_channels
+    ):
+        meta["channels"].append(bits[0])
+        meta["exposure"].append(float(bits[3]))
+        meta["number_z_sections"].append(int(bits[4]))
+        meta["z_spacing"].append(float(bits[5]))
+        meta["sectioning_method"].append(bits[6])
 
 
-def fields_to_dict_or_df(result: t.List[t.List]):
-    """Convert field to dict or dataframe."""
-    if len(result) > 1:
-        formatted = pd.DataFrame(
-            [[row[1] for row in pr[1]] for pr in result],
-            columns=[x[0] for x in result[0][1]],
-            index=[x[0][0][1] for x in result],
-        )
-        formatted.name = result[0][0][1][1]
-    else:
-        # a single table
-        formatted = {k: cast_type(v) for k, v in dict(result[0][1]).items()}
-    return formatted
+def parse_group(bits: t.List[str], meta: t.Dict) -> None:
+    """Parse information on the imaging groups."""
+    meta["group"].append(bits[0])
+    meta["spatial_position"].append((float(bits[1]), float(bits[2])))
 
 
-def cast_type(x: str) -> t.Union[str, int, float, bool]:
-    """Convert to either an integer or float or boolean."""
-    x = x.strip()
-    if x.isdigit():
-        x = int(x)
-    else:
-        try:
-            x = float(x)
-        except Exception:
-            try:
-                x = ("false", "true").index(x.lower())
-            except Exception:
-                pass
-    return x
+def parse_devices(bits: t.List[str], meta: t.Dict) -> None:
+    """Parse information on the devices used in the experiment."""
+    if bits[0] in possible_imaging_channels:
+        meta["device"].append((bits[0], bits[1], bits[2], float(bits[3])))

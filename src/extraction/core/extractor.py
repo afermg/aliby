@@ -135,7 +135,7 @@ class Extractor(StepABC):
     or leaf level.
     """
 
-    # get pixel_size; z_size; spacing
+    # get pixel_size; z_size; z_spacing
     default_meta = global_parameters.imaging_specifications
 
     def __init__(

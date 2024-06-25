@@ -23,41 +23,36 @@ from pathlib import Path
 
 import pandas as pd
 from agora.io import metadata_legacy
-from agora.io.writer import Writer
-from logfile_parser.swainlab_parser_new import parse_from_swainlab_grammar
+from logfile_parser.swainlab_parser import parse_swainlab_logs
 
 
 class MetaData:
     """Metadata process that loads and parses log files."""
 
-    def __init__(self, log_dir, store):
-        """Initialise with log-file directory and h5 location to write."""
+    def __init__(self, log_dir):
+        """Initialise by loading and parsing microscopy logs."""
         self.log_dir = log_dir
-        self.store = store
-        self.metadata_writer = Writer(self.store)
+        self.full = parse_microscopy_logs(log_dir)
 
-    def load_logs(self):
-        """Load log using a hierarchy of parsers."""
-        logs_metadata = parse_logs(self.log_dir)
-        return logs_metadata
-
-    def run(self, overwrite=False):
-        """
-        Load and parse logs and write to h5 file.
-
-        Used by pipline.py.
-        """
-        metadata_dict = self.load_logs()
-        self.metadata_writer.write(
-            path="/", meta=metadata_dict, overwrite=overwrite
-        )
+    @property
+    def minimal(self) -> t.Dict:
+        """Get minimal microscopy metadata to write to h5 file."""
+        if not hasattr(self, "_minimal_meta"):
+            if hasattr(self, "full"):
+                if "legacy" in self.full:
+                    self._minimal_meta = metadata_legacy.get_meta_from_legacy(
+                        self.full
+                    )
+                else:
+                    self._minimal_meta = get_minimal_meta_swainlab(self.full)
+            else:
+                self._minimal_meta = {}
+        return self._minimal_meta
 
 
-def parse_logs(filedir: t.Union[str, Path]):
+def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:
     """
-    Dispatch metadata parsers to parse logfiles into a dict.
-
-    Currently only contains the swainlab log parsers.
+    Dispatch metadata parsers to parse microscopy logfiles.
 
     Parameters
     --------
@@ -71,20 +66,14 @@ def parse_logs(filedir: t.Union[str, Path]):
     filepath = find_file(filedir, "*.log")
     if filepath:
         # log files ending in .log
-        raw_parse = parse_from_swainlab_grammar(filepath)
-        minimal_meta = get_minimal_meta_swainlab(raw_parse)
+        full_meta = parse_swainlab_logs(filepath)
     else:
         # legacy log files ending in .txt
-        legacy_parse = metadata_legacy.parse_legacy_logs(filedir)
-        minimal_meta = (
-            metadata_legacy.get_meta_from_legacy(legacy_parse)
-            if legacy_parse
-            else {}
-        )
-    if minimal_meta is None:
-        raise Exception("No metadata found.")
+        full_meta = metadata_legacy.parse_legacy_logs(filedir)
+    if full_meta is None:
+        raise Exception("No microscopy metadata found.")
     else:
-        return minimal_meta
+        return full_meta
 
 
 def find_file(root_dir, regex):
@@ -107,37 +96,16 @@ def find_file(root_dir, regex):
         return file[0]
 
 
-def get_minimal_meta_swainlab(parsed_metadata: dict):
-    """
-    Extract channels from parsed metadata.
-
-    Parameters
-    --------
-    parsed_metadata: dict[str, str or int or DataFrame or Dict]
-        default['general', 'image_config', 'device_properties',
-                'group_position', 'group_time', 'group_config']
-
-    Returns
-    --------
-    Dict with channels metadata
-    """
-    channels_dict = find_channels_by_position(parsed_metadata["group_config"])
-    channels = parsed_metadata["image_config"]["Image config"].values.tolist()
-    parsed_ntps = parsed_metadata["group_time"]["frames"]
-    if type(parsed_ntps) is int:
-        ntps = parsed_ntps
-    else:
-        ntps = parsed_ntps.max()
-    parsed_tinterval = parsed_metadata["group_time"]["interval"]
-    if type(parsed_tinterval) is int:
-        timeinterval = parsed_tinterval
-    else:
-        timeinterval = parsed_tinterval.min()
+def get_minimal_meta_swainlab(full_metadata: t.Dict) -> t.Dict:
+    """Extract channels and time settings from microscopy metadata."""
+    # TODO "channels_by_group": channels_dict,
     minimal_meta = {
-        "channels_by_group": channels_dict,
-        "channels": channels,
-        "time_settings/ntimepoints": int(ntps),
-        "time_settings/timeinterval": int(timeinterval),
+        key: full_metadata[key]
+        for key in [
+            "channels",
+            "time_settings/ntimepoints",
+            "time_settings/timeinterval",
+        ]
     }
     return minimal_meta
 
