@@ -22,10 +22,9 @@ except AttributeError:
     from aliby.baby_client import BabyParameters, BabyRunner
 
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.metadata import MetaData, find_file
-from logfile_parser.swainlab_parser import parse_swainlab_logs
+from agora.io.metadata import MetaData
 from agora.io.signal import Signal
-from agora.io.writer import Writer, LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter, Writer
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
@@ -113,12 +112,17 @@ class PipelineParameters(ParametersABC):
                 directory.mkdir(parents=True)
             # download microscopy logs for posterity
             conn.cache_logs(directory)
-        meta = MetaData(directory)
+            # get channels to ensure metadata has the correct order
+            if hasattr(conn, "get_channels"):
+                OMERO_channels = conn.get_channels()
+            else:
+                OMERO_channels = None
+        meta = MetaData(directory, OMERO_channels)
         # define default values for general parameters
         tps = meta.full["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
-                id=expt_id,
+                expt_id=expt_id,
                 distributed=0,
                 tps=tps,
                 directory=str(directory.parent),
@@ -168,24 +172,22 @@ class PipelineParameters(ParametersABC):
 class Pipeline(ProcessABC):
     """Initialise and run tiling, segmentation, extraction and post-processing."""
 
-    def __init__(
-        self, parameters: PipelineParameters, store=None, OMERO_channels=None
-    ):
+    def __init__(self, parameters: PipelineParameters, store=None):
         """Initialise using Pipeline parameters."""
         super().__init__(parameters)
         if store is not None:
             store = Path(store)
         # h5 file
         self.store = store
-        if OMERO_channels is not None:
-            self.OMERO_channels = OMERO_channels
         config = self.parameters.to_dict()
         self.server_info = {
             k: config["general"].get(k)
             for k in ("host", "username", "password")
         }
-        self.expt_id = config["general"]["id"]
-        self.setLogger(config["general"]["directory"], config["general"]["id"])
+        self.expt_id = config["general"]["expt_id"]
+        self.setLogger(
+            config["general"]["directory"], config["general"]["expt_id"]
+        )
 
     @staticmethod
     def setLogger(
@@ -196,19 +198,20 @@ class Pipeline(ProcessABC):
     ):
         """Initialise and format logger."""
         logger = logging.getLogger("aliby")
+        logger.handlers.clear()
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
-        # for streams - stdout, files, etc.
+        # to print to screen
         ch = logging.StreamHandler()
         ch.setLevel(getattr(logging, stream_level))
         ch.setFormatter(formatter)
         logger.addHandler(ch)
         # create file handler to log all messages
         logfile_name = f"aliby_{str(expt_id).split('/')[-1]}.log"
-        fh = logging.FileHandler(Path(folder) / logfile_name, "w+")
+        fh = logging.FileHandler(Path(folder) / logfile_name, "w")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
@@ -241,43 +244,7 @@ class Pipeline(ProcessABC):
             print("\t" + f"{i}: " + pos.split(".")[0])
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
-        # find spatial locations on the microscope stage of the positions
-        self.spatial_locations = self.spatial_location_of_positions(
-            position_ids
-        )
         return position_ids
-
-    def spatial_location_of_positions(self, position_ids):
-        """Find spatial location of each position from the microscopy log file."""
-        dir_path = Path(self.parameters.general["directory"])
-        logpath = find_file(dir_path, "*.log")
-        if logpath:
-            raw_meta = parse_swainlab_logs(logpath)
-            location_df = raw_meta["group_position"]
-            locations = {
-                position: (
-                    location_df[location_df.Name == position].X.values.astype(
-                        "float"
-                    )[0],
-                    location_df[location_df.Name == position].Y.values.astype(
-                        "float"
-                    )[0],
-                )
-                for position in position_ids
-            }
-        else:
-            locations = {}
-        return locations
-
-    def channels_from_OMERO(self):
-        """Get a definitive list of channels from OMERO."""
-        dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
-        with dispatcher as conn:
-            if hasattr(conn, "get_channels"):
-                channels = conn.get_channels()
-            else:
-                channels = None
-        return channels
 
     def filter_positions(self, position_filter, position_ids):
         """Select particular positions."""
@@ -316,8 +283,6 @@ class Pipeline(ProcessABC):
 
     def run(self):
         """Run separate pipelines for all positions in an experiment."""
-        if not hasattr(self, "OMERO_channels"):
-            self.OMERO_channels = self.channels_from_OMERO()
         config = self.parameters.to_dict()
         position_ids = self.setup()
         # pick particular positions if desired
@@ -381,14 +346,12 @@ class Pipeline(ProcessABC):
         initialise_tensorflow()
         frac_clogged_traps = 0.0
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
-            # initialise tiler; load local meta data from image
+            # initialise tiler
             tiler = Tiler.from_image(
                 image,
                 TilerParameters.from_dict(config["tiler"]),
-                OMERO_channels=self.OMERO_channels,
+                microscopy_metadata=self.parameters.to_dict()["metadata"],
             )
-            # add location of position on the microscope stage
-            tiler.spatial_location = self.spatial_locations.get(name, None)
             # initialise Baby
             babyrunner = BabyRunner.from_tiler(
                 BabyParameters.from_dict(config["baby"]), tiler=tiler
@@ -400,7 +363,11 @@ class Pipeline(ProcessABC):
                 tiler=tiler,
             )
             # initiate progress bar
-            tps = min(config["general"]["tps"], image.data.shape[0])
+            tps = config["general"]["tps"]
+            if tps > image.data.shape[0]:
+                raise Exception(
+                    f"Data set appears to have only {image.data.shape[0]} time points not {tps}."
+                )
             progress_bar = tqdm(range(tps), desc=image.name)
             # run through time points
             for i in progress_bar:

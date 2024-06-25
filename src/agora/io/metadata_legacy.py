@@ -42,16 +42,19 @@ def parse_legacy_logs(
         if isinstance(v, list):
             # replace None with 0
             parsed_flattened[k] = [0 if el is None else el for el in v]
+    # add spatial locations as a dict
+    parsed_flattened["spatial_locations"] = {
+        position: (
+            parsed_flattened["positions/xpos"][i],
+            parsed_flattened["positions/ypos"][i],
+        )
+        for i, position in enumerate(parsed_flattened["positions/posname"])
+    }
+    # update naming of channels field from the legacy convention
+    parsed_flattened["channels"] = parsed_flattened["channels/channel"]
     # add watermark
     parsed_flattened["legacy"] = True
     return parsed_flattened
-
-
-def get_meta_from_legacy(parsed_metadata: dict):
-    """Fix naming convention for channels in legacy .txt log files."""
-    result = parsed_metadata
-    result["channels"] = result["channels/channel"]
-    return result
 
 
 def flatten_dict(nested_dict, separator="/"):

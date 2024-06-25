@@ -11,7 +11,7 @@ def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:
     """Parse and process a Swain lab microscopy log file."""
     raw_meta = first_parse(filepath)
     meta = raw_meta.copy()
-    # convert raw_meta values into dict
+    # convert raw_meta values into dicts
     for meta_key in [
         "exposure",
         "number_z_sections",
@@ -22,8 +22,8 @@ def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:
             channel: raw_meta[meta_key][i]
             for i, channel in enumerate(raw_meta["channels"])
         }
-    meta["spatial_position"] = {
-        position: raw_meta["spatial_position"][i]
+    meta["spatial_locations"] = {
+        position: raw_meta["spatial_locations"][i]
         for i, position in enumerate(raw_meta["group"])
     }
     return meta
@@ -38,7 +38,7 @@ def first_parse(filepath: t.Union[str, PosixPath]) -> t.Dict:
         "z_spacing": [],
         "sectioning_method": [],
         "group": [],
-        "spatial_position": [],
+        "spatial_locations": [],
         "device": [],
     }
     general_setting = True
@@ -127,7 +127,7 @@ def parse_acquisition(bits: t.List[str], meta: t.Dict) -> None:
 def parse_group(bits: t.List[str], meta: t.Dict) -> None:
     """Parse information on the imaging groups."""
     meta["group"].append(bits[0])
-    meta["spatial_position"].append((float(bits[1]), float(bits[2])))
+    meta["spatial_locations"].append((float(bits[1]), float(bits[2])))
 
 
 def parse_devices(bits: t.List[str], meta: t.Dict) -> None:

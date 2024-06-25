@@ -34,7 +34,7 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     A callable Dataset instance, either network-dependent or local.
     """
     if isinstance(expt_id, int):
-        # data available online
+        # data available from OMERO
         return Dataset(expt_id, **kwargs)
     elif isinstance(expt_id, str):
         # data available locally

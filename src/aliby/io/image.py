@@ -22,6 +22,7 @@ import dask.array as da
 import numpy as np
 import xmltodict
 import zarr
+from aliby.io.omero import Image
 from dask.array.image import imread
 
 try:
@@ -56,9 +57,6 @@ def instantiate_image(
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     """Pick the appropriate Image class for the source of data."""
     if isinstance(source, (int, np.int64)):
-        # requires omero module
-        from aliby.io.omero import Image
-
         instantiator = Image
     elif isinstance(source, dict) or (
         isinstance(source, (str, Path)) and Path(source).is_dir()
@@ -71,7 +69,7 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     elif isinstance(source, (str, Path)) and Path(source).is_file():
         instantiator = ImageLocalOME
     else:
-        raise Exception(f"Invalid data source at {source}")
+        raise Exception(f"Invalid data source at {source}.")
     return instantiator
 
 

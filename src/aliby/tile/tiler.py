@@ -37,7 +37,6 @@ import dask.array as da
 import h5py
 import numpy as np
 from agora.abc import ParametersABC, StepABC
-from agora.io.metadata import find_channels_by_position
 from agora.io.writer import BridgeH5
 from aliby.global_parameters import imaging_specifications
 from aliby.tile.traps import segment_traps
@@ -228,16 +227,16 @@ class Tiler(StepABC):
     Fetch images from an OMERO server if necessary.
 
     Uses an Image instance, which lazily provides the pixel data,
-    and, as an independent argument, metadata.
+    and, as an independent argument, image_metadata.
     """
 
     def __init__(
         self,
         image: da.core.Array,
-        metadata: dict,
+        image_metadata: t.Dict,
         parameters: TilerParameters,
         tile_locations=None,
-        OMERO_channels=None,
+        microscopy_metadata: t.Dict = None,
     ):
         """
         Initialise.
@@ -245,51 +244,28 @@ class Tiler(StepABC):
         Parameters
         ----------
         image: an instance of Image
-        metadata: dictionary
+        image_metadata: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
-        OMERO_channels: list of str
-            A definitive list of channels from OMERO to order channels in tiler.
+        micrscopy_metadata: optional
         """
         super().__init__(parameters)
         self.image = image
         self.position_name = parameters.to_dict()["position_name"]
-        # get channels for this position
-        if "channels_by_group" in metadata:
-            channel_dict = metadata["channels_by_group"]
-        elif "positions/posname" in metadata:
-            # old meta data from image
-            channel_dict = find_channels_by_position(
-                metadata["positions/posname"]
-            )
+        # image meta data contains channels for that image
+        self.channels = image_metadata.get(
+            "channels", list(range(image_metadata.get("size_c", 0)))
+        )
+        # get spatial location of position
+        if microscopy_metadata is not None:
+            self.spatial_location = microscopy_metadata["full"][
+                "spatial_locations"
+            ][self.position_name]
         else:
-            channel_dict = {}
-        if channel_dict:
-            channels = channel_dict.get(
-                self.position_name,
-                list(range(metadata.get("size_c", 0))),
-            )
-        else:
-            channels = []
-        if not channels:
-            # image meta data contains channels for that image
-            channels = metadata.get(
-                "channels", list(range(metadata.get("size_c", 0)))
-            )
-        # sort channels based on OMERO's channel order
-        if OMERO_channels is not None:
-            channels = [
-                ch for och in OMERO_channels for ch in channels if ch == och
-            ]
-        self.channels = channels
+            self.spatial_location = None
         # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
-        if "zsections" in metadata:
-            self.z_perchannel = {
-                ch: zsect
-                for ch, zsect in zip(self.channels, metadata["zsections"])
-            }
         # adjust for non-standard magnification
         if self.tile_size != imaging_specifications["tile_size"]:
             print(
@@ -309,7 +285,7 @@ class Tiler(StepABC):
         cls,
         image,
         parameters: TilerParameters,
-        OMERO_channels: t.List[str] = None,
+        microscopy_metadata: t.Dict = None,
     ):
         """
         Instantiate from an Image instance.
@@ -321,9 +297,9 @@ class Tiler(StepABC):
         """
         return cls(
             image.data,
-            image.metadata,
-            parameters,
-            OMERO_channels=OMERO_channels,
+            image_metadata=image.metadata,
+            parameters=parameters,
+            microscopy_metadata=microscopy_metadata,
         )
 
     @classmethod
@@ -332,7 +308,7 @@ class Tiler(StepABC):
         image,
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
-        OMERO_channels: t.List[str] = None,
+        microscopy_metadata: t.Dict = None,
     ):
         """
         Instantiate from an h5 file.
@@ -345,16 +321,15 @@ class Tiler(StepABC):
         parameters: an instance of TileParameters (optional)
         """
         tile_locs = TileLocations.read_h5(filepath)
-        metadata = BridgeH5(filepath).meta_h5
-        metadata["channels"] = image.metadata["channels"]
+        image_metadata = BridgeH5(filepath).meta_h5
+        image_metadata["channels"] = image.metadata["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(
             image.data,
-            metadata,
+            image_metadata,
             parameters,
             tile_locations=tile_locs,
-            OMERO_channels=OMERO_channels,
         )
         if hasattr(tile_locs, "drifts"):
             tiler.no_processed = len(tile_locs.drifts)

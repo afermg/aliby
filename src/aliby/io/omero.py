@@ -209,9 +209,12 @@ class Dataset(BridgeOmero):
 
     def get_channels(self):
         """Get list of channels from OMERO."""
+        channels = []
         for im in self.ome_class.listChildren():
-            channels = [ch.getLabel() for ch in im.getChannels()]
-            break
+            current_channels = [ch.getLabel() for ch in im.getChannels()]
+            for ch in current_channels:
+                if ch not in channels:
+                    channels.append(ch)
         return channels
 
     @property
@@ -328,7 +331,7 @@ class Image(BridgeOmero):
     @property
     def metadata(self):
         """
-        Get metadata from OMERO as a dict.
+        Get image metadata from OMERO as a dict.
 
         Get image size, number of time points, labels of channels,
         and image name.
