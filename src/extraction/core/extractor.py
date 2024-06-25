@@ -43,17 +43,7 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
     base = {
-        "tree": {
-            "general": {
-                "None": [
-                    "area",
-                    "volume",
-                    "eccentricity",
-                    "centroid_x",
-                    "centroid_y",
-                ]
-            }
-        },
+        "tree": {"general": {"None": global_parameters.outline_functions}},
         "multichannel_ops": {},
     }
     candidate_channels = set(global_parameters.possible_imaging_channels)

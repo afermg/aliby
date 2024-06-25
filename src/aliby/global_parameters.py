@@ -34,6 +34,16 @@ possible_imaging_channels = [
     "pHluorin488",
 ]
 
+# functions to apply to cell outlines
+outline_functions = [
+    "area",
+    "volume",
+    "eccentricity",
+    "centroid_x",
+    "centroid_y",
+]
+
+
 # functions to apply to the fluorescence of each cell
 fluorescence_functions = [
     "mean",
