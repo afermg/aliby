@@ -119,30 +119,30 @@ class DatasetLocalABC(ABC):
         pass
 
 
-class DatasetLocalDir(DatasetLocalABC):
-    """Find paths to a data set, comprising multiple images in different folders."""
+# class DatasetLocalDir(DatasetLocalABC):
+#     """Find paths to a data set, comprising multiple images in different folders."""
 
-    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
-        super().__init__(dpath)
+#     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
+#         super().__init__(dpath)
 
-    def get_position_ids(self):
-        """
-        Return a dict of file paths for each position.
+#     def get_position_ids(self):
+#         """
+#         Return a dict of file paths for each position.
 
-        FUTURE 3.12 use pathlib is_junction to pick Dir or File
-        """
-        position_ids_dict = {
-            item.name: item
-            for item in self.path.glob("*/")
-            if item.is_dir()
-            and any(
-                path
-                for suffix in self._valid_suffixes
-                for path in item.glob(f"*.{suffix}")
-            )
-            or item.suffix[1:] in self._valid_suffixes
-        }
-        return position_ids_dict
+#         FUTURE 3.12 use pathlib is_junction to pick Dir or File
+#         """
+#         position_ids_dict = {
+#             item.name: item
+#             for item in self.path.glob("*/")
+#             if item.is_dir()
+#             and any(
+#                 path
+#                 for suffix in self._valid_suffixes
+#                 for path in item.glob(f"*.{suffix}")
+#             )
+#             or item.suffix[1:] in self._valid_suffixes
+#         }
+#         return position_ids_dict
 
 
 class DatasetLocalOME(DatasetLocalABC):
@@ -168,7 +168,7 @@ class DatasetLocalOME(DatasetLocalABC):
         }
 
 
-class DatasetIndFiles(DatasetLocalABC):
+class DatasetDir(DatasetLocalABC):
     """
     Find paths to a data set, comprising of individual files. The
     data can be parsed using a regex and a string to capture the order of dimension.
