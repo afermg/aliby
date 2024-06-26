@@ -51,28 +51,47 @@ def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwarg
     return dispatch_image(source)(source, **kwargs)
 
 
-def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
+def dispatch_image(source: str or int or dict[str, str] or Path):
     """Pick the appropriate Image class for the source of data."""
-    if isinstance(source, (int, np.int64)):
-        # requires omero module
+    if isinstance(source, int):
         from aliby.io.omero import Image
 
-        instantiator = Image
-    elif isinstance(source, dict) or (
-        isinstance(source, (str, Path)) and Path(source).is_dir()
-    ):
-        # zarr files are considered directories
-        if Path(source).suffix == ".zarr":
-            instantiator = ImageZarr
-        else:
-            instantiator = ImageDir
-    elif isinstance(source, (str, Path)) and Path(source).is_file():
-        instantiator = ImageLocalOME
-    elif isinstance(source, str) and not Path(source).is_file():
-        instantiator = ImageIndFiles
-    else:
-        raise Exception(f"Invalid data source at {source}")
-    return instantiator
+        img_type = Image
+    else:  # Local files
+        match Path(source):
+            case s if s.is_dir() and s.exists():
+                img_type = ImageDir
+            case s if s.suffix(".zarr"):
+                img_type = ImageZarr
+            case s if s.is_file() and s.exists():
+                img_type = ImageLocalOME
+            case _:
+                raise ("Invalid data type")
+
+    return img_type
+
+    # if isinstance(source, (int, np.int64)):
+    #     # requires omero module
+    #     from aliby.io.omero import Image
+
+    #     instantiator = Image
+    # elif isinstance(source, dict):
+    #         instantiator = ImageDir
+    # elif isinstance(source, ):
+    #     or (
+    #     (source_path := Path(source)).is_dir() and source_path.exists()
+    # ):
+    #     # zarr files are considered directories
+    #     if source_path.suffix == ".zarr":
+    #         instantiator = ImageZarr
+    #     else:
+    # elif isinstance(source, (str, Path)) and Path(source).is_file():
+    #     instantiator = ImageLocalOME
+    # elif isinstance(source, str) and not Path(source).is_file():
+    #     instantiator = ImageIndFiles
+    # else:
+    #     raise Exception(f"Invalid data source at {source}")
+    # return instantiator
 
 
 def files_to_image_sizes(path: Path, suffix="tiff"):
@@ -260,7 +279,7 @@ class ImageLocalOME(BaseLocalImage):
         return self.rechunk_data(img)
 
 
-class ImageDir(BaseLocalImage):
+class ImageDirLegacy(BaseLocalImage):
     """
     Standard image class for tiff files.
 
@@ -352,7 +371,7 @@ class ImageZarr(BaseLocalImage):
         return "TCZYX"
 
 
-class ImageIndFiles(BaseLocalImage):
+class ImageDir(BaseLocalImage):
     """
     Standard image class for tiff files.
 
@@ -389,12 +408,12 @@ class ImageIndFiles(BaseLocalImage):
         # self.meta = filename_to_meta_gsk(self.path)
         self.regex = regex or self.path.replace("*", "(.*)")
         self.image_filenames = image_filenames or tuple(
-            re.match(self.regex, x) for x in glob(wildcard)
+            x for x in glob(wildcard) if re.match(self.regex, x)
         )
         self.image_id = calculate_checksum(
             self.image_filenames
         )  # checksum of all files
-        self.capture_order = capture_order or "CTZ"
+        self.capture_order = capture_order or "CWTFZ"
         self._dimorder = dimorder or "TCZYX"
 
     @cached_property
@@ -416,7 +435,7 @@ class ImageIndFiles(BaseLocalImage):
         # reshaping fails
         # FIXME: Temporary workaround, something is off when fetching
         # large chunks of the data
-        order = tuple(self.dimorder_d.values())
+        order = tuple(v for k, v in self.dimorder_d.items() if k in self._dimorder)
         arr = np.empty(
             order + (1, 1),
             dtype=object,
@@ -444,6 +463,7 @@ class ImageIndFiles(BaseLocalImage):
 
     @property
     def dimorder(self):
+        # sorted dimorder
         return [self.dimorder_d[dim] for dim in self._dimorder]
 
     @cached_property
@@ -452,8 +472,7 @@ class ImageIndFiles(BaseLocalImage):
 
     @cached_property
     def image_filenames(self):
-        regex = re.compile(self.wildcard)
-        return glob(wildcard)
+        return tuple(glob(self.path))
 
 
 def get_dims_from_names(
@@ -462,7 +481,8 @@ def get_dims_from_names(
     capture_order: str,
 ) -> dict[str, int]:
     regex_ = re.compile(regex)
-    matches = [regex_.match(x).groups() for x in image_filenames]
+    sorted_files = sorted(image_filenames)
+    matches = [regex_.match(x).groups() for x in sorted_files]
     dim_size = {
         dim: len(set([y[i] for y in matches])) for i, dim in enumerate(capture_order)
     }
