@@ -11,18 +11,20 @@ from pprint import pprint
 import baby
 import baby.errors
 import numpy as np
+import tensorflow as tf
 from pathos.multiprocessing import Pool
 from tqdm import tqdm
 
+try:
+    if baby.__version__:
+        from aliby.baby_sitter import BabyParameters, BabyRunner
+except AttributeError:
+    from aliby.baby_client import BabyParameters, BabyRunner
 
-import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData, find_file, parse_from_swainlab_grammar
 from agora.io.signal import Signal
-from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter, CellPoseWriter
-from aliby.io.dataset import dispatch_dataset
-from aliby.io.image import dispatch_image
-from aliby.tile.tiler import Tiler, TilerParameters
+from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
@@ -32,6 +34,15 @@ from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+
+import aliby.global_parameters as global_parameters
+from aliby.io.dataset import dispatch_dataset
+from aliby.io.image import dispatch_image
+from aliby.tile.tiler import Tiler, TilerParameters
+
+# stop warnings from TensorFlow
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
 class PipelineParameters(ParametersABC):
@@ -79,10 +90,7 @@ class PipelineParameters(ParametersABC):
         postprocessing: dict (optional)
             Parameters for post-processing.
         """
-        if (
-            isinstance(general["expt_id"], Path)
-            and general["expt_id"].exists()
-        ):
+        if isinstance(general["expt_id"], Path) and general["expt_id"].exists():
             expt_id = str(general["expt_id"])
         else:
             expt_id = general["expt_id"]
@@ -140,9 +148,7 @@ class PipelineParameters(ParametersABC):
         # generate a backup channel for when logfile meta is available
         # but not image metadata.
         backup_ref_channel = None
-        if "channels" in meta_d and isinstance(
-            defaults["tiler"]["ref_channel"], str
-        ):
+        if "channels" in meta_d and isinstance(defaults["tiler"]["ref_channel"], str):
             backup_ref_channel = meta_d["channels"].index(
                 defaults["tiler"]["ref_channel"]
             )
@@ -159,9 +165,7 @@ class PipelineParameters(ParametersABC):
 class Pipeline(ProcessABC):
     """Initialise and run tiling, segmentation, extraction and post-processing."""
 
-    def __init__(
-        self, parameters: PipelineParameters, store=None, OMERO_channels=None
-    ):
+    def __init__(self, parameters: PipelineParameters, store=None, OMERO_channels=None):
         """Initialise using Pipeline parameters."""
         super().__init__(parameters)
         if store is not None:
@@ -172,15 +176,12 @@ class Pipeline(ProcessABC):
             self.OMERO_channels = OMERO_channels
         config = self.parameters.to_dict()
         self.server_info = {
-            k: config["general"].get(k)
-            for k in ("host", "username", "password")
+            k: config["general"].get(k) for k in ("host", "username", "password")
         }
         self.expt_id = config["general"]["id"]
         self.setLogger(
             config["general"]["directory"],
-            logfile_root_name=str(config["general"]["id"])
-            .split("/")[-1]
-            .split(".")[0],
+            logfile_root_name=str(config["general"]["id"]).split("/")[-1].split(".")[0],
         )
 
     @staticmethod
@@ -205,9 +206,7 @@ class Pipeline(ProcessABC):
         # create file handler that logs even debug messages
         if logfile_root_name is None:
             logfile_root_name = "aliby"
-        fh = logging.FileHandler(
-            Path(folder) / f"{logfile_root_name}.log", "w+"
-        )
+        fh = logging.FileHandler(Path(folder) / f"{logfile_root_name}.log", "w+")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
@@ -224,9 +223,7 @@ class Pipeline(ProcessABC):
         # extract from configuration
         root_dir = Path(config["general"]["directory"])
         dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
-        self.log(
-            f"Fetching data using {dispatcher.__class__.__name__}.", "info"
-        )
+        self.log(f"Fetching data using {dispatcher.__class__.__name__}.", "info")
         # get positions_ids and save microscopy log files
         with dispatcher as conn:
             position_ids = conn.get_position_ids()
@@ -241,17 +238,8 @@ class Pipeline(ProcessABC):
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
         # find spatial locations on the microscope stage of the positions
-
+        self.spatial_locations = self.spatial_location_of_positions(position_ids)
         return position_ids
-
-
-    @property
-    def spatial_locations(self):
-        if not hasattr(self, "_spatial_locations"):
-            self._spatial_locations = self.spatial_location_of_positions(
-                position_ids
-            )
-        return return self._spatial_locations 
 
     def spatial_location_of_positions(self, position_ids):
         """Find spatial location of each position from the microscopy log file."""
@@ -262,12 +250,12 @@ class Pipeline(ProcessABC):
             location_df = raw_meta["group_position"]
             locations = {
                 position: (
-                    location_df[location_df.Name == position].X.values.astype(
-                        "float"
-                    )[0],
-                    location_df[location_df.Name == position].Y.values.astype(
-                        "float"
-                    )[0],
+                    location_df[location_df.Name == position].X.values.astype("float")[
+                        0
+                    ],
+                    location_df[location_df.Name == position].Y.values.astype("float")[
+                        0
+                    ],
                 )
                 for position in position_ids
             }
@@ -307,9 +295,7 @@ class Pipeline(ProcessABC):
         if isinstance(position_filter, str):
             # pick positions using a regular expression
             position_ids = {
-                k: v
-                for k, v in position_ids.items()
-                if re.search(position_filter, k)
+                k: v for k, v in position_ids.items() if re.search(position_filter, k)
             }
         elif isinstance(position_filter, int):
             # pick a particular position
@@ -369,9 +355,7 @@ class Pipeline(ProcessABC):
             meta.run()
         return out_file
 
-    def run_one_position(
-        self, name_image_id: t.Tuple[str, str or Path or int]
-    ):
+    def run_one_position(self, name_image_id: t.Tuple[str, str or Path or int]):
         """Run a pipeline for one position."""
         name, image_id = name_image_id
         config = self.parameters.to_dict()
@@ -380,48 +364,24 @@ class Pipeline(ProcessABC):
         out_file = self.generate_h5file(image_id)
         # instantiate writers
         tiler_writer = TilerWriter(out_file)
-        seg_writer = LinearBabyWriter(out_file)
-        state_writer = StateWriter(out_file)
+        baby_writer = LinearBabyWriter(out_file)
+        babystate_writer = StateWriter(out_file)
         # start pipeline
-
-        if "TODO add condition for baby or CellPose":
-            from agora.io.writer import LinearBabyWriter 
-            try:
-                if baby.__version__:
-                    from aliby.baby_sitter import BabyParameters, BabyRunner
-            except AttributeError:
-                from aliby.baby_client import BabyParameters, BabyRunner
-            initialise_tensorflow()
-            segmenter_cls, segmenter_params= BabyRunner, BabyParameters
-        else:
-            from agora.io.writer import CellPoseWriter 
-            from aliby.cellpose import CellposeParameters, CellposeRunner
-
-            segmenter_cls, segmenter_params= CellposeRunner, CellposeParameters
-
+        initialise_tensorflow()
         frac_clogged_traps = 0.0
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             # initialise tiler; load local meta data from image
-
-            kwargs = {}
-            if config["segmenter"]["model"]=="baby":
-                kwargs = dict(
-                    OMERO_channels=self.OMERO_channels,
-                    spatial_location= self.spatial_locations.get(name, None)
-                )
-
             tiler = Tiler.from_image(
                 image,
                 TilerParameters.from_dict(config["tiler"]),
-                **kwargs,
+                OMERO_channels=self.OMERO_channels,
             )
-
-            segmenter = dispatch_segmenter(config["segmenter"],
-                                           tiler,)
-            segmenter_cls.from_tiler(
-                segmenter_params.from_dict(config["segmenter"]), tiler=tiler
+            # add location of position on the microscope stage
+            tiler.spatial_location = self.spatial_locations.get(name, None)
+            # initialise Baby
+            babyrunner = BabyRunner.from_tiler(
+                BabyParameters.from_dict(config["baby"]), tiler=tiler
             )
-
             # initialise extraction
             extraction = Extractor.from_tiler(
                 ExtractorParameters.from_dict(config["extraction"]),
@@ -447,52 +407,32 @@ class Pipeline(ProcessABC):
                     )
                     if i == 0:
                         self.log(
-                            f"Found {len(tiler.tile_locs)} traps in {image.name}.",
+                            f"Found {tiler.no_tiles} traps in {image.name}.",
                             "info",
                         )
-                    # run segmentation
+                    # run Baby
                     try:
-
-                        segment_fn = segmenter
-                        if hasattr(segment_fn, "run_tp"):
-                            segment_fn = lambda x : segmenter.run_tp(i)
-                        result = segment(i)
-
+                        result = babyrunner.run_tp(i)
                     except baby.errors.Clogging:
-                        self.log(
-                            "WARNING: Clogging threshold exceeded in BABY."
-                        )
+                        self.log("WARNING: Clogging threshold exceeded in BABY.")
                     except baby.errors.BadOutput:
-                        self.log(
-                            "WARNING: Bud has been assigned as its own mother."
-                        )
-                        raise Exception("Catastrophic Segmentation error!")
-
-                    if config["segmenter"]["model_name"]=="baby":
-                        seg_writer.write(
-                            data=result,
-                            overwrite=["mother_assign"],
-                            meta={"last_processed": i},
-                            tp=i,
-                        )
-                        state_writer.write(
-                            data=segmenter.crawler.tracker_states,
-                            overwrite=seg_state_writer.datatypes.keys(),
-                            tp=i,
-                        )
-                    else:
-                        pass
-                        # we still need to track
-                        # with h5py.File(self.File, "a") as store:
-                        #     hgroup = store.require_group(self.group)
-                        # TODO track using stitch3D
-                        # TODO adapt extraction to
-                        # use tracking and masks separately
-                        # TODO write masks
-                        # TODO write tracking state
-
+                        self.log("WARNING: Bud has been assigned as its own mother.")
+                        raise Exception("Catastrophic Baby error!")
+                    baby_writer.write(
+                        data=result,
+                        overwrite=["mother_assign"],
+                        meta={"last_processed": i},
+                        tp=i,
+                    )
+                    babystate_writer.write(
+                        data=babyrunner.crawler.tracker_states,
+                        overwrite=babystate_writer.datatypes.keys(),
+                        tp=i,
+                    )
                     # run extraction
-                    result = extraction.run_tp(i, cell_labels=None, masks=None)
+                    result = extraction.run_tp(
+                        i, cell_labels=None, masks=None, save=True
+                    )
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(
                         out_file,
@@ -556,9 +496,9 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     s = Signal(filename)
     df = s.get_raw("/extraction/general/None/area")
     # check the latest time points only
-    cells_used = df[
-        df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
-    ].dropna(how="all")
+    cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
+        how="all"
+    )
     # find tiles with too many cells
     traps_above_nthresh = (
         cells_used.groupby("trap").count().apply(np.mean, axis=1)
@@ -571,3 +511,13 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     )
     return (traps_above_nthresh & traps_above_athresh).mean()
 
+
+def initialise_tensorflow(version=2):
+    """Initialise tensorflow."""
+    if version == 2:
+        gpus = tf.config.experimental.list_physical_devices("GPU")
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.experimental.list_logical_devices("GPU")
+            print(len(gpus), "physical GPUs,", len(logical_gpus), "logical GPUs")
