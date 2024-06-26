@@ -181,8 +181,9 @@ class ImageLocalOME(BaseLocalImage):
     """
     Local OMERO Image class.
 
-    This is a derivative Image class. It fetches an image from OMEXML data format,
-    in which a multidimensional tiff image contains the metadata.
+    This is a derivative Image class. It fetches an image from
+    OMEXML data format, in which a multidimensional tiff image
+    contains the metadata.
     """
 
     def __init__(self, path: str, dimorder=None, **kwargs):

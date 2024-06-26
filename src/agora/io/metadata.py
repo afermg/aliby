@@ -19,6 +19,11 @@ class MetaData:
         if OMERO_channels is not None:
             # OMERO overrules metadata from logs
             self.full["channels"] = OMERO_channels
+        # add channels per position
+        if "legacy" in self.full:
+            self.full["channels_by_position"] = (
+                metadata_legacy.find_channels_by_position_legacy(self.full)
+            )
 
     @property
     def minimal(self) -> t.Dict:
@@ -28,7 +33,7 @@ class MetaData:
                 self._minimal_meta = {
                     k: v
                     for k, v in self.full.items()
-                    if k != "spatial_locations"
+                    if k not in ["spatial_locations", "channels_by_position"]
                 }
             else:
                 self._minimal_meta = get_minimal_meta_swainlab(self.full)

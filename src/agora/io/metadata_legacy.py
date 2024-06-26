@@ -4,7 +4,7 @@ import glob
 import os
 from datetime import datetime
 from pathlib import Path
-
+import typing as t
 import pandas as pd
 from logfile_parser import Parser
 from pytz import timezone
@@ -94,3 +94,27 @@ def find_file_legacy(root_dir, regex):
         return sorted(file)[0]
     else:
         return file[0]
+
+
+def find_channels_by_position_legacy(metadata: t.Dict) -> t.Dict:
+    """
+    Parse metadata to find the imaging channels for each group.
+
+    Return a dict with groups as keys and channels as values.
+    """
+    if isinstance(metadata, dict) and "positions/posname" in metadata:
+        channels_dict = {
+            position_name: []
+            for position_name in metadata["positions/posname"]
+        }
+        channels = metadata["channels"]
+        for i, position_name in enumerate(metadata["positions/posname"]):
+            for channel in channels:
+                if (
+                    f"positions/{channel}" in metadata
+                    and metadata[f"positions/{channel}"][i]
+                ):
+                    channels_dict[position_name].append(channel)
+    else:
+        channels_dict = {}
+    return channels_dict

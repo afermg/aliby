@@ -58,13 +58,16 @@ class Grouper(ABC):
 
     @property
     def available(self) -> t.Collection[str]:
-        """Generate list of available signals from the first position."""
-        return self.first_signal.available
+        """Generate list of available signals from all positions."""
+        all_available = [
+            x for s in self.positions.values() for x in s.available
+        ]
+        return sorted(set(all_available))
 
     @property
     def available_grouped(self) -> None:
         """Display available signals and the number of positions with these signals."""
-        if not hasattr(self, "available_grouped"):
+        if not hasattr(self, "_available_grouped"):
             self._available_grouped = Counter(
                 [x for s in self.positions.values() for x in s.available]
             )

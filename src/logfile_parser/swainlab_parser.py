@@ -6,6 +6,8 @@ from pathlib import PosixPath
 
 from aliby.global_settings import possible_imaging_channels
 
+possible_imaging_channels = possible_imaging_channels.copy() + ["Brightfield"]
+
 
 def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:
     """Parse and process a Swain lab microscopy log file."""

@@ -18,9 +18,8 @@ imaging_specifications = {
     "tile_size": 117,
 }
 
-# possible imaging channels
+# possible imaging channels excluding Brightfield
 possible_imaging_channels = [
-    "Brightfield",
     "Citrine",
     "GFP",
     "GFPFast",

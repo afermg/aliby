@@ -37,7 +37,7 @@ REDUCTION_FUNS = load_redfuns()
 
 
 def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
-    """Obtain parameters for extraction from meta data."""
+    """Obtain parameters for extraction from microscopy metadata."""
     if not isinstance(meta, dict):
         # load meta data
         with h5py.File(meta, "r") as f:
@@ -52,7 +52,7 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
     default_reduction_and_fluorescence_metrics = {
         r: default_fluorescence_metrics for r in default_reductions
     }
-    # Uncomment to add nuc_conv_3d (slow)
+    # uncomment to add nuc_conv_3d (slow)
     # default_reduction_metrics["None"] = ["nuc_conv_3d"]
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:

@@ -252,10 +252,16 @@ class Tiler(StepABC):
         super().__init__(parameters)
         self.image = image
         self.position_name = parameters.to_dict()["position_name"]
-        # image meta data contains channels for that image
-        self.channels = image_metadata.get(
-            "channels", list(range(image_metadata.get("size_c", 0)))
-        )
+        if "channels" in image_metadata and isinstance(image, da.Array):
+            # information for a particular image
+            self.channels = image_metadata["channels"]
+        elif "channels_by_position" in microscopy_metadata["full"]:
+            # likely zarr array
+            self.channels = microscopy_metadata["full"][
+                "channels_by_position"
+            ][self.position_name]
+        else:
+            self.channels = list(range(image_metadata.get("size_c", 0)))
         # get spatial location of position
         if microscopy_metadata is not None:
             self.spatial_location = microscopy_metadata["full"][
