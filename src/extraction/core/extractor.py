@@ -735,7 +735,7 @@ class Extractor(StepABC):
         self,
         tps: t.List[int] = None,
         tree=None,
-        save=True,
+        save=False,
         **kwargs,
     ) -> dict:
         """
