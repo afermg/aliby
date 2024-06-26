@@ -1,16 +1,17 @@
 import typing as t
 from pathlib import Path
 
+import aliby.global_parameters as global_parameters
 import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
-
-import aliby.global_parameters as global_parameters
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writer import Writer, load_meta
+from agora.utils.masks import transform_2d_to_3d
 from aliby.tile.tiler import Tiler, find_channel_name
+
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
     load_custom_args,
@@ -20,9 +21,7 @@ from extraction.core.functions.loaders import (
 
 # define types
 reduction_method = t.Union[t.Callable, str, None]
-extraction_tree = t.Dict[
-    str, t.Dict[reduction_method, t.Dict[str, t.Collection]]
-]
+extraction_tree = t.Dict[str, t.Dict[reduction_method, t.Dict[str, t.Collection]]]
 extraction_result = t.Dict[
     str, t.Dict[reduction_method, t.Dict[str, t.Dict[str, pd.Series]]]
 ]
@@ -45,7 +44,7 @@ def extraction_params_from_meta(
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
     base = {
-        "channels_tree": {
+        "tree": {
             "general": {
                 "None": [
                     "area",
@@ -61,9 +60,7 @@ def extraction_params_from_meta(
     candidate_channels = set(global_parameters.possible_imaging_channels)
     default_reductions = {"max"}
     default_metrics = set(global_parameters.fluorescence_functions)
-    default_reduction_metrics = {
-        r: default_metrics for r in default_reductions
-    }
+    default_reduction_metrics = {r: default_metrics for r in default_reductions}
     # default_rm["None"] = ["nuc_conv_3d"] # Uncomment this to add nuc_conv_3d (slow)
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
@@ -167,13 +164,9 @@ class Extractor(StepABC):
             available_channels = set((*tiler.channels, "general"))
             # only extract for channels available
             self.params.tree = {
-                k: v
-                for k, v in self.params.tree.items()
-                if k in available_channels
+                k: v for k, v in self.params.tree.items() if k in available_channels
             }
-            self.params.sub_bg = available_channels.intersection(
-                self.params.sub_bg
-            )
+            self.params.sub_bg = available_channels.intersection(self.params.sub_bg)
             # add background subtracted channels to those available
             available_channels_bgsub = available_channels.union(
                 [c + "_bgsub" for c in self.params.sub_bg]
@@ -256,8 +249,7 @@ class Extractor(StepABC):
         funs = funs.intersection(CUSTOM_FUNS.keys())
         # find their arguments
         self.custom_arg_vals = {
-            k: {k2: self.get_meta(k2) for k2 in v}
-            for k, v in CUSTOM_ARGS.items()
+            k: {k2: self.get_meta(k2) for k2 in v} for k, v in CUSTOM_ARGS.items()
         }
         # define custom functions
         self.custom_funs = {}
@@ -348,13 +340,15 @@ class Extractor(StepABC):
 
         # Unflatten flat masks and generate cell_labels
         if len(masks) and masks[0].ndim == 2:
-            cell_labels = {}
+            if cell_labels is None:
+                cell_labels = {}
             fov_masks_2d = masks
             masks = []
             for i, (masks_2d) in enumerate(fov_masks_2d):
                 local_cell_labels, masks_3d = transform_2d_to_3d(masks_2d)
                 masks.append(masks_3d)
-                cell_labels[i] = local_cell_labels
+                if cell_labels is None:
+                    cell_labels[i] = local_cell_labels
         elif cell_labels is None:
             self.log("No cell labels given. Sorting cells using index.")
 
@@ -433,9 +427,7 @@ class Extractor(StepABC):
         if tiles is not None:
             for reduction in reduction_cell_funs.keys():
                 reduced_tiles[reduction] = [
-                    self.reduce_dims(
-                        tile_data, method=REDUCTION_FUNS[reduction]
-                    )
+                    self.reduce_dims(tile_data, method=REDUCTION_FUNS[reduction])
                     for tile_data in tiles
                 ]
         # calculate cell and tile properties
@@ -494,12 +486,10 @@ class Extractor(StepABC):
             }
         return cell_labels
 
-    def extract_one_channel(
-        self, tree, cell_labels, img, img_bgsub, masks, **kwargs
-    ):
+    def extract_one_channel(self, tree, cell_labels, img, img_bgsub, masks, **kwargs):
         """Extract as dict all metrics requiring only a single channel."""
         d = {}
-        for ch, reduction_cell_funs in tree["channels_tree"].items():
+        for ch, reduction_cell_funs in tree.items():
             # extract from all images including bright field
             d[ch] = self.reduce_extract(
                 # use None for "general"; no fluorescence image
@@ -583,7 +573,8 @@ class Extractor(StepABC):
             A list of masks per trap with each mask having dimensions
             (ncells, tile_size, tile_size) and with one mask per cell.
         cell_labels : dict
-            A dictionary with trap_ids as keys and cell_labels as values.
+            A dictionary with roi id as keys, on the second level cell_labels -> list[int] and max_label -> int
+        as value.
         **kwargs : keyword arguments
             Passed to extractor.reduce_extract.
 
@@ -610,18 +601,18 @@ class Extractor(StepABC):
         # get masks one per cell per trap
         if masks is None:
             masks = self.get_masks(tp, masks, Cells(self.h5path))
+        # Only get last mask if it is a list of lists
+        # which means that multiple tps are passed as args
+        elif isinstance(masks[0], list):
+            masks = masks[-1]
+            cell_labels = {k: v["labels"] for k, v in cell_labels[-1].items()}
         # find the cell labels as dict with trap_ids as keys
         # If masks are 2d this can be skipped, as that info is contained
         if cell_labels is None and len(masks) and (masks[0].ndim == 3):
-            cell_labels = self.get_cell_labels(
-                tp, cell_labels, Cells(self.h5path)
-            )
-
+            cell_labels = self.get_cell_labels(tp, cell_labels, Cells(self.h5path))
         # find image data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
-        fl_channels = [
-            x for x in set(tree["channels_tree"].keys()) if x != "general"
-        ]
+        fl_channels = [x for x in set(tree) if x != "general"]
         tiles = self.get_tiles(tp, channels=fl_channels)
 
         # generate boolean masks for background for each trap
@@ -630,7 +621,6 @@ class Extractor(StepABC):
             bgs = get_background_masks(masks, tile_size)
 
         # perform extraction by applying metrics
-        d = {}
         self.img_bgsub = {}
         # for ch, red_metrics in tree.items():
         #     # NB ch != is necessary for threading
@@ -699,18 +689,15 @@ class Extractor(StepABC):
         """
         img = {}
         img_bgsub = {}
-        for ch, _ in tree["channels_tree"].items():
+        # for ch, _ in tree["channels_tree"].items():
+        for ch in tree:
             # NB ch != is necessary for threading
             if tiles is not None and len(tiles):
                 # image data for all traps for a particular channel and
                 # time point arranged as (traps, Z, X, Y)
                 # we use 0 here to access the single time point available
                 img[ch] = tiles[:, tree["channels"].index(ch), 0]
-                if (
-                    bgs.any()
-                    and ch in self.params.sub_bg
-                    and img[ch] is not None
-                ):
+                if bgs.any() and ch in self.params.sub_bg and img[ch] is not None:
                     # subtract median background
                     bgsub_mapping = map(
                         # move Z to last column to allow subtraction
@@ -723,9 +710,7 @@ class Extractor(StepABC):
                     # apply map and convert to array
                     mapping_result = np.stack(list(bgsub_mapping))
                     # move Z axis back to the second column
-                    img_bgsub[ch + "_bgsub"] = np.moveaxis(
-                        mapping_result, -1, 1
-                    )
+                    img_bgsub[ch + "_bgsub"] = np.moveaxis(mapping_result, -1, 1)
             else:
                 img[ch] = None
                 img_bgsub[ch] = None
@@ -811,12 +796,8 @@ class Extractor(StepABC):
         traps = np.array(x_df.index.get_level_values("trap"))
         for tp in x_df.columns:
             tile_locs = self.tiler.tile_locs.centres_at_time(tp)
-            centroid_coords = np.column_stack(
-                (x_df[tp].values, y_df[tp].values)
-            )
-            coords_in_image = (
-                centroid_coords + tile_locs[traps][:, ::-1] - half_width
-            )
+            centroid_coords = np.column_stack((x_df[tp].values, y_df[tp].values))
+            coords_in_image = centroid_coords + tile_locs[traps][:, ::-1] - half_width
             extract_dict["general/None/image_x"][tp] = coords_in_image[:, 0]
             extract_dict["general/None/image_y"][tp] = coords_in_image[:, 1]
         if self.tiler.spatial_location is not None:
@@ -853,9 +834,7 @@ class Extractor(StepABC):
         if isinstance(flds, str):
             flds = [flds]
         meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
-        return {
-            f: meta_short.get(f, self.default_meta.get(f, None)) for f in flds
-        }
+        return {f: meta_short.get(f, self.default_meta.get(f, None)) for f in flds}
 
 
 def flatten_nesteddict(
@@ -902,48 +881,10 @@ def get_background_masks(masks, tile_size):
             map(
                 # sum over masks for each cell
                 lambda x: (
-                    np.sum(x, axis=0)
-                    if np.any(x)
-                    else np.zeros((tile_size, tile_size))
+                    np.sum(x, axis=0) if np.any(x) else np.zeros((tile_size, tile_size))
                 ),
                 masks,
             )
         )
     ).astype(bool)
     return bgs
-
-
-def transform_2d_to_3d(masks: np.ndarray) -> (tuple[int], np.ndarray):
-    """
-    Convert a 2d (int) to its equivalent cell labels and 3d bool image.
-
-
-    Example:
-
-    > masks = np.array([[0, 2], [5, 0], [4, 4], [0, 0]])
-    > transform_2d_to_3d(masks)
-
-        (array([2, 4, 5]),
-         array([[[False,  True],
-                 [False, False],
-                 [False, False],
-                 [False, False]],
-
-                [[False, False],
-                 [False, False],
-                 [ True,  True],
-                 [False, False]],
-
-                [[False, False],
-                 [ True, False],
-                 [False, False],
-                 [False, False]]]))
-    """
-
-    cell_labels = np.unique(masks)
-    cell_labels = cell_labels[cell_labels > 0]
-
-    to_compare = np.ones((*masks.shape, 1)) * cell_labels
-
-    masks_3d = masks == np.moveaxis(to_compare, -1, 0)
-    return cell_labels, masks_3d
