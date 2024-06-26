@@ -39,10 +39,10 @@ from pathlib import Path
 import dask.array as da
 import h5py
 import numpy as np
-from skimage.registration import phase_cross_correlation
-
 from agora.abc import ParametersABC, StepABC
 from agora.io.writer import BridgeH5
+from skimage.registration import phase_cross_correlation
+
 from aliby.tile.traps import segment_traps
 
 
@@ -328,9 +328,7 @@ class TilerABC(StepABC):
             parameters,
         )
 
-    def get_tiles_timepoint(
-        self, tp: int, channels=None, z: int = 0
-    ) -> np.ndarray:
+    def get_tiles_timepoint(self, tp: int, channels=None, z: int = 0) -> np.ndarray:
         """
         Get a multidimensional array with all tiles for a set of channels
         and z-stacks.
@@ -359,11 +357,7 @@ class TilerABC(StepABC):
             channels = [channels]
         # convert to indices
         channels = [
-            (
-                self.channels.index(channel)
-                if isinstance(channel, str)
-                else channel
-            )
+            (self.channels.index(channel) if isinstance(channel, str) else channel)
             for channel in channels
         ]
         # get the data as a list of length of the number of channels
@@ -413,16 +407,13 @@ class Tiler(TilerABC):
 
         params_d = parameters.to_dict()
         if "position_name" in params_d:
-            self.channels = find_channel_swainlab(
-                meta, params_d["position_name"]
-            )
+            self.channels = find_channel_swainlab(meta, params_d["position_name"])
         # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
         if "zsections" in meta:
             self.z_perchannel = {
-                ch: zsect
-                for ch, zsect in zip(self.channels, meta["zsections"])
+                ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
             }
         self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
 
@@ -654,9 +645,7 @@ def if_out_of_bounds_pad(pixels, slices):
     # get the tile including all z stacks
     tile = pixels[:, y, x]
     # find extent of padding needed in x and y
-    padding = np.array(
-        [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
-    )
+    padding = np.array([(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices])
     if padding.any():
         tile_size = slices[0].stop - slices[0].start
         if (padding > tile_size / 4).any():
@@ -705,7 +694,5 @@ def set_areas_of_interest(
         # one tile with its centre at the image's centre
         yx_shape = shape[-2:]
         tile_locs = (tuple(x // 2 for x in yx_shape),)
-        tile_locs = TileLocations.from_tiler_init(
-            tile_locs, max_size=min(yx_shape)
-        )
+        tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=min(yx_shape))
     return tile_locs
