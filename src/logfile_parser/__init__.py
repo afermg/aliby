@@ -1,2 +1,2 @@
 # -*- coding: utf-8 -*-
-from .logfile_parser import Parser
+from .logfile_parser_legacy import Parser

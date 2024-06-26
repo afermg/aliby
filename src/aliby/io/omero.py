@@ -208,13 +208,14 @@ class Dataset(BridgeOmero):
         }
 
     def get_channels(self):
-        """Get list of channels from OMERO."""
-        channels = []
+        """
+        Get list of channels from OMERO.
+
+        Assume all positions have the same channels.
+        """
         for im in self.ome_class.listChildren():
-            current_channels = [ch.getLabel() for ch in im.getChannels()]
-            for ch in current_channels:
-                if ch not in channels:
-                    channels.append(ch)
+            channels = [ch.getLabel() for ch in im.getChannels()]
+            break
         return channels
 
     @property

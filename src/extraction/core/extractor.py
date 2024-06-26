@@ -2,7 +2,7 @@ import copy
 import typing as t
 from pathlib import Path
 
-import aliby.global_parameters as global_parameters
+import aliby.global_settings as global_settings
 import bottleneck as bn
 import h5py
 import numpy as np
@@ -43,14 +43,12 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
     base = {
-        "tree": {"general": {"None": global_parameters.outline_functions}},
+        "tree": {"general": {"None": global_settings.outline_functions}},
         "multichannel_ops": {},
     }
-    candidate_channels = set(global_parameters.possible_imaging_channels)
+    candidate_channels = set(global_settings.possible_imaging_channels)
     default_reductions = {"max"}
-    default_fluorescence_metrics = set(
-        global_parameters.fluorescence_functions
-    )
+    default_fluorescence_metrics = set(global_settings.fluorescence_functions)
     default_reduction_and_fluorescence_metrics = {
         r: default_fluorescence_metrics for r in default_reductions
     }
@@ -126,7 +124,7 @@ class Extractor(StepABC):
     """
 
     # get pixel_size; z_size; z_spacing
-    default_meta = global_parameters.imaging_specifications
+    default_meta = global_settings.imaging_specifications
 
     def __init__(
         self,

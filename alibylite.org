@@ -4,7 +4,7 @@ The microscope visits multiple positions during an experiment. Each position may
 
 We divide all images into *tiles*, one per trap. Baby determines masks, mother-bud pairs, and tracking for each tile. We obtain data on individual cells first for each tile and then for each position for all time points: *cells* and *signal* provide this information for a position; *grouper* concatenates over all positions.
 
-All global parameters, such as possible fluorescence channels and pixel sizes, are stored in *global_parameters*.
+All global parameters, such as possible fluorescence channels and pixel sizes, are stored in *global_settings*.
 
 * aliby/pipeline
 Runs the *tiler*, *baby*, and *extraction* steps of the pipeline, and then *postprocessing*.
@@ -39,7 +39,7 @@ Defines more complex functions to apply to cells, such as *nuc_est_conv*, which 
 * agora/bridge
 Interfaces with h5 files.
 * agora/cells
-Accesses information on cells and masks in tiles from an h5 file.
+A class for accessing information on cells and masks for tiles from an h5 file. Attributes are only created when you request particular data.
 * agora/signal
 Gets extracted properties, such as median fluorescence, for all cells and all time points from an h5 file - data for one position.
 

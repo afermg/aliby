@@ -22,12 +22,12 @@ class ParseError(Exception):
 
 class Parser(object):
     def __init__(self, grammar_filename):
-        """Create a Parser object based on the grammar defined in a file
+        """
+        Create a Parser object based on the grammar defined in a file.
 
         :param grammar_filename: path to json file specifying grammar for this
         parser, or one of the default grammars included with the package
         """
-
         if exists(grammar_filename):
             with open(grammar_filename, "r") as f:
                 self.grammar = json.load(f)

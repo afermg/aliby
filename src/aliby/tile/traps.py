@@ -1,7 +1,7 @@
 """Functions for identifying and dealing with ALCATRAS traps."""
 
 import numpy as np
-from aliby.global_parameters import imaging_specifications
+from aliby.global_settings import imaging_specifications
 from skimage import feature, transform
 from skimage.filters import threshold_otsu
 from skimage.filters.rank import entropy

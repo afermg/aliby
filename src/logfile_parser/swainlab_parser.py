@@ -1,10 +1,10 @@
-"""To parse microscopy log files generated in the Swain lab."""
+"""Parse microscopy log files generated in the Swain lab."""
 
 import re
 import typing as t
 from pathlib import PosixPath
 
-from aliby.global_parameters import possible_imaging_channels
+from aliby.global_settings import possible_imaging_channels
 
 
 def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:

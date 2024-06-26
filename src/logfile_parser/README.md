@@ -1,3 +1,5 @@
+All for legacy log files. We use a simpler approach for the single .log files that the microscope now creates.
+
 # logfile\_parser
 
 Simple log file parsing according to grammars specified in JSON

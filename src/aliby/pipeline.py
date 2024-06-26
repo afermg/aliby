@@ -36,7 +36,7 @@ from postprocessor.core.postprocessing import (
     PostProcessorParameters,
 )
 
-import aliby.global_parameters as global_parameters
+import aliby.global_settings as global_settings
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -127,7 +127,7 @@ class PipelineParameters(ParametersABC):
                 tps=tps,
                 directory=str(directory.parent),
                 filter="",
-                earlystop=global_parameters.earlystop,
+                earlystop=global_settings.earlystop,
                 logfile_level="INFO",
                 use_explog=True,
             ),
