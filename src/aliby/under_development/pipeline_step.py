@@ -7,6 +7,8 @@ Isolated pipeline step
 from copy import copy
 from itertools import cycle
 
+import pandas as pd
+import polars as pl
 from aliby.io.dataset import DatasetDir
 from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
@@ -103,6 +105,9 @@ def pipeline_step(
 
     for step_name, parameters in steps.items():
         # Get or initialise step
+        if step_name == "tile" and tp == 13:
+            print("stop")
+
         if step_name not in state["data"]:
             state["data"][step_name] = []
         step = state["fn"].get(step_name, init_step(step_name, parameters, state["fn"]))
@@ -128,6 +133,40 @@ def pipeline_step(
     return state
 
 
+def run_pipeline(wildcard: str):
+    pipeline = copy(base_pipeline)
+    pipeline["steps"]["tile"]["image_kwargs"]["wildcard"] = wildcard
+    data = []
+    state = {}
+
+    for i in range(21):
+        state = pipeline_step(pipeline, state)
+        new_data = format_extraction(state["data"]["extract"][-1])
+        data.append(new_data)
+        # pl.DataFrame(new_data.values())
+
+    extracted_fov = pl.concat(data)
+    return extracted_fov
+
+
+def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
+    renamed_columns = [
+        pl.DataFrame(v.reset_index())
+        .with_columns(
+            pl.col(tp).cast(pl.Float32).alias("value"),
+            pl.lit(k).alias("Feature"),
+            pl.lit(tp).alias("tp"),
+            pl.col("trap").cast(pl.UInt16),
+        )
+        .select(pl.exclude(tp))
+        for k, v in extracted_tp.items()
+        if (tp := str(v.columns[0])) is not None
+    ]
+    concat = pl.concat(renamed_columns)
+    return concat
+
+
+# -------
 # Load dataset from a regular expression
 
 path = "/home/amunoz/gsk/batches/ELN201687_subset/ELN201687_subset/H00DJKJread1BF48hrs_20230926_095825/"
@@ -137,19 +176,18 @@ dif = DatasetDir(
     dimorder="CFTZ",
 )
 
-
 # create pipeline for ImageDir
 # for wildcard, image_filenames in dif.get_position_ids().values():
 wildcard, image_filenames = list(dif.get_position_ids().values())[0]
-pipeline = copy(base_pipeline)
-pipeline["steps"]["tile"]["image_kwargs"]["wildcard"] = wildcard
-data = []
-state = {}
 
-for i in range(10):
-    state = pipeline_step(pipeline, state)
-    data.append(copy(state["data"]["extract"][-1]))
+extracted_fov = run_pipeline(wildcard)
 
+# from pathos.multiprocessing import Pool
+
+# with Pool(10) as p:
+#     results = run_pipeline(
+#         wildcard,
+#     )
 # pixels = tiler.get_tp_data(0, 0)
 # masks = segment(pixels)
 # tracked_mask = track(masks, masks)
