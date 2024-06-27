@@ -8,7 +8,7 @@ https://cellpose.readthedocs.io/en/latest/models.html#full-built-in-models
 import numpy as np
 
 
-def dispatch_segmenter(kind, **kwargs) -> callable:
+def dispatch_segmenter(kind: str, **kwargs) -> callable:
     match kind:
         case "baby":
             import logging
