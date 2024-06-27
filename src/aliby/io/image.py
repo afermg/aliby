@@ -407,8 +407,9 @@ class ImageDir(BaseLocalImage):
         self.path = wildcard
         # self.meta = filename_to_meta_gsk(self.path)
         self.regex = regex or self.path.replace("*", "(.*)")
-        self.image_filenames = image_filenames or tuple(
-            x for x in glob(wildcard) if re.match(self.regex, x)
+        self.image_filenames = sorted(
+            image_filenames
+            or tuple(x for x in glob(wildcard) if re.match(self.regex, x))
         )
         self.image_id = calculate_checksum(
             self.image_filenames
