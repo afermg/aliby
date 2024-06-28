@@ -9,13 +9,14 @@ from itertools import cycle
 
 import pandas as pd
 import polars as pl
+from extraction.core.extractor import Extractor, ExtractorParameters
+from pathos.multiprocessing import Pool
+
 from aliby.io.dataset import DatasetDir
 from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
-from extraction.core.extractor import Extractor, ExtractorParameters
-from pathos.multiprocessing import Pool
 
 
 def init_step(
@@ -94,8 +95,8 @@ def pipeline_step(
     return state
 
 
-def run_pipeline(wildcard: str):
-    pipeline = copy(base_pipeline)
+def run_pipeline(pipeline: dict, wildcard: str):
+    pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["wildcard"] = wildcard
     data = []
     state = {}
