@@ -95,18 +95,17 @@ def pipeline_step(
     return state
 
 
-def run_pipeline(pipeline: dict, wildcard: str):
+def run_pipeline(pipeline: dict, wildcard: str, ntps: int):
     pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["wildcard"] = wildcard
     data = []
     state = {}
 
-    for i in range(21):
+    for i in range(ntps):
         state = pipeline_step(pipeline, state)
         new_data = format_extraction(state["data"]["extract"][-1])
         if len(new_data):
             data.append(new_data)
-        # pl.DataFrame(new_data.values())
 
     extracted_fov = pl.concat(data)
     return extracted_fov
