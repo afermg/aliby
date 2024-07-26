@@ -6,7 +6,7 @@ from collections import Counter
 from functools import cached_property as property
 from pathlib import Path
 from typing import Union
-
+from tqdm import tqdm
 import h5py
 import numpy as np
 import pandas as pd
@@ -57,12 +57,18 @@ class Grouper(ABC):
         return tintervals[0]
 
     @property
-    def available(self) -> t.Collection[str]:
+    def all_available(self) -> t.Collection[str]:
         """Generate list of available signals from all positions."""
         all_available = [
-            x for s in self.positions.values() for x in s.available
+            x for s in tqdm(self.positions.values()) for x in s.available
         ]
         return sorted(set(all_available))
+
+    @property
+    def available(self) -> t.Collection[str]:
+        """Generate list of available signals from all positions."""
+        available = self.first_signal.available
+        return available
 
     @property
     def available_grouped(self) -> None:
@@ -213,7 +219,7 @@ class Grouper(ABC):
                     tmax_in_mins_dict=tmax_in_mins_dict,
                     **kwargs,
                 )
-                for name, position in positions.items()
+                for name, position in tqdm(positions.items())
             ]
         return records
 
