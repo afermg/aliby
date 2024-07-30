@@ -354,13 +354,13 @@ class Extractor(StepABC):
 
         idx = []
         results = []
-        for tile_id, (mask_set, trap, local_cell_labels) in enumerate(
+        for tile_id, (mask_set, tile, local_cell_labels) in enumerate(
             zip(masks, tiles, cell_labels.values())
         ):
             # ignore empty tiles
             if len(mask_set):
                 # find property from the tile
-                result = self.all_funs[cell_function](mask_set, tiles)
+                result = self.all_funs[cell_function](mask_set, tile)
                 if cell_function in self.all_cell_funs:
                     # store results for each cell separately
                     for cell_label, val in zip(local_cell_labels, result):
@@ -369,7 +369,7 @@ class Extractor(StepABC):
                 else:
                     # background (tile) function
                     results.append(result)
-                    idx.append(trap_id)
+                    idx.append(tile_id)
         res_idx = (tuple(results), tuple(idx))
         return res_idx
 

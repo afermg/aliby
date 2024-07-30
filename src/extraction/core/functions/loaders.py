@@ -2,6 +2,8 @@ import typing as t
 from types import FunctionType
 from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 
+import numpy as np
+from skimage.measure import regionprops_table
 import bottleneck as bn
 
 from extraction.core.functions import cell, trap
@@ -82,6 +84,66 @@ def load_cellfuns():
                     return lambda m, img: trap_apply(f, m, img)
 
             CELL_FUNS[f_name] = tmp(f)
+
+    # Add automatically sklearn functions
+    # TODO use heuristics to make execution more efficient
+    SK_FUNS = [
+                # "area",
+                "area_bbox",
+                "area_convex",
+                "area_filled",
+                "axis_major_length",
+                "axis_minor_length",
+                "bbox",
+                # "centroid",
+                "centroid_local",
+                "centroid_weighted",
+                "centroid_weighted_local",
+                "coords_scaled",
+                "coords",
+                # "eccentricity",
+                "equivalent_diameter_area",
+                "euler_number",
+                "extent",
+                "feret_diameter_max",
+                # "image",
+                # "image_convex",
+                # "image_filled",
+                # "image_intensity",
+                "inertia_tensor",
+                "inertia_tensor_eigvals",
+                "intensity_max",
+                "intensity_mean",
+                "intensity_min",
+                # "label",
+                "moments",
+                "moments_central",
+                "moments_hu",
+                "moments_normalized",
+                "moments_weighted",
+                "moments_weighted_central",
+                "moments_weighted_hu",
+                "moments_weighted_normalized",
+                "num_pixels",
+                "orientation",
+                "perimeter",
+                "perimeter_crofton",
+                "slice",
+                "solidity",
+    ]
+
+    for fun_name in SK_FUNS:
+        CELL_FUNS[fun_name] = lambda m, img: trap_apply(
+            lambda m_,img_: regionprops_table(
+                m_.astype(np.uint8),
+                intensity_image=img_,
+                properties=(fun_name,),
+                cache=False,
+            )[fun_name][0],
+            m,
+            img)
+
+            
     return CELL_FUNS
 
 
