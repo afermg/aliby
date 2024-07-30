@@ -24,11 +24,14 @@ def init_step(
     parameters: dict[str, str or callable or int or dict],
     other_steps: callable,
 ) -> callable:
+    """
+    Set up the parameters for any step. This mostly includes dispatching a specific step subtype.
+    """
     match step_name:
         case "tile":
             image_kwargs = parameters["image_kwargs"]
             tiler_kwargs = {k: v for k, v in parameters.items() if k != "image_kwargs"}
-            image = dispatch_image(source=image_kwargs["path"])(**image_kwargs)
+            image = dispatch_image(source=image_kwargs["source"])(**image_kwargs)
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case "segment":
             step = dispatch_segmenter(**parameters["segmenter_kwargs"])
@@ -97,7 +100,7 @@ def pipeline_step(
 
 def run_pipeline(pipeline: dict, wildcard: str, ntps: int):
     pipeline = copy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["wildcard"] = wildcard
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = wildcard
     data = []
     state = {}
 

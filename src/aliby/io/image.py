@@ -8,7 +8,7 @@ are stored in dask arrays; the standard way is to store them in 5-dimensional
 arrays: T(ime point), C(channel), Z(-stack), Y, X.
 
 This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
-handles local OMERO images.  ImageDir handles cases in which images are split
+handles local OMERO images.  ImageWildcard handles cases in which images are split
 into directories, with each time point and channel having its own image file.
 ImageDummy is a dummy class for silent failure testing.
 """
@@ -53,49 +53,27 @@ def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwarg
 
 def dispatch_image(source: str or int or dict[str, str] or Path):
     """Pick the appropriate Image class for the source of data."""
+    img_type=None
     if isinstance(source, int):
         from aliby.io.omero import Image
 
         img_type = Image
     else:  # Local files
         match Path(source):
-            case s if s.is_dir() and s.exists():
-                img_type = ImageDir
-            case s if s.suffix(".zarr"):
+            case s if "*" in str(s): # Wildcard
+                img_type = ImageWildcard
+            case s if s.suffix == ".zarr":
                 img_type = ImageZarr
             case s if s.is_file() and s.exists():
                 img_type = ImageLocalOME
-            case _:
-                raise ("Invalid data type")
-
+            case s if s.is_dir() and s.exists():
+                img_type = ImageDir
     return img_type
 
-    # if isinstance(source, (int, np.int64)):
-    #     # requires omero module
-    #     from aliby.io.omero import Image
-
-    #     instantiator = Image
-    # elif isinstance(source, dict):
-    #         instantiator = ImageDir
-    # elif isinstance(source, ):
-    #     or (
-    #     (source_path := Path(source)).is_dir() and source_path.exists()
-    # ):
-    #     # zarr files are considered directories
-    #     if source_path.suffix == ".zarr":
-    #         instantiator = ImageZarr
-    #     else:
-    # elif isinstance(source, (str, Path)) and Path(source).is_file():
-    #     instantiator = ImageLocalOME
-    # elif isinstance(source, str) and not Path(source).is_file():
-    #     instantiator = ImageIndFiles
-    # else:
-    #     raise Exception(f"Invalid data source at {source}")
-    # return instantiator
-
-
 def files_to_image_sizes(path: Path, suffix="tiff"):
-    """Deduce image sizes from the naming convention of tiff files."""
+    """
+    Deduce image sizes from the naming convention of tiff files.
+    """
     filenames = list(path.glob(f"*.{suffix}"))
     try:
         # deduce order from filenames
@@ -279,7 +257,7 @@ class ImageLocalOME(BaseLocalImage):
         return self.rechunk_data(img)
 
 
-class ImageDirLegacy(BaseLocalImage):
+class ImageDir(BaseLocalImage):
     """
     Standard image class for tiff files.
 
@@ -371,45 +349,29 @@ class ImageZarr(BaseLocalImage):
         return "TCZYX"
 
 
-class ImageDir(BaseLocalImage):
+class ImageWildcard(BaseLocalImage):
     """
-    Standard image class for tiff files.
-
-    Image class for the case in which all images are split in one or
-    multiple folders with positions and time-points as independent files.
-    It inherits from BaseLocalImage so we only override methods that are critical.
-    The target use-case of this class is when we create virtual staining channels in
-    independent folders.
-
-    Assumptions:
-    - One folder per channel.
-    - Images are flat.
-    - Position, Time, z-stack and the others are determined by filenames.
-    - Provides Dimorder as it is set in the filenames, or expects order
-
-    There are some peculiarities:
-    path is a wildcard that encodes all the dimensional information.
-    image_id is the hex md5sum for all the images involved.
-    there is an `image_filenames` directory that encodes both
+    Image subclass that uses a and a string to associate images to channels. Assumes that every image is isolated.
     """
 
     def __init__(
         self,
-        wildcard: str,
+        source: str,
         regex: str or None = None,
         image_filenames: list[str] or None = None,
         capture_order: str or None = None,
         dimorder: str or None = None,
         **kwargs,
     ):
-        """Initialise using a directory and parse the files inside of it using a regex."""
+        """
+        Initialise using a directory and parse the files inside of it using a regex."""
         # super().__init__(img_files)
-        self.path = wildcard
+        self.path = source
         # self.meta = filename_to_meta_gsk(self.path)
         self.regex = regex or self.path.replace("*", "(.*)")
         self.image_filenames = sorted(
             image_filenames
-            or tuple(x for x in glob(wildcard) if re.match(self.regex, x))
+            or tuple(x for x in glob(source) if re.match(self.regex, x))
         )
         self.image_id = calculate_checksum(
             self.image_filenames
