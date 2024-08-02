@@ -52,6 +52,10 @@ def parse_legacy_logs(
     }
     # update naming of channels field from the legacy convention
     parsed_flattened["channels"] = parsed_flattened["channels/channel"]
+    if isinstance(parsed_flattened["time_settings/ntimepoints"], list):
+        parsed_flattened["time_settings/ntimepoints"] = parsed_flattened[
+            "time_settings/ntimepoints"
+        ][0]
     # add watermark
     parsed_flattened["legacy"] = True
     return parsed_flattened
