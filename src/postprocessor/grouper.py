@@ -219,7 +219,7 @@ class Grouper(ABC):
                     tmax_in_mins_dict=tmax_in_mins_dict,
                     **kwargs,
                 )
-                for name, position in tqdm(positions.items())
+                for name, position in positions.items()
             ]
         return records
 
