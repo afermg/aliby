@@ -50,4 +50,6 @@ fluorescence_functions = [
     "std",
     "imBackground",
     "max5px_median",
+    "total",
+    "total_squared",
 ]

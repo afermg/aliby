@@ -58,6 +58,34 @@ def mean(cell_mask, trap_image) -> float:
     return np.mean(trap_image[cell_mask])
 
 
+def total(cell_mask, trap_image) -> float:
+    """
+    Find the sum of the pixels in the cell.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    trap_image: 2d array
+    """
+    return np.sum(trap_image[cell_mask])
+
+
+def total_squared(cell_mask, trap_image) -> float:
+    """
+    Find the sum of the square of the pixels in the cell.
+
+    For finding variances.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    trap_image: 2d array
+    """
+    return np.sum(trap_image[cell_mask] ** 2)
+
+
 def median(cell_mask, trap_image) -> int:
     """
     Find the median of the pixels in the cell.
