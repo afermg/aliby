@@ -73,6 +73,8 @@ def total(cell_mask, trap_image) -> float:
 
 def total_squared(cell_mask, trap_image) -> float:
     """
+    WARNING: produces overflow error when converted to float16
+
     Find the sum of the square of the pixels in the cell.
 
     For finding variances.
