@@ -113,7 +113,10 @@ class PipelineParameters(ParametersABC):
             # download microscopy logs for posterity
             conn.cache_logs(directory)
             # get channels to ensure metadata has the correct order
-            if hasattr(conn, "get_channels"):
+            if "channels" in general:
+                # use the order specifed by the user
+                OMERO_channels = general["channels"]
+            elif hasattr(conn, "get_channels"):
                 OMERO_channels = conn.get_channels()
             else:
                 OMERO_channels = None
