@@ -11,8 +11,6 @@ from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
 from extraction.core.functions.distributors import trap_apply
 from extraction.core.functions.math_utils import div0
-from copy import copy
-
 """
 Load functions for analysing cells and their background.
 
@@ -32,36 +30,6 @@ def load_cellfuns_core():
     }
 
 
-def load_custom_args() -> t.Tuple[
-    (t.Dict[str, t.Callable], t.Dict[str, t.List[str]])
-]:
-    """
-    Load custom functions from the localisation module.
-
-    Return the functions and any additional arguments other
-    than cell_mask and trap_image as dictionaries.
-    """
-    # load functions from module
-    funs = {
-        f[0]: f[1]
-        for f in getmembers(localisation)
-        if isfunction(f[1])
-        and f[1].__module__.startswith("extraction.core.functions")
-    }
-    # load additional arguments if cell_mask and trap_image are arguments
-    args = {
-        k: getfullargspec(v).args[2:]
-        for k, v in funs.items()
-        if set(["cell_mask", "trap_image"]).intersection(
-            getfullargspec(v).args
-        )
-    }
-    # return dictionaries of functions and of arguments
-    return (
-        {k: funs[k] for k in args.keys()},
-        {k: v for k, v in args.items() if v},
-    )
-
 
 def load_cellfuns():
     """
@@ -73,19 +41,27 @@ def load_cellfuns():
     cell_funs = load_cellfuns_core()
     # create a dict of functions that apply the core functions to an array of cell_masks
     CELL_FUNS = {}
+    def trap_apply_on_mask(f:FunctionType):
+        """
+        Wrapper to ignore pixels and curry the function to be called.
+        """
+        def tmp(masks, pixels, cell_fun):
+            return trap_apply(masks, cell_fun=cell_fun)
+        
+        return partial(tmp, cell_fun=f)
+    
     for f_name, f in cell_funs.items():
         if isfunction(f):
 
-            def tmp(f):
-                args = getfullargspec(f).args
-                if len(args) == 1:
-                    # function that applies f to m, an array of masks
-                    return lambda m, _: trap_apply(f, m)
-                else:
-                    # function that applies f to m and img, the trap_image
-                    return lambda m, img: trap_apply(f, m, img)
+            args = getfullargspec(f).args
+            if len(args) == 1:
+                # function that applies f to m, an array of masks
+                new_fun =  trap_apply_on_mask(f)
+            else:
+                # function that applies f to m and img, the trap_image
+                new_fun =  partial(trap_apply, cell_fun=f)
 
-            CELL_FUNS[f_name] = tmp(f)
+            CELL_FUNS[f_name] = new_fun
 
     # Add automatically sklearn functions
     # TODO use heuristics to make execution more efficient
@@ -117,7 +93,6 @@ def load_cellfuns():
                 "intensity_max",
                 "intensity_mean",
                 "intensity_min",
-                # "label",
                 "moments",
                 "moments_central",
                 "moments_hu",
@@ -135,19 +110,11 @@ def load_cellfuns():
     ]
 
     for fun_name in SK_FUNS:
-        CELL_FUNS[fun_name] = lambda m, img: trap_apply(
-            lambda m_,img_: regionprops_table(
-                m_.astype(np.uint8),
-                intensity_image=img_,
-                properties=(fun_name,),
-                cache=False,
-            )[fun_name][0],
-            m,
-            img)
+        CELL_FUNS[fun_name] = partial(get_sk_features, feature=fun_name)
         
     # Add CellProfiler measurements
-    for f_name, f in get_all_measurements().items():
-        CELL_FUNS[f_name] = lambda m, img: trap_apply(f, m, img)
+    for fun_name, f in get_all_measurements().items():
+        CELL_FUNS[fun_name] = partial(trap_apply, cell_fun=f)
             
     return CELL_FUNS
 
@@ -199,3 +166,19 @@ def load_redfuns(
             ]
         RED_FUNS.update(additional_reducers)
     return RED_FUNS
+
+from functools import partial
+
+# Functional solutions to complex problems
+
+def get_sk_features(masks: np.ndarray, pixels: np.ndarray, feature: str):
+    """
+    Freeze the sklearn function to use feature.
+    """
+    return [regionprops_table(
+            mask,
+            intensity_image=pixels,
+            properties=(feature,),
+            cache=False,
+        )[feature][0] for mask in masks.astype(np.uint8)] # Assumes masks.dims=(N,Y,X)
+    

@@ -131,27 +131,29 @@ def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
                 new_entry = exploded.loc(axis=1)[[col]]
                 new_entry.columns = df.columns
                 new_entry.index = df.index
+
+                new_name = f"{k}_{col}"
                 
-                new_entries[f"{k}_{col}"] = new_entry 
+                new_entries[new_name] = new_entry 
                 
     for k in to_delete:
         del extracted_tp[k]
 
 
-        extracted_tp = {**extracted_tp, **new_entries}
-    
-    renamed_columns = [
-        pl.DataFrame(v.reset_index())
+    extracted_tp = {**extracted_tp, **new_entries}
+
+    renamed_columns = []
+    for k,v in extracted_tp.items():
+
+        if (tp := str(v.columns[0])) is not None:
+            renamed_columns.append(pl.DataFrame(v.reset_index())
         .with_columns(
             pl.col(tp).cast(pl.Float32).alias("value"),
             pl.lit(k).alias("Feature"),
             pl.lit(tp).alias("tp"),
             pl.col("trap").cast(pl.UInt16),
         )
-        .select(pl.exclude(tp))
-        for k, v in extracted_tp.items()
-        if (tp := str(v.columns[0])) is not None
-    ]
+        .select(pl.exclude(tp)))
     concat = pl.concat(renamed_columns)
     return concat
 

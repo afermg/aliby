@@ -14,7 +14,6 @@ from aliby.tile.tiler import Tiler, find_channel_name
 
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
-    load_custom_args,
     load_funs,
     load_redfuns,
 )
@@ -31,7 +30,6 @@ extraction_result = t.Dict[
 # to be stored in a dictionary for access only on demand and to be
 # defined simply in extraction/core/functions.
 CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_funs()
-CUSTOM_FUNS, CUSTOM_ARGS = load_custom_args()
 REDUCTION_FUNS = load_redfuns()
 
 
@@ -166,6 +164,7 @@ class Extractor(StepABC):
             self.params.tree = {
                 k: v for k, v in self.params.tree.items() if k in available_channels
             }
+            len(set(self.params.tree).intersection(available_channels))==len(set(self.params.tree)),"At least one channel was dropped"
             self.params.sub_bg = available_channels.intersection(self.params.sub_bg)
             # add background subtracted channels to those available
             available_channels_bgsub = available_channels.union(
@@ -219,53 +218,9 @@ class Extractor(StepABC):
 
     def load_funs(self):
         """Define all functions, including custom ones."""
-        self.load_custom_funs()
-        self.all_cell_funs = set(self.custom_funs.keys()).union(CELL_FUNS)
+        self.all_cell_funs = CELL_FUNS
         # merge the two dicts
-        self.all_funs = {**self.custom_funs, **ALL_FUNS}
-
-    def load_custom_funs(self):
-        """
-        Incorporate extra arguments of custom functions into their definitions.
-
-        Normal functions only have cell_masks and trap_image as their
-        arguments, and here custom functions are made the same by
-        setting the values of their extra arguments.
-
-        Any other parameters are taken from the experiment's metadata
-        and automatically applied. These parameters therefore must be
-        loaded within an Extractor instance.
-        """
-        # find functions specified in params.tree
-        funs = set(
-            [
-                fun
-                for channel in self.params.tree.values()
-                for reduction in channel.values()
-                for fun in reduction
-            ]
-        )
-        # consider only those already loaded from CUSTOM_FUNS
-        funs = funs.intersection(CUSTOM_FUNS.keys())
-        # find their arguments
-        self.custom_arg_vals = {
-            k: {k2: self.get_meta(k2) for k2 in v} for k, v in CUSTOM_ARGS.items()
-        }
-        # define custom functions
-        self.custom_funs = {}
-        for k, f in CUSTOM_FUNS.items():
-
-            def tmp(f):
-                # pass extra arguments to custom function
-                # return a function of cell_masks and trap_image
-                return lambda cell_masks, trap_image: trap_apply(
-                    f,
-                    cell_masks,
-                    trap_image,
-                    **self.custom_arg_vals.get(k, {}),
-                )
-
-            self.custom_funs[k] = tmp(f)
+        self.all_funs = ALL_FUNS
 
     def get_tiles(
         self,
@@ -291,9 +246,12 @@ class Extractor(StepABC):
         if channels is None:
             # find channels from tiler
             channel_ids = list(range(len(self.tiler.channels)))
-        elif len(channels):
+        elif len(channels) and isinstance(channels[0], str):
             # a subset of channels was specified
             channel_ids = [self.tiler.get_channel_index(ch) for ch in channels]
+        elif len(channels) and isinstance(channels[0], int):
+            # a list of indices
+            channel_ids = channels
         else:
             # a list of the indices of the z stacks
             channel_ids = None
@@ -499,7 +457,7 @@ class Extractor(StepABC):
                 cell_labels=cell_labels,
                 **kwargs,
             )
-            if ch != "general":
+            if ch != "general" and ch in img_bgsub:
                 # extract from background-corrected fluorescence images
                 d[ch + "_bgsub"] = self.reduce_extract(
                     tiles=img_bgsub[ch + "_bgsub"],
@@ -612,7 +570,7 @@ class Extractor(StepABC):
             cell_labels = self.get_cell_labels(tp, cell_labels, Cells(self.h5path))
         # find image data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
-        fl_channels = [x for x in set(tree) if x != "general"]
+        fl_channels = [x for x in tree if x != "general"]
         tiles = self.get_tiles(tp, channels=fl_channels)
 
         # generate boolean masks for background for each trap
@@ -689,14 +647,17 @@ class Extractor(StepABC):
         """
         img = {}
         img_bgsub = {}
+        av_channels = [x for x in tree if x != "general"]
+        
         # for ch, _ in tree["channels_tree"].items():
-        for ch in tree:
+        for ch in tree :
             # NB ch != is necessary for threading
-            if tiles is not None and len(tiles):
+            if tiles is not None and len(tiles) and ch != "general":
                 # image data for all traps for a particular channel and
                 # time point arranged as (traps, Z, X, Y)
                 # we use 0 here to access the single time point available
-                img[ch] = tiles[:, tree["channels"].index(ch), 0]
+                img[ch] = tiles[:, av_channels.index(ch), 0]
+                                
                 if bgs.any() and ch in self.params.sub_bg and img[ch] is not None:
                     # subtract median background
                     bgsub_mapping = map(
@@ -864,7 +825,14 @@ def flatten_nesteddict(
     for k0, v0 in nest.items():
         for k1, v1 in v0.items():
             for k2, v2 in v1.items():
-                d["/".join((k0, k1, k2))] = (
+                if isinstance(v2, dict):
+                    # measurement that returns multiple features (e.g., CellProfiler Measurements)
+                    for feature, values in v2.items():
+                        d["/".join((str(k0),k1,feature))] = (
+                            pd.Series(*values, name=tp) if to == "series" else v2
+                        )
+                else:
+                    d["/".join((str(k0), k1, k2))] = (
                     pd.Series(*v2, name=tp) if to == "series" else v2
                 )
     return d
