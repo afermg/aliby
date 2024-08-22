@@ -3,6 +3,7 @@ from types import FunctionType
 from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 
 import numpy as np
+from cp_measure.bulk import get_all_measurements
 from skimage.measure import regionprops_table
 import bottleneck as bn
 
@@ -10,6 +11,7 @@ from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
 from extraction.core.functions.distributors import trap_apply
 from extraction.core.functions.math_utils import div0
+from copy import copy
 
 """
 Load functions for analysing cells and their background.
@@ -142,7 +144,10 @@ def load_cellfuns():
             )[fun_name][0],
             m,
             img)
-
+        
+    # Add CellProfiler measurements
+    for f_name, f in get_all_measurements().items():
+        CELL_FUNS[f_name] = lambda m, img: trap_apply(f, m, img)
             
     return CELL_FUNS
 

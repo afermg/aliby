@@ -118,6 +118,28 @@ def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
     if not len(list(extracted_tp.values())[0]):
         return pl.DataFrame()
 
+    # If DataFrame contains multiple items (e.g., CellProfiler measurements)
+    # Split them into multiple dict entries
+    to_delete = []
+    new_entries = {}
+    for k, df in extracted_tp.items():
+        if isinstance(df.iloc[:,0].values[0], dict):
+            to_delete.append(k)
+            exploded = pd.json_normalize(df.iloc[:, 0])
+
+            for col in exploded.columns:
+                new_entry = exploded.loc(axis=1)[[col]]
+                new_entry.columns = df.columns
+                new_entry.index = df.index
+                
+                new_entries[f"{k}_{col}"] = new_entry 
+                
+    for k in to_delete:
+        del extracted_tp[k]
+
+
+        extracted_tp = {**extracted_tp, **new_entries}
+    
     renamed_columns = [
         pl.DataFrame(v.reset_index())
         .with_columns(
