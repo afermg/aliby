@@ -51,3 +51,6 @@ fluorescence_functions = [
     "imBackground",
     "max5px_median",
 ]
+
+# default time interval in seconds
+default_time_interval = 300

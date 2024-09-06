@@ -84,9 +84,10 @@ class Signal(BridgeH5):
                     return res
             else:
                 logging.getLogger("aliby").warn(
-                    f"{str(self.filename).split('/')[-1]}: using default time interval of 300 seconds."
+                    f"{str(self.filename).split('/')[-1]}: using default time interval "
+                    f"of {global_settings.default_time_interval} seconds."
                 )
-                return 300
+                return global_settings.default_time_interval
 
     def retained(self, signal, cutoff: float = 0, tmax_in_mins: int = None):
         """Get retained cells for a Signal or list of Signals."""

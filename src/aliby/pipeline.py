@@ -369,7 +369,8 @@ class Pipeline(ProcessABC):
             tps = config["general"]["tps"]
             if tps > image.data.shape[0]:
                 raise Exception(
-                    f"Data set appears to have only {image.data.shape[0]} time points not {tps}."
+                    f"Data set appears to have only {image.data.shape[0]} "
+                    f"time points not {tps}."
                 )
             progress_bar = tqdm(range(tps), desc=image.name)
             # run through time points
