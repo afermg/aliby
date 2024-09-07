@@ -1,3 +1,5 @@
+"""Extract areas, volumes and fluorescence for the cells in one position."""
+
 import copy
 import typing as t
 from pathlib import Path
@@ -371,9 +373,9 @@ class Extractor(StepABC):
         **kwargs,
     ) -> t.Dict[str, pd.Series]:
         """
-        Return dict with cell_funs as keys and the corresponding results as values.
+        Return dict with cell_funs as keys and their results as values.
 
-        Data from one time point is used.
+        Use data from one time point.
         """
         d = {
             cell_fun: self.apply_cell_function(
@@ -527,7 +529,7 @@ class Extractor(StepABC):
         for ch, reduction_cell_funs in tree_dict["tree"].items():
             # extract from all images including bright field
             d[ch] = self.reduce_extract(
-                # use None for "general"; no fluorescence image
+                # use None for "general" - no fluorescence image
                 tiles=img.get(ch, None),
                 masks=masks,
                 reduction_cell_funs=reduction_cell_funs,
@@ -641,7 +643,7 @@ class Extractor(StepABC):
         tiles = self.get_tiles(tp, channels=tree_dict["channels"])
         # generate boolean masks for background for each trap
         bgs = self.get_background_masks(masks, tile_size)
-        # get images and background corrected images as dicts
+        # get images and background-corrected images as dicts
         # with fluorescnce channels as keys
         img, img_bgsub = self.get_imgs_background_subtract(
             tree_dict, tiles, bgs
@@ -796,23 +798,14 @@ class Extractor(StepABC):
                 + self.tiler.spatial_location[1]
             )
 
-    def save_to_h5(self, dict_series, path=None):
-        """
-        Save the extracted data for one position to the h5 file.
-
-        Parameters
-        ----------
-        dict_series: dict
-            A dictionary of the extracted data, created by run.
-        path: Path (optional)
-            To the h5 file.
-        """
+    def save_to_h5(self, extract_dict, path=None):
+        """Save the extracted data for one position to the h5 file."""
         if path is None:
             path = self.h5path
         self.writer = Writer(path)
-        for extract_name, series in dict_series.items():
+        for extract_name, data in extract_dict.items():
             dset_path = "/extraction/" + extract_name
-            self.writer.write(dset_path, series)
+            self.writer.write(dset_path, data)
         self.writer.id_cache.clear()
 
     def get_meta(self, flds: t.Union[str, t.Collection]):

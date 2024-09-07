@@ -41,7 +41,11 @@ Interfaces with h5 files.
 * agora/cells
 A class for accessing information on cells and masks for tiles from an h5 file. Attributes are only created when you request particular data.
 * agora/signal
+Signal is only used during postprocessing.
+
 Gets extracted properties, such as median fluorescence, for all cells and all time points from an h5 file - data for one position.
+
+Defines the time variable from integer-labelled columns.
 
 Signal applies picking and merging of cells using the choices made by *picker* and *merger*. *get_raw* gets the data from the h5 file without any picking and merging.
 

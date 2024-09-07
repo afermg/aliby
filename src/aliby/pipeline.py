@@ -1,4 +1,8 @@
-"""Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
+"""
+Set up and run pipeline.
+
+Include tiling, segmentation, extraction, and then post-processing.
+"""
 
 import logging
 import multiprocessing

@@ -1,3 +1,5 @@
+"""Signal gets data from an h5 file as a data frame."""
+
 import logging
 import typing as t
 from copy import copy
@@ -43,7 +45,7 @@ class Signal(BridgeH5):
         dset: t.Union[str, t.Collection],
         tmax_in_mins: int = None,
     ):
-        """Get Signal after merging and picking."""
+        """Get Signal and apply merging and picking."""
         if isinstance(dset, str):
             record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
             if record is not None:
@@ -52,7 +54,7 @@ class Signal(BridgeH5):
         elif isinstance(dset, list):
             return [self.get(d) for d in dset]
         else:
-            raise Exception("Error in Signal.get")
+            raise Exception("Error in Signal.get.")
 
     @staticmethod
     def add_name(df, name):
@@ -62,7 +64,7 @@ class Signal(BridgeH5):
 
     def cols_in_mins(self, df: pd.DataFrame):
         """Convert numerical columns in a data frame to minutes."""
-        df.columns = (df.columns * self.tinterval // 60).astype(int)
+        df.columns = (df.columns * np.round(self.tinterval / 60)).astype(int)
         return df
 
     @cached_property
@@ -84,8 +86,8 @@ class Signal(BridgeH5):
                     return res
             else:
                 logging.getLogger("aliby").warn(
-                    f"{str(self.filename).split('/')[-1]}: using default time interval "
-                    f"of {global_settings.default_time_interval} seconds."
+                    f"{str(self.filename).split('/')[-1]}: using default time "
+                    f"interval of {global_settings.default_time_interval} seconds."
                 )
                 return global_settings.default_time_interval
 
@@ -120,9 +122,9 @@ class Signal(BridgeH5):
         self, lineage_location: t.Optional[str] = None, merged: bool = False
     ) -> np.ndarray:
         """
-        Get lineage data from a given location in the h5 file.
+        Get lineage data from the h5 file.
 
-        Returns an array with three columns: the tile id, the mother label,
+        Return an array with three columns: the tile id, the mother label,
         and the daughter label.
         """
         if lineage_location is None:

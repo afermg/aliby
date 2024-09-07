@@ -49,7 +49,9 @@ class Grouper(ABC):
     def tinterval_minutes(self) -> float:
         """Find the time interval for all positions."""
         tintervals = list(
-            np.unique([s.tinterval / 60 for s in self.positions.values()])
+            np.unique(
+                [np.round(s.tinterval / 60) for s in self.positions.values()]
+            )
         )
         if len(tintervals) > 1:
             raise Exception(

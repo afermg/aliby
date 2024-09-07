@@ -1,3 +1,5 @@
+"""Run picking, merging, and find buddings and bud metrics."""
+
 import typing as t
 from itertools import takewhile
 
@@ -36,12 +38,13 @@ class PostProcessorParameters(ParametersABC):
         param_sets: t.Dict = {},
         outpaths: t.Dict = {},
     ):
+        """Initialise, with no defaults."""
         self.targets = targets
         self.param_sets = param_sets
         self.outpaths = outpaths
 
     def __getitem__(self, item):
-        """Access attributes like dict keys."""
+        """Access attributes, like dict keys."""
         return getattr(self, item)
 
     @classmethod
@@ -190,7 +193,7 @@ class PostProcessor(ProcessABC):
         elif isinstance(dataset, str):
             signal = self.signal.get(dataset)
         else:
-            raise ("Incorrect dataset")
+            raise Exception("postprocessing: Incorrect dataset.")
         # run process on signal
         if signal is None:
             return None

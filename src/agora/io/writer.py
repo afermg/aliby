@@ -4,6 +4,7 @@ import logging
 from collections.abc import Iterable
 from typing import Dict
 
+import aliby.global_settings as global_settings
 import h5py
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ class Writer(BridgeH5):
     """
     Class to transform data into compatible structures.
 
-    Use with Extractor and Postprocessor within the pipeline.
+    Use with Extractor and Postprocessor.
     """
 
     def __init__(self, filename, flag=None, compression="gzip"):
@@ -43,26 +44,14 @@ class Writer(BridgeH5):
         meta: dict = {},
         overwrite: str = None,
     ):
-        """
-        Write data and metadata to a particular path in the h5 file.
-
-        Parameters
-        ----------
-        path : str
-            Path inside h5 file into which to write.
-        data : Iterable, optional
-        meta : dict, optional
-        overwrite: str, optional
-        """
+        """Write data and metadata to a path in the h5 file."""
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
             if overwrite == "overwrite":  # TODO refactor overwriting
                 if path in f:
                     del f[path]
             logging.debug(
-                "{} {} to {} and {} metadata fields".format(
-                    overwrite, type(data), path, len(meta)
-                )
+                f"{overwrite} {type(data)} to {path} and {len(meta)} metadata fields."
             )
             # write data
             if data is not None:
@@ -73,10 +62,10 @@ class Writer(BridgeH5):
                     self.write_meta(f, path, attr, data=metadata)
 
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
-        """Write data in different ways depending on its type to the h5 file."""
+        """Write data to the h5 file."""
         # data is a datafram
         if isinstance(data, pd.DataFrame):
-            self.write_pd(f, path, data, compression=self.compression)
+            self.write_dataframe(f, path, data, compression=self.compression)
         # data is a multi-index dataframe
         elif isinstance(data, pd.MultiIndex):
             # TODO: benchmark I/O speed when using compression
@@ -141,15 +130,15 @@ class Writer(BridgeH5):
             indices = f[id_path]
             indices[()] = ids
 
-    def write_pd(self, f, path, df, **kwargs):
+    def write_dataframe(self, f, path, df, **kwargs):
         """Write a dataframe."""
         values_path = (
             path + "values" if path.endswith("/") else path + "/values"
         )
         if path not in f:
             # create dataset and write data
-            max_ncells = 2e5
-            max_tps = 1e3
+            max_ncells = global_settings.h5_max_ncells
+            max_tps = global_settings.h5_max_tps
             f.create_dataset(
                 name=values_path,
                 shape=df.shape,
@@ -241,7 +230,6 @@ class Writer(BridgeH5):
                 ]
             ].values
             ncells, ntps = f[values_path].shape
-
             # add found cells
             dset.resize(dset.shape[1] + df.shape[1], axis=1)
             dset[:, ntps:] = np.nan
@@ -252,7 +240,7 @@ class Writer(BridgeH5):
             # case when all labels are new
             if found_indices_sorted.any():
                 # h5py does not allow bidimensional indexing,
-                # so we have to iterate over the columns
+                # so we iterate over the columns
                 for i, tp in enumerate(df.columns):
                     dset[found_indices_sorted, tp] = existing_values[:, i]
             # add new cells
@@ -300,6 +288,7 @@ class Writer(BridgeH5):
 
 
 def locate_indices(existing, new):
+    """Find new indices in existing ones."""
     if new.any():
         if new.shape[1] > 1:
             return [
