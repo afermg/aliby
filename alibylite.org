@@ -9,7 +9,7 @@ All global parameters, such as possible fluorescence channels and pixel sizes, a
 * aliby/pipeline
 Runs the *tiler*, *baby*, and *extraction* steps of the pipeline, and then *postprocessing*.
 The *run* function loops through positions, calling *run_one_position*, which loops through time points.
-For each time point, each step of the pipeline has a *_run_tp* function, which StepABC renames to *run_tp*, to process one time point for a position.
+For each time point, each step of the pipeline has a *_run_tp* function, which StepABC renames to *run_tp* and wraps in a timer function, to process one time point for a position.
 Extractor does not have an independent writer, but writes to the h5 file in *_run_tp*.
 
 * aliby/tile/tiler
