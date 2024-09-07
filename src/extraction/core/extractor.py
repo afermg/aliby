@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.writer import Writer, load_meta
+from agora.io.writer import Writer
+from agora.io.dynamic_writer import load_meta
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
@@ -706,6 +707,7 @@ class Extractor(StepABC):
         """
         Run extraction for one position and for the specified time points.
 
+        One time point is run at a time in pipeline.
         Save the results to a h5 file.
 
         Parameters

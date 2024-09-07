@@ -24,7 +24,8 @@ except AttributeError:
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
-from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter, Writer
+from agora.io.dynamic_writer import LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.writer import Writer
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
@@ -431,7 +432,8 @@ class Pipeline(ProcessABC):
                 else:
                     # stop if too many clogged traps
                     self.log(
-                        f"{name}: Stopped early at time {i} with {frac_clogged_traps} clogged traps"
+                        f"{name}: Stopped early at time {i} with "
+                        f"{frac_clogged_traps} clogged traps."
                     )
                     break
             # run post-processing

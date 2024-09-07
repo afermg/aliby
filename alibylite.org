@@ -45,12 +45,12 @@ Gets extracted properties, such as median fluorescence, for all cells and all ti
 
 Signal applies picking and merging of cells using the choices made by *picker* and *merger*. *get_raw* gets the data from the h5 file without any picking and merging.
 
-* postprocessor/core/processor
+* postprocessor/core/postprocessing
 For one position, the *run* function performs picking, of appropriate cells, and merging, of tracklets, via *run_prepost* and then runs processes, such as the *buddings* and *bud_metric* functions, on signals, such as *volume*, to get new signals, such as *buddings* and *bud_volume*.
 
 *run_process* writes the results to an h5 file.
 
-The class *PostProcessorParameters* lists the standard processes we perform, such as running *buddings* and *bud_metric* on *area*.
+The class *PostProcessorParameters* lists the obligatory processes we perform, such as running *buddings* and *bud_metric* on *area*.
 
 * postprocessor/core/reshapers/picker
 Selects cells from a Signal for which there is lineage information and by how long they remain in the experiment, writing the choices to the h5 file.

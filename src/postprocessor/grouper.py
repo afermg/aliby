@@ -46,14 +46,15 @@ class Grouper(ABC):
         return max([s.ntimepoints for s in self.positions.values()])
 
     @property
-    def tinterval(self) -> float:
+    def tinterval_minutes(self) -> float:
         """Find the time interval for all positions."""
         tintervals = list(
             np.unique([s.tinterval / 60 for s in self.positions.values()])
         )
-        assert (
-            len(tintervals) == 1
-        ), "Not all positions have the same time interval."
+        if len(tintervals) > 1:
+            raise Exception(
+                "Grouper: Not all positions have the same time interval."
+            )
         return tintervals[0]
 
     @property

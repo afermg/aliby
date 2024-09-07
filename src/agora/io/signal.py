@@ -73,7 +73,7 @@ class Signal(BridgeH5):
 
     @cached_property
     def tinterval(self) -> int:
-        """Find the interval between time points (seconds)."""
+        """Find the interval between time points in seconds."""
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
             if tinterval_location in f.attrs:
