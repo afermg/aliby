@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from aliby.tile.traps import identify_trap_locations
+from aliby.tile.process_traps import identify_trap_locations
 
 
 class TestCase(unittest.TestCase):
