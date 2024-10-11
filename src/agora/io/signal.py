@@ -115,7 +115,13 @@ class Signal(BridgeH5):
     def channels(self) -> t.Collection[str]:
         """Get channels as an array of strings."""
         with h5py.File(self.filename, "r") as f:
-            return list(f.attrs["channels"])
+            if "channels" in f.attrs:
+                return list(f.attrs["channels"])
+            elif "channels/channel" in f.attrs:
+                # old defunct h5 format
+                return list(f.attrs["channels/channel"])
+            else:
+                raise Exception(f"Channels missing in the {self.filename}.")
 
     @lru_cache(2)
     def lineage(

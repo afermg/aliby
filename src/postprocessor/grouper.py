@@ -157,17 +157,27 @@ class Grouper(ABC):
             records = [record for record in records if record is not None]
             if len(errors):
                 print(f"Warning: Positions ({errors}) contain errors.")
-            assert len(records), "All data sets contain errors"
-            # combine into one data frame
-            concat = pd.concat(records, axis=0)
-            if len(concat.index.names) > 4:
-                # reorder levels in the multi-index data frame
-                # when mother_label is present
-                concat = concat.reorder_levels(
-                    ("group", "position", "trap", "cell_label", "mother_label")
+            if len(records):
+                # combine into one data frame
+                concat = pd.concat(records, axis=0)
+                if len(concat.index.names) > 4:
+                    # reorder levels in the multi-index data frame
+                    # when mother_label is present
+                    concat = concat.reorder_levels(
+                        (
+                            "group",
+                            "position",
+                            "trap",
+                            "cell_label",
+                            "mother_label",
+                        )
+                    )
+                concat_sorted = concat.sort_index()
+                return concat_sorted
+            else:
+                print(
+                    f"All data sets are missing or contain errors for {path}."
                 )
-            concat_sorted = concat.sort_index()
-            return concat_sorted
         else:
             print("No data found.")
 
