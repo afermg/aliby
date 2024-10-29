@@ -57,4 +57,4 @@ default_time_interval = 300
 
 # maximum possible size of data frame in h5 files
 h5_max_ncells = 2e5
-h5_max_tps = 1e3
+h5_max_tps = 1500
