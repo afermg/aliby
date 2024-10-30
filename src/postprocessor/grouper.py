@@ -83,6 +83,14 @@ class Grouper(ABC):
         for s, n in self._available_grouped.items():
             print(f"{s} - {n}")
 
+    @property
+    def print_signals_by_position(self) -> None:
+        """Print signals available at each position."""
+        for position in self.positions:
+            print(f"\n{position}\n---")
+            for signal in self.positions[position].available:
+                print(signal)
+
     def concat_signal(
         self,
         path: str,
