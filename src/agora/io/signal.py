@@ -138,7 +138,12 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
-            traps_mothers_daughters = f[lineage_location]
+            if lineage_location not in f:
+                raise Exception(
+                    f"Neither modifiers nor postprocessing in {self.filename}"
+                )
+            else:
+                traps_mothers_daughters = f[lineage_location]
             if isinstance(traps_mothers_daughters, h5py.Dataset):
                 lineage = traps_mothers_daughters[()]
             else:
