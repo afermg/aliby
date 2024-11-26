@@ -53,6 +53,7 @@ class TilerParameters(ParametersABC):
         "ref_z": 0,
         "position_name": None,
         "magnification": imaging_specifications["magnification"],
+        "initial_tp": 0,
     }
 
 
@@ -245,7 +246,9 @@ class Tiler(StepABC):
         tile_size: integer
             The size of a tile.
         """
-        initial_image = self.image[0, self.ref_channel_index, self.ref_z]
+        initial_image = self.image[
+            self.initial_tp, self.ref_channel_index, self.ref_z
+        ]
         if tile_size:
             half_tile = tile_size // 2
             # max_size is the minimum of the numbers of x and y pixels

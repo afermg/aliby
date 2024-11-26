@@ -353,6 +353,7 @@ class Pipeline(ProcessABC):
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
+        # image here is the connection to OMERO
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
             # initialise tiler
             tiler = Tiler.from_image(
