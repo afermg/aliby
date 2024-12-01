@@ -189,8 +189,7 @@ class Pipeline(ProcessABC):
         self.store = store
         config = self.parameters.to_dict()
         self.server_info = {
-            k: config["general"].get(k)
-            for k in ("host", "username", "password")
+            k: config["general"].get(k) for k in ("host", "username", "password")
         }
         self.expt_id = config["general"]["expt_id"]
         self.setLogger(
@@ -236,9 +235,7 @@ class Pipeline(ProcessABC):
         # extract from configuration
         root_dir = Path(config["general"]["directory"])
         dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
-        self.log(
-            f"Fetching data using {dispatcher.__class__.__name__}.", "info"
-        )
+        self.log(f"Fetching data using {dispatcher.__class__.__name__}.", "info")
         # get positions_ids and save microscopy log files
         with dispatcher as conn:
             position_ids = conn.get_position_ids()
@@ -276,9 +273,7 @@ class Pipeline(ProcessABC):
         if isinstance(position_filter, str):
             # pick positions using a regular expression
             position_ids = {
-                k: v
-                for k, v in position_ids.items()
-                if re.search(position_filter, k)
+                k: v for k, v in position_ids.items() if re.search(position_filter, k)
             }
         elif isinstance(position_filter, int):
             # pick a particular position
@@ -337,9 +332,7 @@ class Pipeline(ProcessABC):
             )
         return out_file
 
-    def run_one_position(
-        self, name_image_id: t.Tuple[str, str or Path or int]
-    ):
+    def run_one_position(self, name_image_id: t.Tuple[str, str or Path or int]):
         """Run a pipeline for one position."""
         name, image_id = name_image_id
         config = self.parameters.to_dict()
@@ -403,13 +396,9 @@ class Pipeline(ProcessABC):
                     try:
                         result = babyrunner.run_tp(i)
                     except baby.errors.Clogging:
-                        self.log(
-                            "WARNING: Clogging threshold exceeded in BABY."
-                        )
+                        self.log("WARNING: Clogging threshold exceeded in BABY.")
                     except baby.errors.BadOutput:
-                        self.log(
-                            "WARNING: Bud has been assigned as its own mother."
-                        )
+                        self.log("WARNING: Bud has been assigned as its own mother.")
                         raise Exception("Catastrophic Baby error!")
                     baby_writer.write(
                         data=result,
@@ -424,7 +413,9 @@ class Pipeline(ProcessABC):
                         tp=i,
                     )
                     # run extraction
-                    result = extraction.run_tp(i, cell_labels=None, masks=None)
+                    result = extraction.run_tp(
+                        i, cell_labels=None, masks=None, save=True
+                    )
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(
                         out_file,
@@ -489,9 +480,9 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     s = Signal(filename)
     df = s.get_raw("/extraction/general/None/area")
     # check the latest time points only
-    cells_used = df[
-        df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
-    ].dropna(how="all")
+    cells_used = df[df.columns[-1 - es_parameters["ntps_to_eval"] : -1]].dropna(
+        how="all"
+    )
     # find tiles with too many cells
     traps_above_nthresh = (
         cells_used.groupby("trap").count().apply(np.mean, axis=1)
@@ -513,6 +504,4 @@ def initialise_tensorflow(version=2):
             for gpu in gpus:
                 tf.config.experimental.set_memory_growth(gpu, True)
             logical_gpus = tf.config.experimental.list_logical_devices("GPU")
-            print(
-                len(gpus), "physical GPUs,", len(logical_gpus), "logical GPUs"
-            )
+            print(len(gpus), "physical GPUs,", len(logical_gpus), "logical GPUs")
