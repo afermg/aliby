@@ -58,10 +58,12 @@ def dispatch_image(source: str or int or dict[str, str] or Path):
         from aliby.io.omero import Image
 
         img_type = Image
-    else:  # Local files
+    elif isinstance(source, (list, tuple)): # Local files
+        img_type = ImageList       
+    else:  
         match Path(source):
             case s if "*" in str(s): # Wildcard
-                img_type = ImageWildcard
+                img_type = ImageList
             case s if s.suffix == ".zarr":
                 img_type = ImageZarr
             case s if s.is_file() and s.exists():
@@ -349,34 +351,36 @@ class ImageZarr(BaseLocalImage):
         return "TCZYX"
 
 
-class ImageWildcard(BaseLocalImage):
+class ImageList(BaseLocalImage):
     """
-    Image subclass that uses a and a string to associate images to channels. Assumes that every image is isolated.
+    Image subclass that uses a wildcard or a (pre-sorted) list of images to associate images to channels. Assumes that every file is a 2-D array and the metadata that pertains to dimensions is encoded
+    in the filename. the metadata must be extracted using regular expressions
     """
 
     def __init__(
         self,
-        source: str,
-        regex: str or None = None,
-        image_filenames: list[str] or None = None,
-        capture_order: str or None = None,
-        dimorder: str or None = None,
+        source: str or tuple[str],
+        regex: str,
+        capture_order: str,
+        dimorder: str or None = None, # output dimorder
         **kwargs,
     ):
         """
         Initialise using a directory and parse the files inside of it using a regex."""
         # super().__init__(img_files)
         self.path = source
+        self.regex = regex
+        self.capture_order = capture_order
         # self.meta = filename_to_meta_gsk(self.path)
-        self.regex = regex or self.path.replace("*", "(.*)")
-        self.image_filenames = sorted(
-            image_filenames
-            or tuple(x for x in glob(source) if re.match(self.regex, x))
-        )
+        if isinstance(source, str): # The source is a wildcard
+            self.image_filenames = sorted(x for x in glob(source) if re.match(self.regex, x))
+        else: # The source is a list of images
+            self.image_filenames = source
+            
         self.image_id = calculate_checksum(
             self.image_filenames
         )  # checksum of all files
-        self.capture_order = capture_order or "CWTFZ"
+        # self.capture_order = capture_order or "CWTFZ"
         self._dimorder = dimorder or "TCZYX"
 
     @cached_property
@@ -388,18 +392,15 @@ class ImageWildcard(BaseLocalImage):
         # Reshape first dimensions based on capture order
         lazy_arrays = [dask.delayed(imageio.imread)(fn) for fn in self.image_filenames]
         sample = lazy_arrays[0].compute()
-
+        # imread(image_filenames)
         lazy_arrays = [
             da.from_delayed(x, shape=sample.shape, dtype=sample.dtype)
             for x in lazy_arrays
         ]
 
-        # This has to be done manually because if we load everything
-        # reshaping fails
-        # FIXME: Temporary workaround, something is off when fetching
-        # large chunks of the data
-        order = tuple(v for k, v in self.dimorder_d.items() if k in self._dimorder)
-        arr = np.empty(
+        # order = tuple(v for k, v in dimorder_d.items() if k in _dimorder)
+        order = tuple(self.dimorder_d[k] for k in "TCZ") # FIXME de-hardcode this
+        arr = np.empty( # Add flat dimensions for WF
             order + (1, 1),
             dtype=object,
         )
@@ -410,12 +411,10 @@ class ImageWildcard(BaseLocalImage):
         for i, (d1, d2, d3) in enumerate(nd_order):
             arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
 
-        # convert to TCZ
-        arr = arr.swapaxes(0, 1)
         a = da.block(arr.tolist())
 
         # rechunk to the last 3 dimensions
-        pixels = da.rechunk(a, (1, 1, 9, 1000, 1000))
+        pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
 
         return pixels
 
@@ -433,9 +432,9 @@ class ImageWildcard(BaseLocalImage):
     def dimorder_d(self):
         return get_dims_from_names(self.image_filenames, self.regex, self.capture_order)
 
-    @cached_property
-    def image_filenames(self):
-        return tuple(glob(self.path))
+    # @cached_property
+    # def image_filenames(self):
+        # return tuple(glob(self.path))
 
 
 def get_dims_from_names(
@@ -443,6 +442,9 @@ def get_dims_from_names(
     regex: str,
     capture_order: str,
 ) -> dict[str, int]:
+    """
+    Capture order in this context means only the order in which matches occur in a regex.
+    """
     regex_ = re.compile(regex)
     sorted_files = sorted(image_filenames)
     matches = [regex_.match(x).groups() for x in sorted_files]

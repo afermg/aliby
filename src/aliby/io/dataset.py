@@ -41,7 +41,6 @@ def dispatch_dataset(expt_id: int or str, custom: str or None = None, **kwargs):
     if not custom:
         if isinstance(expt_id, int):
             from aliby.io.omero import Dataset
-
             # data available online
             return Dataset(expt_id, **kwargs)
         elif isinstance(expt_id, str):
@@ -177,18 +176,21 @@ class DatasetDir(DatasetLocalABC):
     def __init__(
         self,
         dpath: t.Union[str, Path],
-        regex: str = None,
-        re_dimorder: str = None,
-        *args,
-        **kwargs,
+        regex: str,
+        capture_order:str,
     ):
+        """
+        capture_order: determines the order of the regular expression
+.
+        - C: Channel
+        - W: Well (optional)
+        - T: Time point
+        - F: Field-of-view (also named position)
+        - Z: Z-stack
+        """
         super().__init__(dpath)
-        if regex is None:
-            regex = ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
         self.regex = regex
-        if re_dimorder is None:
-            dimorder = "CFTZ"
-        self.dimorder = dimorder
+        self.capture_order = capture_order
 
     def get_position_ids(self) -> dict[str, list[str]]:
         """
@@ -196,22 +198,27 @@ class DatasetDir(DatasetLocalABC):
         The key is the name of the position/field-of-view and the value is
         a list of stings indicated the associated files.
         """
+        
+        captured_indices = sorted(self.capture_order.index(x) for x in set("WF").intersection(self.capture_order)) # Indices of groups to replace with wildcard
+        assert len(captured_indices), "capture_order is missing Wells or field-of-view indicator"
+        sort_files_by = tuple(self.capture_order.index(x) for x in "TCZ") # FIXME pass this as an argument
+        sorted_groups = organize_by_regex(self.path, self.regex, tuple(captured_indices), sort_files_by)
 
-        d = groupby_regex(self.path, self.regex)
+        assert len(sorted_groups), "No files were found."
+        
+        return sorted_groups
 
-        return d
 
-
-@cache
-def groupby_regex(
-    path: str, regex: str, capture_group_indices: tuple[int] = (1, 3)
+#@cache
+def organize_by_regex(
+        path: str, regex: str, group_by_capture: tuple[int], sort_by_capture: tuple[int],
 ) -> dict[str, list[str]]:
     """
     Use a regex to group filenames of the same field-of-view (or, in
     some cases, well+field-of-view).
 
-    It returns the key, the wildcard and the list of files. The files accelerate
-    search processes down the line, and the wildcard is necessary to load files with dask.
+    It returns the a dictionary where the key is a combination of well+field of view and the value
+    is a list with the remaining dimensions (e.g., time point, channel, z-stack) sorted in the order defined by -dimorder_out-.
     """
     regex = re.compile(regex)
     str_paths = list(map(str, sorted(Path(path).rglob("*.tif"))))
@@ -220,20 +227,23 @@ def groupby_regex(
         (*capture.groups(), pth) for pth, capture in zip(str_paths, captures) if capture
     ]
 
-    key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
-    sorted_by = sorted(valid, key=key_fn)
-    iterator = groupby(sorted_by, key=key_fn)
-    # Replace groups (dimensions) with wildcard to be read by dask
-    d = {}
+    key_fn = lambda x: tuple(x[i] for i in group_by_capture)
+    sorted_keys = sorted(valid, key=key_fn) 
+    iterator = groupby(sorted_keys, key=key_fn)
+
+    sorted_groups = {}
     for key, group in iterator:
         files = [x[-1] for x in group]
-        as_list = list(files[0])
-        spans = regex.match(files[0]).regs[1:]
-        variable_captures = [
-            span for i, span in enumerate(spans) if i not in capture_group_indices
-        ]
-        for start, end in variable_captures[::-1]:
-            as_list[start:end] = "*"
+        sorted_groups[key] = sort_by_regex_groups(files, regex, sort_by_capture)
+    return sorted_groups
 
-        d[key] = ("".join(as_list), files)
-    return d
+
+def sort_by_regex_groups(files:tuple[str], regex:re.Pattern, sort_by_capture:tuple[int]):
+    """
+    Sort groups of files based on a given regex. It assumes that they are have the same length
+    and format, and sorts based on the captured sections with indexes defined in :sort_by: (for example, if :sort_by=(3,0): the lists are sorted based on the third and first capture group, in that order).
+    """
+    spans = regex.match(files[0]).regs[1:]
+    key_fn = lambda x: [x[slice(*spans[i])] for i in sort_by_capture]
+    sorted_files = sorted(files, key=key_fn)
+    return sorted_files

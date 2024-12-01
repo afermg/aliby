@@ -32,6 +32,7 @@ def init_step(
             image_kwargs = parameters["image_kwargs"]
             tiler_kwargs = {k: v for k, v in parameters.items() if k != "image_kwargs"}
             image = dispatch_image(source=image_kwargs["source"])(**image_kwargs)
+
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case "segment":
             step = dispatch_segmenter(**parameters["segmenter_kwargs"])
@@ -98,9 +99,10 @@ def pipeline_step(
     return state
 
 
-def run_pipeline(pipeline: dict, wildcard: str, ntps: int):
+# TODO pass sorted images instead of wildcard
+def run_pipeline(pipeline: dict, input_images:str or list[str], ntps: int):
     pipeline = copy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = wildcard
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = input_images
     data = []
     state = {}
 
