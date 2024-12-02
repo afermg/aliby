@@ -100,11 +100,3 @@ For convenience, to start the environment every time you access the project you 
 direnv allow . 
 ```
 
-### IDE Integration
-#### Doom Emacs
-Activate the `direnv` module (under `:tools`) on [Doom](https://github.com/doomemacs/doomemacs)'s `init.el`. Then add this to your `config.el`.
-```elisp
-(require 'envrc)
-(add-hook! (add-hook 'change-major-mode-after-body-hook 'envrc-mode))
-```
-That should ensure that Emacs finds the activated environment when running `(run-python)` from a Python file inside the environment.
