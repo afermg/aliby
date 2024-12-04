@@ -11,4 +11,4 @@ jobs:
               uses: platisd/duplicate-code-detection-tool@master
               with:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
-                  directories: "workspace/analysis"
+                  directories: "src, tests"
