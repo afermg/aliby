@@ -11,4 +11,17 @@ jobs:
               uses: platisd/duplicate-code-detection-tool@master
               with:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
-                  directories: "src, tests"
+                  directories: "src"
+                  file_extensions: "py"
+                  # Only report similarities above 5%
+                  ignore_below: 5
+                  # If a file is more than 15% similar to another, show a warning symbol in the report
+                  warn_above: 15
+                  # Remove `src/` from the file paths when reporting similarities
+                  project_root_dir: "src"
+                  # For python source code only. This is checked on a per-file basis
+                  only_code: true
+                  # Leave only one comment with the report and update it for consecutive runs
+                  one_comment: true
+                  # The message to be displayed at the start of the report
+                  header_message_start: "The following files have a similarity above the threshold:"
