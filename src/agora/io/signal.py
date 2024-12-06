@@ -6,7 +6,7 @@ from copy import copy
 from functools import cached_property, lru_cache
 from pathlib import Path
 
-import bottleneck as bn
+import numpy as np
 import h5py
 import numpy as np
 import pandas as pd
@@ -109,7 +109,7 @@ class Signal(BridgeH5):
         Cells must be present for at least cutoff fraction of the total number
         of time points.
         """
-        return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
+        return df.loc[np.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
     def channels(self) -> t.Collection[str]:

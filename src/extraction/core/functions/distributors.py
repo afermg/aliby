@@ -1,6 +1,5 @@
 import typing as t
 
-import bottleneck as bn
 import numpy as np
 
 
@@ -40,7 +39,7 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     if (
         hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck"
     ):  # Bottleneck type
-        return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
+        return getattr(np.reduce, fun.__name__)(trap_image, axis=axis)
     elif isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
         return fun.reduce(trap_image, axis=axis)

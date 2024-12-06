@@ -5,7 +5,6 @@ import typing as t
 from pathlib import Path
 
 import aliby.global_settings as global_settings
-import bottleneck as bn
 import h5py
 import numpy as np
 import pandas as pd
@@ -613,7 +612,7 @@ class Extractor(StepABC):
                         # move Z to last column to allow subtraction
                         lambda img, bgs: np.moveaxis(img, 0, -1)
                         # median of background over all pixels for each Z section
-                        - bn.median(img[:, bgs], axis=1),
+                        - np.median(img[:, bgs], axis=1),
                         img[ch],
                         bgs,
                     )
