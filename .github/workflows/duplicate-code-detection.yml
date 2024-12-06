@@ -12,7 +12,6 @@ jobs:
               with:
                   github_token: ${{ secrets.GITHUB_TOKEN }}
                   directories: "src"
-                  file_extensions: "py"
                   # Only report similarities above 5%
                   ignore_below: 5
                   # If a file is more than 15% similar to another, show a warning symbol in the report
