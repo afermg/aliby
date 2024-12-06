@@ -5,7 +5,6 @@ from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 import numpy as np
 from cp_measure.bulk import get_all_measurements
 from skimage.measure import regionprops_table
-import bottleneck as bn
 
 from extraction.core.functions import cell, trap
 from extraction.core.functions.custom import localisation
@@ -152,11 +151,11 @@ def load_redfuns(
         Functions to perform the reduction.
     """
     RED_FUNS = {
-        "max": bn.nanmax,
-        "mean": bn.nanmean,
-        "median": bn.nanmedian,
+        "max": np.nanmax,
+        "mean": np.nanmean,
+        "median": np.nanmedian,
         "div0": div0,
-        "add": bn.nansum,
+        "add": np.nansum,
         "None": None,
     }
     if additional_reducers is not None:

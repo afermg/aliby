@@ -143,12 +143,12 @@ def filt_cluster(
 
 
 def cluster_kymograph(kymograph: pd.DataFrame, n: int = 2):
-    import bottleneck as bn
+    import numpy as np
     from sklearn.cluster import KMeans
 
     # Normalise according to mean value of signal
     X = (
-        kymograph.divide(bn.nanmean(kymograph, axis=1), axis=0)
+        kymograph.divide(np.nanmean(kymograph, axis=1), axis=0)
         .dropna(axis=1)
         .values
     )
