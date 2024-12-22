@@ -15,7 +15,7 @@ import aliby.global_settings as global_settings
 from agora.io.bridge import BridgeH5
 from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_lineage
-from agora.utils.kymograph import add_index_levels
+from agora.utils.multiindex_utils import add_index_levels
 from agora.utils.merge import apply_merges
 
 

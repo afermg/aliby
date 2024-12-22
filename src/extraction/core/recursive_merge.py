@@ -1,5 +1,5 @@
 def recursive_merge_extractor(dict1, dict2):
-    """For merge two extractor trees."""
+    """Merge two extractor trees."""
     for key, value in dict2.items():
         if (
             key in dict1

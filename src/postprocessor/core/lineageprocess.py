@@ -58,7 +58,6 @@ class LineageProcess(PostProcessABC):
     def get_lineage_information(self, signal=None, merged=True):
         """Get lineage as an array with tile IDs, mother and bud labels."""
         if signal is not None and "mother_label" in signal.index.names:
-            # from kymograph
             lineage = np.array(signal.index.to_list())
         elif hasattr(self, "lineage"):
             lineage = self.lineage
