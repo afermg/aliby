@@ -169,6 +169,10 @@ class Tiler(StepABC):
         image_metadata["channels"] = image.metadata["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
+        elif isinstance(parameters, dict):
+            parameters = TilerParameters.default(**parameters)
+        else:
+            raise Exception(f"Tiler: parameters unrecognised - {parameters}")
         tiler = cls(
             image.data,
             image_metadata,
@@ -202,7 +206,7 @@ class Tiler(StepABC):
         -------
         full: an array of images
         """
-        full = self.image[tp, c]
+        full = self.image[tp + self.initial_tp, c]
         if hasattr(full, "compute"):
             # if using dask fetch images
             full = full.compute(scheduler="synchronous")

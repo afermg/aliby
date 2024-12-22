@@ -379,7 +379,15 @@ class Pipeline(ProcessABC):
                     f" time points not {tps}."
                 )
                 tps = image.data.shape[0]
-            progress_bar = tqdm(range(tps), desc=image.name)
+            # potentially skip initial_tp number of images
+            if tps < config["tiler"]["initial_tp"]:
+                raise Exception(
+                    f'Initial time point {config["tiler"]["initial_tp"]}'
+                    " is greater than the number of time points."
+                )
+            else:
+                all_tps = range(tps - config["tiler"]["initial_tp"])
+            progress_bar = tqdm(all_tps, desc=image.name)
             # run through time points
             for i in progress_bar:
                 if (
