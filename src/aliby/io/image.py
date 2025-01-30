@@ -28,7 +28,6 @@ import imageio
 import numpy as np
 import xmltodict
 import zarr
-from agora.io.metadata import parse_metadata
 from dask.array.image import imread
 from tifffile import TiffFile
 

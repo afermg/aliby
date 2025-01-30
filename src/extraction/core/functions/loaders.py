@@ -3,7 +3,7 @@ from types import FunctionType
 from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 
 import numpy as np
-from cp_measure.bulk import get_all_measurements
+from cp_measure.bulk import get_core_measurements
 from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
@@ -112,7 +112,7 @@ def load_cellfuns():
         CELL_FUNS[fun_name] = partial(get_sk_features, feature=fun_name)
         
     # Add CellProfiler measurements
-    for fun_name, f in get_all_measurements().items():
+    for fun_name, f in get_core_measurements().items():
         CELL_FUNS[fun_name] = partial(trap_apply, cell_fun=f)
             
     return CELL_FUNS
