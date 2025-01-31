@@ -570,11 +570,12 @@ class Extractor(StepABC):
         tiles = self.get_tiles(tp, channels=fl_channels)
 
         # generate boolean masks for background for each trap
-        bgs = self.get_background_masks(masks, tile_size)
+        bgs = get_background_masks(masks, tile_size)
         # get images and background-corrected images as dicts
         # with fluorescnce channels as keys
         img, img_bgsub = self.get_imgs_background_subtract(
-            tree_dict, tiles, bgs
+            # tree_dict, tiles, bgs
+            tree, tiles, bgs
         )
         # perform extraction
         res_one = self.extract_one_channel(

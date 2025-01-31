@@ -43,7 +43,10 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             # ensure it returns only masks
             # TODO generalise so it does not assume a 1-tile file
             def segment(*args) -> list[np.ndarray]:
-                return [model.eval(*args, **kwargs)[0]]
+                result =  model.eval(*args, z_axis=0, normalize={"norm3D":False}, **kwargs)[0]
+                # TODO Check that this is the best way to project 3-D labels into 2D
+                result =  [np.stack([(result==lbl).max(axis=0) for lbl in range(1,result.max())])]
+                return result
 
             return segment
 
