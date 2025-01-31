@@ -113,7 +113,7 @@ def load_cellfuns():
         
     # Add CellProfiler measurements
     for fun_name, f in get_core_measurements().items():
-        CELL_FUNS[fun_name] = partial(trap_apply, cell_fun=f)
+        CELL_FUNS[fun_name] = partial(wrap_cp_measure_features, fun=f)
             
     return CELL_FUNS
 
@@ -180,4 +180,9 @@ def get_sk_features(masks: np.ndarray, pixels: np.ndarray, feature: str):
             properties=(feature,),
             cache=False,
         )[feature][0] for mask in masks.astype(np.uint8)] # Assumes masks.dims=(N,Y,X)
+    
+
+def wrap_cp_measure_features(masks:np.ndarray, pixels = np.ndarray, fun:t.Callable=None)->t.Callable:
+    results = [{k:v[0] for k,v in fun(m, pixels).items()} for m in masks.astype(np.uint8)]
+    return results
     

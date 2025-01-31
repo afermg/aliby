@@ -45,7 +45,7 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             def segment(*args) -> list[np.ndarray]:
                 result =  model.eval(*args, z_axis=0, normalize={"norm3D":False}, **kwargs)[0]
                 # TODO Check that this is the best way to project 3-D labels into 2D
-                result =  [np.stack([(result==lbl).max(axis=0) for lbl in range(1,result.max())])]
+                result =  [result.max(axis=0)]
                 return result
 
             return segment
