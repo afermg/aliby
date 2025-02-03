@@ -93,16 +93,19 @@ class Signal(BridgeH5):
 
     def retained(self, signal, cutoff: float = 0, tmax_in_mins: int = None):
         """Get retained cells for a Signal or list of Signals."""
+        # get data frame
         if isinstance(signal, str):
-            # get data frame
             signal = self.get(signal, tmax_in_mins=tmax_in_mins)
-        if isinstance(signal, pd.DataFrame):
-            return self.get_retained(signal, cutoff)
         elif isinstance(signal, list):
-            return [self.get_retained(d, cutoff=cutoff) for d in signal]
+            signal = [self.get(s) for s in signal]
+        # apply cutoff
+        if isinstance(signal, pd.DataFrame):
+            return self.apply_cutoff(signal, cutoff)
+        elif isinstance(signal, list):
+            return [self.apply_cutoff(s, cutoff) for s in signal]
 
     @staticmethod
-    def get_retained(df, cutoff):
+    def apply_cutoff(df, cutoff):
         """
         Return sub data frame with retained cells.
 
