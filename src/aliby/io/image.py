@@ -29,7 +29,7 @@ import numpy as np
 import xmltodict
 import zarr
 from dask.array.image import imread
-from tifffile import TiffFile
+# from tifffile import TiffFile
 
 
 def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwargs):
@@ -186,6 +186,7 @@ class ImageLocalOME(BaseLocalImage):
     def set_meta(self, path):
         """Get metadata from the associated tiff file."""
         meta = dict()
+        raise Exception("Tiffile is not installed")
         try:
             with TiffFile(path) as f:
                 self.meta = xmltodict.parse(f.ome_metadata)["OME"]

@@ -39,7 +39,7 @@ tensorflow = {version = ">=2.13.1", optional=true}
 baby-seg = {version = ">=0.30.4", optional=true}
 
 omero-py = { version = ">=5.6.2", optional = true }
-cellpose = "^3.0.9"
+cellpose = ">=3"
 polars = ">=1.5.0"
 pyarrow = ">=15.0.1"
 cp-measure = "^0.1.7"
