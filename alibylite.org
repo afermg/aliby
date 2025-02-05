@@ -57,7 +57,7 @@ For one position, the *run* function performs picking, of appropriate cells, and
 The class *PostProcessorParameters* lists the obligatory processes we perform, such as running *buddings* and *bud_metric* on *area*.
 
 * postprocessor/core/reshapers/picker
-Selects cells from a Signal for which there is lineage information and by how long they remain in the experiment, writing the choices to the h5 file.
+Selects cells from a Signal for which there is lineage information, identifying cells as being buds of mothers, and by how long they remain in the experiment, default is at least three time points, writing the choices to the h5 file.
 * postprocessor/core/reshapers/merger
 Combines tracks that should be a single track of the same cell, writing the choices to the h5 file.
 * agora/utils/indexing
