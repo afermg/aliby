@@ -44,7 +44,8 @@ base_pipeline = dict(
         ),
         segment=dict(
             segmenter_kwargs=dict(
-                kind="baby",
+                # kind="baby",
+                kind="cyto3",
             ),
             img_channel=0,
         ),

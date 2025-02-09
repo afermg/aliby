@@ -2,13 +2,13 @@
 """
 Functions to efficiently merge rows in DataFrames.
 """
+
 import typing as t
 
 import numpy as np
 import pandas as pd
-from utils_find_1st import cmp_larger, find_1st
 
-from agora.utils.indexing import index_isin
+from agora.utils.indexing import find_1st_greater, index_isin
 
 
 def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
@@ -24,9 +24,7 @@ def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
     # make unique and order merges for each trap
     multi_merge = np.unique(np.concatenate((linr, rinl)), axis=0)
     # find traps requiring a singe merge
-    single_merge = merges[
-        ~index_isin(merges, multi_merge).all(axis=1).flatten(), :
-    ]
+    single_merge = merges[~index_isin(merges, multi_merge).all(axis=1).flatten(), :]
     # convert to lists of arrays
     single_merge_list = [[sm] for sm in single_merge]
     multi_merge_list = [
@@ -37,9 +35,7 @@ def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
     return res
 
 
-def merge_lineage(
-    lineage: np.ndarray, merges: np.ndarray
-) -> (np.ndarray, np.ndarray):
+def merge_lineage(lineage: np.ndarray, merges: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     Use merges to update lineage information.
 
@@ -83,9 +79,7 @@ def merge_lineage(
                 replacement_dict[key] = key
             # find only correct merges
             new_merges = merges[
-                ~index_isin(
-                    merges[:, 0], np.array(incorrect_merges)
-                ).flatten(),
+                ~index_isin(merges[:, 0], np.array(incorrect_merges)).flatten(),
                 ...,
             ]
         else:
@@ -93,8 +87,7 @@ def merge_lineage(
         # correct lineage information
         # replace mother or bud index with index of rightmost track
         flat_lineage[valid_lineages] = [
-            replacement_dict[tuple(index)]
-            for index in flat_lineage[valid_lineages]
+            replacement_dict[tuple(index)] for index in flat_lineage[valid_lineages]
         ]
     else:
         new_merges = merges
@@ -145,13 +138,11 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
     return merged
 
 
-def join_two_tracks(
-    left_track: np.ndarray, right_track: np.ndarray
-) -> np.ndarray:
+def join_two_tracks(left_track: np.ndarray, right_track: np.ndarray) -> np.ndarray:
     """Join two tracks and return the new one."""
     new_track = left_track.copy()
     # find last positive element by inverting track
-    end = find_1st(left_track[::-1], 0, cmp_larger)
+    end = find_1st_greater(left_track[::-1], 0, cmp_larger)
     # merge tracks into one
     new_track[-end:] = right_track[-end:]
     return new_track
@@ -183,9 +174,7 @@ def union_find(lsts):
 def sort_association(array: np.ndarray):
     # Sort the internal associations
 
-    order = np.where(
-        (array[:, 0, ..., None] == array[:, 1].T[None, ...]).all(axis=1)
-    )
+    order = np.where((array[:, 0, ..., None] == array[:, 1].T[None, ...]).all(axis=1))
 
     res = []
     [res.append(x) for x in np.flip(order).flatten() if x not in res]

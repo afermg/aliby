@@ -69,7 +69,7 @@ class Tiler(StepABC):
 
     def __init__(
         self,
-        image: da.core.Array,
+        pixels: da.core.Array,
         meta: dict,
         parameters: TilerParameters,
         tile_locations=None,
@@ -80,31 +80,36 @@ class Tiler(StepABC):
 
         Parameters
         ----------
-        image: an instance of Image
+        pixels: Numerical values of image
         meta: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
         **kwargs
         """
         super().__init__(parameters)
-        self.image = image
+        self.pixels = pixels
 
         params_d = parameters.to_dict()
-        self.ref_channel_index = self.channels.index(parameters.ref_channel)
-        self.tile_locs = tile_locations
 
-        if "position_name" in params_d:
+        if "position_name" in params_d:  # SwainLab Experiment
             from aliby.tile.meta import find_channel_swainlab
 
             self.channels = find_channel_swainlab(meta, params_d["position_name"])
             self.position_name = params_d["position_name"]
-        else:
             # get reference channel - used for segmentation
             if "zsections" in meta:
                 self.z_perchannel = {
                     ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
                 }
+        else:  # Data with little metadata
+            self.channels = meta.get("channels", list(range(pixels.shape[-4])))
             self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
+            # get reference channel - used for segmentation
+            ref_channel_index = parameters.ref_channel
+            if isinstance(ref_channel_index, str):
+                ref_channel_index = self.channels.index(parameters.ref_channel)
+            self.ref_channel_index = ref_channel_index
+            self.tile_locs = tile_locations
 
     @classmethod
     def from_image(

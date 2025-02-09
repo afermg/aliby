@@ -9,10 +9,10 @@ import h5py
 import numpy as np
 import pandas as pd
 import yaml
-from utils_find_1st import cmp_equal, find_1st
 
 import aliby.global_settings as global_settings
 from agora.io.bridge import BridgeH5
+from agora.utils.indexing import find_1st_equal
 
 #################### Dynamic version ##################################
 
@@ -657,7 +657,7 @@ def locate_indices(existing, new):
     if new.any():
         if new.shape[1] > 1:
             return [
-                find_1st(
+                find_1st_equal(
                     (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]),
                     True,
                     cmp_equal,
@@ -665,7 +665,7 @@ def locate_indices(existing, new):
                 for n in new
             ]
         else:
-            return [find_1st(existing[:, 0] == n, True, cmp_equal) for n in new]
+            return [find_1st_equal(existing[:, 0] == n, True) for n in new]
     else:
         return []
 
