@@ -22,10 +22,14 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
 
             initialise_tensorflow()
             segmenter_cls, segmenter_params = BabyRunner, BabyParameters
-            # TODO fix this
+
+            assert "tiler" in kwargs, "A Tiler must be passed to baby seg"
+            tiler = kwargs["tiler"]  # Assume tiler is passed
+            baby_kwargs = {k: v for k, v in kwargs.items() if k != "tiler"}
             segment = segmenter_cls.from_tiler(
-                segmenter_params.from_dict(kwargs["segmenter"]),
-                tiler=kwargs["tiler"],
+                segmenter_params.default(**baby_kwargs),
+                # How do we pass a tiler if it's not instanced yet?
+                tiler=tiler,
             )
         case _:  # One of the cellpose models
             # cellpose does without all the ABC stuff

@@ -6,6 +6,7 @@ import itertools
 import re
 import typing as t
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 from baby import modelsets
@@ -133,7 +134,7 @@ class BabyRunner(StepABC):
             else parameters.model_config
         )
 
-        tiler_z = self.tiler.pixels.shape[-3]
+        tiler_z = self.tiler.shape[-3]
         model_name = self.model_config["flattener_file"]
         if tiler_z != 5:
             assert f"{tiler_z}z" in model_name, (
@@ -155,6 +156,7 @@ class BabyRunner(StepABC):
     def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
         # Access the image
+        t = perf_counter()
         img = self.get_data(tp)
         segmentation = self.crawler.step(
             img,
@@ -193,7 +195,7 @@ def choose_model_from_params(
     model_name : str
     """
     # cameras prime95 has become sCMOS and evolve has EMCCD
-    valid_models = list(modelsets().keys())
+    valid_models = list(modelsets.remote_modelsets()["models"].keys())
 
     # Apply modelset filter if specified
     if modelset_filter is not None:
@@ -201,14 +203,15 @@ def choose_model_from_params(
         valid_models = filter(msf_regex.search, valid_models)
 
     # Apply parameter filters if specified
+    camera_new = {"prime95b": "sCMOS", "evolve": "EMCCD"}
     params = [
         str(x) if x is not None else ".+"
-        for x in [camera.lower(), channel.lower(), zoom, n_stacks]
+        for x in [channel.lower(), camera_new[camera.lower()], zoom, n_stacks]
     ]
-    params_re = re.compile("^" + "_".join(params) + "$")
+    params_re = re.compile("-".join(params))
     valid_models = list(filter(params_re.search, valid_models))
     # Check that there are valid models
     if len(valid_models) == 0:
         raise KeyError("No model sets found matching {}".format(", ".join(params)))
     # Pick the first model
-    return modelsets()[valid_models[0]]
+    return modelsets.remote_modelsets()["models"][valid_models[0]]

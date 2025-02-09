@@ -142,7 +142,7 @@ def join_two_tracks(left_track: np.ndarray, right_track: np.ndarray) -> np.ndarr
     """Join two tracks and return the new one."""
     new_track = left_track.copy()
     # find last positive element by inverting track
-    end = find_1st_greater(left_track[::-1], 0, cmp_larger)
+    end = find_1st_greater(left_track[::-1], 0)
     # merge tracks into one
     new_track[-end:] = right_track[-end:]
     return new_track

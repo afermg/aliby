@@ -34,7 +34,10 @@ def init_step(
 
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case "segment":
-            step = dispatch_segmenter(**parameters["segmenter_kwargs"])
+            step = dispatch_segmenter(**{
+                **parameters["segmenter_kwargs"],
+                "tiler": other_steps["tile"],  # Necessary for BABY
+            })
         case "track":
             step = dispatch_tracker(**parameters)
         case "extract":

@@ -44,8 +44,22 @@ base_pipeline = dict(
         ),
         segment=dict(
             segmenter_kwargs=dict(
-                # kind="baby",
-                kind="cyto3",
+                kind="baby",
+                modelset_filter=None,
+                camera="prime95b",
+                channel="brightfield",
+                zoom="60x",
+                n_stacks="5z",
+                # model_id="yeast-alcatras-brightfield-sCMOS-60x-5zs", #
+                # ['ecoli-mothermachine-phase-EMCCD-100x-1z',
+                # 'yeast-alcatras-brightfield-sCMOS-60x-5z',
+                # 'yeast-alcatras-brightfield-EMCCD-60x-1z',
+                # 'ecoli-mothermachine-phase-sCMOS-100x-1z',
+                # 'yeast-alcatras-brightfield-sCMOS-60x-1z',
+                # 'yeast-alcatras-brightfield-EMCCD-60x-5z',
+                # 'yeast-alcatras-brightfield-sCMOS-60x-3z',
+                # 'yeast-microcol-brightfield-sCMOS-100x-1z',
+                # 'yeast-alcatras-brightfield-EMCCD-60x-3z']
             ),
             img_channel=0,
         ),

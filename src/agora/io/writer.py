@@ -660,7 +660,7 @@ def locate_indices(existing, new):
                 find_1st_equal(
                     (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]),
                     True,
-                    cmp_equal,
+                    # cmp_equal,
                 )
                 for n in new
             ]

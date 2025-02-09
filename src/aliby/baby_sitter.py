@@ -68,7 +68,7 @@ class BabyRunner(StepABC):
             if parameters is None
             else parameters.modelset_name
         )
-        tiler_z = self.tiler.pixels.shape[-3]
+        tiler_z = self.tiler.shape[-3]
         if f"{tiler_z}z" not in modelset_name:
             raise KeyError(
                 f"Tiler z-stack ({tiler_z}) and model"
