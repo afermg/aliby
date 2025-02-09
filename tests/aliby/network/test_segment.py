@@ -3,7 +3,6 @@ import unittest
 import numpy as np
 import pytest
 
-from aliby.tile.tiler import Tiler, TilerParameters
 
 
 @pytest.mark.skip(

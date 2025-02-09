@@ -9,9 +9,7 @@ from itertools import cycle
 
 import pandas as pd
 import polars as pl
-from pathos.multiprocessing import Pool
 
-from aliby.io.dataset import DatasetDir
 from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters

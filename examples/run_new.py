@@ -14,13 +14,6 @@ Process:
 5. Extend to new data types (/datastore/alan/aliby/)
 """
 
-from pathlib import Path
-
-datasets_path = Path("/home/amunoz/projects/microscopy_backup/data")
-datasets = {
-    int(x.stem.split("_")[0]): str(x) for x in datasets_path.glob("*") if x.is_dir()
-}
-
 #!/usr/bin/env jupyter
 from pathlib import Path
 from time import perf_counter

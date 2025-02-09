@@ -1,13 +1,12 @@
 import typing as t
 from types import FunctionType
-from inspect import getfullargspec, getmembers, isfunction, isbuiltin
+from inspect import getfullargspec, getmembers, isfunction
 
 import numpy as np
 from cp_measure.bulk import get_core_measurements
 from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
-from extraction.core.functions.custom import localisation
 from extraction.core.functions.distributors import trap_apply
 from extraction.core.functions.math_utils import div0
 """

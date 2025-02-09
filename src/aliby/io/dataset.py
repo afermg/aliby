@@ -12,8 +12,7 @@ import re
 import shutil
 import time
 import typing as t
-from abc import ABC, abstractmethod, abstractproperty
-from functools import cache
+from abc import ABC, abstractmethod
 from itertools import groupby
 from pathlib import Path
 

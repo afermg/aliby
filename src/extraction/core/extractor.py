@@ -15,7 +15,7 @@ from agora.io.dynamic_writer import load_meta
 from agora.utils.masks import transform_2d_to_3d
 from aliby.tile.tiler import Tiler, find_channel_name
 
-from extraction.core.functions.distributors import reduce_z, trap_apply
+from extraction.core.functions.distributors import reduce_z
 from extraction.core.functions.loaders import (
     load_funs,
     load_redfuns,

@@ -8,7 +8,6 @@ from postprocessor.core.lineageprocess import (
     LineageProcess,
     LineageProcessParameters,
 )
-import logging
 
 
 class BudMetricParameters(LineageProcessParameters):

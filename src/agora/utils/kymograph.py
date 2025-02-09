@@ -144,7 +144,6 @@ def filt_cluster(
 
 def cluster_kymograph(kymograph: pd.DataFrame, n: int = 2):
     import numpy as np
-    from sklearn.cluster import KMeans
 
     # Normalise according to mean value of signal
     X = (

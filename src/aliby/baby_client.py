@@ -3,22 +3,16 @@ Underlying methods for different neural network deployments.
 """
 
 import itertools
-import logging
 import re
-import time
 import typing as t
 from pathlib import Path
 from time import perf_counter
 
-import baby.errors
-import h5py
 import numpy as np
-import requests
 from agora.abc import ParametersABC, StepABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
-from requests.exceptions import HTTPError, Timeout
 
 
 ################### Dask Methods ################################

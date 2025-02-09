@@ -14,7 +14,6 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             import logging
             import os
 
-            import tensorflow as tf
             from aliby.baby_client import BabyParameters, BabyRunner
 
             # stop warnings from TensorFlow

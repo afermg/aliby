@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from skimage import draw
-from skimage.morphology import disk, erosion
+from skimage.morphology import disk
 
 from extraction.core.functions.cell import (
     eccentricity,

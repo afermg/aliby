@@ -5,7 +5,7 @@ import pkgutil
 import re
 import typing as t
 from datetime import datetime
-from os.path import dirname, exists, join
+from os.path import exists
 
 CONFIG_KEY = "@@CONFIG@@"
 DEFAULT_NOSKIP = {"regex", "regexs", "list", "lists"}

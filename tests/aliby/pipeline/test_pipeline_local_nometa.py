@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from aliby.pipeline import Pipeline, PipelineParameters
 

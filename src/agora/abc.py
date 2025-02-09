@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import copy
 from pathlib import Path
-from time import perf_counter
 from typing import Union
 
 from flatten_dict import flatten, unflatten
