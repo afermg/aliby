@@ -30,15 +30,12 @@ regex = ".+\/(.+)\/.*([0-9]{6})_(\S+)_([0-9]{3}).tif"
 capture_order = "FTCZ"
 assert Path(path).exists(), "Folder does not exist"
 
-
 # Load dataset from a regular expression
-
 base_pipeline = dict(
     steps=dict(
         tile=dict(
             image_kwargs=dict(
                 regex=regex,
-                # dimorder="CWTFZ",
                 capture_order=capture_order,
             ),
             tile_size=None,
@@ -47,11 +44,9 @@ base_pipeline = dict(
         ),
         segment=dict(
             segmenter_kwargs=dict(
-                kind="nuclei",
-                diameter=None,
-                channels=[0, 0],
+                kind="baby",
             ),
-            img_channel=1,
+            img_channel=0,
         ),
         track=dict(kind="stitch"),
         extract=dict(
@@ -187,6 +182,6 @@ else:
                 out_file=out_dir / f"{'_'.join(ws_wc[0])}.parquet",
                 ntps=1,
             ),
-            wellsite_to_wildcard.items(),
+            fov_to_files.items(),
         )
 print(f"Analysis took {perf_counter() - t0} seconds")

@@ -36,187 +36,13 @@ from functools import lru_cache
 from pathlib import Path
 
 import dask.array as da
-import h5py
 import numpy as np
-from agora.abc import ParametersABC, StepABC
-from agora.io.writer import BridgeH5
-from aliby.global_settings import imaging_specifications
-from aliby.tile.process_traps import segment_traps
-from aliby.tile.tiles import Tile, TileLocations
 from skimage.registration import phase_cross_correlation
 
-
-class TilerParameters(ParametersABC):
-    """Define default values for tile size and the reference channels."""
-
-    _defaults = {
-        "tile_size": imaging_specifications["tile_size"],
-        "ref_channel": "Brightfield",
-        "ref_z": 0,
-        "position_name": None,
-        "magnification": imaging_specifications["magnification"],
-        "initial_tp": 0,
-    }
-
-    def __init__(self, centre, parent_class, size, max_size):
-        """Initialise using a parent class."""
-        self.centre = centre
-        self.parent_class = parent_class  # used to access drifts
-        self.size = size
-        self.half_size = size // 2
-        self.max_size = max_size
-
-    def centre_at_time(self, tp: int) -> t.List[int]:
-        """
-        Return tile's centre by applying drifts.
-
-        Parameters
-        ----------
-        tp: integer
-            Index for the time point of interest.
-        """
-        drifts = self.parent_class.drifts
-        tile_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
-        return list(tile_centre.astype(int))
-
-    def as_tile(self, tp: int):
-        """
-        Return tile in the OMERO tile format of x, y, w, h.
-
-        Here x, y are at the bottom left corner of the tile
-        and w and h are the tile width and height.
-
-        Parameters
-        ----------
-        tp: integer
-            Index for the time point of interest.
-
-        Returns
-        -------
-        x: int
-            x-coordinate of bottom left corner of tile.
-        y: int
-            y-coordinate of bottom left corner of tile.
-        w: int
-            Width of tile.
-        h: int
-            Height of tile.
-        """
-        x, y = self.centre_at_time(tp)
-        # tile bottom corner
-        x = int(x - self.half_size)
-        y = int(y - self.half_size)
-        return x, y, self.size, self.size
-
-    def as_range(self, tp: int):
-        """
-        Return a horizontal and a vertical slice of a tile.
-
-        Parameters
-        ----------
-        tp: integer
-            Index for a time point
-
-        Returns
-        -------
-        A slice of x coordinates from left to right
-        A slice of y coordinates from top to bottom
-        """
-        x, y, w, h = self.as_tile(tp)
-        return slice(x, x + w), slice(y, y + h)
-
-
-class TileLocations:
-    """Store each tile as an instance of Tile."""
-
-    def __init__(
-        self,
-        initial_location: np.array,
-        tile_size: int = None,
-        max_size: int = 1200,
-        drifts: np.array = None,
-    ):
-        """
-        Initialise tiles as an array of Tile objects.
-
-        Parameters
-        ----------
-        initial_location: array
-            An array of tile centres.
-        tile_size: int
-            Length of one side of a square tile.
-        max_size: int, optional
-            Default is 1200.
-        drifts: array
-            An array of translations to correct drift of the microscope.
-        """
-        if drifts is None:
-            drifts = []
-        self.tile_size = tile_size
-        self.max_size = max_size
-        self.initial_location = initial_location
-        self.tiles = [
-            Tile(centre, self, tile_size or max_size, max_size)
-            for centre in initial_location
-        ]
-        self.drifts = drifts
-
-    def __len__(self):
-        """Find number of tiles."""
-        return len(self.tiles)
-
-    def __iter__(self):
-        """Return the next tile from the list of tiles."""
-        yield from self.tiles
-
-    @property
-    def shape(self):
-        """Return the number of tiles and the number of drifts."""
-        return len(self.tiles), len(self.drifts)
-
-    def to_dict(self, tp: int):
-        """
-        Export initial locations, tile_size, max_size, and drifts as a dict.
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        """
-        res = dict()
-        if tp == 0:
-            res["trap_locations"] = self.initial_location
-            res["attrs/tile_size"] = self.tile_size
-            res["attrs/max_size"] = self.max_size
-        res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
-        return res
-
-    def centres_at_time(self, tp: int) -> np.ndarray:
-        """Return an array of tile centres (x- and y-coords)."""
-        return np.array([tile.centre_at_time(tp) for tile in self.tiles])
-
-    @classmethod
-    def from_tiler_init(
-        cls,
-        initial_location,
-        tile_size: int = None,
-        max_size: int = 1200,
-    ):
-        """Instantiate from a Tiler."""
-        return cls(initial_location, tile_size, max_size, drifts=[])
-
-    @classmethod
-    def read_h5(cls, file):
-        """Instantiate from a h5 file."""
-        with h5py.File(file, "r") as hfile:
-            tile_info = hfile["trap_info"]
-            initial_locations = tile_info["trap_locations"][()]
-            drifts = tile_info["drifts"][()].tolist()
-            max_size = tile_info.attrs["attrs/max_size"]
-            tile_size = tile_info.attrs["attrs/tile_size"]
-        tile_loc_cls = cls(initial_locations, tile_size, max_size=max_size)
-        tile_loc_cls.drifts = drifts
-        return tile_loc_cls
+from agora.abc import ParametersABC, StepABC
+from agora.io.writer import BridgeH5
+from aliby.tile.process_traps import segment_traps
+from aliby.tile.tiles import TileLocations
 
 
 class TilerParameters(ParametersABC):
@@ -230,159 +56,7 @@ class TilerParameters(ParametersABC):
     }
 
 
-class TilerABC(StepABC):
-    """
-    Base interface for Tiler. Minimal and simple.
-    This should enable build different types of tilers in the future that
-    make different assumptions to our usual Tiler class.
-    """
-
-    def __init__(
-        self,
-        pixels: da.core.Array,
-        meta: dict,
-        parameters: TilerParameters,
-    ):
-        super().__init__(parameters)
-        self.pixels = pixels
-
-        self.channels = meta.get("channels", list(range(pixels.shape[-4])))
-        # get reference channel - used for segmentation
-        ref_channel_index = parameters.ref_channel
-        if isinstance(ref_channel_index, str):
-            ref_channel_index = self.channels.index(parameters.ref_channel)
-        self.ref_channel_index = ref_channel_index
-
-    def _run_tp(self, tp: int):
-        """
-        Find tiles for a given time point.
-
-        Determine any translational drift of the current image from the
-        previous one.
-
-        Arguments
-        ---------
-        tp: integer
-            The time point to tile.
-        """
-        if self.no_processed == 0:
-            initial_image = self.pixels[0, self.ref_channel_index, self.ref_z]
-            self.tile_locs = set_areas_of_interest(
-                initial_image,
-                self.tile_size,
-            )
-
-        if hasattr(self.tile_locs, "drifts"):
-            drift_len = len(self.tile_locs.drifts)
-            if self.no_processed != drift_len:
-                warnings.warn(
-                    "Tiler: the number of processed tiles and the number of drifts"
-                    " calculated do not match."
-                )
-                self.no_processed = drift_len
-
-        # determine drift for this time point and update tile_locs.drifts
-        self.find_drift(tp)
-        # update no_processed
-        self.no_processed = tp + 1
-        # return result for writer
-        return self.tile_locs.to_dict(tp)
-
-    @lru_cache(maxsize=2)
-    def load_image(self, tp: int, c: int) -> np.ndarray:
-        """
-        Load image using dask.
-
-        Assumes the image is arranged as
-            no of time points
-            no of channels
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in x direction
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        c: integer
-            An index for a channel
-
-        Returns
-        -------
-        full: an array of images
-        """
-        full = self.pixels[tp, c]
-        if hasattr(full, "compute"):
-            # if using dask fetch images
-            full = full.compute(scheduler="synchronous")
-        return full
-
-    @classmethod
-    def from_image(
-        cls,
-        image,
-        parameters: TilerParameters,
-    ):
-        """
-        Instantiate from an Image instance.
-
-        Parameters
-        ----------
-        image: an instance of Image
-        parameters: an instance of TilerPameters
-        """
-        return cls(
-            image.data,
-            image.meta,
-            parameters,
-        )
-
-    def get_tiles_timepoint(self, tp: int, channels=None, z: int = 0) -> np.ndarray:
-        """
-        Get a multidimensional array with all tiles for a set of channels
-        and z-stacks.
-
-        Used by extractor.
-
-        Parameters
-        ---------
-        tp: int
-            Index of time point
-        tile_shape: int or tuple of two ints
-            Size of tile in x and y dimensions
-        channels: string or list of strings
-            Names of channels of interest
-        z: int
-            Index of z-channel of interest
-
-        Returns
-        -------
-        res: array
-            Data arranged as (tiles, channels, Z, X, Y)
-        """
-        if channels is None:
-            channels = [0]
-        elif isinstance(channels, str):
-            channels = [channels]
-        # convert to indices
-        channels = [
-            (self.channels.index(channel) if isinstance(channel, str) else channel)
-            for channel in channels
-        ]
-        # get the data as a list of length of the number of channels
-        res = []
-        for c in channels:
-            # only return requested z
-            tiles = self.get_tp_data(tp, c)[:, z]
-            # insert new axis at index 1 for missing time point
-            tiles = np.expand_dims(tiles, axis=1)
-            res.append(tiles)
-        # stack at time-point axis if more than one channel
-        tiles_tp = np.stack(res, axis=1)
-        return tiles_tp
-
-
-class Tiler(TilerABC):
+class Tiler(StepABC):
     """
     Divide images into smaller tiles for faster processing.
 
@@ -412,19 +86,25 @@ class Tiler(TilerABC):
         tile_locs: (optional)
         **kwargs
         """
-        super().__init__(image, meta, parameters)
+        super().__init__(parameters)
+        self.image = image
 
         params_d = parameters.to_dict()
-        if "position_name" in params_d:
-            self.channels = find_channel_swainlab(meta, params_d["position_name"])
-        # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
-        if "zsections" in meta:
-            self.z_perchannel = {
-                ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
-            }
-        self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
+
+        if "position_name" in params_d:
+            from aliby.tile.meta import find_channel_swainlab
+
+            self.channels = find_channel_swainlab(meta, params_d["position_name"])
+            self.position_name = params_d["position_name"]
+        else:
+            # get reference channel - used for segmentation
+            if "zsections" in meta:
+                self.z_perchannel = {
+                    ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
+                }
+            self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
 
     @classmethod
     def from_image(
@@ -571,6 +251,114 @@ class Tiler(TilerABC):
         ndtile = if_out_of_bounds_pad(full, tile.as_range(tp))
 
         return ndtile
+
+    def _run_tp(self, tp: int):
+        """
+        Find tiles for a given time point.
+
+        Determine any translational drift of the current image from the
+        previous one.
+
+        Arguments
+        ---------
+        tp: integer
+            The time point to tile.
+        """
+        if self.no_processed == 0:
+            initial_image = self.pixels[0, self.ref_channel_index, self.ref_z]
+            self.tile_locs = set_areas_of_interest(
+                initial_image,
+                self.tile_size,
+            )
+
+        if hasattr(self.tile_locs, "drifts"):
+            drift_len = len(self.tile_locs.drifts)
+            if self.no_processed != drift_len:
+                warnings.warn(
+                    "Tiler: the number of processed tiles and the number of drifts"
+                    " calculated do not match."
+                )
+                self.no_processed = drift_len
+
+        # determine drift for this time point and update tile_locs.drifts
+        self.find_drift(tp)
+        # update no_processed
+        self.no_processed = tp + 1
+        # return result for writer
+        return self.tile_locs.to_dict(tp)
+
+    @lru_cache(maxsize=2)
+    def load_image(self, tp: int, c: int) -> np.ndarray:
+        """
+        Load image using dask.
+
+        Assumes the image is arranged as
+            no of time points
+            no of channels
+            no of z stacks
+            no of pixels in y direction
+            no of pixels in x direction
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+
+        Returns
+        -------
+        full: an array of images
+        """
+        full = self.pixels[tp, c]
+        if hasattr(full, "compute"):
+            # if using dask fetch images
+            full = full.compute(scheduler="synchronous")
+        return full
+
+    def get_tiles_timepoint(self, tp: int, channels=None, z: int = 0) -> np.ndarray:
+        """
+        Get a multidimensional array with all tiles for a set of channels
+        and z-stacks.
+
+        Used by extractor.
+
+        Parameters
+        ---------
+        tp: int
+            Index of time point
+        tile_shape: int or tuple of two ints
+            Size of tile in x and y dimensions
+        channels: string or list of strings
+            Names of channels of interest
+        z: int
+            Index of z-channel of interest
+
+        Returns
+        -------
+        res: array
+            Data arranged as (tiles, channels, Z, X, Y)
+        """
+        if channels is None:
+            channels = [0]
+        elif isinstance(channels, str):
+            channels = [channels]
+        # convert to indices
+        channels = [
+            (self.channels.index(channel) if isinstance(channel, str) else channel)
+            for channel in channels
+        ]
+        # get the data as a list of length of the number of channels
+        res = []
+        for c in channels:
+            # only return requested z
+            tiles = self.get_tp_data(tp, c)[:, z]
+            # insert new axis at index 1 for missing time point
+            tiles = np.expand_dims(tiles, axis=1)
+            res.append(tiles)
+        # stack at time-point axis if more than one channel
+        tiles_tp = np.stack(res, axis=1)
+        return tiles_tp
 
 
 def run(self, time_dim: int or None = None):

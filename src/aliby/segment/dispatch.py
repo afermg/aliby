@@ -24,7 +24,7 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             segmenter_cls, segmenter_params = BabyRunner, BabyParameters
             # TODO fix this
             segment = segmenter_cls.from_tiler(
-                segmenter_params.from_dict(config["segmenter"]),
+                segmenter_params.from_dict(kwargs["segmenter"]),
                 tiler=kwargs["tiler"],
             )
         case _:  # One of the cellpose models
@@ -42,9 +42,15 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             # ensure it returns only masks
             # TODO generalise so it does not assume a 1-tile file
             def segment(*args) -> list[np.ndarray]:
-                result =  model.eval(*args, z_axis=0, normalize=dict(norm3D=False), stitch_threshold=0.1, **kwargs)[0]
+                result = model.eval(
+                    *args,
+                    z_axis=0,
+                    normalize=dict(norm3D=False),
+                    stitch_threshold=0.1,
+                    **kwargs,
+                )[0]
                 # TODO Check that this is the best way to project 3-D labels into 2D
-                result =  [result.max(axis=0)]
+                result = [result.max(axis=0)]
                 return result
 
             return segment
@@ -54,6 +60,8 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
 
 def initialise_tensorflow(version=2):
     """Initialise tensorflow."""
+    import tensorflow as tf
+
     if version == 2:
         gpus = tf.config.experimental.list_physical_devices("GPU")
         if gpus:

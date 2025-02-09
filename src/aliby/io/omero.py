@@ -57,8 +57,7 @@ class BridgeOmero:
         """
         if host is None or username is None or password is None:
             raise Exception(
-                f"Invalid credentials. host: {host}, user: {username},"
-                f" pwd: {password}"
+                f"Invalid credentials. host: {host}, user: {username}, pwd: {password}"
             )
         self.conn = None
         self.host = host
@@ -88,7 +87,7 @@ class BridgeOmero:
                     valid_name
                     for valid_name in ("Dataset", "Image")
                     if re.match(
-                        f".*{ valid_name }.*",
+                        f".*{valid_name}.*",
                         self.__class__.__name__,
                         re.IGNORECASE,
                     )
@@ -140,9 +139,7 @@ class BridgeOmero:
         ]
         return valid_annotations
 
-    def add_file_as_annotation(
-        self, file_to_upload: t.Union[str, Path], **kwargs
-    ):
+    def add_file_as_annotation(self, file_to_upload: t.Union[str, Path], **kwargs):
         """
         Upload annotation to object on OMERO server.
 
@@ -193,19 +190,15 @@ class Dataset(BridgeOmero):
     @property
     def unique_name(self):
         """Get full name of experiment including its date."""
-        return "_".join(
-            (
-                str(self.ome_id),
-                self.date.strftime("%Y_%m_%d").replace("/", "_"),
-                self.name,
-            )
-        )
+        return "_".join((
+            str(self.ome_id),
+            self.date.strftime("%Y_%m_%d").replace("/", "_"),
+            self.name,
+        ))
 
     def get_position_ids(self):
         """Get dict of image names and IDs from OMERO."""
-        return {
-            im.getName(): im.getId() for im in self.ome_class.listChildren()
-        }
+        return {im.getName(): im.getId() for im in self.ome_class.listChildren()}
 
     def get_channels(self):
         """
@@ -228,9 +221,7 @@ class Dataset(BridgeOmero):
                 if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
         if not len(self._files):
-            raise Exception(
-                "exception:metadata: experiment has no annotation files."
-            )
+            raise Exception("exception:metadata: experiment has no annotation files.")
         elif len(self.file_annotations) != len(self._files):
             raise Exception("Number of files and annotations do not match")
         return self._files
@@ -280,9 +271,7 @@ class Dataset(BridgeOmero):
         dataset_keys = ("omero_id", "omero_id,", "dataset_id")
         for k in dataset_keys:
             if k in bridge.meta_h5:
-                return cls(
-                    bridge.meta_h5[k], **cls.server_info_from_h5(filepath)
-                )
+                return cls(bridge.meta_h5[k], **cls.server_info_from_h5(filepath))
 
 
 class Image(BridgeOmero):

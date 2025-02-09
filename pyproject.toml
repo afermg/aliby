@@ -26,17 +26,14 @@ scikit-image = ">=0.18.1"
 dask = ">=2021.12.0"
 flatten-dict = ">=0.4.2"
 h5py = ">=3.8.0"
-more-itertools = ">=10.2.0"
 pathos = ">=0.2.8"
-pyyaml = ">=5.3.1"
-py-find-1st = ">=1.1.6"
 tqdm = ">=4.62.3"
 xmltodict = ">=0.13.0"
 zarr = ">=2.14.0"
 
 # tensorflow = "2.13.1" # TODO Check if removing this breaks baby; it was necessary for compat with cp_measure/cp-library
 tensorflow = {version = ">=2.13.1", optional=true}
-baby-seg = {version = ">=0.30.4", optional=true}
+baby-seg = {version = ">=0.30.6", optional=true}
 
 omero-py = { version = ">=5.6.2", optional = true }
 cellpose = ">=3"
@@ -53,9 +50,9 @@ ruff = ">=0.3.2"
 ruff-lsp = ">=0.0.52"
 
 [tool.poetry.extras]
-omero = ["omero-py"]
+# omero = ["omero-py"]
 # cellpose = ["cellpose"]
-# baby = ["baby-seg"]
+baby = ["baby-seg"]
 
 [tool.black]
 line-length = 79

@@ -6,13 +6,13 @@ import itertools
 import re
 import typing as t
 from pathlib import Path
-from time import perf_counter
 
 import numpy as np
-from agora.abc import ParametersABC, StepABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
+
+from agora.abc import ParametersABC, StepABC
 
 
 ################### Dask Methods ################################
@@ -136,9 +136,9 @@ class BabyRunner(StepABC):
         tiler_z = self.tiler.pixels.shape[-3]
         model_name = self.model_config["flattener_file"]
         if tiler_z != 5:
-            assert (
-                f"{tiler_z}z" in model_name
-            ), f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
+            assert f"{tiler_z}z" in model_name, (
+                f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
+            )
 
         self.brain = BabyBrain(**self.model_config)
         self.crawler = BabyCrawler(self.brain)
@@ -150,16 +150,11 @@ class BabyRunner(StepABC):
 
     def get_data(self, tp):
         # Swap axes x and z, probably shouldn't swap, just move z
-        return (
-            self.tiler.get_tp_data(tp, self.bf_channel)
-            .swapaxes(1, 3)
-            .swapaxes(1, 2)
-        )
+        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3).swapaxes(1, 2)
 
     def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
         # Access the image
-        t = perf_counter()
         img = self.get_data(tp)
         segmentation = self.crawler.step(
             img,
@@ -214,8 +209,6 @@ def choose_model_from_params(
     valid_models = list(filter(params_re.search, valid_models))
     # Check that there are valid models
     if len(valid_models) == 0:
-        raise KeyError(
-            "No model sets found matching {}".format(", ".join(params))
-        )
+        raise KeyError("No model sets found matching {}".format(", ".join(params)))
     # Pick the first model
     return modelsets()[valid_models[0]]
