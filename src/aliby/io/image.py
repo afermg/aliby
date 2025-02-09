@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Image: Loads images and registers them.
 

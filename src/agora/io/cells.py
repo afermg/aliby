@@ -1,15 +1,17 @@
+"""Define from an h5 file a class containing data on the segmented cells."""
+
 import logging
 import typing as t
+from functools import cached_property, lru_cache
 from itertools import groupby
 from pathlib import Path
-from functools import lru_cache, cached_property
 
 import h5py
 import numpy as np
+from agora.utils.indexing import find_1st_equal
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
 from scipy.sparse.base import isdense
-from utils_find_1st import cmp_equal, find_1st
 
 
 class Cells:
@@ -28,11 +30,11 @@ class Cells:
 
     'trap_info', which contains 'drifts', and 'trap_locations'.
 
-    The "timepoint", "cell_label", and "trap" variables are mutually consistent
-    1D lists.
+    The "timepoint", "cell_label", and "trap" variables are mutually
+    consistent 1D lists.
 
-    Examples are self["timepoint"][self.get_idx(1, 3)] to find the time points
-    where cell 1 was present in trap 3.
+    Examples are self["timepoint"][self.get_idx(1, 3)] to find the time
+    points where cell 1 was present in trap 3.
     """
 
     def __init__(self, filename, path="cell_info"):
@@ -430,13 +432,12 @@ class Cells:
         ids = np.unique(list(zip(trap, cell_label)), axis=0)
         # find when each cell last appeared at its trap
         last_lin_preds = [
-            find_1st(
+            find_1st_equal(
                 (
                     (cell_label[::-1] == cell_label_id)
                     & (trap[::-1] == trap_id)
                 ),
                 True,
-                cmp_equal,
             )
             for trap_id, cell_label_id in ids
         ]

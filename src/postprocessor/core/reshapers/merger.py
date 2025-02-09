@@ -1,3 +1,5 @@
+"""Class for merging single-cell tracks."""
+
 import numpy as np
 
 from agora.abc import ParametersABC

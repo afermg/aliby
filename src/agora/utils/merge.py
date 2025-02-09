@@ -1,20 +1,18 @@
-#!/usr/bin/env jupyter
-"""
-Functions to efficiently merge rows in DataFrames.
-"""
+"""Functions to efficiently merge rows in DataFrames."""
+
 import typing as t
 
 import numpy as np
 import pandas as pd
-from utils_find_1st import cmp_larger, find_1st
-
-from agora.utils.indexing import index_isin
+from agora.utils.indexing import find_1st_greater, index_isin
 
 
 def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
     """
-    Convert merges into a list of merges for traps requiring multiple
-    merges and then for traps requiring single merges.
+    Convert merges into a list of merges.
+
+    First or traps requiring multiple merges and then for traps
+    requiring single merges.
     """
     left_tracks = merges[:, 0]
     right_tracks = merges[:, 1]
@@ -151,43 +149,7 @@ def join_two_tracks(
     """Join two tracks and return the new one."""
     new_track = left_track.copy()
     # find last positive element by inverting track
-    end = find_1st(left_track[::-1], 0, cmp_larger)
+    end = find_1st_greater(left_track[::-1], 0)
     # merge tracks into one
     new_track[-end:] = right_track[-end:]
     return new_track
-
-
-##################################################################
-
-
-def union_find(lsts):
-    sets = [set(lst) for lst in lsts if lst]
-    merged = True
-    while merged:
-        merged = False
-        results = []
-        while sets:
-            common, rest = sets[0], sets[1:]
-            sets = []
-            for x in rest:
-                if x.isdisjoint(common):
-                    sets.append(x)
-                else:
-                    merged = True
-                    common |= x
-            results.append(common)
-        sets = results
-    return sets
-
-
-def sort_association(array: np.ndarray):
-    # Sort the internal associations
-
-    order = np.where(
-        (array[:, 0, ..., None] == array[:, 1].T[None, ...]).all(axis=1)
-    )
-
-    res = []
-    [res.append(x) for x in np.flip(order).flatten() if x not in res]
-    sorted_array = array[np.array(res)]
-    return sorted_array

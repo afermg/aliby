@@ -8,16 +8,11 @@ minimal time point of the other.
 A right track can have multiple potential left tracks. We pick the best.
 """
 
-import typing as t
 from copy import copy
 from typing import List, Union
 
-import more_itertools as mit
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
-from utils_find_1st import cmp_larger, find_1st
-
 from postprocessor.core.reshapers.nusavgol import non_uniform_savgol
 
 
@@ -122,6 +117,12 @@ def clean_tracks(
     return growing_long_tracks
 
 
+def max_ntps(track: pd.Series) -> int:
+    """Get number of time points."""
+    indices = np.where(track.notna())
+    return np.max(indices) - np.min(indices)
+
+
 def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
     """
     Get all pair of contiguous track ids from a tracks data frame.
@@ -202,8 +203,7 @@ def get_dMetric_wrap(lst: List, **kwargs):
 
 def get_dMetric(pre_values: List[float], post_values: List[float]):
     """
-    Calculate a scoring matrix based on the difference between two Signal
-    values.
+    Calculate a scoring matrix based on comparing two Signal values.
 
     We generate one score per pair of contiguous tracks.
 
@@ -316,283 +316,3 @@ def get_avg_gr(track: pd.Series) -> float:
     vals = track.dropna().values
     gr = (vals[-1] - vals[0]) / ntps
     return gr
-
-
-######################################################################
-
-
-def get_joinable_original(
-    tracks, smooth=False, tol=0.1, window=5, degree=3
-) -> dict:
-    """
-    Get the pair of track (without repeats) that have a smaller error than the
-    tolerance. If there is a track that can be assigned to two or more other
-    ones, choose the one with lowest error.
-
-    Parameters
-    ----------
-    tracks: (m x n) Signal
-        A Signal, usually area, dataframe where rows are cell tracks and
-        columns are time points.
-    tol: float or int
-        threshold of average (prediction error/std) necessary
-        to consider two tracks the same. If float is fraction of first track,
-        if int it is absolute units.
-    window: int
-        value of window used for savgol_filter
-    degree: int
-        value of polynomial degree passed to savgol_filter
-    """
-    # only consider time series with more than two non-NaN data points
-    tracks = tracks.loc[tracks.notna().sum(axis=1) > 2]
-    # get contiguous tracks
-    if smooth:
-        # specialise to tracks with growing cells and of long duration
-        clean = clean_tracks(tracks, min_duration=window + 1, min_gr=0.9)
-        contigs = clean.groupby(["trap"]).apply(get_contiguous_pairs)
-    else:
-        contigs = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
-    # remove traps with no contiguous tracks
-    contigs = contigs.loc[contigs.apply(len) > 0]
-    # flatten to (trap, cell_id) pairs
-    flat = set([k for v in contigs.values for i in v for j in i for k in j])
-    # make a data frame of contiguous tracks with the tracks as arrays
-    if smooth:
-        smoothed_tracks = clean.loc[flat].apply(
-            lambda x: non_uniform_savgol(x.index, x.values, window, degree),
-            axis=1,
-        )
-    else:
-        smoothed_tracks = tracks.loc[flat].apply(
-            lambda x: np.array(x.values), axis=1
-        )
-    # get the Signal values for neighbouring end points of contiguous tracks
-    actual_edge_values = contigs.apply(
-        lambda x: get_edge_values(x, smoothed_tracks)
-    )
-    # get the predicted values
-    predicted_edge_values = contigs.apply(
-        lambda x: get_predicted_edge_values(x, smoothed_tracks, window)
-    )
-    # score predicted edge values
-    prediction_scores = predicted_edge_values.apply(get_dMetric_wrap, tol=tol)
-
-    solutions = [
-        # for all sets of contigs at a trap
-        find_best_from_scores_wrap(cost, edge_values, tol=tol)
-        for (trap_id, cost), edge_values in zip(
-            prediction_scores.items(), actual_edge_values
-        )
-    ]
-    closest_pairs = pd.Series(
-        solutions,
-        index=prediction_scores.index,
-    )
-    # match local with global ids
-    joinable_ids = [
-        localid_to_idx(closest_pairs.loc[i], contigs.loc[i])
-        for i in closest_pairs.index
-    ]
-
-    contigs_to_join = [
-        contigs for trap_tracks in joinable_ids for contigs in trap_tracks
-    ]
-    return contigs_to_join
-
-
-def load_test_dset():
-    """Load test data set."""
-    return pd.DataFrame(
-        {
-            ("a", 1, 1): [2, 5, np.nan, 6, 8] + [np.nan] * 5,
-            ("a", 1, 2): list(range(2, 12)),
-            ("a", 1, 3): [np.nan] * 8 + [6, 7],
-            ("a", 1, 4): [np.nan] * 5 + [9, 12, 10, 14, 18],
-        },
-        index=range(1, 11),
-    ).T
-
-
-def max_ntps(track: pd.Series) -> int:
-    """Get number of time points."""
-    indices = np.where(track.notna())
-    return np.max(indices) - np.min(indices)
-
-
-def max_nonstop_ntps(track: pd.Series) -> int:
-    nona_tracks = track.notna()
-    consecutive_nonas_grouped = [
-        len(list(x))
-        for x in mit.consecutive_groups(np.flatnonzero(nona_tracks))
-    ]
-    return max(consecutive_nonas_grouped)
-
-
-def merge_tracks(
-    tracks, drop=False, **kwargs
-) -> t.Tuple[pd.DataFrame, t.Collection]:
-    """
-    Join tracks that are contiguous and within a volume threshold of each other
-
-    :param tracks: (m x n) dataframe where rows are cell tracks and
-        columns are timepoints
-    :param kwargs: args passed to get_joinable
-
-    returns
-
-    :joint_tracks: (m x n) Dataframe where rows are cell tracks and
-        columns are timepoints. Merged tracks are still present but filled
-        with np.nans.
-    """
-
-    # calculate tracks that can be merged until no more traps can be merged
-    joinable_pairs = get_joinable(tracks, **kwargs)
-    if joinable_pairs:
-        tracks = join_tracks(tracks, joinable_pairs, drop=drop)
-    return (tracks, joinable_pairs)
-
-
-def get_joint_ids(merging_seqs) -> dict:
-    """
-    Convert a series of merges into a dictionary where
-    the key is the cell_id of destination and the value a list
-    of the other track ids that were merged into the key
-
-    :param merging_seqs: list of tuples of indices indicating the
-    sequence of merging events. It is important for this to be in sequential order
-
-    How it works:
-
-    The order of merging matters for naming, always the leftmost track will keep the id
-
-    For example, having tracks (a, b, c, d) and the iterations of merge events:
-
-    0 a b c d
-    1 a b cd
-    2 ab cd
-    3 abcd
-
-    We should get:
-
-    output {a:a, b:a, c:a, d:a}
-
-    """
-    if not merging_seqs:
-        return {}
-    targets, origins = list(zip(*merging_seqs))
-    static_tracks = set(targets).difference(origins)
-    joint = {track_id: track_id for track_id in static_tracks}
-    for target, origin in merging_seqs:
-        joint[origin] = target
-    moved_target = [
-        k for k, v in joint.items() if joint[v] != v and v in joint.values()
-    ]
-    for orig in moved_target:
-        joint[orig] = rec_bottom(joint, orig)
-    return {
-        k: v for k, v in joint.items() if k != v
-    }  # remove ids that point to themselves
-
-
-def rec_bottom(d, k):
-    if d[k] == k:
-        return k
-    else:
-        return rec_bottom(d, d[k])
-
-
-def join_tracks(tracks, joinable_pairs, drop=True) -> pd.DataFrame:
-    """
-    Join pairs of tracks from later tps towards the start.
-
-    :param tracks: (m x n) dataframe where rows are cell tracks and
-        columns are timepoints
-
-    returns (copy)
-
-    :param joint_tracks: (m x n) Dataframe where rows are cell tracks and
-        columns are timepoints. Merged tracks are still present but filled
-        with np.nans.
-    :param drop: bool indicating whether or not to drop moved rows
-
-    """
-    tmp = copy(tracks)
-    for target, source in joinable_pairs:
-        tmp.loc[target] = join_track_pair(tmp.loc[target], tmp.loc[source])
-        if drop:
-            tmp = tmp.drop(source)
-    return tmp
-
-
-def join_track_pair(target, source):
-    tgt_copy = copy(target)
-    end = find_1st(target.values[::-1], 0, cmp_larger)
-    tgt_copy.iloc[-end:] = source.iloc[-end:].values
-    return tgt_copy
-
-
-def localid_to_idx(local_ids, contig_trap):
-    """
-    Fetch the original ids from a nested list with joinable local_ids.
-
-    input
-    :param local_ids: list of list of pairs with cell ids to be joint
-    :param local_ids: list of list of pairs with corresponding cell ids
-
-    return
-    list of pairs with (experiment-level) ids to be joint
-    """
-    lin_pairs = []
-    for i, pairs in enumerate(local_ids):
-        if len(pairs):
-            for left, right in pairs:
-                lin_pairs.append(
-                    (contig_trap[i][0][left], contig_trap[i][1][right])
-                )
-    return lin_pairs
-
-
-def get_vec_closest_pairs(lst: List, **kwargs):
-    return [get_closest_pairs(*sublist, **kwargs) for sublist in lst]
-
-
-def get_closest_pairs(
-    pre: List[float], post: List[float], tol: Union[float, int] = 1
-):
-    """
-    Calculate a cost matrix for the Hungarian algorithm to pick the best set of
-    options.
-
-    input
-    :param pre: list of floats with edges on left
-    :param post: list of floats with edges on right
-    :param tol: int or float if int metrics of tolerance, if float fraction
-
-    returns
-    :: list of indices corresponding to the best solutions for matrices
-
-    """
-    dMetric = get_dMetric(pre, post, tol)
-    return find_best_from_scores(dMetric, pre, post, tol)
-
-
-def plot_joinable(tracks, joinable_pairs):
-    """Convenience plotting function for debugging."""
-    nx = 8
-    ny = 8
-    _, axes = plt.subplots(nx, ny)
-    for i in range(nx):
-        for j in range(ny):
-            if i * ny + j < len(joinable_pairs):
-                ax = axes[i, j]
-                pre, post = joinable_pairs[i * ny + j]
-                pre_srs = tracks.loc[pre].dropna()
-                post_srs = tracks.loc[post].dropna()
-                ax.plot(pre_srs.index, pre_srs.values, "b")
-                # try:
-                #     totrange = np.arange(pre_srs.index[0],post_srs.index[-1])
-                #     ax.plot(totrange, interpolate(pre_srs, totrange), 'r-')
-                # except:
-                #     pass
-                ax.plot(post_srs.index, post_srs.values, "g")
-    plt.show()

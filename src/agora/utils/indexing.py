@@ -158,3 +158,17 @@ def assoc_indices_to_2d(array: np.ndarray):
             (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
         )
     return result
+
+
+def find_1st_greater(arr, limit):
+    """Find the first index where the array is larger than limit."""
+    indices = np.flatnonzero(arr > limit)
+    first_index = indices[0] if len(indices) > 0 else -1
+    return first_index
+
+
+def find_1st_equal(arr, limit):
+    """Find the first index where the array equals the limit."""
+    indices = np.flatnonzero(arr == limit)
+    first_index = indices[0] if len(indices) > 0 else -1
+    return first_index
