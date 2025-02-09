@@ -9,7 +9,6 @@ from itertools import cycle
 
 import pandas as pd
 import polars as pl
-from extraction.core.extractor import Extractor, ExtractorParameters
 from pathos.multiprocessing import Pool
 
 from aliby.io.dataset import DatasetDir
@@ -17,6 +16,7 @@ from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
+from extraction.core.extractor import Extractor, ExtractorParameters
 
 
 def init_step(
@@ -31,7 +31,8 @@ def init_step(
         case "tile":
             image_kwargs = parameters["image_kwargs"]
             tiler_kwargs = {k: v for k, v in parameters.items() if k != "image_kwargs"}
-            image = dispatch_image(source=image_kwargs["source"])(**image_kwargs)
+            image_type = dispatch_image(source=image_kwargs["source"])
+            image = image_type(**image_kwargs)
 
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case "segment":
@@ -100,7 +101,7 @@ def pipeline_step(
 
 
 # TODO pass sorted images instead of wildcard
-def run_pipeline(pipeline: dict, input_images:str or list[str], ntps: int):
+def run_pipeline(pipeline: dict, input_images: str or list[str], ntps: int):
     pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = input_images
     data = []
@@ -125,7 +126,7 @@ def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
     to_delete = []
     new_entries = {}
     for k, df in extracted_tp.items():
-        if isinstance(df.iloc[:,0].values[0], dict):
+        if isinstance(df.iloc[:, 0].values[0], dict):
             to_delete.append(k)
             exploded = pd.json_normalize(df.iloc[:, 0])
 
@@ -135,27 +136,27 @@ def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
                 new_entry.index = df.index
 
                 new_name = f"{k}_{col}"
-                
-                new_entries[new_name] = new_entry 
-                
+
+                new_entries[new_name] = new_entry
+
     for k in to_delete:
         del extracted_tp[k]
-
 
     extracted_tp = {**extracted_tp, **new_entries}
 
     renamed_columns = []
-    for k,v in extracted_tp.items():
-
+    for k, v in extracted_tp.items():
         if (tp := str(v.columns[0])) is not None:
-            renamed_columns.append(pl.DataFrame(v.reset_index())
-        .with_columns(
-            pl.col(tp).cast(pl.Float32).alias("value"),
-            pl.lit(k).alias("Feature"),
-            pl.lit(tp).alias("tp"),
-            pl.col("trap").cast(pl.UInt16),
-        )
-        .select(pl.exclude(tp)))
+            renamed_columns.append(
+                pl.DataFrame(v.reset_index())
+                .with_columns(
+                    pl.col(tp).cast(pl.Float32).alias("value"),
+                    pl.lit(k).alias("Feature"),
+                    pl.lit(tp).alias("tp"),
+                    pl.col("trap").cast(pl.UInt16),
+                )
+                .select(pl.exclude(tp))
+            )
     concat = pl.concat(renamed_columns)
     return concat
 

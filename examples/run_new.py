@@ -13,29 +13,40 @@ Process:
 
 5. Extend to new data types (/datastore/alan/aliby/)
 """
+
 from pathlib import Path
 
 datasets_path = Path("/home/amunoz/projects/microscopy_backup/data")
-datasets = {int(x.stem.split("_")[0]):str(x) for x in datasets_path.glob("*") if x.is_dir()}
+datasets = {
+    int(x.stem.split("_")[0]): str(x) for x in datasets_path.glob("*") if x.is_dir()
+}
 
 #!/usr/bin/env jupyter
 from pathlib import Path
 from time import perf_counter
 
-from aliby.io.dataset import DatasetDir
-from aliby.pipe import run_pipeline
 from pathos.multiprocessing import Pool
 
-#
-# -------
+from aliby.io.dataset import DatasetDir
+from aliby.pipe import run_pipeline
+
+# Variables
+path = Path("/datastore/alan/aliby/flavin_htb2_pyruvate_20gpL_01_00/")
+out_dir = Path(f"/datastore/alan/swainlab/results/{path.stem}")
+regex = ".+\/(.+)\/.*([0-9]{6})_(\S+)_([0-9]{3}).tif"
+capture_order = "FTCZ"
+assert Path(path).exists(), "Folder does not exist"
+
+
 # Load dataset from a regular expression
 
 base_pipeline = dict(
     steps=dict(
         tile=dict(
             image_kwargs=dict(
-                # regex=".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif",
-                dimorder="CWTFZ",
+                regex=regex,
+                # dimorder="CWTFZ",
+                capture_order=capture_order,
             ),
             tile_size=None,
             ref_channel=0,
@@ -133,20 +144,15 @@ base_pipeline = dict(
     ),
 )
 
-path = "/datastore/alan/gsk/batches/ELN201687/H00DJKJread1BF48hrs_20230926_095825"
-out_dir = Path(f"/datastore/alan/swainlab/results/{path.stem}")
-assert Path(path).exists(), "Folder does not exist"
-
+# Load dataset
 dif = DatasetDir(
     path,
-    regex=".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif",
-    capture_order="CFTZ",
+    regex=regex,
+    capture_order=capture_order,
 )
 
 # Pathos seems to result in a highetr cpu usage, (which is good)
-well_site_to_wildcard_files = dif.get_position_ids()
-wellsite_to_wildcard = {k: x[0] for k, x in well_site_to_wildcard_files.items()}
-
+fov_to_files = dif.get_position_ids(regex, capture_order)
 
 
 def run_pipeline_save(base_pipeline: dict, wc: str, out_file: str | Path, ntps=1):
@@ -154,23 +160,23 @@ def run_pipeline_save(base_pipeline: dict, wc: str, out_file: str | Path, ntps=1
 
     result = None
     if not Path(out_file).exists():
-        try:
-            result = run_pipeline(base_pipeline, wc, ntps=20)
-            out_dir = Path(out_file).parent
-            if not out_dir.exists():  # Only create a dir after we have files to save
-                out_dir.mkdir(parents=True, exist_ok=True)
-            result.write_parquet(out_file)
-        except Exception as e:
-            with open("logfile.txt", "a") as f:
-                f.write(f"{out_file} failed:{e}\n")
+        # try:
+        result = run_pipeline(base_pipeline, wc, ntps=20)
+        out_dir = Path(out_file).parent
+        if not out_dir.exists():  # Only create a dir after we have files to save
+            out_dir.mkdir(parents=True, exist_ok=True)
+        result.write_parquet(out_file)
+        # except Exception as e:
+        #     print(e)
+        #     with open("logfile.txt", "a") as f:
+        #         f.write(f"{out_file} failed:{e}\n")
     return result
 
 
-list(wellsite_to_wildcard.items())[595:]
 t0 = perf_counter()
 if True:  # Threaded or not, non-threaded is for easy debug
     results = []
-    for well_site, wc in list(wellsite_to_wildcard.items())[:2]:
+    for well_site, wc in list(fov_to_files.items())[:2]:
         result = run_pipeline_save(
             base_pipeline=base_pipeline,
             wc=wc,
@@ -190,4 +196,4 @@ else:
             ),
             wellsite_to_wildcard.items(),
         )
-print(f"Analysis took {perf_counter()-t0} seconds")
+print(f"Analysis took {perf_counter() - t0} seconds")
