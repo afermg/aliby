@@ -87,8 +87,10 @@ def pipeline_step(
 
         # Run step
         args = []
-        if step_name == "segment":  # Pass correct images from tiler
-            source_step, method, param_name = passed_methods["segment"]
+        if (
+            step_name == "segment" and parameters["segmenter_kwargs"]["kind"] != "baby"
+        ):  # Pass correct images from tiler
+            source_step, method, param_name = passed_methods.get("segment")
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
 
         step_result = run_step(step, *args, tp=tp, **passed_data)

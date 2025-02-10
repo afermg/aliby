@@ -161,11 +161,9 @@ class BabyRunner(StepABC):
 
     def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
-        # Access the image
-        t = perf_counter()
-        img = self.get_data(tp)
+        pixels = self.get_data(tp)
         segmentation = self.crawler.step(
-            img,
+            pixels,
             with_edgemasks=with_edgemasks,
             assign_mothers=assign_mothers,
             **kwargs,

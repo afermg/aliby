@@ -45,21 +45,11 @@ base_pipeline = dict(
         segment=dict(
             segmenter_kwargs=dict(
                 kind="baby",
-                modelset_filter=None,
                 camera="prime95b",
                 channel="brightfield",
                 zoom="60x",
                 n_stacks="5z",
-                # model_id="yeast-alcatras-brightfield-sCMOS-60x-5zs", #
-                # ['ecoli-mothermachine-phase-EMCCD-100x-1z',
-                # 'yeast-alcatras-brightfield-sCMOS-60x-5z',
-                # 'yeast-alcatras-brightfield-EMCCD-60x-1z',
-                # 'ecoli-mothermachine-phase-sCMOS-100x-1z',
-                # 'yeast-alcatras-brightfield-sCMOS-60x-1z',
-                # 'yeast-alcatras-brightfield-EMCCD-60x-5z',
-                # 'yeast-alcatras-brightfield-sCMOS-60x-3z',
-                # 'yeast-microcol-brightfield-sCMOS-100x-1z',
-                # 'yeast-alcatras-brightfield-EMCCD-60x-3z']
+                # modelset_filter=None,
             ),
             img_channel=0,
         ),
@@ -111,26 +101,11 @@ base_pipeline = dict(
                 },
                 1: {
                     "max": [
-                        "radial_distribution",
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "zernike",
-                        "ferret",
-                        "granularity",
-                        "texture",
-                    ]
-                },
-                0: {
-                    "max": [
-                        "radial_distribution",
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "zernike",
-                        "ferret",
-                        "granularity",
-                        "texture",
+                        "total",
+                        "max5px_median",
+                        # "volume",
+                        # "centroid_x",
+                        # "centroid_y",
                     ]
                 },
             },
@@ -142,9 +117,10 @@ base_pipeline = dict(
         extract=[("cell_labels", "track"), ("masks", "segment")],
     ),
     # key -> (step, method, parameter (from key))
-    passed_methods=dict(
-        segment=("tile", "get_tp_data", "img_channel"),
-    ),
+    passed_methods=dict(),
+    # passed_methods=dict(
+    #     segment=("tile", "get_tp_data", "img_channel"),
+    # ),
 )
 
 # Load dataset
