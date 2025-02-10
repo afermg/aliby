@@ -32,7 +32,7 @@ xmltodict = ">=0.13.0"
 zarr = ">=2.14.0"
 
 # tensorflow = "2.13.1" # TODO Check if removing this breaks baby; it was necessary for compat with cp_measure/cp-library
-tensorflow = {version = ">=2.13.1", optional=true}
+tensorflow = {version = "==2.13.1", optional=true}
 baby-seg = {version = ">=0.30.6", optional=true}
 
 omero-py = { version = ">=5.6.2", optional = true }
@@ -51,7 +51,7 @@ ruff-lsp = ">=0.0.52"
 
 [tool.poetry.extras]
 # omero = ["omero-py"]
-# cellpose = ["cellpose"]
+cellpose = ["cellpose"]
 baby = ["baby-seg"]
 
 [tool.black]
