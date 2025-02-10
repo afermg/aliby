@@ -25,15 +25,15 @@ We save the cell properties we wish to extract as a nested dictionary, such as
         {'general': {'None': ['area', 'volume', 'eccentricity']}}.
 *extract_tp* extracts data for one time point.
 
-** extraction/core/functions/cell
+** extraction/core/functions/cell.py
 Defines the standard functions, such as area and median, that we apply to pixels from individual cells.
-** extraction/core/functions/trap
+** extraction/core/functions/trap.py
 Determines properties of a tile's background.
-** extraction/core/functions/distributors
+** extraction/core/functions/distributors.py
 Collapses multiple z-sections to a 2D image.
-** extraction/core/functions/defaults
+** extraction/core/functions/defaults.py
 Defines the standard fluorescence signals and metrics, like median, we extract in *exparams_from_meta*.
-** extraction/core/function/custom/localisation
+** extraction/core/function/custom/localisation.py
 Defines more complex functions to apply to cells, such as *nuc_est_conv*, which estimates nuclear localisation of a fluorescent protein.
 
 * agora/bridge

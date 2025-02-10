@@ -15,8 +15,10 @@ from scipy import signal, stats
 
 def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
     """
-    2D gaussian mask - should give the same result as MATLAB's
-    fspecial('gaussian',[shape],[sigma])
+    Perform 2D Gaussian mask.
+
+    Should give the same result as MATLAB's
+    fspecial('gaussian',[shape],[sigma]).
     """
     m, n = [(ss - 1.0) / 2.0 for ss in shape]
     y, x = np.ogrid[-m : m + 1, -n : n + 1]
@@ -31,7 +33,11 @@ def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
 def gauss3D(
     shape: t.Tuple[int] = (3, 3, 3), sigma: t.Tuple[float] = (0.5, 0.5, 0.5)
 ):
-    """3D gaussian mask - based on MATLAB's fspecial but made 3D."""
+    """
+    Perform 3D gaussian mask.
+
+    Based on MATLAB's fspecial but made 3D.
+    """
     m, n, p = [(ss - 1.0) / 2.0 for ss in shape]
     z, y, x = np.ogrid[-p : p + 1, -m : m + 1, -n : n + 1]
     sigmax, sigmay, sigmaz = sigma
