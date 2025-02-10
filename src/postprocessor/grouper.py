@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import typing as t
 from abc import ABC
 from collections import Counter

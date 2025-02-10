@@ -33,8 +33,7 @@ def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
 def gauss3D(
     shape: t.Tuple[int] = (3, 3, 3), sigma: t.Tuple[float] = (0.5, 0.5, 0.5)
 ):
-    """
-    Perform 3D gaussian mask.
+    """Perform 3D gaussian mask.
 
     Based on MATLAB's fspecial but made 3D.
     """

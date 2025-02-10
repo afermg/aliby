@@ -26,7 +26,7 @@ We save the cell properties we wish to extract as a nested dictionary, such as
 *extract_tp* extracts data for one time point.
 
 ** extraction/core/functions/cell.py
-Defines the standard functions, such as area and median, that we apply to pixels from individual cells.
+Defines the standard functions, such as area and median, that we apply to pixels from individual cells. We define multichannel functions here too.
 ** extraction/core/functions/trap.py
 Determines properties of a tile's background.
 ** extraction/core/functions/distributors.py

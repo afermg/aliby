@@ -548,7 +548,26 @@ class Extractor(StepABC):
         return d
 
     def extract_multiple_channels(self, cell_labels, img, img_bgsub, masks):
-        """Extract as a dict all metrics requiring multiple channels."""
+        """
+        Extract as a dict all metrics requiring multiple channels.
+
+        Include 'Brightfield'.
+
+        Multichannel functions do not use tree_dict.
+        Instead in extraction parameters include, for example,
+
+            {"multichannel": [["CFP", "YFP"], "max", "ratio"]}
+
+        If params is an instance of PipelineParameters, use
+
+            params.to_dict()["extraction"]["multichannel_ops"].update(
+            {"multichannel": [["Flavin", "mCherry"], "max", "ratio"]}
+            )
+
+        which will create a Signal called
+
+            '/extraction/multichannel/max/ratio'
+        """
         # NB multichannel functions do not use tree_dict
         available_channels = set(list(img.keys()) + list(img_bgsub.keys()))
         d = {}
@@ -616,7 +635,7 @@ class Extractor(StepABC):
 
         Returns
         -------
-        d: dict
+        res: dict
             Dictionary of the results with three levels of dictionaries.
             The first level has channels as keys.
             The second level has reduction metrics as keys.
@@ -638,16 +657,20 @@ class Extractor(StepABC):
         cell_labels = self.get_cell_labels(tp, cell_labels, cells)
         # get masks one per cell per trap
         masks = self.get_masks(tp, masks, cells)
-        # find image data for all traps at the time point
+        # find fluoresence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
         tiles = self.get_tiles(tp, channels=tree_dict["channels"])
         # generate boolean masks for background for each trap
         bgs = self.get_background_masks(masks, tile_size)
-        # get images and background-corrected images as dicts
-        # with fluorescnce channels as keys
+        # get fluorescence images and background-corrected images as dicts
+        # with fluorescence channels as keys
         img, img_bgsub = self.get_imgs_background_subtract(
             tree_dict, tiles, bgs
         )
+        # brightfield images
+        img["Brightfield"] = self.get_tiles(tp, channels=["Brightfield"])[
+            :, 0, 0, ...
+        ]
         # perform extraction
         res_one = self.extract_one_channel(
             tree_dict, cell_labels, img, img_bgsub, masks, **kwargs
@@ -673,7 +696,7 @@ class Extractor(StepABC):
                 # image data for all traps for a particular channel and
                 # time point arranged as (traps, Z, X, Y)
                 # we use 0 here to access the single time point available
-                img[ch] = tiles[:, tree_dict["channels"].index(ch), 0]
+                img[ch] = tiles[:, tree_dict["channels"].index(ch), 0, ...]
                 if (
                     bgs.any()
                     and ch in self.params.sub_bg

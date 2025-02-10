@@ -272,20 +272,6 @@ def moment_of_inertia(cell_mask, trap_image):
         return np.nan
 
 
-def ratio(cell_mask, trap_image):
-    """Find the median ratio between two fluorescence channels."""
-    if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
-        fl_0 = trap_image[..., 0][cell_mask]
-        fl_1 = trap_image[..., 1][cell_mask]
-        if np.any(fl_1 == 0):
-            div = np.nan
-        else:
-            div = np.median(fl_0 / fl_1)
-    else:
-        div = np.nan
-    return div
-
-
 def centroid(cell_mask):
     """Find the cell's centroid."""
     weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
@@ -312,3 +298,32 @@ def centroid_x(cell_mask):
 def centroid_y(cell_mask):
     """Return y coordinate of a cell's centroid."""
     return centroid(cell_mask)[1]
+
+
+###
+# Multichannel functions
+###
+
+
+def ratio(cell_mask, trap_image):
+    """Find the median ratio between two fluorescence channels."""
+    if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
+        fl_0 = trap_image[..., 0][cell_mask]
+        fl_1 = trap_image[..., 1][cell_mask]
+        if np.any(fl_1 == 0):
+            div = np.nan
+        else:
+            div = np.median(fl_0 / fl_1)
+    else:
+        div = np.nan
+    return div
+
+
+def test_nn(cell_mask, trap_image):
+    if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
+        img = {}
+        for i, ch in enumerate(["bf", "fl"]):
+            img[ch] = np.zeros(cell_mask.shape)
+            img[ch][cell_mask] = trap_image[..., i][cell_mask]
+    else:
+        return np.nan
