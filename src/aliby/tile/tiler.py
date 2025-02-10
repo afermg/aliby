@@ -321,6 +321,16 @@ class Tiler(StepABC):
             full = full.compute(scheduler="synchronous")
         return full
 
+    @property
+    def shape(self):
+        """
+        Return the shape of the image array.
+
+        The image array is arranged as number of images, number of channels,
+        number of z sections, and size of the image in y and x.
+        """
+        return self.pixels.shape
+
     def get_tiles_timepoint(self, tp: int, channels=None, z: int = 0) -> np.ndarray:
         """
         Get a multidimensional array with all tiles for a set of channels

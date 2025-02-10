@@ -12,6 +12,7 @@ import numpy as np
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
+from baby.modelsets import get_params
 
 from agora.abc import ParametersABC, StepABC
 
@@ -127,21 +128,26 @@ class BabyRunner(StepABC):
 
     def __init__(self, tiler, parameters=None, **kwargs):
         self.tiler = tiler
-        # self.model_config = modelsets()[choose_model_from_params(**kwargs)]
         self.model_config = (
             choose_model_from_params(**kwargs)
             if parameters is None
             else parameters.model_config
         )
 
+        # This line is necessary to pull the models
+
+        # Brain_params must be run to download the files
+        brain_params = get_params(self.model_config["name"])
+
         tiler_z = self.tiler.shape[-3]
-        model_name = self.model_config["flattener_file"]
+        model_name = self.model_config["name"]
         if tiler_z != 5:
             assert f"{tiler_z}z" in model_name, (
                 f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
             )
 
-        self.brain = BabyBrain(**self.model_config)
+        # We need to pass the modelset name explicitly
+        self.brain = BabyBrain(modelset_path=model_name, **brain_params)
         self.crawler = BabyCrawler(self.brain)
         self.bf_channel = self.tiler.ref_channel_index
 
