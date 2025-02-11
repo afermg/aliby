@@ -319,6 +319,7 @@ class Extractor(StepABC):
         masks: t.List[np.ndarray],
         cell_function: str,
         cell_labels: t.Dict[int, t.List[int]],
+        channels: t.List[str],
     ) -> t.Tuple[t.Union[t.Tuple[float], t.Tuple[t.Tuple[int]]]]:
         """
         Apply a cell function to all cells at all traps for one time point.
@@ -334,6 +335,8 @@ class Extractor(StepABC):
         cell_labels: dict
             A dict with trap_ids as keys and a list of cell labels as
             values.
+        channels: list of str
+            A list of the channels corresponding to the data in traps.
 
         Returns
         -------
@@ -352,7 +355,7 @@ class Extractor(StepABC):
             # ignore empty traps
             if len(mask_set):
                 # find property from the tile
-                result = self.all_funs[cell_function](mask_set, trap)
+                result = self.all_funs[cell_function](mask_set, trap, channels)
                 if cell_fun:
                     # store results for each cell separately
                     for cell_label, val in zip(local_cell_labels, result):
@@ -370,6 +373,7 @@ class Extractor(StepABC):
         tiles: t.List[np.array],
         masks: t.List[np.array],
         cell_funs: t.List[str],
+        channels: t.List[str],
         **kwargs,
     ) -> t.Dict[str, pd.Series]:
         """
@@ -379,7 +383,11 @@ class Extractor(StepABC):
         """
         d = {
             cell_fun: self.apply_cell_function(
-                traps=tiles, masks=masks, cell_function=cell_fun, **kwargs
+                traps=tiles,
+                masks=masks,
+                cell_function=cell_fun,
+                channels=channels,
+                **kwargs,
             )
             for cell_fun in cell_funs
         }
@@ -390,6 +398,7 @@ class Extractor(StepABC):
         tiles: np.ndarray,
         masks: t.List[np.ndarray],
         reduction_cell_funs: t.Dict[reduction_method, t.Collection[str]],
+        channels: t.List[str],
         **kwargs,
     ) -> t.Dict[str, t.Dict[reduction_method, t.Dict[str, pd.Series]]]:
         """
@@ -406,6 +415,8 @@ class Extractor(StepABC):
             keys are reduction functions and values are either a list
             or a set of strings giving the cell functions to apply.
             For example: {'np_max': {'max5px', 'mean', 'median'}}
+        channels: list of str
+            A list comprising the channel corresponding to the data in tiles.
         **kwargs: dict
             All other arguments passed to Extractor.apply_cell_funs.
 
@@ -430,6 +441,7 @@ class Extractor(StepABC):
                 tiles=reduced_tiles.get(reduction, [None for _ in masks]),
                 masks=masks,
                 cell_funs=cell_funs,
+                channels=channels,
                 **kwargs,
             )
             for reduction, cell_funs in reduction_cell_funs.items()
@@ -534,6 +546,7 @@ class Extractor(StepABC):
                 masks=masks,
                 reduction_cell_funs=reduction_cell_funs,
                 cell_labels=cell_labels,
+                channels=[ch],
                 **kwargs,
             )
             if ch != "general":
@@ -543,13 +556,14 @@ class Extractor(StepABC):
                     masks=masks,
                     reduction_cell_funs=reduction_cell_funs,
                     cell_labels=cell_labels,
+                    channels=[ch],
                     **kwargs,
                 )
         return d
 
     def extract_multiple_channels(self, cell_labels, img, img_bgsub, masks):
         """
-        Extract as a dict all metrics requiring multiple channels.
+        Extract as a dict all metrics requiring multiple channels
 
         Include 'Brightfield'.
 
@@ -600,6 +614,7 @@ class Extractor(StepABC):
                         masks,
                         multichannel_function,
                         cell_labels,
+                        channels,
                     )
         return d
 

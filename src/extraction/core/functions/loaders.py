@@ -78,10 +78,16 @@ def load_cellfuns():
                 args = getfullargspec(f).args
                 if len(args) == 1:
                     # function that applies f to m, an array of masks
-                    return lambda m, _: trap_apply(f, m)
+                    return lambda m, _, __: trap_apply(f, m)
+                elif len(args) == 2:
+                    # function that applies f to m and img, the fluorescence images
+                    return lambda m, img, _: trap_apply(f, m, img)
                 else:
-                    # function that applies f to m and img, the trap_image
-                    return lambda m, img: trap_apply(f, m, img)
+                    # function that applies f to m and img, the fluorescnce images,
+                    # and channels - for mulitchannel functions
+                    return lambda m, img, channels: trap_apply(
+                        f, m, img, channels
+                    )
 
             CELL_FUNS[f_name] = tmp(f)
     return CELL_FUNS

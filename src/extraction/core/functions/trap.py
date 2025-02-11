@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def imBackground(cell_masks, trap_image):
+def imBackground(cell_masks, trap_image, channels=None):
     """
     Find the median background (pixels not comprising cells) from trap_image.
 
@@ -23,7 +23,7 @@ def imBackground(cell_masks, trap_image):
     return np.median(trap_image[np.where(background)])
 
 
-def background_max5(cell_masks, trap_image):
+def background_max5(cell_masks, trap_image, channels=None):
     """
     Finds the mean of the maximum five pixels of the background.
 

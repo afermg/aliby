@@ -12,7 +12,6 @@ We use the module bottleneck when it performs faster than numpy:
 - values containing NaNs (but we make sure this never happens).
 """
 
-import math
 import typing as t
 
 import bottleneck as bn
@@ -207,7 +206,7 @@ def spherical_volume(cell_mask):
         Segmentation mask for the cell
     """
     total_area = area(cell_mask)
-    r = math.sqrt(total_area / np.pi)
+    r = np.sqrt(total_area / np.pi)
     return (4 * np.pi * r**3) / 3
 
 
@@ -305,25 +304,30 @@ def centroid_y(cell_mask):
 ###
 
 
-def ratio(cell_mask, trap_image):
+def ratio(cell_mask, trap_image, channels):
     """Find the median ratio between two fluorescence channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
-        fl_0 = trap_image[..., 0][cell_mask]
-        fl_1 = trap_image[..., 1][cell_mask]
-        if np.any(fl_1 == 0):
+        img = {}
+        for i, ch in enumerate(channels):
+            img[ch] = trap_image[..., i][cell_mask]
+        if np.any(img["mCherry"] == 0):
             div = np.nan
         else:
-            div = np.median(fl_0 / fl_1)
+            div = np.median(img["Flavin"] / img["mCherry"])
     else:
         div = np.nan
     return div
 
 
-def test_nn(cell_mask, trap_image):
+def test_nn(cell_mask, trap_image, channels):
+    fl = [ch for ch in channels if ch != "Brightfield"][0]
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
         img = {}
-        for i, ch in enumerate(["bf", "fl"]):
+        for i, ch in enumerate(channels):
             img[ch] = np.zeros(cell_mask.shape)
             img[ch][cell_mask] = trap_image[..., i][cell_mask]
+        X = np.stack([img["Brightfield"], img[fl]])
+        X = X[np.newaxis, :]
+        return X
     else:
         return np.nan
