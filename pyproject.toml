@@ -33,13 +33,16 @@ tqdm = ">=4.62.3"
 xmltodict = ">=0.13.0"
 zarr = ">=2.14.0"
 
+[tool.poetry.group.omero]
+optional = true
+[tool.poetry.group.omero.dependencies]
+omero-py = ">=5.6.2"
+
+[tool.poetry.group.baby]
+optional = true
+[tool.poetry.group.baby.dependencies]
 tensorflow = "2.13.1"
 baby-seg = ">=0.30.6"
-
-omero-py = { version = ">=5.6.2", optional = true }
-
-[tool.poetry.extras]
-omero = ["omero-py"]
 
 [tool.black]
 line-length = 79
