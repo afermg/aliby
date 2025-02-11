@@ -29,7 +29,7 @@ conda activate alibylite
 - Git clone alibylite, change to the alibylite directory with the poetry.lock file, and use poetry to install:
 
 ```bash 
-poetry install
+poetry install --with baby
  ```
 
 - Git clone wela, change to the wela directory with the poetry.lock file, and use poetry to install:
@@ -56,7 +56,7 @@ conda install omero-py
  For everything else, use:
 
  ```bash 
-poetry install --all-extras
+poetry install --with omero
  ```
 
 - You may have an issue with Matplotlib crashing.
