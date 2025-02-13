@@ -1,11 +1,13 @@
 """
+CURRENT TASK 2025/02: Run the whole examples. Double-check that the cellpose pipeline is still working.
+
 Run Swain Lab experiments with new pipeline.
 
 Process:
 1. List dataset
 2. Select and instance Image
 3. Process in a similar way to
-/home/amunoz/projects/gsk-ia/scripts/2024_08_21_get_full_morphological_profiles.py
+/home/amunoz/projects/gsk-ia/scripts/2024_08_21_get_fully_morphological_profiles.py
 
 4. Test in multiple cases
 - Ura9 (GFP only)
@@ -21,13 +23,16 @@ from time import perf_counter
 from pathos.multiprocessing import Pool
 
 from aliby.io.dataset import DatasetDir
-from aliby.pipe import run_pipeline
+from aliby.pipe import run_pipeline_save
 
 # Variables
-path = Path("/datastore/alan/aliby/flavin_htb2_pyruvate_20gpL_01_00/")
+# path = Path("/datastore/alan/aliby/flavin_htb2_pyruvate_20gpL_01_00/")
+path = Path("/datastore/alan/aliby/PDR5_GFP_100ugml_flc_25hr_00/")
 out_dir = Path(f"/datastore/alan/swainlab/results/{path.stem}")
 regex = ".+\/(.+)\/.*([0-9]{6})_(\S+)_([0-9]{3}).tif"
 capture_order = "FTCZ"
+
+ntps = 3
 assert Path(path).exists(), "Folder does not exist"
 
 # Load dataset from a regular expression
@@ -38,7 +43,7 @@ base_pipeline = dict(
                 regex=regex,
                 capture_order=capture_order,
             ),
-            tile_size=None,
+            tile_size=117,
             ref_channel=0,
             ref_z=0,
         ),
@@ -53,7 +58,7 @@ base_pipeline = dict(
             ),
             img_channel=0,
         ),
-        track=dict(kind="stitch"),
+        track=dict(kind="baby"),
         extract=dict(
             channels=(1, 2),
             tree={
@@ -113,7 +118,7 @@ base_pipeline = dict(
         ),
     ),
     passed_data=dict(  # A=-> [(B,C,D)] where A receives variable B (or field D) from C.
-        track=[("masks", "segment"), ("track_info", "track")],
+        # track=[("masks", "segment"), ("track_info", "track")],
         extract=[("cell_labels", "track"), ("masks", "segment")],
     ),
     # key -> (step, method, parameter (from key))
@@ -134,33 +139,15 @@ dif = DatasetDir(
 fov_to_files = dif.get_position_ids(regex, capture_order)
 
 
-def run_pipeline_save(base_pipeline: dict, wc: str, out_file: str | Path, ntps=1):
-    print(f"Running {out_file}")
-
-    result = None
-    if not Path(out_file).exists():
-        # try:
-        result = run_pipeline(base_pipeline, wc, ntps=20)
-        out_dir = Path(out_file).parent
-        if not out_dir.exists():  # Only create a dir after we have files to save
-            out_dir.mkdir(parents=True, exist_ok=True)
-        result.write_parquet(out_file)
-        # except Exception as e:
-        #     print(e)
-        #     with open("logfile.txt", "a") as f:
-        #         f.write(f"{out_file} failed:{e}\n")
-    return result
-
-
 t0 = perf_counter()
-if True:  # Threaded or not, non-threaded is for easy debug
+if False:  # Threaded or not, non-threaded is for easy debug
     results = []
     for well_site, wc in list(fov_to_files.items())[:2]:
         result = run_pipeline_save(
             base_pipeline=base_pipeline,
             wc=wc,
             out_file=out_dir / f"{'_'.join(well_site)}.parquet",
-            ntps=1,
+            ntps=ntps,
         )
         print(f"Result: {result}")
         results.append(result)

@@ -168,7 +168,9 @@ class BabyRunner(StepABC):
             assign_mothers=assign_mothers,
             **kwargs,
         )
-        return format_segmentation(segmentation, tp)
+        formatted_segmentation = format_segmentation(segmentation, tp)
+
+        return formatted_segmentation
 
 
 def choose_model_from_params(

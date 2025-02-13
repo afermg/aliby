@@ -6,6 +6,7 @@ New and simpler pipeline that uses dictionaries as parameters and to define vari
 
 from copy import copy
 from itertools import cycle
+from pathlib import Path
 
 import pandas as pd
 import polars as pl
@@ -39,7 +40,9 @@ def init_step(
                 "tiler": other_steps["tile"],  # Necessary for BABY
             })
         case "track":
-            step = dispatch_tracker(**parameters)
+            step = dispatch_tracker(
+                **parameters, crawler=other_steps["segment"].crawler
+            )
         case "extract":
             tiler = other_steps["tile"]
             step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
@@ -82,7 +85,8 @@ def pipeline_step(
         # Pass input data if available
         this_step_receives = pipeline["passed_data"].get(step_name, {})
         passed_data = {
-            kwd: state["data"].get(from_step) for kwd, from_step in this_step_receives
+            kwd: state["data"].get(from_step, [])[-1]
+            for kwd, from_step in this_step_receives
         }
 
         # Run step
@@ -190,3 +194,21 @@ def label_and_concat_extraction(
     extracted_dataset = pl.concat(datasets)
     # TODO check if we want to remove the trap column
     return extracted_dataset.select()
+
+
+def run_pipeline_save(base_pipeline: dict, wc: str, out_file: str | Path, ntps=1):
+    print(f"Running {out_file}")
+
+    result = None
+    if not Path(out_file).exists():
+        # try:
+        result = run_pipeline(base_pipeline, wc, ntps=ntps)
+        out_dir = Path(out_file).parent
+        if not out_dir.exists():  # Only create a dir after we have files to save
+            out_dir.mkdir(parents=True, exist_ok=True)
+        result.write_parquet(out_file)
+        # except Exception as e:
+        #     print(e)
+        #     with open("logfile.txt", "a") as f:
+        #         f.write(f"{out_file} failed:{e}\n")
+    return result

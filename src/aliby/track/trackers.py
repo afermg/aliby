@@ -4,8 +4,9 @@ Trackers get a pair of masks as inputs and return a list of labels linking the f
 """
 
 import numpy as np
-from agora.utils.masks import labels_from_masks, transform_2d_to_3d
 from cellpose.utils import stitch3D
+
+from agora.utils.masks import labels_from_masks, transform_2d_to_3d
 
 
 def stitch_rois(
@@ -66,3 +67,7 @@ def update_labels(masks: np.ndarray, prev_labels: list[int] = []) -> np.ndarray:
         updated_labels = (np.moveaxis(masks_3d, 0, -1) * prev_labels).max(axis=-1)
 
     return updated_labels
+
+
+def get_baby_labels():
+    pass

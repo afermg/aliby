@@ -11,8 +11,11 @@ import numpy as np
 def dispatch_segmenter(kind: str, **kwargs) -> callable:
     match kind:
         case "baby":
+            import itertools
             import logging
             import os
+
+            from scipy.ndimage import binary_fill_holes
 
             from aliby.baby_client import BabyParameters, BabyRunner
 
@@ -28,9 +31,32 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             baby_kwargs = {k: v for k, v in kwargs.items() if k != "tiler"}
             segment = segmenter_cls.from_tiler(
                 segmenter_params.default(**baby_kwargs),
-                # How do we pass a tiler if it's not instanced yet?
                 tiler=tiler,
             )
+
+            # Monkey patch segmentation class so this returns masks only
+            # https://github.com/julianpietsch/baby/issues/5
+
+            def wrap_segmentation(tp, *args, **kwargs):
+                segmentation = segment._run_tp(tp, *args, **kwargs)
+                # refill edgemasks
+                masks = [binary_fill_holes(x) for x in segmentation["edgemasks"]]
+                # group by tile to match extractor input
+                masks_by_tile = {
+                    x[0]: np.stack([y[1] for y in x[1]])
+                    for x in itertools.groupby(
+                        zip(segmentation["trap"], masks), lambda x: x[0]
+                    )
+                }
+                return [
+                    masks_by_tile.get(i, np.array([]))
+                    for i in range(len(segment.tiler.tile_locs))
+                ]
+
+            segment.run_tp = wrap_segmentation
+
+            return segment
+
         case _:  # One of the cellpose models
             # cellpose does without all the ABC stuff
             # It returns a function to segment
@@ -56,8 +82,6 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                 # TODO Check that this is the best way to project 3-D labels into 2D
                 result = [result.max(axis=0)]
                 return result
-
-            return segment
 
     return segment
 

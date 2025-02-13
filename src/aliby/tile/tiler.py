@@ -227,9 +227,9 @@ class Tiler(StepABC):
         for tile in self.tile_locs:
             if drift:
                 # pad tile if necessary
-                full = if_out_of_bounds_pad(full, tile.as_range(tp))
+                tiled_pixels = if_out_of_bounds_pad(full, tile.as_range(tp))
 
-            tiles.append(full)
+            tiles.append(tiled_pixels)
         return np.stack(tiles)
 
     def get_tile_data(self, tile_id: int, tp: int, c: int) -> np.ndarray:
