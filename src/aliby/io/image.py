@@ -7,9 +7,9 @@ also contains image properties such as name and metadata.  Pixels from images
 are stored in dask arrays; the standard way is to store them in 5-dimensional
 arrays: T(ime point), C(channel), Z(-stack), Y, X.
 
-This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
-handles local OMERO images.  ImageDir handles cases in which images are split
-into directories, with each time point and channel having its own image file.
+This module consists of a base Image class (BaseLocalImage). ImageDir
+handles cases in which images are split into directories,
+with each time point and channel having its own image file.
 ImageDummy is a dummy class for silent failure testing.
 """
 
@@ -17,7 +17,6 @@ import hashlib
 import re
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import datetime
 from functools import cached_property
 from glob import glob
 from pathlib import Path
@@ -26,11 +25,10 @@ import dask
 import dask.array as da
 import imageio
 import numpy as np
-import xmltodict
 import zarr
-from agora.io.metadata import parse_metadata
 from dask.array.image import imread
-from tifffile import TiffFile
+
+# from tifffile import TiffFile
 
 
 def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwargs):
@@ -53,49 +51,28 @@ def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwarg
 
 def dispatch_image(source: str or int or dict[str, str] or Path):
     """Pick the appropriate Image class for the source of data."""
+    img_type = None
     if isinstance(source, int):
         from aliby.io.omero import Image
 
         img_type = Image
-    else:  # Local files
+    elif isinstance(source, (list, tuple)):  # Local files
+        img_type = ImageList
+    else:
         match Path(source):
+            case s if "*" in str(s):  # Wildcard
+                img_type = ImageList
+            case s if s.suffix == ".zarr":
+                img_type = ImageZarr
             case s if s.is_dir() and s.exists():
                 img_type = ImageDir
-            case s if s.suffix(".zarr"):
-                img_type = ImageZarr
-            case s if s.is_file() and s.exists():
-                img_type = ImageLocalOME
-            case _:
-                raise ("Invalid data type")
-
     return img_type
-
-    # if isinstance(source, (int, np.int64)):
-    #     # requires omero module
-    #     from aliby.io.omero import Image
-
-    #     instantiator = Image
-    # elif isinstance(source, dict):
-    #         instantiator = ImageDir
-    # elif isinstance(source, ):
-    #     or (
-    #     (source_path := Path(source)).is_dir() and source_path.exists()
-    # ):
-    #     # zarr files are considered directories
-    #     if source_path.suffix == ".zarr":
-    #         instantiator = ImageZarr
-    #     else:
-    # elif isinstance(source, (str, Path)) and Path(source).is_file():
-    #     instantiator = ImageLocalOME
-    # elif isinstance(source, str) and not Path(source).is_file():
-    #     instantiator = ImageIndFiles
-    # else:
-    #     raise Exception(f"Invalid data source at {source}")
-    # return instantiator
 
 
 def files_to_image_sizes(path: Path, suffix="tiff"):
-    """Deduce image sizes from the naming convention of tiff files."""
+    """
+    Deduce image sizes from the naming convention of tiff files.
+    """
     filenames = list(path.glob(f"*.{suffix}"))
     try:
         # deduce order from filenames
@@ -111,7 +88,7 @@ def files_to_image_sizes(path: Path, suffix="tiff"):
         dim_shapes = [max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)]
         meta = {"size_" + dim: shape for dim, shape in zip(dimorder, dim_shapes)}
     except Exception as e:
-        print("Warning: files_to_image_sizes failed." f"\nError: {e}")
+        print(f"Warning: files_to_image_sizes failed.\nError: {e}")
         meta = {}
     return meta
 
@@ -165,11 +142,14 @@ class BaseLocalImage(ABC):
 
     def set_meta(self):
         """Load metadata using parser dispatch."""
-        parsed_meta = parse_metadata(self.path)
-        if parsed_meta is None:
+        from agora.io.metadata import parse_microscopy_logs
+
+        logs_metadata = parse_microscopy_logs(self.path)
+        if logs_metadata is None:
             # try to deduce metadata
-            parsed_meta = files_to_image_sizes(self.path)
-        self.meta = parsed_meta
+            self.meta = files_to_image_sizes(self.path)
+        else:
+            self.meta = logs_metadata
 
     @abstractmethod
     def get_data_lazy(self) -> da.Array:
@@ -187,99 +167,7 @@ class BaseLocalImage(ABC):
         pass
 
 
-class ImageLocalOME(BaseLocalImage):
-    """
-    Local OMERO Image class.
-
-    This is a derivative Image class. It fetches an image from OMEXML data format,
-    in which a multidimensional tiff image contains the metadata.
-    """
-
-    def __init__(self, path: str, dimorder=None, **kwargs):
-        """Initialise using file name."""
-        super().__init__(path)
-        self._id = str(path)
-        self.set_meta(str(path))
-
-    def set_meta(self, path):
-        """Get metadata from the associated tiff file."""
-        meta = dict()
-        try:
-            with TiffFile(path) as f:
-                self.meta = xmltodict.parse(f.ome_metadata)["OME"]
-            for dim in self.dimorder:
-                meta["size_" + dim.lower()] = int(
-                    self.meta["Image"]["Pixels"]["@Size" + dim]
-                )
-                meta["channels"] = [
-                    x["@Name"] for x in self.meta["Image"]["Pixels"]["Channel"]
-                ]
-                meta["name"] = self.meta["Image"]["@Name"]
-                meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
-        except Exception as e:
-            # images not in OMEXML
-            print("Warning:Metadata not found: {}".format(e))
-            print(
-                "Warning: No dimensional info provided. "
-                f"Assuming {self.default_dimorder}"
-            )
-            # mark non-existent dimensions for padding
-            self.base = self.default_dimorder
-            self.dimorder = self.base
-            self.meta = meta
-
-    @property
-    def name(self):
-        return self.meta["name"]
-
-    @property
-    def date(self):
-        date_str = [
-            x
-            for x in self.meta["StructuredAnnotations"]["TagAnnotation"]
-            if x["Description"] == "Date"
-        ][0]["Value"]
-        return datetime.strptime(date_str, "%d-%b-%Y")
-
-    @property
-    def dimorder(self):
-        """Return order of dimensions in the image."""
-        if not hasattr(self, "dimorder"):
-            self.dimorder = self.meta["Image"]["Pixels"]["@DimensionOrder"]
-        return self.dimorder
-
-    @dimorder.setter
-    def dimorder(self, order: str):
-        self.dimorder = order
-        return self.dimorder
-
-    def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array via lazy-loading of tiff files."""
-        if not hasattr(self, "formatted_img"):
-            if not hasattr(self, "ids"):
-                # standard order of image dimensions
-                img = (imread(str(self.path))[0],)
-            else:
-                # bespoke order, so rearrange axes for compatibility
-                img = imread(str(self.path))[0]
-                for i, d in enumerate(self.dimorder):
-                    self.meta["size_" + d.lower()] = img.shape[i]
-                target_order = (
-                    *self.ids,
-                    *[i for i, d in enumerate(self.base) if d not in self.dimorder],
-                )
-                reshaped = da.reshape(
-                    img,
-                    shape=(
-                        *img.shape,
-                        *[1 for _ in range(5 - len(self.dimorder))],
-                    ),
-                )
-                img = da.moveaxis(reshaped, range(len(reshaped.shape)), target_order)
-        return self.rechunk_data(img)
-
-
-class ImageDirLegacy(BaseLocalImage):
+class ImageDir(BaseLocalImage):
     """
     Standard image class for tiff files.
 
@@ -356,9 +244,9 @@ class ImageZarr(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self.meta.update(
-            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
-        )
+        self.meta.update({
+            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
+        })
 
     @property
     def name(self):
@@ -371,51 +259,37 @@ class ImageZarr(BaseLocalImage):
         return "TCZYX"
 
 
-class ImageDir(BaseLocalImage):
+class ImageList(BaseLocalImage):
     """
-    Standard image class for tiff files.
-
-    Image class for the case in which all images are split in one or
-    multiple folders with positions and time-points as independent files.
-    It inherits from BaseLocalImage so we only override methods that are critical.
-    The target use-case of this class is when we create virtual staining channels in
-    independent folders.
-
-    Assumptions:
-    - One folder per channel.
-    - Images are flat.
-    - Position, Time, z-stack and the others are determined by filenames.
-    - Provides Dimorder as it is set in the filenames, or expects order
-
-    There are some peculiarities:
-    path is a wildcard that encodes all the dimensional information.
-    image_id is the hex md5sum for all the images involved.
-    there is an `image_filenames` directory that encodes both
+    Image subclass that uses a wildcard or a (pre-sorted) list of images to associate images to channels. Assumes that every file is a 2-D array and the metadata that pertains to dimensions is encoded
+    in the filename. the metadata must be extracted using regular expressions
     """
 
     def __init__(
         self,
-        wildcard: str,
-        regex: str or None = None,
-        image_filenames: list[str] or None = None,
-        capture_order: str or None = None,
-        dimorder: str or None = None,
+        source: str or tuple[str],
+        regex: str,
+        capture_order: str,
+        dimorder: str or None = None,  # output dimorder
         **kwargs,
     ):
-        """Initialise using a directory and parse the files inside of it using a regex."""
+        """
+        Initialise using a directory and parse the files inside of it using a regex."""
         # super().__init__(img_files)
-        self.path = wildcard
-        # self.meta = filename_to_meta_gsk(self.path)
-        self.regex = regex or self.path.replace("*", "(.*)")
-        self.image_filenames = sorted(
-            image_filenames
-            or tuple(x for x in glob(wildcard) if re.match(self.regex, x))
-        )
+        self.path = source
+        self.regex = regex
+        self.capture_order = capture_order  #  or "CWTFZ"
+        self._dimorder = dimorder or "TCZYX"
+        if isinstance(source, str):  # The source is a wildcard
+            self.image_filenames = sorted(
+                x for x in glob(source) if re.match(self.regex, x)
+            )
+        else:  # The source is a list of images
+            self.image_filenames = source
+
         self.image_id = calculate_checksum(
             self.image_filenames
         )  # checksum of all files
-        self.capture_order = capture_order or "CWTFZ"
-        self._dimorder = dimorder or "TCZYX"
 
     @cached_property
     def meta(self):
@@ -432,28 +306,31 @@ class ImageDir(BaseLocalImage):
             for x in lazy_arrays
         ]
 
-        # This has to be done manually because if we load everything
-        # reshaping fails
-        # FIXME: Temporary workaround, something is off when fetching
-        # large chunks of the data
-        order = tuple(v for k, v in self.dimorder_d.items() if k in self._dimorder)
-        arr = np.empty(
+        order = tuple(self.dimorder_d[k] for k in self.dimorder if k in "TCZ")
+        arr = np.zeros(
             order + (1, 1),
             dtype=object,
         )
         nd_order = np.array(
-            np.where(np.arange(len(lazy_arrays)).reshape(order) + 1)
+            np.where(
+                np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(order) + 1
+            )
         ).transpose()
 
         for i, (d1, d2, d3) in enumerate(nd_order):
-            arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+            if i < len(lazy_arrays):
+                arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+            else:
+                arr[d1, d2, d3, 0, 0] = da.from_delayed(
+                    dask.delayed(np.zeros)(sample.shape),
+                    shape=sample.shape,
+                    dtype=sample.dtype,
+                )
 
-        # convert to TCZ
-        arr = arr.swapaxes(0, 1)
         a = da.block(arr.tolist())
 
-        # rechunk to the last 3 dimensions
-        pixels = da.rechunk(a, (1, 1, 9, 1000, 1000))
+        # rechunk to the last 3 dimensions. Leave time and channel unchunked
+        pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
 
         return pixels
 
@@ -465,15 +342,11 @@ class ImageDir(BaseLocalImage):
     @property
     def dimorder(self):
         # sorted dimorder
-        return [self.dimorder_d[dim] for dim in self._dimorder]
+        return self._dimorder
 
     @cached_property
     def dimorder_d(self):
         return get_dims_from_names(self.image_filenames, self.regex, self.capture_order)
-
-    @cached_property
-    def image_filenames(self):
-        return tuple(glob(self.path))
 
 
 def get_dims_from_names(
@@ -481,6 +354,9 @@ def get_dims_from_names(
     regex: str,
     capture_order: str,
 ) -> dict[str, int]:
+    """
+    Capture order in this context means only the order in which matches occur in a regex.
+    """
     regex_ = re.compile(regex)
     sorted_files = sorted(image_filenames)
     matches = [regex_.match(x).groups() for x in sorted_files]
@@ -489,10 +365,10 @@ def get_dims_from_names(
     }
 
     # Check that the dimensions match the file
-    n = 1
-    for v in dim_size.values():
-        n *= v
-    assert len(image_filenames) == n
+    if len(image_filenames) != np.prod(dim_size.values()):
+        print(
+            "Warning: The number of available images does not match the expected one given the dimensions and their maximum values. Will pad to match."
+        )
 
     return dim_size
 

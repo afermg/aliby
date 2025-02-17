@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from copy import copy
 from pathlib import Path
-from time import perf_counter
 from typing import Union
 
 from flatten_dict import flatten, unflatten
@@ -147,6 +146,8 @@ class ProcessABC(ABC):
 
     def __init__(self, parameters):
         """
+        Initialise by defining parameters as attributes.
+
         Arguments
         ---------
         parameters: instance of ParametersABC
@@ -159,11 +160,8 @@ class ProcessABC(ABC):
 
     @property
     def parameters(self):
+        """Get process's parameters."""
         return self._parameters
-
-    @abstractmethod
-    def run(self):
-        pass
 
     def log(self, message: str, level: str = "warning"):
         """Log messages at the corresponding level."""
@@ -173,8 +171,9 @@ class ProcessABC(ABC):
 
 class StepABC(ProcessABC):
     """
-    Base class that expands on ProcessABC to include tools used by Aliby steps.
-    It adds a setup step, logging and benchmarking for time benchmarks.
+    Base class used for steps in aliby's pipeline.
+
+    Includes a setup step, logging and time benchmarking.
     """
 
     def __init__(self, *args, **kwargs):
@@ -188,7 +187,3 @@ class StepABC(ProcessABC):
     def run_tp(self, tp: int, **kwargs):
         """Time and log the timing of a step."""
         return self._run_tp(tp, **kwargs)
-
-    def run(self):
-        # Replace run with run_tp
-        raise Warning("Steps use run_tp instead of run.")

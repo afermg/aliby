@@ -15,7 +15,6 @@ We use the module bottleneck when it performs faster than numpy:
 import math
 import typing as t
 
-import bottleneck as bn
 import numpy as np
 from scipy import ndimage
 
@@ -58,6 +57,36 @@ def mean(cell_mask, trap_image) -> float:
     return np.mean(trap_image[cell_mask])
 
 
+def total(cell_mask, trap_image) -> float:
+    """
+    Find the sum of the pixels in the cell.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    trap_image: 2d array
+    """
+    return np.sum(trap_image[cell_mask])
+
+
+def total_squared(cell_mask, trap_image) -> float:
+    """
+    WARNING: produces overflow error when converted to float16
+
+    Find the sum of the square of the pixels in the cell.
+
+    For finding variances.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    trap_image: 2d array
+    """
+    return np.sum(trap_image[cell_mask] ** 2)
+
+
 def median(cell_mask, trap_image) -> int:
     """
     Find the median of the pixels in the cell.
@@ -68,7 +97,7 @@ def median(cell_mask, trap_image) -> int:
          Segmentation mask for the cell.
     trap_image: 2d array
     """
-    return bn.median(trap_image[cell_mask])
+    return np.median(trap_image[cell_mask])
 
 
 def max2p5pc(cell_mask, trap_image) -> float:
@@ -86,7 +115,7 @@ def max2p5pc(cell_mask, trap_image) -> float:
     n_top = int(np.ceil(npixels * 0.025))
     # sort pixels in cell and find highest 2.5%
     pixels = trap_image[cell_mask]
-    top_values = bn.partition(pixels, len(pixels) - n_top)[-n_top:]
+    top_values = np.partition(pixels, len(pixels) - n_top)[-n_top:]
     # find mean of these highest pixels
     return np.mean(top_values)
 
@@ -107,7 +136,7 @@ def max5px_median(cell_mask, trap_image) -> float:
     # sort pixels in cell
     pixels = trap_image[cell_mask]
     if len(pixels) > 5:
-        top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
+        top_values = np.partition(pixels, len(pixels) - 5)[-5:]
         # find mean of five brightest pixels
         max5px = np.mean(top_values)
         med = np.median(pixels)

@@ -4,12 +4,12 @@ The microscope visits multiple positions during an experiment. Each position may
 
 We divide all images into *tiles*, one per trap. Baby determines masks, mother-bud pairs, and tracking for each tile. We obtain data on individual cells first for each tile and then for each position for all time points: *cells* and *signal* provide this information for a position; *grouper* concatenates over all positions.
 
-All global parameters, such as possible fluorescence channels and pixel sizes, are stored in *global_parameters*.
+All global parameters, such as possible fluorescence channels and pixel sizes, are stored in *global_settings*.
 
 * aliby/pipeline
 Runs the *tiler*, *baby*, and *extraction* steps of the pipeline, and then *postprocessing*.
 The *run* function loops through positions, calling *run_one_position*, which loops through time points.
-For each time point, each step of the pipeline has a *_run_tp* function, which StepABC renames to *run_tp*, to process one time point for a position.
+For each time point, each step of the pipeline has a *_run_tp* function, which StepABC renames to *run_tp* and wraps in a timer function, to process one time point for a position.
 Extractor does not have an independent writer, but writes to the h5 file in *_run_tp*.
 
 * aliby/tile/tiler
@@ -39,18 +39,22 @@ Defines more complex functions to apply to cells, such as *nuc_est_conv*, which 
 * agora/bridge
 Interfaces with h5 files.
 * agora/cells
-Accesses information on cells and masks in tiles from an h5 file.
+A class for accessing information on cells and masks for tiles from an h5 file. Attributes are only created when you request particular data.
 * agora/signal
+Signal is only used during postprocessing.
+
 Gets extracted properties, such as median fluorescence, for all cells and all time points from an h5 file - data for one position.
+
+Defines the time variable from integer-labelled columns.
 
 Signal applies picking and merging of cells using the choices made by *picker* and *merger*. *get_raw* gets the data from the h5 file without any picking and merging.
 
-* postprocessor/core/processor
+* postprocessor/core/postprocessing
 For one position, the *run* function performs picking, of appropriate cells, and merging, of tracklets, via *run_prepost* and then runs processes, such as the *buddings* and *bud_metric* functions, on signals, such as *volume*, to get new signals, such as *buddings* and *bud_volume*.
 
 *run_process* writes the results to an h5 file.
 
-The class *PostProcessorParameters* lists the standard processes we perform, such as running *buddings* and *bud_metric* on *area*.
+The class *PostProcessorParameters* lists the obligatory processes we perform, such as running *buddings* and *bud_metric* on *area*.
 
 * postprocessor/core/reshapers/picker
 Selects cells from a Signal for which there is lineage information and by how long they remain in the experiment, writing the choices to the h5 file.

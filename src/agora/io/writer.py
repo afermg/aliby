@@ -1,16 +1,18 @@
+"""Writer for Extractor and Postprocessor."""
+
 import logging
 from collections.abc import Iterable
 from pathlib import Path
-from time import perf_counter
 from typing import Dict
 
 import h5py
 import numpy as np
 import pandas as pd
 import yaml
-from utils_find_1st import cmp_equal, find_1st
 
+import aliby.global_settings as global_settings
 from agora.io.bridge import BridgeH5
+from agora.utils.indexing import find_1st_equal
 
 #################### Dynamic version ##################################
 
@@ -76,9 +78,7 @@ class DynamicWriter:
         try:
             n = len(data)
         except Exception as e:
-            logging.debug(
-                "DynamicWriter: Attributes have no length: {}".format(e)
-            )
+            logging.debug("DynamicWriter: Attributes have no length: {}".format(e))
             n = 1
         if key in hgroup:
             # append to existing dataset
@@ -105,9 +105,7 @@ class DynamicWriter:
                 dtype=dtype,
                 compression=self.compression,
                 compression_opts=(
-                    self.compression_opts
-                    if self.compression is not None
-                    else None
+                    self.compression_opts if self.compression is not None else None
                 ),
             )
             # write all data, signified by the empty tuple
@@ -176,9 +174,7 @@ class DynamicWriter:
                             # append or create new dataset
                             self._append(value, key, hgroup)
                     except Exception as e:
-                        self.log(
-                            f"{key}:{value} could not be written: {e}", "error"
-                        )
+                        self.log(f"{key}:{value} could not be written: {e}", "error")
             # write metadata
             for key, value in meta.items():
                 hgroup.attrs[key] = value
@@ -250,9 +246,7 @@ class LinearBabyWriter(DynamicWriter):
     }
     group = "cell_info"
 
-    def write(
-        self, data: dict, overwrite: list, tp: int = None, meta: dict = {}
-    ):
+    def write(self, data: dict, overwrite: list, tp: int = None, meta: dict = {}):
         """
         Check data does not exist before writing.
 
@@ -334,21 +328,17 @@ class StateWriter(DynamicWriter):
             tp_back, trap, value = zip(*lbl_tuples)
         else:
             # set as empty lists
-            tp_back, trap, value = [
-                [[] for _ in states[0][val_name]] for _ in range(3)
-            ]
+            tp_back, trap, value = [[[] for _ in states[0][val_name]] for _ in range(3)]
         return tp_back, trap, value
 
     @staticmethod
     def format_values_traps(states: list, val_name: str):
         """Format either lifetime, p_was_bud, or p_is_mother variables as a list."""
-        formatted = np.array(
-            [
-                (trap, clabel_val)
-                for trap, state in enumerate(states)
-                for clabel_val in state[val_name]
-            ]
-        )
+        formatted = np.array([
+            (trap, clabel_val)
+            for trap, state in enumerate(states)
+            for clabel_val in state[val_name]
+        ])
         return formatted
 
     @staticmethod
@@ -362,9 +352,7 @@ class StateWriter(DynamicWriter):
     def format_states(self, states: list):
         """Re-format state data into a dict of lists, with one element per per list per state."""
         formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
-        tp_back, trap, cell_label = self.format_values_tpback(
-            states, "cell_lbls"
-        )
+        tp_back, trap, cell_label = self.format_values_tpback(states, "cell_lbls")
         _, _, prev_feats = self.format_values_tpback(states, "prev_feats")
         # store lists in a dict
         formatted_state["tp_back"] = tp_back
@@ -373,16 +361,11 @@ class StateWriter(DynamicWriter):
         formatted_state["prev_feats"] = np.array(prev_feats)
         # one entry per cell label - tp_back independent
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
-            formatted_state[val_name] = self.format_values_traps(
-                states, val_name
-            )
+            formatted_state[val_name] = self.format_values_traps(states, val_name)
         bacum_max = max([len(state["ba_cum"]) for state in states])
-        formatted_state["ba_cum"] = np.array(
-            [
-                self.pad_if_needed(state["ba_cum"], bacum_max)
-                for state in states
-            ]
-        )
+        formatted_state["ba_cum"] = np.array([
+            self.pad_if_needed(state["ba_cum"], bacum_max) for state in states
+        ])
         return formatted_state
 
     def write(self, data: dict, overwrite: list, tp: int = 0):
@@ -414,7 +397,9 @@ class StateWriter(DynamicWriter):
 class Writer(BridgeH5):
     """
     Class to transform data into compatible structures.
-    Used by Extractor and Postprocessor within the pipeline."""
+
+    Use with Extractor and Postprocessor.
+    """
 
     def __init__(self, filename, flag=None, compression="gzip"):
         """
@@ -425,9 +410,11 @@ class Writer(BridgeH5):
         filename: str
             Name of file to write into
         flag: str, default=None
-            Flag to pass to the default file reader. If None the file remains closed.
+            Flag to pass to the default file reader.
+            If None the file remains closed.
         compression: str, default="gzip"
-            Compression method passed on to h5py writing functions (only used for dataframes and other array-like data).
+            Compression method passed on to h5py writing functions
+            (only used for dataframes and other array-like data).
         """
         super().__init__(filename, flag=flag)
         self.compression = compression
@@ -439,26 +426,14 @@ class Writer(BridgeH5):
         meta: dict = {},
         overwrite: str = None,
     ):
-        """
-        Write data and metadata to a particular path in the h5 file.
-
-        Parameters
-        ----------
-        path : str
-            Path inside h5 file into which to write.
-        data : Iterable, optional
-        meta : dict, optional
-        overwrite: str, optional
-        """
+        """Write data and metadata to a path in the h5 file."""
         self.id_cache = {}
         with h5py.File(self.filename, "a") as f:
             if overwrite == "overwrite":  # TODO refactor overwriting
                 if path in f:
                     del f[path]
             logging.debug(
-                "{} {} to {} and {} metadata fields".format(
-                    overwrite, type(data), path, len(meta)
-                )
+                f"{overwrite} {type(data)} to {path} and {len(meta)} metadata fields."
             )
             # write data
             if data is not None:
@@ -469,18 +444,18 @@ class Writer(BridgeH5):
                     self.write_meta(f, path, attr, data=metadata)
 
     def write_dset(self, f: h5py.File, path: str, data: Iterable):
-        """Write data in different ways depending on its type to an open h5 file."""
+        """Write data to the h5 file."""
         # data is a datafram
         if isinstance(data, pd.DataFrame):
-            self.write_pd(f, path, data, compression=self.compression)
+            self.write_dataframe(f, path, data, compression=self.compression)
         # data is a multi-index dataframe
         elif isinstance(data, pd.MultiIndex):
             # TODO: benchmark I/O speed when using compression
             self.write_index(f, path, data)  # , compression=self.compression)
         # data is a dictionary of dataframes
-        elif isinstance(data, Dict) and np.all(
-            [isinstance(x, pd.DataFrame) for x in data.values]
-        ):
+        elif isinstance(data, Dict) and np.all([
+            isinstance(x, pd.DataFrame) for x in data.values
+        ]):
             for k, df in data.items():
                 self.write_dset(f, path + f"/{k}", df)
         # data is an iterable
@@ -537,31 +512,25 @@ class Writer(BridgeH5):
             indices = f[id_path]
             indices[()] = ids
 
-    def write_pd(self, f, path, df, **kwargs):
+    def write_dataframe(self, f, path, df, **kwargs):
         """Write a dataframe."""
-        values_path = (
-            path + "values" if path.endswith("/") else path + "/values"
-        )
+        values_path = path + "values" if path.endswith("/") else path + "/values"
         if path not in f:
             # create dataset and write data
-            max_ncells = 2e5
-            max_tps = 1e3
+            max_ncells = global_settings.h5_max_ncells
+            max_tps = global_settings.h5_max_tps
             f.create_dataset(
                 name=values_path,
                 shape=df.shape,
-                # chunks=(min(df.shape[0], 1), df.shape[1]),
-                # dtype=df.dtypes.iloc[0], This is making NaN in ints into negative vals
                 dtype="float",
                 maxshape=(max_ncells, max_tps),
                 compression=kwargs.get("compression", None),
             )
             dset = f[values_path]
             dset[()] = df.values.astype("float16")
-
             # create dateset and write indices
-            if not len(df):  # Only write more if not empty
+            if not len(df):
                 return None
-
             for name in df.index.names:
                 indices_path = "/".join((path, name))
                 f.create_dataset(
@@ -573,7 +542,6 @@ class Writer(BridgeH5):
                 )
                 dset = f[indices_path]
                 dset[()] = df.index.get_level_values(level=name).tolist()
-
                 # create dataset and write time points as columns
                 tp_path = path + "/timepoint"
                 if tp_path not in f:
@@ -590,17 +558,12 @@ class Writer(BridgeH5):
         else:
             # path exists
             dset = f[values_path]
-
             # filter out repeated timepoints
             new_tps = set(df.columns)
             if path + "/timepoint" in f:
                 new_tps = new_tps.difference(f[path + "/timepoint"][()])
             df = df[list(new_tps)]
-
-            if (
-                not hasattr(self, "id_cache")
-                or df.index.nlevels not in self.id_cache
-            ):
+            if not hasattr(self, "id_cache") or df.index.nlevels not in self.id_cache:
                 # use cache dict to store previously obtained indices
                 self.id_cache[df.index.nlevels] = {}
                 existing_ids = self.get_existing_ids(
@@ -618,60 +581,45 @@ class Writer(BridgeH5):
                     existing=existing_ids,
                     new=new,
                 )
-                found_indices = np.array(
-                    locate_indices(existing_ids, found_multis)
-                )
-
+                found_indices = np.array(locate_indices(existing_ids, found_multis))
                 # sort indices for h5 indexing
                 incremental_existing = np.argsort(found_indices)
-                self.id_cache[df.index.nlevels]["found_indices"] = (
-                    found_indices[incremental_existing]
-                )
+                self.id_cache[df.index.nlevels]["found_indices"] = found_indices[
+                    incremental_existing
+                ]
                 self.id_cache[df.index.nlevels]["found_multi"] = found_multis[
                     incremental_existing
                 ]
-
             existing_values = df.loc[
                 [
-                    _tuple_or_int(x)
+                    tuple_or_int(x)
                     for x in self.id_cache[df.index.nlevels]["found_multi"]
                 ]
             ].values
             new_values = df.loc[
                 [
-                    _tuple_or_int(x)
-                    for x in self.id_cache[df.index.nlevels][
-                        "additional_multis"
-                    ]
+                    tuple_or_int(x)
+                    for x in self.id_cache[df.index.nlevels]["additional_multis"]
                 ]
             ].values
             ncells, ntps = f[values_path].shape
-
             # add found cells
             dset.resize(dset.shape[1] + df.shape[1], axis=1)
             dset[:, ntps:] = np.nan
-
             # TODO refactor this indices sorting. Could be simpler
-            found_indices_sorted = self.id_cache[df.index.nlevels][
-                "found_indices"
-            ]
-
+            found_indices_sorted = self.id_cache[df.index.nlevels]["found_indices"]
             # case when all labels are new
             if found_indices_sorted.any():
                 # h5py does not allow bidimensional indexing,
-                # so we have to iterate over the columns
+                # so we iterate over the columns
                 for i, tp in enumerate(df.columns):
                     dset[found_indices_sorted, tp] = existing_values[:, i]
             # add new cells
-            n_newcells = len(
-                self.id_cache[df.index.nlevels]["additional_multis"]
-            )
+            n_newcells = len(self.id_cache[df.index.nlevels]["additional_multis"])
             dset.resize(dset.shape[0] + n_newcells, axis=0)
             dset[ncells:, :] = np.nan
-
             for i, tp in enumerate(df.columns):
                 dset[ncells:, tp] = new_values[:, i]
-
             # save indices
             for i, name in enumerate(df.index.names):
                 tmp = path + "/" + name
@@ -680,15 +628,10 @@ class Writer(BridgeH5):
                 dset.resize(n + n_newcells, axis=0)
                 dset[n:] = (
                     self.id_cache[df.index.nlevels]["additional_multis"][:, i]
-                    if len(
-                        self.id_cache[df.index.nlevels][
-                            "additional_multis"
-                        ].shape
-                    )
+                    if len(self.id_cache[df.index.nlevels]["additional_multis"].shape)
                     > 1
                     else self.id_cache[df.index.nlevels]["additional_multis"]
                 )
-
             tmp = path + "/timepoint"
             dset = f[tmp]
             n = dset.shape[0]
@@ -702,7 +645,7 @@ class Writer(BridgeH5):
 
     @staticmethod
     def find_ids(existing, new):
-        """Compare two tuple sets and return the intersection and difference (elements in the 'new' set not in 'existing')."""
+        """Return the intersection and difference of two tuple sets."""
         set_existing = set([tuple(*x) for x in zip(existing.tolist())])
         existing_cells = np.array(list(set_existing.intersection(new)))
         new_cells = np.array(list(set(new).difference(set_existing)))
@@ -710,25 +653,24 @@ class Writer(BridgeH5):
 
 
 def locate_indices(existing, new):
+    """Find new indices in existing ones."""
     if new.any():
         if new.shape[1] > 1:
             return [
-                find_1st(
+                find_1st_equal(
                     (existing[:, 0] == n[0]) & (existing[:, 1] == n[1]),
                     True,
-                    cmp_equal,
+                    # cmp_equal,
                 )
                 for n in new
             ]
         else:
-            return [
-                find_1st(existing[:, 0] == n, True, cmp_equal) for n in new
-            ]
+            return [find_1st_equal(existing[:, 0] == n, True) for n in new]
     else:
         return []
 
 
-def _tuple_or_int(x):
+def tuple_or_int(x):
     """Convert tuple to int if it only contains one value."""
     if len(x) == 1:
         return x[0]

@@ -1,6 +1,6 @@
 import argparse
 
-from aliby.io.image import ImageLocalOME
+from aliby.io.image import ImageDir
 
 # from aliby.experiment import ExperimentLocal
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -26,7 +26,7 @@ def initialise_dummy():
 
 
 def initialise_objects(data_path, template=None):
-    image = ImageLocalOME(data_path)
+    image = ImageDir(data_path)
     tiler = Tiler.from_image(image, TilerParameters.default())
     return tiler
 
@@ -68,9 +68,7 @@ if __name__ == "__main__":
 
     n_traps, n_tps = get_n_traps_timepoints(tiler)
 
-    timelapse = trap_timelapse(
-        tiler, args.trap, args.channel, args.z_positions
-    )
+    timelapse = trap_timelapse(tiler, args.trap, args.channel, args.z_positions)
     traps = timepoint_traps(
         tiler, args.time, args.channel, args.z_positions, args.tile_size
     )

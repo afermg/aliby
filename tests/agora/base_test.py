@@ -2,7 +2,6 @@
 Basic ParametersIO tests
 """
 
-import pytest
 
 from agora.abc import ParametersABC
 

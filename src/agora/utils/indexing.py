@@ -80,9 +80,7 @@ def validate_lineage(
         c_index = 1
 
     # if buds have two mothers, pick the first one
-    lineage = lineage[
-        ~pd.DataFrame(lineage[:, 1, :]).duplicated().values, :, :
-    ]
+    lineage = lineage[~pd.DataFrame(lineage[:, 1, :]).duplicated().values, :, :]
     # find valid lineage
     valid_lineages = index_isin(lineage, indices)
     if how == "families":
@@ -154,7 +152,19 @@ def assoc_indices_to_2d(array: np.ndarray):
     """Convert indices to 2d."""
     result = array
     if len(array):
-        result = np.concatenate(
-            (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
-        )
+        result = np.concatenate((array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1)
     return result
+
+
+def find_1st_greater(arr, limit):
+    """Find the first index where the array is larger than limit."""
+    indices = np.flatnonzero(arr > limit)
+    first_index = indices[0] if len(indices) > 0 else -1
+    return first_index
+
+
+def find_1st_equal(arr, limit):
+    """Find the first index where the array equals the limit."""
+    indices = np.flatnonzero(arr == limit)
+    first_index = indices[0] if len(indices) > 0 else -1
+    return first_index

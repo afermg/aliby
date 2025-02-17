@@ -1,15 +1,16 @@
 import logging
 import typing as t
+from functools import cached_property, lru_cache
 from itertools import groupby
 from pathlib import Path
-from functools import lru_cache, cached_property
 
 import h5py
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
 from scipy.sparse.base import isdense
-from utils_find_1st import cmp_equal, find_1st
+
+from agora.utils.indexing import find_1st_equal
 
 
 class Cells:
@@ -91,9 +92,7 @@ class Cells:
     @property
     def max_labels(self) -> t.List[int]:
         """Return the maximum cell label per tile."""
-        return [
-            max((0, *self.cell_labels_in_trap(i))) for i in range(self.ntraps)
-        ]
+        return [max((0, *self.cell_labels_in_trap(i))) for i in range(self.ntraps)]
 
     @property
     def max_label(self) -> int:
@@ -146,8 +145,7 @@ class Cells:
         """Get the maximal cell label for each tile within a frame of time."""
         max_labels = [
             self["cell_label"][
-                (self["timepoint"] <= final_time_point)
-                & (self["trap"] == trap_id)
+                (self["timepoint"] <= final_time_point) & (self["trap"] == trap_id)
             ]
             for trap_id in range(self.ntraps)
         ]
@@ -165,21 +163,17 @@ class Cells:
     def mask(self, cell_id, trap_id):
         """Return the times and the filled edge masks for a cell and trap."""
         times, outlines = self.outline(cell_id, trap_id)
-        return times, np.array(
-            [ndimage.morphology.binary_fill_holes(o) for o in outlines]
-        )
+        return times, np.array([
+            ndimage.morphology.binary_fill_holes(o) for o in outlines
+        ])
 
-    def at_time(
-        self, timepoint: int, kind="mask"
-    ) -> t.List[t.List[np.ndarray]]:
+    def at_time(self, timepoint: int, kind="mask") -> t.List[t.List[np.ndarray]]:
         """Return a dict with traps as keys and cell masks as values for a time point."""
         idx = self["timepoint"] == timepoint
         traps = self["trap"][idx]
         edgemasks = self.edgemasks_from_idx(idx)
         masks = [
-            Cells.astype(edgemask, kind)
-            for edgemask in edgemasks
-            if edgemask.any()
+            Cells.astype(edgemask, kind) for edgemask in edgemasks if edgemask.any()
         ]
         return self.group_by_traps(traps, masks)
 
@@ -273,9 +267,7 @@ class Cells:
             (self.ntraps, self["cell_label"].max(), self.ntimepoints),
             dtype=bool,
         )
-        ncells_mat[self["trap"], self["cell_label"] - 1, self["timepoint"]] = (
-            True
-        )
+        ncells_mat[self["trap"], self["cell_label"] - 1, self["timepoint"]] = True
         return ncells_mat
 
     def cell_tp_where(
@@ -288,9 +280,7 @@ class Cells:
 
         The result can be restricted to a particular interval of time.
         """
-        window = sliding_window_view(
-            self.cells_vs_tps, min_consecutive_tps, axis=1
-        )
+        window = sliding_window_view(self.cells_vs_tps, min_consecutive_tps, axis=1)
         tp_min = window.sum(axis=-1) == min_consecutive_tps
         # apply a filter to restrict to an interval of time
         if interval is not None:
@@ -430,13 +420,10 @@ class Cells:
         ids = np.unique(list(zip(trap, cell_label)), axis=0)
         # find when each cell last appeared at its trap
         last_lin_preds = [
-            find_1st(
-                (
-                    (cell_label[::-1] == cell_label_id)
-                    & (trap[::-1] == trap_id)
-                ),
+            find_1st_equal(
+                ((cell_label[::-1] == cell_label_id) & (trap[::-1] == trap_id)),
                 True,
-                cmp_equal,
+                # cmp_equal,
             )
             for trap_id, cell_label_id in ids
         ]
@@ -454,9 +441,7 @@ class Cells:
     ###############################################################################
 
     @lru_cache(maxsize=200)
-    def labelled_in_frame(
-        self, frame: int, global_id: bool = False
-    ) -> np.ndarray:
+    def labelled_in_frame(self, frame: int, global_id: bool = False) -> np.ndarray:
         """
         Return labels in a 4D ndarray with potentially global ids.
 
@@ -480,8 +465,7 @@ class Cells:
         """
         labels_in_frame = self.labels_at_time(frame)
         n_labels = [
-            len(labels_in_frame.get(trap_id, []))
-            for trap_id in range(self.ntraps)
+            len(labels_in_frame.get(trap_id, [])) for trap_id in range(self.ntraps)
         ]
         stacks_in_frame = self.get_stacks_in_frame(frame, self.tile_size)
         first_id = np.cumsum([0, *n_labels])
@@ -644,9 +628,7 @@ class Cells:
             masks.append(tile_mask)
         return (tile_ids, cell_labels, tps), np.stack(masks)
 
-    def matrix_trap_tp_where(
-        self, min_ncells: int = 2, min_consecutive_tps: int = 5
-    ):
+    def matrix_trap_tp_where(self, min_ncells: int = 2, min_consecutive_tps: int = 5):
         """
         NOTE CURRENTLY UNUSED BUT USEFUL.
 

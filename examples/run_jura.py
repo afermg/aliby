@@ -1,4 +1,4 @@
-from aliby.pipeline import PipelineParameters, Pipeline
+from aliby.pipeline import Pipeline, PipelineParameters
 
 params = PipelineParameters.default(
     general={
@@ -6,8 +6,8 @@ params = PipelineParameters.default(
         "distributed": 0,
         "directory": ".",
         "host": "staffa.bio.ed.ac.uk",
-        "username": pass,
-        "password": pass,
+        "username": "XXXXX",
+        "password": "XXXXX",
     }
 )
 # specify OMERO_channels if the channels on OMERO have a different order from the logfiles

@@ -1,4 +1,8 @@
-"""Set up and run pipelines: tiling, segmentation, extraction, and then post-processing."""
+"""
+Set up and run pipeline.
+
+Include tiling, segmentation, extraction, and then post-processing.
+"""
 
 import logging
 import multiprocessing
@@ -22,20 +26,22 @@ except AttributeError:
     from aliby.baby_client import BabyParameters, BabyRunner
 
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.metadata import MetaData, find_file, parse_from_swainlab_grammar
+from agora.io.metadata import MetaData
 from agora.io.signal import Signal
-from agora.io.writer import LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.dynamic_writer import LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.writer import Writer
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
     extraction_params_from_meta,
 )
+from extraction.core.recursive_merge import recursive_merge_extractor
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
 
-import aliby.global_parameters as global_parameters
+import aliby.global_settings as global_settings
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -55,6 +61,7 @@ class PipelineParameters(ParametersABC):
         baby,
         extraction,
         postprocessing,
+        metadata=None,
     ):
         """Initialise parameter sets using passed dictionaries."""
         self.general = general
@@ -62,6 +69,7 @@ class PipelineParameters(ParametersABC):
         self.baby = baby
         self.extraction = extraction
         self.postprocessing = postprocessing
+        self.metadata = metadata
 
     @classmethod
     def default(
@@ -90,7 +98,11 @@ class PipelineParameters(ParametersABC):
         postprocessing: dict (optional)
             Parameters for post-processing.
         """
-        if isinstance(general["expt_id"], Path) and general["expt_id"].exists():
+        if (
+            isinstance(general["expt_id"], Path)
+            and general["expt_id"].exists()
+        ):
+            # for zarr files
             expt_id = str(general["expt_id"])
         else:
             expt_id = general["expt_id"]
@@ -103,36 +115,31 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # download logs for metadata
+            # download microscopy logs for posterity
             conn.cache_logs(directory)
-        try:
-            meta_d = MetaData(directory, None).load_logs()
-        except Exception as e:
-            logging.getLogger("aliby").warn(
-                f"WARNING:Metadata: error when loading: {e}"
-            )
-            minimal_default_meta = {
-                "channels": ["Brightfield"],
-                "time_settings/ntimepoints": [2000],
-            }
-            # set minimal metadata
-            meta_d = minimal_default_meta
+            # get channels to ensure metadata has the correct order
+            if "channels" in general:
+                # use the order specifed by the user
+                OMERO_channels = general["channels"]
+            elif hasattr(conn, "get_channels"):
+                OMERO_channels = conn.get_channels()
+            else:
+                OMERO_channels = None
+        meta = MetaData(directory, OMERO_channels)
         # define default values for general parameters
-        if isinstance(meta_d["time_settings/ntimepoints"], list):
-            tps = meta_d["time_settings/ntimepoints"][0]
-        else:
-            tps = meta_d["time_settings/ntimepoints"]
+        tps = meta.full["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
-                id=expt_id,
+                expt_id=expt_id,
                 distributed=0,
                 tps=tps,
                 directory=str(directory.parent),
                 filter="",
-                earlystop=global_parameters.earlystop,
+                earlystop=global_settings.earlystop,
                 logfile_level="INFO",
                 use_explog=True,
-            )
+            ),
+            "metadata": {"minimal": meta.minimal, "full": meta.full},
         }
         # update default values for general using inputs
         for k, v in general.items():
@@ -143,19 +150,27 @@ class PipelineParameters(ParametersABC):
                     defaults["general"][k][k2] = v2
             else:
                 defaults["general"][k] = v
-        # default Tiler parameters
+        # default Tiler parameters and update with any input tiler
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         # generate a backup channel for when logfile meta is available
         # but not image metadata.
         backup_ref_channel = None
-        if "channels" in meta_d and isinstance(defaults["tiler"]["ref_channel"], str):
-            backup_ref_channel = meta_d["channels"].index(
+        if "channels" in meta.full and isinstance(
+            defaults["tiler"]["ref_channel"], str
+        ):
+            backup_ref_channel = meta.full["channels"].index(
                 defaults["tiler"]["ref_channel"]
             )
         defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
-        # default parameters
+        # defaults for extraction
+        defaults["extraction"] = extraction_params_from_meta(meta.minimal)
+        # merge any input, a nested dict
+        if extraction:
+            defaults["extraction"] = recursive_merge_extractor(
+                defaults["extraction"], extraction
+            )
+        # default parameters updated with any inputs
         defaults["baby"] = BabyParameters.default(**baby).to_dict()
-        defaults["extraction"] = extraction_params_from_meta(meta_d)
         defaults["postprocessing"] = PostProcessorParameters.default(
             **postprocessing
         ).to_dict()
@@ -165,48 +180,45 @@ class PipelineParameters(ParametersABC):
 class Pipeline(ProcessABC):
     """Initialise and run tiling, segmentation, extraction and post-processing."""
 
-    def __init__(self, parameters: PipelineParameters, store=None, OMERO_channels=None):
+    def __init__(self, parameters: PipelineParameters, store=None):
         """Initialise using Pipeline parameters."""
         super().__init__(parameters)
         if store is not None:
             store = Path(store)
         # h5 file
         self.store = store
-        if OMERO_channels is not None:
-            self.OMERO_channels = OMERO_channels
         config = self.parameters.to_dict()
         self.server_info = {
             k: config["general"].get(k) for k in ("host", "username", "password")
         }
-        self.expt_id = config["general"]["id"]
+        self.expt_id = config["general"]["expt_id"]
         self.setLogger(
-            config["general"]["directory"],
-            logfile_root_name=str(config["general"]["id"]).split("/")[-1].split(".")[0],
+            config["general"]["directory"], config["general"]["expt_id"]
         )
 
     @staticmethod
     def setLogger(
         folder,
+        expt_id: str,
         file_level: str = "INFO",
         stream_level: str = "INFO",
-        logfile_root_name: str = None,
     ):
         """Initialise and format logger."""
         logger = logging.getLogger("aliby")
+        logger.handlers.clear()
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
-        # for streams - stdout, files, etc.
+        # to print to screen
         ch = logging.StreamHandler()
         ch.setLevel(getattr(logging, stream_level))
         ch.setFormatter(formatter)
         logger.addHandler(ch)
-        # create file handler that logs even debug messages
-        if logfile_root_name is None:
-            logfile_root_name = "aliby"
-        fh = logging.FileHandler(Path(folder) / f"{logfile_root_name}.log", "w+")
+        # create file handler to log all messages
+        logfile_name = f"aliby_{str(expt_id).split('/')[-1]}.log"
+        fh = logging.FileHandler(Path(folder) / logfile_name, "w")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
@@ -230,48 +242,14 @@ class Pipeline(ProcessABC):
             directory = self.store or root_dir / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # copy logs to h5 directory
+            # copy microscopy logs to h5 directory
             conn.cache_logs(directory)
         print("Positions available:")
         for i, pos in enumerate(position_ids.keys()):
             print("\t" + f"{i}: " + pos.split(".")[0])
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
-        # find spatial locations on the microscope stage of the positions
-        self.spatial_locations = self.spatial_location_of_positions(position_ids)
         return position_ids
-
-    def spatial_location_of_positions(self, position_ids):
-        """Find spatial location of each position from the microscopy log file."""
-        dir_path = Path(self.parameters.general["directory"])
-        logpath = find_file(dir_path, "*.log")
-        if logpath:
-            raw_meta = parse_from_swainlab_grammar(logpath)
-            location_df = raw_meta["group_position"]
-            locations = {
-                position: (
-                    location_df[location_df.Name == position].X.values.astype("float")[
-                        0
-                    ],
-                    location_df[location_df.Name == position].Y.values.astype("float")[
-                        0
-                    ],
-                )
-                for position in position_ids
-            }
-        else:
-            locations = {}
-        return locations
-
-    def channels_from_OMERO(self):
-        """Get a definitive list of channels from OMERO."""
-        dispatcher = dispatch_dataset(self.expt_id, **self.server_info)
-        with dispatcher as conn:
-            if hasattr(conn, "get_channels"):
-                channels = conn.get_channels()
-            else:
-                channels = None
-        return channels
 
     def filter_positions(self, position_filter, position_ids):
         """Select particular positions."""
@@ -308,8 +286,6 @@ class Pipeline(ProcessABC):
 
     def run(self):
         """Run separate pipelines for all positions in an experiment."""
-        if not hasattr(self, "OMERO_channels"):
-            self.OMERO_channels = self.channels_from_OMERO()
         config = self.parameters.to_dict()
         position_ids = self.setup()
         # pick particular positions if desired
@@ -349,10 +325,11 @@ class Pipeline(ProcessABC):
         # remove existing h5 file
         if out_file.exists():
             os.remove(out_file)
-        meta = MetaData(out_dir, out_file)
-        # generate h5 file using meta data from logs
+        # write minimal microscopy metadata to h5 file
         if config["general"]["use_explog"]:
-            meta.run()
+            Writer(out_file).write(
+                path="/", meta=self.parameters.to_dict()["metadata"]["minimal"]
+            )
         return out_file
 
     def run_one_position(self, name_image_id: t.Tuple[str, str or Path or int]):
@@ -369,15 +346,14 @@ class Pipeline(ProcessABC):
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
+        # image here is the connection to OMERO
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
-            # initialise tiler; load local meta data from image
+            # initialise tiler
             tiler = Tiler.from_image(
                 image,
                 TilerParameters.from_dict(config["tiler"]),
-                OMERO_channels=self.OMERO_channels,
+                microscopy_metadata=self.parameters.to_dict()["metadata"],
             )
-            # add location of position on the microscope stage
-            tiler.spatial_location = self.spatial_locations.get(name, None)
             # initialise Baby
             babyrunner = BabyRunner.from_tiler(
                 BabyParameters.from_dict(config["baby"]), tiler=tiler
@@ -389,7 +365,13 @@ class Pipeline(ProcessABC):
                 tiler=tiler,
             )
             # initiate progress bar
-            tps = min(config["general"]["tps"], image.data.shape[0])
+            tps = config["general"]["tps"]
+            if tps > image.data.shape[0]:
+                self.log(
+                    f"WARNING: Data appears to have only {image.data.shape[0]}"
+                    f" time points not {tps}."
+                )
+                tps = image.data.shape[0]
             progress_bar = tqdm(range(tps), desc=image.name)
             # run through time points
             for i in progress_bar:
@@ -423,6 +405,7 @@ class Pipeline(ProcessABC):
                         overwrite=["mother_assign"],
                         meta={"last_processed": i},
                         tp=i,
+                        tile_size=tiler.tile_size,
                     )
                     babystate_writer.write(
                         data=babyrunner.crawler.tracker_states,
@@ -446,7 +429,8 @@ class Pipeline(ProcessABC):
                 else:
                     # stop if too many clogged traps
                     self.log(
-                        f"{name}: Stopped early at time {i} with {frac_clogged_traps} clogged traps"
+                        f"{name}: Stopped early at time {i} with "
+                        f"{frac_clogged_traps} clogged traps."
                     )
                     break
             # run post-processing

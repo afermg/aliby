@@ -3,22 +3,18 @@ Underlying methods for different neural network deployments.
 """
 
 import itertools
-import logging
 import re
-import time
 import typing as t
 from pathlib import Path
 from time import perf_counter
 
-import baby.errors
-import h5py
 import numpy as np
-import requests
-from agora.abc import ParametersABC, StepABC
 from baby import modelsets
 from baby.brain import BabyBrain
 from baby.crawler import BabyCrawler
-from requests.exceptions import HTTPError, Timeout
+from baby.modelsets import get_params
+
+from agora.abc import ParametersABC, StepABC
 
 
 ################### Dask Methods ################################
@@ -132,21 +128,26 @@ class BabyRunner(StepABC):
 
     def __init__(self, tiler, parameters=None, **kwargs):
         self.tiler = tiler
-        # self.model_config = modelsets()[choose_model_from_params(**kwargs)]
         self.model_config = (
             choose_model_from_params(**kwargs)
             if parameters is None
             else parameters.model_config
         )
 
-        tiler_z = self.tiler.pixels.shape[-3]
-        model_name = self.model_config["flattener_file"]
-        if tiler_z != 5:
-            assert (
-                f"{tiler_z}z" in model_name
-            ), f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
+        # This line is necessary to pull the models
 
-        self.brain = BabyBrain(**self.model_config)
+        # Brain_params must be run to download the files
+        brain_params = get_params(self.model_config["name"])
+
+        tiler_z = self.tiler.shape[-3]
+        model_name = self.model_config["name"]
+        if tiler_z != 5:
+            assert f"{tiler_z}z" in model_name, (
+                f"Tiler z-stack ({tiler_z}) and Model shape ({model_name}) do not match "
+            )
+
+        # We need to pass the modelset name explicitly
+        self.brain = BabyBrain(modelset_path=model_name, **brain_params)
         self.crawler = BabyCrawler(self.brain)
         self.bf_channel = self.tiler.ref_channel_index
 
@@ -156,24 +157,20 @@ class BabyRunner(StepABC):
 
     def get_data(self, tp):
         # Swap axes x and z, probably shouldn't swap, just move z
-        return (
-            self.tiler.get_tp_data(tp, self.bf_channel)
-            .swapaxes(1, 3)
-            .swapaxes(1, 2)
-        )
+        return self.tiler.get_tp_data(tp, self.bf_channel).swapaxes(1, 3).swapaxes(1, 2)
 
     def _run_tp(self, tp, with_edgemasks=True, assign_mothers=True, **kwargs):
         """Simulating processing time with sleep"""
-        # Access the image
-        t = perf_counter()
-        img = self.get_data(tp)
+        pixels = self.get_data(tp)
         segmentation = self.crawler.step(
-            img,
+            pixels,
             with_edgemasks=with_edgemasks,
             assign_mothers=assign_mothers,
             **kwargs,
         )
-        return format_segmentation(segmentation, tp)
+        formatted_segmentation = format_segmentation(segmentation, tp)
+
+        return formatted_segmentation
 
 
 def choose_model_from_params(
@@ -204,7 +201,7 @@ def choose_model_from_params(
     model_name : str
     """
     # cameras prime95 has become sCMOS and evolve has EMCCD
-    valid_models = list(modelsets().keys())
+    valid_models = list(modelsets.remote_modelsets()["models"].keys())
 
     # Apply modelset filter if specified
     if modelset_filter is not None:
@@ -212,16 +209,15 @@ def choose_model_from_params(
         valid_models = filter(msf_regex.search, valid_models)
 
     # Apply parameter filters if specified
+    camera_new = {"prime95b": "sCMOS", "evolve": "EMCCD"}
     params = [
         str(x) if x is not None else ".+"
-        for x in [camera.lower(), channel.lower(), zoom, n_stacks]
+        for x in [channel.lower(), camera_new[camera.lower()], zoom, n_stacks]
     ]
-    params_re = re.compile("^" + "_".join(params) + "$")
+    params_re = re.compile("-".join(params))
     valid_models = list(filter(params_re.search, valid_models))
     # Check that there are valid models
     if len(valid_models) == 0:
-        raise KeyError(
-            "No model sets found matching {}".format(", ".join(params))
-        )
+        raise KeyError("No model sets found matching {}".format(", ".join(params)))
     # Pick the first model
-    return modelsets()[valid_models[0]]
+    return modelsets.remote_modelsets()["models"][valid_models[0]]

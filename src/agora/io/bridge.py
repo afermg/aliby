@@ -1,5 +1,5 @@
 """
-Tools to interact with h5 files and handle data consistently.
+Tools to interact with h5 files.
 """
 
 import collections
@@ -17,7 +17,7 @@ class BridgeH5:
     """
     Base class to interact with h5 files.
 
-    It includes functions that predict how long segmentation will take.
+    Include functions to predict how long segmentation will take.
     """
 
     def __init__(self, filename, flag="r"):
@@ -30,7 +30,7 @@ class BridgeH5:
             ), "Invalid file. No 'cell_info' found."
 
     def log(self, message: str, level: str = "warn"):
-        # Log messages in the corresponding level
+        """Log messages at the desired level."""
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
@@ -52,7 +52,7 @@ class BridgeH5:
 
     @staticmethod
     def get_consecutives(tree, nstepsback):
-        """Receives a sorted tree and returns the keys of consecutive elements."""
+        """Receive a sorted tree and return the keys of consecutive elements."""
         # get tp level
         vals = {k: np.array(list(v)) for k, v in tree.items()}
         # get indices of consecutive elements
@@ -95,16 +95,21 @@ class BridgeH5:
         self, fields: Union[tuple, list] = ("trap", "timepoint", "cell_label")
     ):
         """
-        Return traps, time points and labels for this position in the form of a tree in the hierarchy determined by the argument fields.
+        Return traps, time points and labels for this position.
 
-        Note that it is compressed to non-empty elements and timepoints.
+        Return in the form of a tree in the hierarchy determined by the
+        argument fields.
+
+        Compress the tree to non-empty elements and timepoints.
 
         Default hierarchy is:
         - trap
         - time point
         - cell label
 
-        This function currently produces trees of depth 3, but it can easily be extended for deeper trees if needed (e.g. considering groups, chambers and/or positions).
+        This function currently produces trees of depth 3, but it can be
+        extended for deeper trees if needed (e.g. considering groups,
+        chambers and/or positions).
 
         Parameters
         ----------
@@ -113,14 +118,19 @@ class BridgeH5:
 
         Returns
         ----------
-        Nested dictionary where keys (or branches) are the upper levels and the leaves are the last element of :fields:.
+        Nested dictionary where keys (or branches) are the upper levels and
+        the leaves are the last element of :fields:.
         """
         zipped_info = (*zip(*[self.hdf["cell_info"][f][()] for f in fields]),)
         return recursive_groupsort(zipped_info)
 
 
 def groupsort(iterable: Union[tuple, list]):
-    """Sorts iterable and returns a dictionary where the values are grouped by the first element."""
+    """
+    Sort iterable and return a dict.
+
+    Values are grouped by the first element.
+    """
     iterable = sorted(iterable, key=lambda x: x[0])
     grouped = {
         k: [x[1:] for x in v] for k, v in groupby(iterable, lambda x: x[0])
@@ -140,7 +150,7 @@ def recursive_groupsort(iterable):
 
 
 def flatten(d, parent_key="", sep="_"):
-    """Flatten nested dict. Adapted from https://stackoverflow.com/a/6027615."""
+    """Flatten nested dict, from https://stackoverflow.com/a/6027615."""
     items = []
     for k, v in d.items():
         new_key = parent_key + (k,) if parent_key else (k,)

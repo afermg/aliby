@@ -12,15 +12,13 @@ import re
 import shutil
 import time
 import typing as t
-from abc import ABC, abstractmethod, abstractproperty
-from functools import cache
+from abc import ABC, abstractmethod
 from itertools import groupby
 from pathlib import Path
 
-from aliby.io.image import ImageLocalOME
 
 
-def dispatch_dataset(expt_id: int or str, custom: str or None = None, **kwargs):
+def dispatch_dataset(expt_id: int or str, is_zarr: bool = False, **kwargs):
     """
     Find paths to the data.
 
@@ -31,34 +29,26 @@ def dispatch_dataset(expt_id: int or str, custom: str or None = None, **kwargs):
     expt_id: int or str
         To identify the data, either an OMERO ID or an OME-TIFF file
         or a local directory.
-    custom: str or None
-        Determines whether to use a Omero-based structure or a custom one.
+    zarr: str or None
+        Determines whether to use a zarr
 
     Returns
     -------
     A callable Dataset instance, either network-dependent or local.
     """
-    if not custom:
-        if isinstance(expt_id, int):
-            from aliby.io.omero import Dataset
+    if isinstance(expt_id, int):
+        from aliby.io.omero import Dataset
 
-            # data available online
-            return Dataset(expt_id, **kwargs)
-        elif isinstance(expt_id, str):
-            # data available locally
-            expt_path = Path(expt_id)
-            if expt_path.is_dir():
-                # data in multiple folders, such as zarr
-                return DatasetLocalDir(expt_path)
-            else:
-                # data in one folder as OME-TIFF files
-                return DatasetLocalOME(expt_path)
-            # Data requires a special transformation (e.g., an unusual single-file-structure)
+        # data available on an Omero server
+        return Dataset(expt_id, **kwargs)
+    elif isinstance(expt_id, str):
+        # data available locally
+        expt_path = Path(expt_id)
+        if expt_path.is_dir() and is_zarr:
+            # data in multiple folders, such as zarr
+            return DatasetZarr(expt_path)
         else:
-            return DatasetIndFiles(expt_path, **kwargs)
-
-    else:
-        raise Warning(f"{expt_id} is an invalid expt_id.")
+            return DatasetDir(expt_path, **kwargs)
 
 
 class DatasetLocalABC(ABC):
@@ -119,53 +109,30 @@ class DatasetLocalABC(ABC):
         pass
 
 
-# class DatasetLocalDir(DatasetLocalABC):
-#     """Find paths to a data set, comprising multiple images in different folders."""
-
-#     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
-#         super().__init__(dpath)
-
-#     def get_position_ids(self):
-#         """
-#         Return a dict of file paths for each position.
-
-#         FUTURE 3.12 use pathlib is_junction to pick Dir or File
-#         """
-#         position_ids_dict = {
-#             item.name: item
-#             for item in self.path.glob("*/")
-#             if item.is_dir()
-#             and any(
-#                 path
-#                 for suffix in self._valid_suffixes
-#                 for path in item.glob(f"*.{suffix}")
-#             )
-#             or item.suffix[1:] in self._valid_suffixes
-#         }
-#         return position_ids_dict
-
-
-class DatasetLocalOME(DatasetLocalABC):
-    """Find names of images in a folder, assuming images in OME-TIFF format."""
+class DatasetZarr(DatasetLocalABC):
+    """Find paths to a data set, comprising multiple images in different folders."""
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
-        assert len(
-            self.get_position_ids()
-        ), f"No valid files found. Formats are {self._valid_suffixes}"
 
-    @property
-    def date(self):
-        """Get the date from the metadata of the first position."""
-        return ImageLocalOME(list(self.get_position_ids().values())[0]).date
+    def get_position_ids(self):
+        """
+        Return a dict of file paths for each position.
 
-    def get_position_ids(self) -> dict[str, str]:
-        """Return a dictionary with the names of the image files."""
-        return {
-            f.name: str(f)
-            for suffix in self._valid_suffixes
-            for f in self.path.glob(f"*.{suffix}")
+        FUTURE 3.12 use pathlib is_junction to pick Dir or File
+        """
+        position_ids_dict = {
+            item.name: item
+            for item in self.path.glob("*/")
+            if item.is_dir()
+            and any(
+                path
+                for suffix in self._valid_suffixes
+                for path in item.glob(f"*.{suffix}")
+            )
+            or item.suffix[1:] in self._valid_suffixes
         }
+        return position_ids_dict
 
 
 class DatasetDir(DatasetLocalABC):
@@ -177,41 +144,70 @@ class DatasetDir(DatasetLocalABC):
     def __init__(
         self,
         dpath: t.Union[str, Path],
-        regex: str = None,
-        re_dimorder: str = None,
-        *args,
-        **kwargs,
+        regex: str,
+        capture_order: str,
     ):
+        """
+                capture_order: determines the order of the regular expression
+        .
+                - C: Channel
+                - W: Well (optional)
+                - T: Time point
+                - F: Field-of-view (also named position)
+                - Z: Z-stack
+        """
         super().__init__(dpath)
-        if regex is None:
-            regex = ".+\/(.+)\/_.+([A-P][0-9]{2}).*_T([0-9]{4})F([0-9]{3}).*Z([0-9]{2}).*[0-9].tif"
         self.regex = regex
-        if re_dimorder is None:
-            dimorder = "CFTZ"
-        self.dimorder = dimorder
+        self.capture_order = capture_order
 
-    def get_position_ids(self) -> dict[str, list[str]]:
-        """
-        Return a dict of a list for filepaths that define each position sorted alphabetically.
-        The key is the name of the position/field-of-view and the value is
-        a list of stings indicated the associated files.
-        """
+    def get_position_ids(self, regex: str = None, capture_order: str = None):
+        regex = regex or self.regex
+        capture_order = capture_order or self.capture_order
 
-        d = groupby_regex(self.path, self.regex)
-
-        return d
+        return _get_position_ids(self.path, regex, capture_order)
 
 
-@cache
-def groupby_regex(
-    path: str, regex: str, capture_group_indices: tuple[int] = (1, 3)
+def _get_position_ids(
+    path: str, regex: str, capture_order: str
+) -> dict[str, list[str]]:
+    """
+    Return a dict of a list for filepaths that define each position sorted alphabetically.
+    The key is the name of the position/field-of-view and the value is
+    a list of stings indicated the associated files.
+    """
+
+    captured_indices = sorted(
+        capture_order.index(x) for x in set("WF").intersection(capture_order)
+    )  # Indices of groups to replace with wildcard
+    assert len(captured_indices), (
+        "capture_order is missing Wells or field-of-view indicator"
+    )
+    # Sort by time, channel and z-stack
+    sort_files_by = tuple(
+        capture_order.index(x) for x in [x for x in capture_order if x in "TCZ"]
+    )
+    sorted_groups = organize_by_regex(
+        path, regex, tuple(captured_indices), sort_files_by
+    )
+
+    assert len(sorted_groups), "No files were found."
+
+    return sorted_groups
+
+
+# @cache
+def organize_by_regex(
+    path: str,
+    regex: str,
+    group_by_capture: tuple[int],
+    sort_by_capture: tuple[int],
 ) -> dict[str, list[str]]:
     """
     Use a regex to group filenames of the same field-of-view (or, in
     some cases, well+field-of-view).
 
-    It returns the key, the wildcard and the list of files. The files accelerate
-    search processes down the line, and the wildcard is necessary to load files with dask.
+    It returns the a dictionary where the key is a combination of well+field of view and the value
+    is a list with the remaining dimensions (e.g., time point, channel, z-stack) sorted in the order defined by -dimorder_out-.
     """
     regex = re.compile(regex)
     str_paths = list(map(str, sorted(Path(path).rglob("*.tif"))))
@@ -220,20 +216,28 @@ def groupby_regex(
         (*capture.groups(), pth) for pth, capture in zip(str_paths, captures) if capture
     ]
 
-    key_fn = lambda x: tuple(x[i] for i in capture_group_indices)
-    sorted_by = sorted(valid, key=key_fn)
-    iterator = groupby(sorted_by, key=key_fn)
-    # Replace groups (dimensions) with wildcard to be read by dask
-    d = {}
+    def key_fn(x):
+        return tuple(x[i] for i in group_by_capture)
+
+    sorted_keys = sorted(valid, key=key_fn)
+    iterator = groupby(sorted_keys, key=key_fn)
+
+    sorted_groups = {}
     for key, group in iterator:
         files = [x[-1] for x in group]
-        as_list = list(files[0])
-        spans = regex.match(files[0]).regs[1:]
-        variable_captures = [
-            span for i, span in enumerate(spans) if i not in capture_group_indices
-        ]
-        for start, end in variable_captures[::-1]:
-            as_list[start:end] = "*"
+        sorted_groups[key] = sort_by_regex_groups(files, regex, sort_by_capture)
+    return sorted_groups
 
-        d[key] = ("".join(as_list), files)
-    return d
+
+def sort_by_regex_groups(
+    files: tuple[str], regex: re.Pattern, sort_by_capture: tuple[int]
+):
+    """
+    Sort groups of files based on a given regex. It assumes that they are have the same length
+    and format, and sorts based on the captured sections with indexes defined in :sort_by: (for example, if :sort_by=(3,0): the lists are sorted based on the third and first capture group, in that order).
+    """
+    spans = regex.match(files[0]).regs[1:]
+    sorted_files = sorted(
+        files, key=lambda x: [x[slice(*spans[i])] for i in sort_by_capture]
+    )
+    return sorted_files

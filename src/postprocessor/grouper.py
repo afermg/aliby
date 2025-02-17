@@ -6,7 +6,7 @@ from collections import Counter
 from functools import cached_property as property
 from pathlib import Path
 from typing import Union
-
+from tqdm import tqdm
 import h5py
 import numpy as np
 import pandas as pd
@@ -46,30 +46,50 @@ class Grouper(ABC):
         return max([s.ntimepoints for s in self.positions.values()])
 
     @property
-    def tinterval(self) -> float:
+    def tinterval_minutes(self) -> float:
         """Find the time interval for all positions."""
         tintervals = list(
-            np.unique([s.tinterval / 60 for s in self.positions.values()])
+            np.unique(
+                [np.round(s.tinterval / 60) for s in self.positions.values()]
+            )
         )
-        assert (
-            len(tintervals) == 1
-        ), "Not all positions have the same time interval."
+        if len(tintervals) > 1:
+            raise Exception(
+                "Grouper: Not all positions have the same time interval."
+            )
         return tintervals[0]
 
     @property
+    def all_available(self) -> t.Collection[str]:
+        """Generate list of available signals from all positions."""
+        all_available = [
+            x for s in tqdm(self.positions.values()) for x in s.available
+        ]
+        return sorted(set(all_available))
+
+    @property
     def available(self) -> t.Collection[str]:
-        """Generate list of available signals from the first position."""
-        return self.first_signal.available
+        """Generate list of available signals from all positions."""
+        available = self.first_signal.available
+        return available
 
     @property
     def available_grouped(self) -> None:
         """Display available signals and the number of positions with these signals."""
-        if not hasattr(self, "available_grouped"):
+        if not hasattr(self, "_available_grouped"):
             self._available_grouped = Counter(
                 [x for s in self.positions.values() for x in s.available]
             )
         for s, n in self._available_grouped.items():
             print(f"{s} - {n}")
+
+    @property
+    def print_signals_by_position(self) -> None:
+        """Print signals available at each position."""
+        for position in self.positions:
+            print(f"\n{position}\n---")
+            for signal in self.positions[position].available:
+                print(signal)
 
     def concat_signal(
         self,
@@ -145,17 +165,27 @@ class Grouper(ABC):
             records = [record for record in records if record is not None]
             if len(errors):
                 print(f"Warning: Positions ({errors}) contain errors.")
-            assert len(records), "All data sets contain errors"
-            # combine into one data frame
-            concat = pd.concat(records, axis=0)
-            if len(concat.index.names) > 4:
-                # reorder levels in the multi-index data frame
-                # when mother_label is present
-                concat = concat.reorder_levels(
-                    ("group", "position", "trap", "cell_label", "mother_label")
+            if len(records):
+                # combine into one data frame
+                concat = pd.concat(records, axis=0)
+                if len(concat.index.names) > 4:
+                    # reorder levels in the multi-index data frame
+                    # when mother_label is present
+                    concat = concat.reorder_levels(
+                        (
+                            "group",
+                            "position",
+                            "trap",
+                            "cell_label",
+                            "mother_label",
+                        )
+                    )
+                concat_sorted = concat.sort_index()
+                return concat_sorted
+            else:
+                print(
+                    f"All data sets are missing or contain errors for {path}."
                 )
-            concat_sorted = concat.sort_index()
-            return concat_sorted
         else:
             print("No data found.")
 

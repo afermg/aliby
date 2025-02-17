@@ -1,17 +1,17 @@
+"""Signal gets data from an h5 file as a data frame."""
+
 import logging
 import typing as t
 from copy import copy
 from functools import cached_property, lru_cache
 from pathlib import Path
 
-import bottleneck as bn
-import h5py
 import numpy as np
+import h5py
 import pandas as pd
 
-import aliby.global_parameters as global_parameters
+import aliby.global_settings as global_settings
 from agora.io.bridge import BridgeH5
-from agora.io.decorators import _first_arg_str_to_raw_df
 from agora.utils.indexing import validate_lineage
 from agora.utils.kymograph import add_index_levels
 from agora.utils.merge import apply_merges
@@ -36,14 +36,14 @@ class Signal(BridgeH5):
             "cell_label",
             "mother_label",
         )
-        self.candidate_channels = global_parameters.possible_imaging_channels
+        self.candidate_channels = global_settings.possible_imaging_channels
 
     def get(
         self,
         dset: t.Union[str, t.Collection],
         tmax_in_mins: int = None,
     ):
-        """Get Signal after merging and picking."""
+        """Get Signal and apply merging and picking."""
         if isinstance(dset, str):
             record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
             if record is not None:
@@ -52,7 +52,7 @@ class Signal(BridgeH5):
         elif isinstance(dset, list):
             return [self.get(d) for d in dset]
         else:
-            raise Exception("Error in Signal.get")
+            raise Exception("Error in Signal.get.")
 
     @staticmethod
     def add_name(df, name):
@@ -62,7 +62,7 @@ class Signal(BridgeH5):
 
     def cols_in_mins(self, df: pd.DataFrame):
         """Convert numerical columns in a data frame to minutes."""
-        df.columns = (df.columns * self.tinterval // 60).astype(int)
+        df.columns = (df.columns * np.round(self.tinterval / 60)).astype(int)
         return df
 
     @cached_property
@@ -73,7 +73,7 @@ class Signal(BridgeH5):
 
     @cached_property
     def tinterval(self) -> int:
-        """Find the interval between time points (seconds)."""
+        """Find the interval between time points in seconds."""
         tinterval_location = "time_settings/timeinterval"
         with h5py.File(self.filename, "r") as f:
             if tinterval_location in f.attrs:
@@ -84,9 +84,10 @@ class Signal(BridgeH5):
                     return res
             else:
                 logging.getLogger("aliby").warn(
-                    f"{str(self.filename).split('/')[-1]}: using default time interval of 300 seconds."
+                    f"{str(self.filename).split('/')[-1]}: using default time "
+                    f"interval of {global_settings.default_time_interval} seconds."
                 )
-                return 300
+                return global_settings.default_time_interval
 
     def retained(self, signal, cutoff: float = 0, tmax_in_mins: int = None):
         """Get retained cells for a Signal or list of Signals."""
@@ -106,22 +107,28 @@ class Signal(BridgeH5):
         Cells must be present for at least cutoff fraction of the total number
         of time points.
         """
-        return df.loc[bn.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
+        return df.loc[np.nansum(df.notna(), axis=1) > df.shape[1] * cutoff]
 
     @property
     def channels(self) -> t.Collection[str]:
         """Get channels as an array of strings."""
         with h5py.File(self.filename, "r") as f:
-            return list(f.attrs["channels"])
+            if "channels" in f.attrs:
+                return list(f.attrs["channels"])
+            elif "channels/channel" in f.attrs:
+                # old defunct h5 format
+                return list(f.attrs["channels/channel"])
+            else:
+                raise Exception(f"Channels missing in the {self.filename}.")
 
     @lru_cache(2)
     def lineage(
         self, lineage_location: t.Optional[str] = None, merged: bool = False
     ) -> np.ndarray:
         """
-        Get lineage data from a given location in the h5 file.
+        Get lineage data from the h5 file.
 
-        Returns an array with three columns: the tile id, the mother label,
+        Return an array with three columns: the tile id, the mother label,
         and the daughter label.
         """
         if lineage_location is None:
@@ -129,7 +136,12 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
-            traps_mothers_daughters = f[lineage_location]
+            if lineage_location not in f:
+                raise Exception(
+                    f"Neither modifiers nor postprocessing in {self.filename}"
+                )
+            else:
+                traps_mothers_daughters = f[lineage_location]
             if isinstance(traps_mothers_daughters, h5py.Dataset):
                 lineage = traps_mothers_daughters[()]
             else:

@@ -1,3 +1,5 @@
+"""Global parameters and settings."""
+
 # parameters to stop the pipeline when exceeded
 earlystop = dict(
     min_tp=100,
@@ -11,10 +13,12 @@ earlystop = dict(
 imaging_specifications = {
     "pixel_size": 0.236,
     "z_size": 0.6,
-    "spacing": 0.6,
+    "z_spacing": 0.6,
+    "magnification": 60,
+    "tile_size": 117,
 }
 
-# possible imaging channels
+# possible imaging channels excluding Brightfield
 possible_imaging_channels = [
     "Citrine",
     "GFP",
@@ -24,9 +28,20 @@ possible_imaging_channels = [
     "Citrine",
     "mKO2",
     "Cy5",
+    "cy5",
     "pHluorin405",
     "pHluorin488",
 ]
+
+# functions to apply to cell outlines
+outline_functions = [
+    "area",
+    "volume",
+    "eccentricity",
+    "centroid_x",
+    "centroid_y",
+]
+
 
 # functions to apply to the fluorescence of each cell
 fluorescence_functions = [
@@ -36,3 +51,10 @@ fluorescence_functions = [
     "imBackground",
     "max5px_median",
 ]
+
+# default time interval in seconds
+default_time_interval = 300
+
+# maximum possible size of data frame in h5 files
+h5_max_ncells = 2e5
+h5_max_tps = 1500

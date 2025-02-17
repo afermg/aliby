@@ -58,9 +58,9 @@
                   enterShell = ''
                     export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
                     export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+                    export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
                     export VIRTUAL_ENV=.venv
                     if [ ! -d $VIRTUAL_ENV ]; then
-                       export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
                        poetry install -vvv --with dev
                    fi
                    source $VIRTUAL_ENV/bin/activate

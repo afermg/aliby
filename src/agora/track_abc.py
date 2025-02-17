@@ -1,5 +1,6 @@
 #!/usr/bin/env jupyter
 
+import pickle
 import typing as t
 from abc import ABC
 from os.path import join
@@ -31,7 +32,6 @@ class FeatureCalculator(ABC):
         aweights: t.Optional[bool] = None,
         pixel_size: t.Optional[float] = None,
     ) -> None:
-
         self.feats2use = feats2use
 
         if trapfeats is None:
@@ -57,9 +57,7 @@ class FeatureCalculator(ABC):
         self.tfeats = self.outfeats + self.tmp_outfeats + self.trapfeats
         self.ntfeats = len(self.tfeats)
 
-    def get_outfeats(
-        self, feats2use: t.Optional[t.Collection[str]] = None
-    ) -> tuple:
+    def get_outfeats(self, feats2use: t.Optional[t.Collection[str]] = None) -> tuple:
         if feats2use is None:
             feats2use = self.feats2use
         outfeats = tuple(
@@ -79,15 +77,11 @@ class FeatureCalculator(ABC):
         nonbase_feats = self.trapfeats + self.extrafeats
 
         tmp_infeats = np.unique([j for x in nonbase_feats for j in tmp_d[x]])
-        self.tmp_infeats = tuple(
-            [f for f in tmp_infeats if f not in self.feats2use]
-        )
+        self.tmp_infeats = tuple([f for f in tmp_infeats if f not in self.feats2use])
 
         # feats that are only used to calculate others
         tmp_outfeats = (
-            self.get_outfeats(feats2use=tmp_infeats)
-            if len(tmp_infeats)
-            else []
+            self.get_outfeats(feats2use=tmp_infeats) if len(tmp_infeats) else []
         )
 
         self.tmp_outfeats = []
@@ -150,31 +144,27 @@ class FeatureCalculator(ABC):
         feats = np.empty((ncells, self.ntfeats))  # ncells * nfeats
         if masks.any():
             if masks.ndim == 3:  # Individual cells in dim 0
-                assert masks.sum(
-                    axis=(1, 2)
-                ).all(), "Dimension with at least one empty outline slice"
-
-                cell_feats = np.array(
-                    [
-                        [
-                            x[0]
-                            for x in regionprops_table(
-                                mask.astype(int), properties=feats2use
-                            ).values()
-                        ]
-                        for mask in masks
-                    ]
+                assert masks.sum(axis=(1, 2)).all(), (
+                    "Dimension with at least one empty outline slice"
                 )
 
-            elif masks.ndim == 2:  # No overlap between cells
-                cell_feats = np.array(
+                cell_feats = np.array([
                     [
-                        x
+                        x[0]
                         for x in regionprops_table(
-                            masks.astype(int), properties=feats2use
+                            mask.astype(int), properties=feats2use
                         ).values()
                     ]
-                ).T
+                    for mask in masks
+                ])
+
+            elif masks.ndim == 2:  # No overlap between cells
+                cell_feats = np.array([
+                    x
+                    for x in regionprops_table(
+                        masks.astype(int), properties=feats2use
+                    ).values()
+                ]).T
             else:
                 raise Exception(
                     "TrackerException: masks do not have the appropiate dimensions"
@@ -186,11 +176,9 @@ class FeatureCalculator(ABC):
             # Fill first sector, with directly extracted features
             feats[:, : len(self.out_merged)] = cell_feats
             if trapfeats:  # Add additional features
-
                 tfeats = self.calc_trapfeats(feats)
                 feats[:, len(self.out_merged) :] = tfeats
         else:
-
             feats = np.zeros((0, self.ntfeats))
 
         return feats
@@ -263,9 +251,7 @@ class FeatureCalculator(ABC):
         }
 
         scaler = {
-            feat: scaling[k]
-            for k, feats in degrees_feats.items()
-            for feat in feats
+            feat: scaling[k] for k, feats in degrees_feats.items() for feat in feats
         }
         # for k in feats.keys():
         #     feats[k] /= scaler[k]

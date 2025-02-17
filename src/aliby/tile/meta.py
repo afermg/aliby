@@ -2,10 +2,11 @@
 """
 Parsing and heuristics to select channels
 """
+
 from agora.io.metadata import find_channels_by_position
 
 
-def find_channel_swainlab(meta: dict[str], position_name: str):
+def find_channel_swainlab(meta: dict[str], position_name: str, **kwargs):
     """
     Apply a series of heuristics to find the correct metadata channel.
     Specific to the Swain Lab metadata structure.
@@ -21,7 +22,7 @@ def find_channel_swainlab(meta: dict[str], position_name: str):
     if channel_dict:
         # TODO maybe we should use image.shape and image.dimoder instead?
         channels = channel_dict.get(
-            self.position_name,
+            position_name,
             list(range(meta.get("size_c", 0))),
         )
 
@@ -32,5 +33,6 @@ def find_channel_swainlab(meta: dict[str], position_name: str):
     # sort channels based on OMERO's channel order
     if "OMERO_channels" in kwargs:
         channels = [
-            ch for och in OMERO_channels for ch in channels if ch == och
+            ch for och in kwargs["OMERO_channels"] for ch in channels if ch == och
         ]
+    return channels

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-
+# only used for legacy log files
 import json
 import pkgutil
 import re
 import typing as t
 from datetime import datetime
-from os.path import dirname, exists, join
+from os.path import exists
 
 CONFIG_KEY = "@@CONFIG@@"
 DEFAULT_NOSKIP = {"regex", "regexs", "list", "lists"}
@@ -22,12 +22,12 @@ class ParseError(Exception):
 
 class Parser(object):
     def __init__(self, grammar_filename):
-        """Create a Parser object based on the grammar defined in a file
+        """
+        Create a Parser object based on the grammar defined in a file.
 
         :param grammar_filename: path to json file specifying grammar for this
         parser, or one of the default grammars included with the package
         """
-
         if exists(grammar_filename):
             with open(grammar_filename, "r") as f:
                 self.grammar = json.load(f)
@@ -54,9 +54,11 @@ class Parser(object):
 
         self._triggers = {
             trigger_type: [
-                (k, v[f"trigger_{trigger_type}"])
-                if trigger_type != "re"
-                else (k, re.compile(v[f"trigger_{trigger_type}"]))
+                (
+                    (k, v[f"trigger_{trigger_type}"])
+                    if trigger_type != "re"
+                    else (k, re.compile(v[f"trigger_{trigger_type}"]))
+                )
                 for k, v in self.grammar.items()
                 if f"trigger_{trigger_type}" in v
             ]
