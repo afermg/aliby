@@ -278,8 +278,8 @@ class ImageList(BaseLocalImage):
         # super().__init__(img_files)
         self.path = source
         self.regex = regex
-        self.capture_order = capture_order
-        # self.meta = filename_to_meta_gsk(self.path)
+        self.capture_order = capture_order  #  or "CWTFZ"
+        self._dimorder = dimorder or "TCZYX"
         if isinstance(source, str):  # The source is a wildcard
             self.image_filenames = sorted(
                 x for x in glob(source) if re.match(self.regex, x)
@@ -290,8 +290,6 @@ class ImageList(BaseLocalImage):
         self.image_id = calculate_checksum(
             self.image_filenames
         )  # checksum of all files
-        # self.capture_order = capture_order or "CWTFZ"
-        self._dimorder = dimorder or "TCZYX"
 
     @cached_property
     def meta(self):
@@ -302,28 +300,36 @@ class ImageList(BaseLocalImage):
         # Reshape first dimensions based on capture order
         lazy_arrays = [dask.delayed(imageio.imread)(fn) for fn in self.image_filenames]
         sample = lazy_arrays[0].compute()
-        # imread(image_filenames)
+
         lazy_arrays = [
             da.from_delayed(x, shape=sample.shape, dtype=sample.dtype)
             for x in lazy_arrays
         ]
 
-        # order = tuple(v for k, v in dimorder_d.items() if k in _dimorder)
-        order = tuple(self.dimorder_d[k] for k in "TCZ")  # FIXME de-hardcode this
-        arr = np.empty(  # Add flat dimensions for WF
+        order = tuple(self.dimorder_d[k] for k in self.dimorder if k in "TCZ")
+        arr = np.zeros(
             order + (1, 1),
             dtype=object,
         )
         nd_order = np.array(
-            np.where(np.arange(len(lazy_arrays)).reshape(order) + 1)
+            np.where(
+                np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(order) + 1
+            )
         ).transpose()
 
         for i, (d1, d2, d3) in enumerate(nd_order):
-            arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+            if i < len(lazy_arrays):
+                arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+            else:
+                arr[d1, d2, d3, 0, 0] = da.from_delayed(
+                    dask.delayed(np.zeros)(sample.shape),
+                    shape=sample.shape,
+                    dtype=sample.dtype,
+                )
 
         a = da.block(arr.tolist())
 
-        # rechunk to the last 3 dimensions
+        # rechunk to the last 3 dimensions. Leave time and channel unchunked
         pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
 
         return pixels
@@ -336,15 +342,11 @@ class ImageList(BaseLocalImage):
     @property
     def dimorder(self):
         # sorted dimorder
-        return [self.dimorder_d[dim] for dim in self._dimorder]
+        return self._dimorder
 
     @cached_property
     def dimorder_d(self):
         return get_dims_from_names(self.image_filenames, self.regex, self.capture_order)
-
-    # @cached_property
-    # def image_filenames(self):
-    # return tuple(glob(self.path))
 
 
 def get_dims_from_names(
@@ -363,10 +365,10 @@ def get_dims_from_names(
     }
 
     # Check that the dimensions match the file
-    n = 1
-    for v in dim_size.values():
-        n *= v
-    assert len(image_filenames) == n
+    if len(image_filenames) != np.prod(dim_size.values()):
+        print(
+            "Warning: The number of available images does not match the expected one given the dimensions and their maximum values. Will pad to match."
+        )
 
     return dim_size
 

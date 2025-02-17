@@ -35,14 +35,19 @@ def init_step(
 
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case "segment":
+            if (
+                parameters["segmenter_kwargs"]["kind"] == "baby"
+            ):  # Baby needs a tiler inside
+                parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
             step = dispatch_segmenter(**{
                 **parameters["segmenter_kwargs"],
-                "tiler": other_steps["tile"],  # Necessary for BABY
             })
         case "track":
-            step = dispatch_tracker(
-                **parameters, crawler=other_steps["segment"].crawler
-            )
+            if (
+                parameters["kind"] == "baby"
+            ):  # Tracker needs to pull info from baby crawler
+                parameters["crawler"] = other_steps["segment"].crawler
+            step = dispatch_tracker(**parameters)
         case "extract":
             tiler = other_steps["tile"]
             step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
@@ -84,10 +89,16 @@ def pipeline_step(
 
         # Pass input data if available
         this_step_receives = pipeline["passed_data"].get(step_name, {})
-        passed_data = {
-            kwd: state["data"].get(from_step, [])[-1]
-            for kwd, from_step in this_step_receives
-        }
+
+        passed_data = {}
+        for kwd, from_step in this_step_receives:
+            passed_data[kwd] = state["data"].get(from_step, [])
+
+            if not (
+                step_name == "track" and kwd == "masks"
+            ):  # Only tracking segmentation masks require multiple time points
+                if len(passed_data[kwd]):
+                    passed_data[kwd] = passed_data[kwd][-1]
 
         # Run step
         args = []
@@ -98,27 +109,30 @@ def pipeline_step(
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
-        state["data"][step_name].append(step_result)
+
+        state["data"][step_name].append(
+            step_result  # TODO replace this with a variable to adjust ntps in memory
+        )
 
         # Update state
-        state["fn"][step_name] = step
+        if not (step_name in state["fn"]):
+            state["fn"][step_name] = step  # the steps should not require update
         state["tps"][step_name] = tp + 1
 
     return state
 
 
 # TODO pass sorted images instead of wildcard
-def run_pipeline(pipeline: dict, input_images: str or list[str], ntps: int):
+def run_pipeline(pipeline: dict, img_source: str or list[str], ntps: int):
     pipeline = copy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = input_images
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     data = []
     state = {}
 
     for i in range(ntps):
         state = pipeline_step(pipeline, state)
         new_data = format_extraction(state["data"]["extract"][-1])
-        if len(new_data):
-            data.append(new_data)
+        data.append(new_data)
 
     extracted_fov = pl.concat(data)
     return extracted_fov
@@ -196,19 +210,33 @@ def label_and_concat_extraction(
     return extracted_dataset.select()
 
 
-def run_pipeline_save(base_pipeline: dict, wc: str, out_file: str | Path, ntps=1):
-    print(f"Running {out_file}")
+def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
+    """
+    Runs a pipeline and saves the result to a parquet file.
 
+    Parameters
+    ----------
+    base_pipeline : dict
+        The base pipeline configuration.
+    img_source : str or list[str]
+        Input files for the pipeline. It can be a list of files
+    or an expression with a wildcard.
+    out_file : str or Path
+        Output file path for the result.
+    ntps : int, optional
+        Number of threads to use (default is 1).
+
+    Returns
+    -------
+    result
+        The result of running the pipeline.
+    """
+    print(f"Running {out_file}\n")
     result = None
-    if not Path(out_file).exists():
-        # try:
-        result = run_pipeline(base_pipeline, wc, ntps=ntps)
+    if overwrite or not Path(out_file).exists():
+        result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
         if not out_dir.exists():  # Only create a dir after we have files to save
             out_dir.mkdir(parents=True, exist_ok=True)
         result.write_parquet(out_file)
-        # except Exception as e:
-        #     print(e)
-        #     with open("logfile.txt", "a") as f:
-        #         f.write(f"{out_file} failed:{e}\n")
     return result

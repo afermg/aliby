@@ -1,22 +1,9 @@
-"""
-CURRENT TASK 2025/02: Run the whole examples. Double-check that the cellpose pipeline is still working.
-
-Run Swain Lab experiments with new pipeline.
-
-Process:
-1. List dataset
-2. Select and instance Image
-3. Process in a similar way to
-/home/amunoz/projects/gsk-ia/scripts/2024_08_21_get_fully_morphological_profiles.py
-
-4. Test in multiple cases
-- Ura9 (GFP only)
-- pHluorin (pH)
-
-5. Extend to new data types (/datastore/alan/aliby/)
-"""
-
 #!/usr/bin/env jupyter
+"""
+Run aliby with baby pipeline.
+"""
+
+from functools import partial
 from pathlib import Path
 from time import perf_counter
 
@@ -26,11 +13,19 @@ from aliby.io.dataset import DatasetDir
 from aliby.pipe import run_pipeline_save
 
 # Variables
-# path = Path("/datastore/alan/aliby/flavin_htb2_pyruvate_20gpL_01_00/")
-path = Path("/datastore/alan/aliby/PDR5_GFP_100ugml_flc_25hr_00/")
+paths = [
+    "/datastore/alan/aliby/flavin_htb2_pyruvate_20gpL_01_00/",
+    "/datastore/alan/aliby/PDR5_GFP_100ugml_flc_25hr_00/",
+]
+path = Path(paths[1])
 out_dir = Path(f"/datastore/alan/swainlab/results/{path.stem}")
+ntps = 30  # Number of time points to process
+seg_channel = 0  # Channel to use for segmentation
+nchannels = 1  # Channels to extract
 regex = ".+\/(.+)\/.*([0-9]{6})_(\S+)_([0-9]{3}).tif"
 capture_order = "FTCZ"
+dimorder = "TCZYX"  # Order of dimensions to feed into the pipeline, do not change
+threaded = False
 
 ntps = 3
 assert Path(path).exists(), "Folder does not exist"
@@ -104,14 +99,20 @@ base_pipeline = dict(
                         "solidity",
                     ],
                 },
-                1: {
-                    "max": [
-                        "total",
-                        "max5px_median",
-                        # "volume",
-                        # "centroid_x",
-                        # "centroid_y",
-                    ]
+                **{
+                    i: {
+                        "max": [
+                            "radial_distribution",
+                            "radial_zernikes",
+                            "intensity",
+                            "sizeshape",
+                            "zernike",
+                            "ferret",
+                            "granularity",
+                            "texture",
+                        ]
+                    }
+                    for i in range(nchannels)
                 },
             },
             multichannel_ops={},
@@ -137,28 +138,24 @@ dif = DatasetDir(
 
 # Pathos seems to result in a highetr cpu usage, (which is good)
 fov_to_files = dif.get_position_ids(regex, capture_order)
+run_pipeline_save_curried = partial(
+    run_pipeline_save, pipeline=base_pipeline, ntps=ntps, overwrite=True
+)
 
-
+# Run pipelines
 t0 = perf_counter()
-if False:  # Threaded or not, non-threaded is for easy debug
+if not threaded:  # Threaded or not, non-threaded is for easy debug
     results = []
-    for well_site, wc in list(fov_to_files.items())[:2]:
-        result = run_pipeline_save(
-            base_pipeline=base_pipeline,
-            wc=wc,
-            out_file=out_dir / f"{'_'.join(well_site)}.parquet",
-            ntps=ntps,
+    for ws, files in fov_to_files.items():
+        result = run_pipeline_save_curried(
+            img_source=files, out_file=out_dir / f"{'_'.join(ws)}.parquet"
         )
-        print(f"Result: {result}")
         results.append(result)
 else:
     with Pool() as p:
-        p.map(
-            lambda ws_wc: run_pipeline_save(
-                base_pipeline,
-                ws_wc[1],
-                out_file=out_dir / f"{'_'.join(ws_wc[0])}.parquet",
-                ntps=1,
+        result = p.map(
+            lambda ws, files: run_pipeline_save_curried(
+                img_source=files, out_file=out_dir / f"{'_'.join(ws)}.parquet"
             ),
             fov_to_files.items(),
         )

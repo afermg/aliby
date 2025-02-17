@@ -4,17 +4,17 @@ import copy
 import typing as t
 from pathlib import Path
 
-import aliby.global_settings as global_settings
 import h5py
 import numpy as np
 import pandas as pd
+
+import aliby.global_settings as global_settings
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.writer import Writer
 from agora.io.dynamic_writer import load_meta
+from agora.io.writer import Writer
 from agora.utils.masks import transform_2d_to_3d
 from aliby.tile.tiler import Tiler, find_channel_name
-
 from extraction.core.functions.distributors import reduce_z
 from extraction.core.functions.loaders import (
     load_funs,
@@ -61,9 +61,7 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
     for ch in extant_fluorescence_ch:
-        base["tree"][ch] = copy.deepcopy(
-            default_reduction_and_fluorescence_metrics
-        )
+        base["tree"][ch] = copy.deepcopy(default_reduction_and_fluorescence_metrics)
     base["sub_bg"] = extant_fluorescence_ch
     return base
 
@@ -160,12 +158,16 @@ class Extractor(StepABC):
             self.params.tree = {
                 k: v for k, v in self.params.tree.items() if k in available_channels
             }
-            len(set(self.params.tree).intersection(available_channels))==len(set(self.params.tree)),"At least one channel was dropped"
+            (
+                len(set(self.params.tree).intersection(available_channels))
+                == len(set(self.params.tree)),
+                "At least one channel was dropped",
+            )
             self.params.sub_bg = available_channels.intersection(self.params.sub_bg)
             # add background subtracted channels to those available
-            available_channels_bgsub = available_channels.union(
-                [c + "_bgsub" for c in self.params.sub_bg]
-            )
+            available_channels_bgsub = available_channels.union([
+                c + "_bgsub" for c in self.params.sub_bg
+            ])
             # remove any multichannel operations requiring a missing channel
             for op, (input_ch, _, _) in self.params.multichannel_ops.items():
                 if not set(input_ch).issubset(available_channels_bgsub):
@@ -575,7 +577,9 @@ class Extractor(StepABC):
         # with fluorescnce channels as keys
         img, img_bgsub = self.get_imgs_background_subtract(
             # tree_dict, tiles, bgs
-            tree, tiles, bgs
+            tree,
+            tiles,
+            bgs,
         )
         # perform extraction
         res_one = self.extract_one_channel(
@@ -597,16 +601,16 @@ class Extractor(StepABC):
         img = {}
         img_bgsub = {}
         av_channels = [x for x in tree if x != "general"]
-        
+
         # for ch, _ in tree["channels_tree"].items():
-        for ch in tree :
+        for ch in tree:
             # NB ch != is necessary for threading
             if tiles is not None and len(tiles) and ch != "general":
                 # image data for all traps for a particular channel and
                 # time point arranged as (traps, Z, X, Y)
                 # we use 0 here to access the single time point available
                 img[ch] = tiles[:, av_channels.index(ch), 0]
-                                
+
                 if bgs.any() and ch in self.params.sub_bg and img[ch] is not None:
                     # subtract median background
                     bgsub_mapping = map(
@@ -670,8 +674,8 @@ class Extractor(StepABC):
         for tp in tps:
             # extract for each time point and convert to dict of pd.Series
             extracted_tp = self.extract_tp(
-                    tp=tp, tile_size=self.tiler.tile_size, tree=tree, **kwargs
-                )
+                tp=tp, tile_size=self.tiler.tile_size, tree=tree, **kwargs
+            )
             new = flatten_nesteddict(
                 extracted_tp,
                 to="series",
@@ -771,31 +775,36 @@ def flatten_nesteddict(
                 if isinstance(v2, dict):
                     # measurement that returns multiple features (e.g., CellProfiler Measurements)
                     for feature, values in v2.items():
-                        d["/".join((str(k0),k1,feature))] = (
+                        d["/".join((str(k0), k1, feature))] = (
                             pd.Series(*values, name=tp) if to == "series" else v2
                         )
                 else:
                     d["/".join((str(k0), k1, k2))] = (
-                    pd.Series(*v2, name=tp) if to == "series" else v2
-                )
+                        pd.Series(*v2, name=tp) if to == "series" else v2
+                    )
     return d
 
 
-def get_background_masks(masks, tile_size):
+def get_background_masks(masks: list[np.ndarray], tile_size: int) -> np.ndarray:
     """
-    Generate boolean background masks.
+    Generate boolean background masks for all tiles.
 
     Combine masks per trap and then take the logical inverse.
     """
-    bgs = ~np.array(
-        list(
-            map(
-                # sum over masks for each cell
-                lambda x: (
-                    np.sum(x, axis=0) if np.any(x) else np.zeros((tile_size, tile_size))
-                ),
-                masks,
-            )
-        )
-    ).astype(bool)
+    bgs = ~np.fromiter(
+        (get_foreground_from_tile(masks_in_tile, tile_size) for masks_in_tile in masks),
+        dtype=((bool, (tile_size, tile_size))),
+        count=len(masks),
+    )
     return bgs
+
+
+def get_foreground_from_tile(masks_in_tile: np.ndarray, tile_size: int) -> np.ndarray:
+    """Return the non-background pixels as true."""
+
+    if masks_in_tile.dtype != np.dtype(
+        bool
+    ):  # Collapse across cell id dimension if bool
+        masks_in_tile = np.any(masks_in_tile, axis=0)
+
+    return masks_in_tile > 0
