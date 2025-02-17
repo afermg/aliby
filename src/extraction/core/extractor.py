@@ -802,9 +802,14 @@ def get_background_masks(masks: list[np.ndarray], tile_size: int) -> np.ndarray:
 def get_foreground_from_tile(masks_in_tile: np.ndarray, tile_size: int) -> np.ndarray:
     """Return the non-background pixels as true."""
 
-    if masks_in_tile.dtype != np.dtype(
-        bool
-    ):  # Collapse across cell id dimension if bool
-        masks_in_tile = np.any(masks_in_tile, axis=0)
+    foreground = np.ones((tile_size, tile_size), dtype=bool)
 
-    return masks_in_tile > 0
+    if masks_in_tile.any():
+        if masks_in_tile.dtype == np.dtype(
+            bool
+        ):  # Collapse across cell id dimension if bool
+            masks_in_tile = np.any(masks_in_tile, axis=0)
+
+        foreground = masks_in_tile > 0
+
+    return foreground
