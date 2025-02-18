@@ -259,6 +259,53 @@ class ImageZarr(BaseLocalImage):
         return "TCZYX"
 
 
+class ImageMultiTiff(BaseLocalImage):
+    """
+    Read multidimensional tiff files.
+    """
+
+    def __init__(
+        self, path: t.Union[str, Path], capture_order: str, dimorder: str = None
+    ):
+        """Initialise using file name."""
+        super().__init__(path)
+        self.capture_order = capture_order
+        self.dimorder = dimorder or "TCZYX"
+
+        shape = imread(path).shape
+
+        self.missing_dims = set(dimorder).difference(capture_order)
+        for dim in self.missing_dims:
+            self.meta[f"size_{dim}"] = 1
+
+        self.meta = {
+            f"size_{dim}": v for dim, v in zip(self.capture_order, shape) if dim
+        }
+
+        lazy = dask.array.imread(self.path)
+        self._img = self.adjust_dimensions(lazy)
+
+    def get_data_lazy(self) -> da.Array:
+        """Return 5D dask array for lazy-loading local multidimensional zarr files."""
+        return self._img
+
+    def add_size_to_meta(self):
+        """Add shape of image array to metadata."""
+        self.meta.update({
+            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
+        })
+
+    @property
+    def name(self):
+        """Return name of zarr directory."""
+        return self.path.stem
+
+    @property
+    def dimorder(self):
+        """Impose a hard-coded order of dimensions based on the zarr compression script."""
+        return "TCZYX"
+
+
 class ImageList(BaseLocalImage):
     """
     Image subclass that uses a wildcard or a (pre-sorted) list of images to associate images to channels. Assumes that every file is a 2-D array and the metadata that pertains to dimensions is encoded
@@ -373,12 +420,71 @@ def get_dims_from_names(
     return dim_size
 
 
-def calculate_checksum(filenames: list[str]) -> bytes:
+def calculate_checksum(filenames: list[str]) -> str:
     """
-    This helps to check that images composed of multiple other
-    images are the same.
+    Calculate the checksum for a list of image files.
+
+    Helps to check that images composed of multiple other
+    images are the same by calculating a checksum from their contents.
+
+    Parameters
+    ----------
+    filenames : list[str]
+        A list of file paths for the images.
+
+    Returns
+    -------
+    str
+        The hexadecimal representation of the MD5 checksum.
     """
     hash = hashlib.md5()
     for fn in filenames:
         hash.update(Path(fn).read_bytes())
     return hash.hexdigest()
+
+
+def adjust_dimensions(lazy: da.array, capture_order: str, dimorder: str) -> da.array:
+    """
+    Adjusts the dimensions of a dask array to match a specified order.
+
+    Parameters
+    ----------
+    lazy : da.array
+        The input dask array.
+    capture_order : str
+        The current order of dimensions in the array.
+    dimorder : str
+        The desired order of dimensions.
+
+    Returns
+    -------
+    da.array
+        The input array with its dimensions adjusted to match `dimorder`.
+
+    Notes
+    -----
+    This function first removes any unused dimensions from the array, then adds
+    any missing dimensions. Finally, it rearranges the dimensions to match `dimorder`.
+    """
+    missing_dims = set(dimorder).difference(capture_order)
+
+    # drop unused dimensions
+    for i, dim in enumerate(reversed(capture_order), 1):
+        if dim not in dimorder:
+            assert lazy.shape[-i] == 1, f"Missing dimension {dim} not in dimorder"
+            lazy = da.squeeze(lazy, -i)
+            capture_order = capture_order.replace(dim, "")
+
+    # Add missing dimensions
+    for dim in sorted(missing_dims):
+        lazy = lazy[..., np.newaxis]
+        capture_order += dim
+
+    assert len(capture_order) == len(dimorder), (
+        "Post-adjustment captureorder and dimorder do not match."
+    )
+    # sort capture_order to match dimorder
+    lazy = da.moveaxis(
+        lazy, [capture_order.index(i) for i in dimorder], range(len(dimorder))
+    )
+    return lazy
