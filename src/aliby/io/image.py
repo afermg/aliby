@@ -64,6 +64,8 @@ def dispatch_image(source: str or int or dict[str, str] or Path):
                 img_type = ImageList
             case s if s.suffix == ".zarr":
                 img_type = ImageZarr
+            case s if ".tif" in s.suffix:
+                img_type = ImageMultiTiff
             case s if s.is_dir() and s.exists():
                 img_type = ImageDir
     return img_type
@@ -102,7 +104,7 @@ class BaseLocalImage(ABC):
     """Set path and provide method for context management."""
 
     # default image order
-    default_dimorder = "tczyx"
+    default_dimorder = "TCZYX"
 
     def __init__(self, path: t.Union[str, Path, list[str]]):
         # If directory, assume contents are naturally sorted
@@ -136,7 +138,7 @@ class BaseLocalImage(ABC):
         """Get data."""
         return self.get_data_lazy()
 
-    @abstractproperty
+    @property
     def meta(self):
         pass
 
@@ -265,25 +267,27 @@ class ImageMultiTiff(BaseLocalImage):
     """
 
     def __init__(
-        self, path: t.Union[str, Path], capture_order: str, dimorder: str = None
+        self, source: t.Union[str, Path], capture_order: str, dimorder: str = None
     ):
         """Initialise using file name."""
-        super().__init__(path)
+        super().__init__(source)
         self.capture_order = capture_order
-        self.dimorder = dimorder or "TCZYX"
+        self._dimorder = dimorder or self.default_dimorder
 
-        shape = imread(path).shape
+        shape = imread(source).shape
 
-        self.missing_dims = set(dimorder).difference(capture_order)
-        for dim in self.missing_dims:
-            self.meta[f"size_{dim}"] = 1
-
-        self.meta = {
+        self._meta = {
             f"size_{dim}": v for dim, v in zip(self.capture_order, shape) if dim
         }
 
-        lazy = dask.array.imread(self.path)
-        self._img = self.adjust_dimensions(lazy)
+        self.missing_dims = set(self._dimorder).difference(capture_order)
+        for dim in self.missing_dims:
+            self._meta[f"size_{dim}"] = 1
+
+        lazy = imread(str(self.path))
+        self._img = adjust_dimensions(
+            lazy, capture_order=capture_order, dimorder=self._dimorder
+        )
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array for lazy-loading local multidimensional zarr files."""
@@ -291,19 +295,28 @@ class ImageMultiTiff(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self.meta.update({
+        self._meta.update({
             f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
         })
 
     @property
     def name(self):
-        """Return name of zarr directory."""
-        return self.path.stem
+        """Return the full path of tiff file."""
+        return str(self.path)
 
     @property
     def dimorder(self):
         """Impose a hard-coded order of dimensions based on the zarr compression script."""
-        return "TCZYX"
+        if not self._dimorder:
+            self._dimorder = self.default_dimorder
+
+        return self._dimorder
+
+    @property
+    def meta(self):
+        if not hasattr(self, "_meta"):
+            self._meta = {}
+        return self._meta
 
 
 class ImageList(BaseLocalImage):

@@ -24,4 +24,4 @@ def dispatch_tracker(kind: str, **kwargs):
 
             return fetch_tracking_info
         case _:
-            return None
+            raise Exception("A tracker must be defined.")

@@ -189,11 +189,13 @@ class Tiler(StepABC):
         tp: integer
             Index for a time point.
         """
+        ref_z = getattr(self, "ref_z", 0)
         prev_tp = max(0, tp - 1)
+
         # cross-correlate
         drift, _, _ = phase_cross_correlation(
-            self.pixels[prev_tp, self.ref_channel_index, self.ref_z],
-            self.pixels[tp, self.ref_channel_index, self.ref_z],
+            self.pixels[prev_tp, self.ref_channel_index, ref_z],
+            self.pixels[tp, self.ref_channel_index, ref_z],
         )
         # store drift
         if 0 < tp < len(self.tile_locs.drifts):
@@ -269,8 +271,9 @@ class Tiler(StepABC):
         tp: integer
             The time point to tile.
         """
+        ref_z = getattr(self, "ref_z", 0)
         if self.no_processed == 0:
-            initial_image = self.pixels[0, self.ref_channel_index, self.ref_z]
+            initial_image = self.pixels[0, self.ref_channel_index, ref_z]
             self.tile_locs = set_areas_of_interest(
                 initial_image,
                 self.tile_size,

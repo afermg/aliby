@@ -23,6 +23,7 @@ retrieved = retrieve(
     *data_path["ecoli"],
     processor=Unzip(),
 )
+
 d = {}
 for f in retrieved:
     if f.endswith("tif"):
@@ -33,7 +34,82 @@ for f in retrieved:
         else:
             d[dirname] = [f]
 
-ntps = 30  # Number of time points to process
-seg_channel = 0  # Channel to use for segmentation
-nchannels = 1  # Channels to extract
+ntps = 10  # Number of time points to process
+seg_channel = 1  # Channel to use for segmentation
+nchannels = 2  # Channels to extract
 threaded = False
+capture_order = "0TCYX"
+
+base_pipeline = dict(
+    steps=dict(
+        tile=dict(
+            image_kwargs=dict(
+                capture_order=capture_order,
+            ),
+            tile_size=None,
+            ref_channel=0,
+        ),
+        segment=dict(
+            segmenter_kwargs=dict(
+                kind="cyto3",
+            ),
+            img_channel=0,
+        ),
+        track=dict(kind="stitch"),
+        extract=dict(
+            channels=(0, 1),
+            tree={
+                "general": {
+                    "None": [
+                        "area",
+                        "area_bbox",
+                        "area_convex",
+                        "area_filled",
+                        "axis_major_length",
+                        "axis_minor_length",
+                        "eccentricity",
+                        "equivalent_diameter_area",
+                        "euler_number",
+                        "extent",
+                        "feret_diameter_max",
+                        "orientation",
+                        "perimeter",
+                        "perimeter_crofton",
+                        "solidity",
+                    ],
+                },
+                **{
+                    i: {
+                        "max": [
+                            "radial_distribution",
+                            "radial_zernikes",
+                            "intensity",
+                            "sizeshape",
+                            "zernike",
+                            "ferret",
+                            "granularity",
+                            "texture",
+                        ]
+                    }
+                    for i in range(nchannels)
+                },
+            },
+            multichannel_ops={},
+        ),
+    ),
+    passed_data=dict(  # A=-> [(B,C,D)] where A receives variable B (or field D) from C.
+        track=[("masks", "segment"), ("track_info", "track")],
+        extract=[("cell_labels", "track"), ("masks", "segment")],
+    ),
+    # key -> (step, method, parameter (from key))
+    passed_methods=dict(
+        segment=("tile", "get_tp_data", "img_channel"),
+    ),
+)
+
+from aliby.pipe import run_pipeline
+
+sample_file = list(d.values())[0][0]
+pipeline = base_pipeline
+# pipeline["steps"]["tiler"]["img_source"] = sample_file
+results = run_pipeline(pipeline=pipeline, img_source=sample_file, ntps=ntps)
