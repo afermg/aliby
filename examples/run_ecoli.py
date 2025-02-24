@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Run aliby on an external dataset. In this case it is
 - Name: Analysis of division and replication cycles in E. coli using time-lapse microscopy, microfluidics and the MoMA software
@@ -34,7 +35,7 @@ for f in retrieved:
         else:
             d[dirname] = [f]
 
-ntps = 10  # Number of time points to process
+ntps = None  # Number of time points to process, All available by default
 seg_channel = 1  # Channel to use for segmentation
 nchannels = 2  # Channels to extract
 threaded = False
@@ -112,4 +113,5 @@ from aliby.pipe import run_pipeline
 sample_file = list(d.values())[0][0]
 pipeline = base_pipeline
 # pipeline["steps"]["tiler"]["img_source"] = sample_file
+
 results = run_pipeline(pipeline=pipeline, img_source=sample_file, ntps=ntps)

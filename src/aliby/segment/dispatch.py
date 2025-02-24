@@ -78,10 +78,17 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                     normalize=dict(norm3D=False),
                     stitch_threshold=0.1,
                     **kwargs,
-                )[0]
-                # TODO Check that this is the best way to project 3-D labels into 2D
-                result = [result.max(axis=0)]
-                return result
+                )
+                result = result[0]
+                ndim = result.ndim
+                if ndim == 3:  # Cellpose squeezes dims!
+                    # TODO Check that this is the best way to project 3-D labels into 2D
+                    result = result.max(axis=0)
+                elif not 1 < ndim < 4:
+                    raise Exception(
+                        f"Segmentation yielded {result.ndim} dimensions instead of 3"
+                    )
+                return [result]
 
     return segment
 

@@ -785,7 +785,7 @@ def flatten_nesteddict(
     return d
 
 
-def get_background_masks(masks: list[np.ndarray], tile_size: int) -> np.ndarray:
+def get_background_masks(masks: list[np.ndarray], tile_size: tuple[int]) -> np.ndarray:
     """
     Generate boolean background masks for all tiles.
 
@@ -793,16 +793,18 @@ def get_background_masks(masks: list[np.ndarray], tile_size: int) -> np.ndarray:
     """
     bgs = ~np.fromiter(
         (get_foreground_from_tile(masks_in_tile, tile_size) for masks_in_tile in masks),
-        dtype=((bool, (tile_size, tile_size))),
+        dtype=(bool, tile_size),
         count=len(masks),
     )
     return bgs
 
 
-def get_foreground_from_tile(masks_in_tile: np.ndarray, tile_size: int) -> np.ndarray:
+def get_foreground_from_tile(
+    masks_in_tile: np.ndarray, tile_size: tuple[int]
+) -> np.ndarray:
     """Return the non-background pixels as true."""
 
-    foreground = np.ones((tile_size, tile_size), dtype=bool)
+    foreground = np.ones(tile_size, dtype=bool)
 
     if masks_in_tile.any():
         if masks_in_tile.dtype == np.dtype(
