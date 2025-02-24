@@ -103,7 +103,7 @@ class Tiler(StepABC):
                 }
         else:  # Data with little metadata
             self.channels = meta.get("channels", list(range(pixels.shape[-4])))
-            self.tile_size = self.tile_size or min(self.pixels.shape[-2:])
+            self.tile_size = self.tile_size or self.pixels.shape[-2:]
             # get reference channel - used for segmentation
             ref_channel_index = parameters.ref_channel
             if isinstance(ref_channel_index, str):
@@ -132,40 +132,6 @@ class Tiler(StepABC):
             parameters,
             **kwargs,
         )
-
-    @classmethod
-    def from_h5(
-        cls,
-        image,
-        filepath: t.Union[str, Path],
-        parameters: t.Optional[TilerParameters] = None,
-        **kwargs,
-    ):
-        """
-        Instantiate from an h5 file.
-
-        Parameters
-        ----------
-        image: an instance of Image
-        filepath: Path instance
-            Path to an h5 file.
-        parameters: an instance of TileParameters (optional)
-        """
-        tile_locs = TileLocations.read_h5(filepath)
-        meta = BridgeH5(filepath).meta_h5
-        meta["channels"] = image.meta["channels"]
-        if parameters is None:
-            parameters = TilerParameters.default()
-        tiler = cls(
-            image.data,
-            meta,
-            parameters,
-            tile_locations=tile_locs,
-            **kwargs,
-        )
-        if hasattr(tile_locs, "drifts"):
-            tiler.no_processed = len(tile_locs.drifts)
-        return tiler
 
     @property
     def no_processed(self) -> int:
@@ -434,17 +400,22 @@ def find_channel_name(image_channels: t.List[str], channel_regex: str):
         return image_channels[index]
 
 
-def if_out_of_bounds_pad(pixels, slices):
+def if_out_of_bounds_pad(
+    pixels: np.ndarray, slices: tuple[slice], max_padding: float = 0.25
+):
     """
     Pad slices if out of bounds.
 
     Parameters
     ----------
-    full: array
+    pixels: array
         Slice of image (zstacks, x, y) - the entire position
         with zstacks as first axis
     slices: tuple of two slices
         Delineates indices for the x- and y- ranges of the tile.
+    max_padding: float
+        Maximum fraction of `pixels` in any dimension that must not be padded.
+        If more than `max_padding` must be padded the entire tile is converted to NaNs.
 
     Returns
     -------
@@ -453,28 +424,35 @@ def if_out_of_bounds_pad(pixels, slices):
         If some padding is needed, the median of the image is used.
         If much padding is needed, a tile of NaN is returned.
     """
-    # number of pixels in the y direction
-    max_size = pixels.shape[-1]
+    # number of pixels in the yx axes
+    max_yx = pixels.shape[-2:]
     # ignore parts of the tile outside of the image
-    y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+    y, x = [
+        slice(max(0, s.start), min(upper_bound, s.stop))
+        for s, upper_bound in zip(slices, max_yx)
+    ]
+    # find extent of padding needed in x and y
+    padding = np.array([
+        (-min(0, s.start), -min(0, upper_bound - s.stop))
+        for s, upper_bound in zip(slices, max_yx)
+    ])
+
     # get the tile including all z stacks
     tile = pixels[:, y, x]
-    # find extent of padding needed in x and y
-    padding = np.array([(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices])
     if padding.any():
-        tile_size = slices[0].stop - slices[0].start
-        if (padding > tile_size / 4).any():
+        tile_shape = [x.stop - x.start for x in slices]
+        if (padding / 0.25 > tile_shape).any():
             # fill with NaN because too much of the tile is outside of the image
-            tile = np.full((pixels.shape[0], tile_size, tile_size), np.nan)
+            tile = np.full((pixels.shape[0], *tile_shape), np.nan)
         else:
-            # pad tile with median value of the tile
+            # pad tile with median value of the tile, ignore first (z) axis
             tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
     return tile
 
 
 def set_areas_of_interest(
     pixels: np.ndarray,
-    tile_size: int = None,
+    tile_size: list[int] = None,
 ) -> tuple[tuple[int]]:
     """
     Find initial positions of tiles, or determine that the entire image is
@@ -485,13 +463,13 @@ def set_areas_of_interest(
 
     Parameters
     ----------
-    tile_size: integer
+    tile_size: list[integer]
         The size of a tile
     """
     shape = pixels.shape
     # only tile if the image fits more than one non-overlaping tile
-    if tile_size and tile_size < min(shape) // 2:
-        half_tile = tile_size // 2
+    if tile_size and min(shape) // 2 > min(tile_size) // 2:
+        half_tile = min(tile_size) // 2
         # max_size is the minimum of the numbers of x and y pixels
         max_size = min(shape[-2:])
         # find the tiles
@@ -509,5 +487,5 @@ def set_areas_of_interest(
         # one tile with its centre at the image's centre
         yx_shape = shape[-2:]
         tile_locs = (tuple(x // 2 for x in yx_shape),)
-        tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=min(yx_shape))
+        tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=yx_shape)
     return tile_locs
