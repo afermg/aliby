@@ -94,10 +94,17 @@ def pipeline_step(
         for kwd, from_step in this_step_receives:
             passed_data[kwd] = state["data"].get(from_step, [])
 
-            if not (
-                step_name == "track" and kwd == "masks"
-            ):  # Only tracking segmentation masks require multiple time points
-                if len(passed_data[kwd]):
+            if len(passed_data[kwd]):
+                if (
+                    step_name == "track" and kwd == "masks"
+                ):  # Only tracking segmentation masks require multiple time points
+                    # Convert tp,tile,y,x to tile,tp,y,x for stitch tracking
+                    passed_data[kwd] = [
+                        [tp_tiles[tile] for tp_tiles in passed_data[kwd][-2:]]
+                        for tile in range(len(passed_data[kwd][-1]))
+                    ]
+                    breakpoint()
+                else:  # We only care about the last time point
                     passed_data[kwd] = passed_data[kwd][-1]
 
         # Run step

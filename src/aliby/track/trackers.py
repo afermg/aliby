@@ -49,6 +49,8 @@ def stitch_rois(
         zip(masks, prev_labels, max_labels)
     ):
         pair_of_masks = np.array(masks_in_tile_pairs)
+        assert pair_of_masks.ndim == 3, "Masks are in wrong dimensions"
+
         result[k] = stitch(pair_of_masks, labels_in_tile, max_in_tile)
     return result
 
@@ -67,10 +69,12 @@ def stitch(
         max_label = masks.max()
     else:
         masks = update_labels(masks, prev_labels)
-        tracked_mask = stitch3D(masks)
-        max_label = max(max_label, masks.max())
+        tracked_mask = stitch3D(masks)[-1]
+        max_label = max(max_label, tracked_mask.max())
 
-    return {"labels": labels_from_masks(tracked_mask), "max_label": max_label}
+    result = {"labels": labels_from_masks(tracked_mask), "max_label": max_label}
+    breakpoint()
+    return result
 
 
 def update_labels(masks: np.ndarray, prev_labels: list[int] = []) -> np.ndarray:
