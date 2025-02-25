@@ -73,7 +73,6 @@ def stitch(
         max_label = max(max_label, tracked_mask.max())
 
     result = {"labels": labels_from_masks(tracked_mask), "max_label": max_label}
-    breakpoint()
     return result
 
 

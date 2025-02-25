@@ -103,7 +103,6 @@ def pipeline_step(
                         [tp_tiles[tile] for tp_tiles in passed_data[kwd][-2:]]
                         for tile in range(len(passed_data[kwd][-1]))
                     ]
-                    breakpoint()
                 else:  # We only care about the last time point
                     passed_data[kwd] = passed_data[kwd][-1]
 
