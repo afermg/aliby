@@ -669,6 +669,15 @@ class Extractor(StepABC):
             tps = list(range(self.meta["time_settings/ntimepoints"][0]))
         elif isinstance(tps, int):
             tps = [tps]
+
+        # Parse tracking input, which allows to pas raw tracking output
+        raw_tracking_info = kwargs.get("cell_labels", {})
+        tracking_vals = list(raw_tracking_info.values())
+        if len(tracking_vals) and isinstance(tracking_vals[0], dict):
+            kwargs["cell_labels"] = {
+                k: v["labels"] for k, v in raw_tracking_info.items()
+            }
+
         # store results in dict
         extract_dict = {}
         for tp in tps:

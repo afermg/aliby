@@ -109,13 +109,12 @@ def pipeline_step(
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
-
         state["data"][step_name].append(
             step_result  # TODO replace this with a variable to adjust ntps in memory
         )
 
         # Update state
-        if not (step_name in state["fn"]):
+        if step_name not in state["fn"]:
             state["fn"][step_name] = step  # the steps should not require update
         state["tps"][step_name] = tp + 1
 
