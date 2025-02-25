@@ -12,7 +12,6 @@ import aliby.global_settings as global_settings
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.dynamic_writer import load_meta
-from agora.io.writer import Writer
 from agora.utils.masks import transform_2d_to_3d
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.distributors import reduce_z
@@ -707,9 +706,6 @@ class Extractor(StepABC):
         # add cells' spatial locations within the image
         # TODO move this somewhere more sensible
         # self.add_spatial_locations_of_cells(extract_dict)
-        # save
-        if save:
-            self.save_to_h5(extract_dict)
         return extract_dict
 
     def add_spatial_locations_of_cells(self, extract_dict):
@@ -735,23 +731,6 @@ class Extractor(StepABC):
                 extract_dict["general/None/image_y"].copy()
                 + self.tiler.spatial_location[1]
             )
-
-    def save_to_h5(self, extract_dict, path=None):
-        """Save the extracted data for one position to the h5 file."""
-        if path is None:
-            path = self.h5path
-        self.writer = Writer(path)
-        for extract_name, data in extract_dict.items():
-            dset_path = "/extraction/" + extract_name
-            self.writer.write(dset_path, data)
-        self.writer.id_cache.clear()
-
-    def get_meta(self, flds: t.Union[str, t.Collection]):
-        """Obtain metadata for one or multiple fields."""
-        if isinstance(flds, str):
-            flds = [flds]
-        meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
-        return {f: meta_short.get(f, self.default_meta.get(f, None)) for f in flds}
 
 
 def flatten_nesteddict(

@@ -33,14 +33,12 @@ import re
 import typing as t
 import warnings
 from functools import lru_cache
-from pathlib import Path
 
 import dask.array as da
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
 from agora.abc import ParametersABC, StepABC
-from agora.io.writer import BridgeH5
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations
 

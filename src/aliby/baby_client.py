@@ -6,7 +6,6 @@ import itertools
 import re
 import typing as t
 from pathlib import Path
-from time import perf_counter
 
 import numpy as np
 from baby import modelsets
