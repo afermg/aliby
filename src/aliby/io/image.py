@@ -366,31 +366,34 @@ class ImageList(BaseLocalImage):
             for x in lazy_arrays
         ]
 
-        order = tuple(self.dimorder_d[k] for k in self.dimorder if k in "TCZ")
+        # Maintain the original order
+        order, shape = list(
+            zip(*[(k, self.dimorder_d[k]) for k in self.dimorder_d if k in "TCZ"])
+        )
+
         arr = np.zeros(
-            order + (1, 1),
+            shape + (1, 1),
             dtype=object,
         )
-        nd_order = np.array(
+        nd_shape = np.array(
             np.where(
-                np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(order) + 1
+                np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape) + 1
             )
         ).transpose()
 
-        for i, (d1, d2, d3) in enumerate(nd_order):
-            if i < len(lazy_arrays):
-                arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
-            else:
-                arr[d1, d2, d3, 0, 0] = da.from_delayed(
-                    dask.delayed(np.zeros)(sample.shape),
-                    shape=sample.shape,
-                    dtype=sample.dtype,
-                )
+        for i, (d1, d2, d3) in enumerate(nd_shape):
+            arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
 
         a = da.block(arr.tolist())
-
         # rechunk to the last 3 dimensions. Leave time and channel unchunked
         pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
+        # Move axes to match dimorder
+        source_target = {
+            order.index(y): i
+            for i, y in enumerate([x for x in self.dimorder if x in order])
+        }
+
+        pixels = da.moveaxis(pixels, source_target.keys(), source_target.values())
 
         return pixels
 
@@ -425,9 +428,9 @@ def get_dims_from_names(
     }
 
     # Check that the dimensions match the file
-    if len(image_filenames) != np.prod(dim_size.values()):
-        print(
-            "Warning: The number of available images does not match the expected one given the dimensions and their maximum values. Will pad to match."
+    if len(image_filenames) != np.prod(list(dim_size.values())):
+        raise Exception(
+            "The number of available images does not match the expected one given the dimensions and their maximum values. Please remove extra files."
         )
 
     return dim_size
