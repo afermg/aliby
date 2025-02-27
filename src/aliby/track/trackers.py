@@ -68,7 +68,7 @@ def stitch(
         tracked_mask = masks
         max_label = masks.max()
     else:
-        masks = update_labels(masks, prev_labels)
+        masks[0] = update_labels(masks[0], prev_labels)
         tracked_mask = stitch3D(masks)[-1]
         max_label = max(max_label, tracked_mask.max())
 
@@ -80,7 +80,7 @@ def update_labels(masks: np.ndarray, prev_labels: list[int] = []) -> np.ndarray:
     """
     Update the labels in masks to become prev_labels.
 
-    Masks must have the same unique numbers as labels (ignoring zero).s
+    Masks must have the same unique numbers as labels (ignoring zero).
     """
     updated_labels = masks
     if len(prev_labels):

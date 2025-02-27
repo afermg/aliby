@@ -8,6 +8,7 @@ from copy import copy
 from itertools import cycle
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import polars as pl
 
@@ -71,6 +72,7 @@ def run_step(step, *args, **kwargs):
 def pipeline_step(
     pipeline: dict,
     state: dict = {},
+    steps_dir: str = None,
 ) -> dict:
     """ """
     steps = pipeline["steps"]
@@ -115,32 +117,27 @@ def pipeline_step(
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
+
+        # Save state
+        steps_to_write = pipeline.get("save")
+        save_interval = pipeline.get("save_interval", 0)
+        if all((steps_to_write, tp, not (tp % save_interval))):
+            if step_name in steps_to_write:
+                write_fn = dispatch_write_fn(step_name)
+                write_fn(step_result, steps_dir=steps_dir)
+
+        # Update state
         state["data"][step_name].append(
             step_result  # TODO replace this with a variable to adjust ntps in memory
         )
+        state["data"][step_name] = state["data"][step_name][-5:]
 
-        # Update state
+        # Update or initialise objects
         if step_name not in state["fn"]:
-            state["fn"][step_name] = step  # the steps should not require update
+            state["fn"][step_name] = step
         state["tps"][step_name] = tp + 1
 
     return state
-
-
-# TODO pass sorted images instead of wildcard
-def run_pipeline(pipeline: dict, img_source: str or list[str], ntps: int):
-    pipeline = copy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
-    data = []
-    state = {}
-
-    for i in range(ntps):
-        state = pipeline_step(pipeline, state)
-        new_data = format_extraction(state["data"]["extract"][-1])
-        data.append(new_data)
-
-    extracted_fov = pl.concat(data)
-    return extracted_fov
 
 
 def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
@@ -215,6 +212,24 @@ def label_and_concat_extraction(
     return extracted_dataset.select()
 
 
+# TODO pass sorted images instead of wildcard
+def run_pipeline(
+    pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
+):
+    pipeline = copy(pipeline)
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
+    data = []
+    state = {}
+
+    for i in range(ntps):
+        state = pipeline_step(pipeline, state, steps_dir=steps_dir)
+        new_data = format_extraction(state["data"]["extract"][-1])
+        data.append(new_data)
+
+    extracted_fov = pl.concat(data)
+    return extracted_fov
+
+
 def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
     """
     Runs a pipeline and saves the result to a parquet file.
@@ -245,3 +260,19 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
             out_dir.mkdir(parents=True, exist_ok=True)
         result.write_parquet(out_file)
     return result
+
+
+def dispatch_write_fn(
+    step_name: str,
+):
+    match step_name:
+        case "segment":
+
+            def write_masks(result, steps_dir: Path, tp: int):
+                steps_dir.mkdir(exist_ok=True, parents=True)
+                out_file = Path(steps_dir) / f"{step_name}_{tp:04d}.npz"
+                np.savez(out_file, np.array(result))
+
+            return write_masks
+        case _:
+            raise Exception(f"Writing {step_name} is not supported yet")

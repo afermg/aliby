@@ -601,9 +601,7 @@ class Extractor(StepABC):
         img_bgsub = {}
         av_channels = [x for x in tree if x != "general"]
 
-        # for ch, _ in tree["channels_tree"].items():
         for ch in tree:
-            # NB ch != is necessary for threading
             if tiles is not None and len(tiles) and ch != "general":
                 # image data for all traps for a particular channel and
                 # time point arranged as (traps, Z, X, Y)
