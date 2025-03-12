@@ -6,18 +6,18 @@ from skimage import feature, transform
 from skimage.filters import threshold_otsu
 from skimage.filters.rank import entropy
 from skimage.measure import label, regionprops
-from skimage.morphology import closing, disk, square
+from skimage.morphology import closing, disk, footprint_rectangle
 from skimage.segmentation import clear_border
 from skimage.util import img_as_ubyte
 
 
 def half_floor(x, tile_size):
-    # round down tile_size
+    """Round down tile_size."""
     return x - tile_size // 2
 
 
 def half_ceil(x, tile_size):
-    # round up tile_size
+    """Round up tile_size."""
     return x + -(tile_size // -2)
 
 
@@ -30,12 +30,10 @@ def segment_traps(
     min_frac_tilesize=0.3,
     **identify_traps_kwargs,
 ):
-    """
-    Use an entropy filter and Otsu thresholding to find a trap template,
-    which is then passed to identify_trap_locations.
+    """Find a trap template using an entropy filter and Otsu thresholding.
 
-    To obtain candidate traps the major axis length of a tile must be
-    smaller than tilesize.
+    Pass template to identify_trap_locations. To obtain candidate traps
+    the major axis length of a tile must be smaller than tilesize.
 
     The hyperparameters have not been optimised.
 
@@ -84,7 +82,9 @@ def segment_traps(
     # find Otsu threshold for entropy image
     thresh = threshold_otsu(entropy_image)
     # apply morphological closing to thresholded, and so binary, image
-    bw = closing(entropy_image > thresh, square(square_size))
+    bw = closing(
+        entropy_image > thresh, footprint_rectangle((square_size, square_size))
+    )
     # remove artifacts connected to image border
     cleared = clear_border(bw)
     # label distinct regions of the image
@@ -145,10 +145,13 @@ def segment_traps(
 
 
 def identify_trap_locations(
-    image, trap_template, optimize_scale=True, downscale=0.35, trap_size=None
+    image,
+    trap_template,
+    optimize_scale=True,
+    downscale=0.35,
+    trap_size=None,
 ):
-    """
-    Identify the traps in a single image based on a trap template.
+    """Identify the traps in a single image based on a trap template.
 
     Requires the trap template to be similar to the image
     (same camera, same magnification - ideally the same experiment).

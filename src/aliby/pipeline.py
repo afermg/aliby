@@ -16,19 +16,10 @@ import baby
 import baby.errors
 import numpy as np
 import tensorflow as tf
-from pathos.multiprocessing import Pool
-from tqdm import tqdm
-
-try:
-    if baby.__version__:
-        from aliby.baby_sitter import BabyParameters, BabyRunner
-except AttributeError:
-    from aliby.baby_client import BabyParameters, BabyRunner
-
 from agora.abc import ParametersABC, ProcessABC
+from agora.io.dynamic_writer import LinearBabyWriter, StateWriter, TilerWriter
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
-from agora.io.dynamic_writer import LinearBabyWriter, StateWriter, TilerWriter
 from agora.io.writer import Writer
 from extraction.core.extractor import (
     Extractor,
@@ -36,12 +27,15 @@ from extraction.core.extractor import (
     extraction_params_from_meta,
 )
 from extraction.core.recursive_merge import recursive_merge_extractor
+from pathos.multiprocessing import Pool
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+from tqdm import tqdm
 
 import aliby.global_settings as global_settings
+from aliby.baby_sitter import BabyParameters, BabyRunner
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
