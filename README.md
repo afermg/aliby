@@ -59,7 +59,7 @@ pip install omero-py
 poetry install --with omero
  ```
 
-- If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html)
+- If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
 
 - You may have an issue with Matplotlib crashing.
 Use conda to install a different version:
