@@ -22,7 +22,7 @@ Then
 - Create and activate an alibylite virtual environment
 
 ```bash
-conda create -n alibylite python=3.10
+conda create -n alibylite python=3.11
 conda activate alibylite
  ```
 
@@ -73,6 +73,12 @@ conda search -f matplotlib
  ```bash 
 conda install matplotlib=3.8.0 
  ```
+ - On an M4 Mac, you need to install tensorflow by hand:
+ 
+```bash 
+pip install tensorflow-macos==2.14
+pip install tensorflow-metal==1.2.0
+```
 
  - On an M1 Mac, these commands proved helpful
 
