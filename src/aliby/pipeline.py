@@ -100,6 +100,8 @@ class PipelineParameters(ParametersABC):
             expt_id = str(general["expt_id"])
         else:
             expt_id = general["expt_id"]
+        if "directory" not in general:
+            general["directory"] = "."
         directory = Path(general["directory"])
         # get metadata from log files either locally or via OMERO
         with dispatch_dataset(
