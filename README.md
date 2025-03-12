@@ -59,9 +59,16 @@ pip install omero-py
 poetry install --with omero
  ```
 
+- On an M4 Mac, you need to install tensorflow by hand:
+ 
+```bash 
+pip install tensorflow-macos==2.14
+pip install tensorflow-metal==1.2.0
+```
+
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
 
-- You may have an issue with Matplotlib crashing.
+- You may have a Matplotlib that crashes.
 Use conda to install a different version:
 
 ```bash 
@@ -73,12 +80,6 @@ conda search -f matplotlib
  ```bash 
 conda install matplotlib=3.8.0 
  ```
- - On an M4 Mac, you need to install tensorflow by hand:
- 
-```bash 
-pip install tensorflow-macos==2.14
-pip install tensorflow-metal==1.2.0
-```
 
  - On an M1 Mac, these commands proved helpful
 
