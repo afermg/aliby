@@ -50,7 +50,7 @@ For a Mac, use:
 
 ```bash 
 conda install -c conda-forge zeroc-ice==3.6.5
-conda install omero-py
+pip install omero-py
  ```
 
  For everything else, use:
@@ -58,6 +58,8 @@ conda install omero-py
  ```bash 
 poetry install --with omero
  ```
+
+- If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html)
 
 - You may have an issue with Matplotlib crashing.
 Use conda to install a different version:
