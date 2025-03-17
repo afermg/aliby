@@ -417,20 +417,6 @@ class Extractor(StepABC):
             reduced = reduce_z(img, method)
         return reduced
 
-    def get_masks(self, tp, masks, cells):
-        """Get the masks as a list with an array of masks for each trap."""
-        # find the cell masks for a given trap as a dict with trap_ids as keys
-        if masks is None:
-            raw_masks = cells.at_time(tp, kind="mask")
-            masks = {trap_id: [] for trap_id in range(cells.ntraps)}
-            for trap_id, cells in raw_masks.items():
-                if len(cells):
-                    masks[trap_id] = np.stack(np.array(cells)).astype(bool)
-        # convert to a list of masks
-        # one array of size (no cells, tile_size, tile_size) per trap
-        masks = [np.array(v) for v in masks.values()]
-        return masks
-
     def get_cell_labels(self, tp, cell_labels, cells):
         """Get the cell labels per trap as a dict with trap_ids as keys."""
         if cell_labels is None:
@@ -553,9 +539,6 @@ class Extractor(StepABC):
         if tree is None:
             tree = self.params.tree
 
-        # get masks one per cell per trap
-        if masks is None:
-            masks = self.get_masks(tp, masks, Cells(self.h5path))
         # Only get last mask if it is a list of lists
         # which means that multiple tps are passed as args
         elif isinstance(masks[0], list):
