@@ -35,7 +35,7 @@ def init_step(
             image = image_type(**image_kwargs)
 
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
-        case "segment":
+        case s if s.startswith("segment"):
             if (
                 parameters["segmenter_kwargs"]["kind"] == "baby"
             ):  # Baby needs a tiler inside
@@ -49,7 +49,7 @@ def init_step(
             ):  # Tracker needs to pull info from baby crawler
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
-        case "extract":
+        case s if s.startswith("extract"):
             tiler = other_steps["tile"]
             step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
         case _:
@@ -111,9 +111,10 @@ def pipeline_step(
         # Run step
         args = []
         if (
-            step_name == "segment" and parameters["segmenter_kwargs"]["kind"] != "baby"
+            step_name.startswith("segment")
+            and parameters["segmenter_kwargs"]["kind"] != "baby"
         ):  # Pass correct images from tiler
-            source_step, method, param_name = passed_methods.get("segment")
+            source_step, method, param_name = passed_methods.get(step_name)
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
@@ -121,15 +122,14 @@ def pipeline_step(
         # Save state
         steps_to_write = pipeline.get("save")
         save_interval = pipeline.get("save_interval", 0)
-        if all((steps_to_write, tp, not (tp % save_interval))):
+        if len(steps_to_write) and not (tp % save_interval):
             if step_name in steps_to_write:
                 write_fn = dispatch_write_fn(step_name)
-                write_fn(step_result, steps_dir=steps_dir)
+                write_fn(step_result, steps_dir=steps_dir, tp=tp)
 
         # Update state
-        state["data"][step_name].append(
-            step_result  # TODO replace this with a variable to adjust ntps in memory
-        )
+        # TODO replace this with a variable to adjust ntps in memory
+        state["data"][step_name].append(step_result)
         state["data"][step_name] = state["data"][step_name][-5:]
 
         # Update or initialise objects
@@ -212,19 +212,34 @@ def label_and_concat_extraction(
     return extracted_dataset.select()
 
 
+def _validate_pipeline(pipeline: dict):
+    """
+    Sanity checks before computationally expensive operations.
+    """
+    steps_to_write = pipeline.get("save")
+    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
+
+
 # TODO pass sorted images instead of wildcard
 def run_pipeline(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
 ):
+    _validate_pipeline(pipeline)
+
     pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     data = []
     state = {}
 
+    results_objects = [
+        x.split("_")[1] for x in pipeline["steps"] if x.startswith("extract")
+    ]
     for i in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
-        new_data = format_extraction(state["data"]["extract"][-1])
-        data.append(new_data)
+        for obj in results_objects:
+            new_data = format_extraction(state["data"][f"extract_{obj}"][-1])
+            new_data.with_columns(object=pl.lit(obj))
+            data.append(new_data)
 
     extracted_fov = pl.concat(data)
     return extracted_fov
@@ -251,13 +266,13 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
     result
         The result of running the pipeline.
     """
-    print(f"Running {out_file}\n")
+    print(f"Running {out_file}")
     result = None
     if overwrite or not Path(out_file).exists():
         result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
         if not out_dir.exists():  # Only create a dir after we have files to save
-            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "profiles").mkdir(parents=True, exist_ok=True)
         result.write_parquet(out_file)
     return result
 
@@ -266,7 +281,7 @@ def dispatch_write_fn(
     step_name: str,
 ):
     match step_name:
-        case "segment":
+        case s if s.startswith("segment"):
 
             def write_masks(result, steps_dir: Path, tp: int):
                 steps_dir.mkdir(exist_ok=True, parents=True)
