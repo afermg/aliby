@@ -238,7 +238,7 @@ def run_pipeline(
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
         for obj in results_objects:
             new_data = format_extraction(state["data"][f"extract_{obj}"][-1])
-            new_data.with_columns(object=pl.lit(obj))
+            new_data = new_data.with_columns(object=pl.lit(obj))
             data.append(new_data)
 
     extracted_fov = pl.concat(data)
@@ -271,9 +271,9 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
     if overwrite or not Path(out_file).exists():
         result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
-        if not out_dir.exists():  # Only create a dir after we have files to save
-            (out_dir / "profiles").mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
         result.write_parquet(out_file)
+
     return result
 
 
