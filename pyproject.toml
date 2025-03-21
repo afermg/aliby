@@ -33,6 +33,13 @@ tqdm = "^4.67.1"
 xmltodict = "^0.14.2"
 zarr = "^3.0.3"
 
+
+[tool.poetry.group.omero]
+optional = true
+[tool.poetry.group.omero.dependencies]
+omero-py = ">=5.19.1"
+
+
 [tool.poetry.group.baby]
 optional = true
 [tool.poetry.group.baby.dependencies]
