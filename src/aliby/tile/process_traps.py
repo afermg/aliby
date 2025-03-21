@@ -6,9 +6,14 @@ from skimage import feature, transform
 from skimage.filters import threshold_otsu
 from skimage.filters.rank import entropy
 from skimage.measure import label, regionprops
-from skimage.morphology import closing, disk, footprint_rectangle
+from skimage.morphology import closing, disk
 from skimage.segmentation import clear_border
 from skimage.util import img_as_ubyte
+
+try:
+    from skimage.morphology import footprint_rectangle
+except ImportError:
+    from skimage.morphology import square
 
 
 def half_floor(x, tile_size):
@@ -82,9 +87,14 @@ def segment_traps(
     # find Otsu threshold for entropy image
     thresh = threshold_otsu(entropy_image)
     # apply morphological closing to thresholded, and so binary, image
-    bw = closing(
-        entropy_image > thresh, footprint_rectangle((square_size, square_size))
-    )
+    if "footprint_rectangle" in globals():
+        bw = closing(
+            entropy_image > thresh,
+            footprint_rectangle((square_size, square_size)),
+        )
+    else:
+        bw = closing(entropy_image > thresh, square(square_size))
+
     # remove artifacts connected to image border
     cleared = clear_border(bw)
     # label distinct regions of the image
