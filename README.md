@@ -76,7 +76,8 @@ pip install tensorflow-metal==1.2.0
 - If you'd like to use wela's imageviewer, you also should running
 
 ```bash 
-pip install napari PyQt5==5.15.9
+pip install "PyQt5<5.16"
+pip install napari 
  ```
 
 **Old suggestions for the Python 3.10 version**
