@@ -52,7 +52,7 @@ pip install ipython seaborn
 
 - Install omero-py.
 
-A failsafe method is to use:
+A fail-safe method is to use:
 
 ```bash 
 conda install -c conda-forge zeroc-ice==3.6.5
@@ -64,7 +64,7 @@ but, depending on success with installing zeroc-ice, this might work too
 poetry install --with omero
  ```
 
-- On an M4 Mac, you need to install tensorflow by hand:
+- On an M4 Mac, you may need to install tensorflow by hand:
  
 ```bash 
 pip install tensorflow-macos==2.14
@@ -72,6 +72,12 @@ pip install tensorflow-metal==1.2.0
 ```
 
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
+
+- If you'd like to use wela's imageviewer, you also should running
+
+```bash 
+pip install napari PyQt5==5.15.9
+ ```
 
 **Old suggestions for the Python 3.10 version**
 
