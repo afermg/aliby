@@ -31,6 +31,12 @@ conda activate alibylite
 ```bash 
 poetry install --with baby
  ```
+ 
+ If you are upgrading to python 3.11, you need to remove the old Baby models:
+
+ ```bash 
+rm -rf ~/.baby_models
+ ```
 
 - Git clone wela, change to the wela directory with the poetry.lock file, and use poetry to install:
 
@@ -46,14 +52,13 @@ pip install ipython seaborn
 
 - Install omero-py.
 
-For a Mac, use:
+A failsafe method is to use:
 
 ```bash 
 conda install -c conda-forge zeroc-ice==3.6.5
 pip install omero-py
  ```
-
- For everything else, use:
+but, depending on success with installing zeroc-ice, this might work too 
 
  ```bash 
 poetry install --with omero
@@ -67,6 +72,8 @@ pip install tensorflow-metal==1.2.0
 ```
 
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
+
+**Old suggestions for the Python 3.10 version**
 
 - You may have a Matplotlib that crashes.
 Use conda to install a different version:
