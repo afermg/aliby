@@ -258,8 +258,6 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
     or an expression with a wildcard.
     out_file : str or Path
         Output file path for the result.
-    ntps : int, optional
-        Number of threads to use (default is 1).
 
     Returns
     -------

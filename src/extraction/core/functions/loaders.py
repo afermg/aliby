@@ -136,11 +136,7 @@ def load_funs():
     return CELL_FUNS, TRAP_FUNS, {**TRAP_FUNS, **CELL_FUNS}
 
 
-def load_redfuns(
-    additional_reducers: t.Optional[
-        t.Union[t.Dict[str, t.Callable], t.Callable]
-    ] = None,
-) -> t.Dict[str, t.Callable]:
+def load_redfuns() -> t.Dict[str, t.Callable]:
     """
     Load functions to reduce a multidimensional image by one dimension.
 
@@ -150,17 +146,13 @@ def load_redfuns(
         Functions to perform the reduction.
     """
     RED_FUNS = {
-        "max": np.nanmax,
-        "mean": np.nanmean,
-        "median": np.nanmedian,
+        "max": np.maximum,
+        "mean": np.mean,
+        "median": np.median,
         "div0": div0,
-        "add": np.nansum,
+        "add": np.add,
         "None": None,
     }
-    if additional_reducers is not None:
-        if isinstance(additional_reducers, FunctionType):
-            additional_reducers = [(additional_reducers.__name__, additional_reducers)]
-        RED_FUNS.update(additional_reducers)
     return RED_FUNS
 
 

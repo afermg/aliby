@@ -382,7 +382,7 @@ class Extractor(StepABC):
         if tiles is not None:
             for reduction in reduction_cell_funs.keys():
                 reduced_tiles[reduction] = [
-                    self.reduce_dims(tile_data, method=REDUCTION_FUNS[reduction])
+                    reduce_dims(tile_data, method=REDUCTION_FUNS[reduction])
                     for tile_data in tiles
                 ]
         # calculate cell and tile properties
@@ -396,26 +396,6 @@ class Extractor(StepABC):
             for reduction, cell_funs in reduction_cell_funs.items()
         }
         return d
-
-    def reduce_dims(
-        self, img: np.ndarray, method: reduction_method = None
-    ) -> np.ndarray:
-        """
-        Collapse a z-stack into 2d array using method.
-
-        If method is None, return the original data.
-
-        Parameters
-        ----------
-        img: array
-            An array of the image data arranged as (X, Y, Z).
-        method: function
-            The reduction function.
-        """
-        reduced = img
-        if method is not None:
-            reduced = reduce_z(img, method)
-        return reduced
 
     def get_cell_labels(self, tp, cell_labels, cells):
         """Get the cell labels per trap as a dict with trap_ids as keys."""
@@ -784,3 +764,26 @@ def get_foreground_from_tile(
         foreground = masks_in_tile > 0
 
     return foreground
+
+
+def reduce_dims(img: np.ndarray, method: reduction_method = None) -> np.ndarray:
+    """
+    Collapse a z-stack into 2d array using method.
+
+    If method is None, return the original data.
+
+    Parameters
+    ----------
+    img: array
+        An array of the image data arranged as (Z, Y, X).
+    method: function
+        The reduction function.
+
+    Parameters
+    ----------
+    A 2D array of X,Y dimensions.
+    """
+    reduced = img
+    if method is not None:
+        reduced = reduce_z(img, method)
+    return reduced
