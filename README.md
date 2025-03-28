@@ -73,6 +73,12 @@ pip install tensorflow-metal==1.2.0
 
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
 
+For example:
+
+```bash
+pip install https://github.com/glencoesoftware/zeroc-ice-py-linux-x86_64/releases/download/20240202/zeroc_ice-3.6.5-cp311-cp311-manylinux_2_28_x86_64.whl
+```
+
 - If you'd like to use wela's imageviewer, you also should run
 
 ```bash 
