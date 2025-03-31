@@ -53,7 +53,6 @@
             let
               python_with_pkgs = pkgs.python311.withPackages (pp: [
                 # Add python pkgs here that you need from nix repos
-                python311Packages.cupy
               ]);
             in
             mkShell {
