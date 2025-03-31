@@ -54,6 +54,7 @@
                   packages = with pkgs; [
                     mpkgs.poetry
                     python310
+                    uv
                   ];
                   enterShell = ''
                     export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
