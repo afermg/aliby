@@ -11,7 +11,7 @@ Once uv is installed, we suggest running
 ```bash
 git clone git@github.com:afermg/aliby.git
 cd aliby
-uv sync
+uv sync # --extra cellpose
 ```
 
 ## Nix installation (experimental)
