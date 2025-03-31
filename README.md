@@ -4,86 +4,14 @@ End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentati
 
 ## Installation
 
-We recommend installing both ALIBY and WELA. 
+We recommend using [uv](https://github.com/astral-sh/uv) to install aliby
 
-To begin you should install [miniconda](https://docs.anaconda.com/free/miniconda/index.html) and [poetry](https://python-poetry.org).
-
-
-Once poetry is installed, we suggest running
+Once uv is installed, we suggest running
 
 ```bash
-poetry config virtualenvs.create false
- ```
-
-so that only conda creates virtual environments.
-
-Then
-
-- Create and activate an alibylite virtual environment
-
-```bash
-conda create -n alibylite python=3.10
-conda activate alibylite
- ```
-
-- Git clone alibylite, change to the alibylite directory with the poetry.lock file, and use poetry to install:
-
-```bash 
-poetry install
- ```
-
-- Git clone wela, change to the wela directory with the poetry.lock file, and use poetry to install:
-
-```bash 
-poetry install
- ```
-
-- Use pip to install your usual Python working environment. For example:
-
-```bash 
-pip install ipython seaborn
- ```
-
-- Install omero-py.
-
-For a Mac, use:
-
-```bash 
-conda install -c conda-forge zeroc-ice==3.6.5
-conda install omero-py
- ```
-
- For everything else, use:
-
- ```bash 
-poetry install --all-extras
- ```
-
-- You may have an issue with Matplotlib crashing.
-Use conda to install a different version:
-
-```bash 
-conda search -f matplotlib       
- ```
-
- and, for example, 
-
- ```bash 
-conda install matplotlib=3.8.0 
- ```
-
- - On an M1 Mac, these commands proved helpful
-
- ```bash 
-conda install openblas
-conda uninstall numpy
-conda install numpy    
- ```
-
- and reinstalling tensorflow
-
- ```bash 
-python -m pip install tensorflow-macos==2.9.0 tensorflow-metal==0.5.0 --force-reinstall
+git clone git@github.com:afermg/aliby.git
+cd aliby
+uv sync
 ```
 
 ## Nix installation (experimental)
@@ -93,7 +21,7 @@ For reproducible environments using [Nix](https://github.com/NixOS/nix) flakes a
 
 To run a self-contained virtual environment shell session
 ```bash
-nix develop . --impure
+nix develop . 
 ```
 For convenience, to start the environment every time you access the project you automatically set the environment
 ```bash
