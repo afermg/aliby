@@ -1,5 +1,6 @@
 import typing as t
 
+import bottleneck as bn
 import numpy as np
 
 
@@ -24,7 +25,7 @@ def trap_apply(masks, *args, cell_fun=None, **kwargs):
 
 def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     """
-    Reduce the 3D image to 2d.
+    Reduce the trap_image to 2d.
 
     Parameters
     ----------
@@ -35,7 +36,12 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     axis: int (default 0)
         Axis in which we apply the reduction operation.
     """
-    if isinstance(fun, np.ufunc):
+    # FUTURE replace with py3.10's match-case.
+    if (
+        hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck"
+    ):  # Bottleneck type
+        return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
+    elif isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
         return fun.reduce(trap_image, axis=axis)
     else:

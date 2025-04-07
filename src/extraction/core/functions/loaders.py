@@ -3,6 +3,7 @@ from functools import partial
 from inspect import getfullargspec, getmembers, isfunction
 from types import FunctionType
 
+import bottleneck as bn
 import numpy as np
 from cp_measure.bulk import get_core_measurements
 from skimage.measure import regionprops_table
@@ -146,11 +147,11 @@ def load_redfuns() -> t.Dict[str, t.Callable]:
         Functions to perform the reduction.
     """
     RED_FUNS = {
-        "max": np.maximum,
-        "mean": np.mean,
-        "median": np.median,
+        "max": bn.nanmax,
+        "mean": bn.nanmean,
+        "median": bn.nanmedian,
         "div0": div0,
-        "add": np.add,
+        "add": bn.nansum,
         "None": None,
     }
     return RED_FUNS
