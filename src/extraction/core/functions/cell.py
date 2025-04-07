@@ -6,10 +6,6 @@ so can only have the cell_mask and trap_image as inputs. They
 must return only one value.
 
 They assume that there are no NaNs in the image.
-
-We use the module bottleneck when it performs faster than numpy:
-- median
-- values containing NaNs (but we make sure this never happens).
 """
 
 import math
@@ -187,9 +183,7 @@ def conical_volume(cell_mask):
         Segmentation mask for the cell
     """
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
-    nearest_neighbor = (
-        ndimage.morphology.distance_transform_edt(padded == 1) * padded
-    )
+    nearest_neighbor = ndimage.morphology.distance_transform_edt(padded == 1) * padded
     return 4 * np.sum(nearest_neighbor)
 
 
@@ -287,12 +281,8 @@ def ratio(cell_mask, trap_image):
 
 def centroid(cell_mask):
     """Find the cell's centroid."""
-    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
-        1, cell_mask.shape[1]
-    )
-    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(
-        cell_mask.shape[0], 1
-    )
+    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(1, cell_mask.shape[1])
+    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(cell_mask.shape[0], 1)
     # moments
     M00 = np.sum(cell_mask)
     M10 = np.sum(np.multiply(cell_mask, weights_c))
