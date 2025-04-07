@@ -62,8 +62,10 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             # It returns a function to segment
             from cellpose.models import CellposeModel
 
+            # Meta parameters
             model = kind
             gpu = kwargs.pop("gpu", False)
+            device = kwargs.pop("device", None)
 
             argname = "model_type"
             # use custom models if fullpath is provided
@@ -74,6 +76,7 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                     argname: model,
                 },
                 gpu=gpu,
+                device=device,
             )
 
             # ensure it returns only masks
