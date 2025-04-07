@@ -63,11 +63,18 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             from cellpose.models import CellposeModel
 
             model = kind
+            gpu = kwargs.pop("gpu", False)
+
             argname = "model_type"
             # use custom models if fullpath is provided
             if model.startswith("/"):
                 argname = "pretrained_model"
-            model = CellposeModel(**{argname: model})
+            model = CellposeModel(
+                **{
+                    argname: model,
+                },
+                gpu=gpu,
+            )
 
             # ensure it returns only masks
             # TODO generalise so it does not assume a 1-tile file
