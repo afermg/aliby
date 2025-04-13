@@ -22,13 +22,13 @@ def trap_apply(masks, *args, cell_fun=None, **kwargs):
     return [cell_fun(mask, *args, **kwargs) for mask in masks]
 
 
-def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
+def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0):
     """
     Reduce the 3D image to 2d.
 
     Parameters
     ----------
-    trap_image: array
+    pixels: array
         Images for all the channels associated with a trap
     fun: function
         Function to execute the reduction
@@ -37,7 +37,7 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     """
     if isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
-        return fun.reduce(trap_image, axis=axis)
+        return fun.reduce(pixels, axis=axis)
     else:
         # WARNING: Very slow, only use when no alternatives exist
-        return np.apply_along_axis(fun, axis, trap_image)
+        return np.apply_along_axis(fun, axis, pixels)
