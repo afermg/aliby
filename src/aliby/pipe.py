@@ -74,7 +74,8 @@ def pipeline_step(
     state: dict = {},
     steps_dir: str = None,
 ) -> dict:
-    """ """
+    """Run one step of the pipeline."""
+
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
     passed_methods = pipeline["passed_methods"]
@@ -84,7 +85,6 @@ def pipeline_step(
 
     for step_name, parameters in steps.items():
         # Get or initialise step
-
         if step_name not in state["data"]:
             state["data"][step_name] = []
         step = state["fn"].get(step_name, init_step(step_name, parameters, state["fn"]))
@@ -238,8 +238,9 @@ def run_pipeline(
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
         for obj in results_objects:
             new_data = format_extraction(state["data"][f"extract_{obj}"][-1])
-            new_data = new_data.with_columns(object=pl.lit(obj))
-            data.append(new_data)
+            if len(new_data):  # Cover case whence measurements are empty
+                new_data = new_data.with_columns(object=pl.lit(obj))
+                data.append(new_data)
 
     extracted_fov = pl.concat(data)
     return extracted_fov
