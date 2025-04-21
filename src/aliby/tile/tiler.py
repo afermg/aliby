@@ -257,7 +257,14 @@ class Tiler(StepABC):
         # update no_processed
         self.no_processed = tp + 1
         # return result for writer
-        return self.tile_locs.to_dict(tp)
+        return {"drift": self.tile_locs.to_dict(tp), "pixels": self.get_pixels(tp)}
+
+    def get_pixels(self, tp: int) -> da.array:
+        """
+        Load multidimensional image for a given time point.
+        Note that this one does not apply image tracking.
+        """
+        return self.pixels[tp]
 
     @lru_cache(maxsize=2)
     def load_image(self, tp: int, c: int) -> np.ndarray:

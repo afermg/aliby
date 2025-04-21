@@ -4,7 +4,7 @@ from inspect import getfullargspec, getmembers, isfunction
 from types import FunctionType
 
 import numpy as np
-from cp_measure.bulk import get_core_measurements
+from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
@@ -115,6 +115,9 @@ def load_cellfuns():
     for fun_name, f in get_core_measurements().items():
         CELL_FUNS[fun_name] = partial(wrap_cp_measure_features, fun=f)
 
+    for fun_name, f in get_correlation_measurements().items():
+        CELL_FUNS[fun_name] = partial(wrap_cp_corr_features, fun=f)
+
     return CELL_FUNS
 
 
@@ -170,14 +173,24 @@ def get_sk_features(masks: np.ndarray, pixels: np.ndarray, feature: str):
             properties=(feature,),
             cache=False,
         )[feature][0]
-        for mask in masks.astype(np.uint8)
+        for mask in masks.astype(np.uint16)
     ]  # Assumes masks.dims=(N,Y,X)
 
 
 def wrap_cp_measure_features(
-    masks: np.ndarray, pixels=np.ndarray, fun: t.Callable = None
+    masks: np.ndarray, pixels: np.ndarray, fun: t.Callable = None
 ) -> t.Callable:
     results = [
-        {k: v[0] for k, v in fun(m, pixels).items()} for m in masks.astype(np.uint8)
+        {k: v[0] for k, v in fun(m, pixels).items()} for m in masks.astype(np.uint16)
+    ]
+    return results
+
+
+def wrap_cp_corr_features(
+    masks: np.ndarray, pixels1: np.ndarray, pixels2: np.ndarray, fun: t.Callable = None
+) -> t.Callable:
+    results = [
+        {k: v[0] for k, v in fun(m, pixels1, pixels2).items()}
+        for m in masks.astype(np.uint16)
     ]
     return results

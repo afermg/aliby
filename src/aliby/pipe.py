@@ -5,6 +5,7 @@ New and simpler pipeline that uses dictionaries as parameters and to define vari
 """
 
 from copy import copy
+from functools import partial
 from itertools import cycle
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
+from extraction.core.extract_new import extract_tree, extract_tree_multi
 from extraction.core.extractor import Extractor, ExtractorParameters
 
 
@@ -52,6 +54,10 @@ def init_step(
         case s if s.startswith("extract"):
             tiler = other_steps["tile"]
             step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
+        case s if s.startswith("ext_new"):
+            step = partial(extract_tree, tree=parameters["tree"])
+        case s if s.startswith("ext_new_multi"):
+            step = partial(extract_tree_multi, tree=parameters["tree_multi"])
         case _:
             raise ("Invalid step name")
 
@@ -94,19 +100,24 @@ def pipeline_step(
 
         passed_data = {}
         for kwd, from_step in this_step_receives:
-            passed_data[kwd] = state["data"].get(from_step, [])
+            passed_value = state["data"].get(from_step, [])
 
-            if len(passed_data[kwd]):
+            if len(passed_value):
                 if (
                     step_name == "track" and kwd == "masks"
                 ):  # Only tracking segmentation masks require multiple time points
                     # Convert tp,tile,y,x to tile,tp,y,x for stitch tracking
                     passed_data[kwd] = [
-                        [tp_tiles[tile] for tp_tiles in passed_data[kwd][-2:]]
-                        for tile in range(len(passed_data[kwd][-1]))
+                        [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
+                        for tile in range(len(passed_value[-1]))
                     ]
                 else:  # We only care about the last time point
-                    passed_data[kwd] = passed_data[kwd][-1]
+                    last_value = passed_value[-1]
+                    if isinstance(last_value, dict):  # Select a subfield of the data
+                        last_value = last_value[kwd]
+                    passed_data[kwd] = last_value
+
+                    # passed_data[kwd] = passed_value
 
         # Run step
         args = []

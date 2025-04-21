@@ -48,15 +48,16 @@ tree = {
 
 def measure(
     mask: da.array,
-    pixels: da.array,
+    pixels: da.array or None,
     reduction: Callable,
     metric: Callable,
 ) -> da.array:
     # Core function: Apply a metric on a z-reduced image and mask pairs
     result = da.array([])
     if len(mask):
-        reduced_pixels = reduce_z(pixels, reduction)
-        result = metric(mask, reduced_pixels)
+        if pixels is not None:
+            pixels = reduce_z(pixels, reduction)
+        result = metric(mask, pixels)
 
     return result
 
@@ -94,7 +95,7 @@ def extract_tree(
                 lambda x: when_da_compute(
                     measure(
                         masks,
-                        pixels[x[0]],
+                        pixels[x[0]] if x[0] is not None else None,
                         REDUCTION_FUNS[x[1]],
                         CELL_FUNS[x[2]],
                     )
@@ -120,7 +121,7 @@ def extract_tree_multi(
             ex.map(
                 lambda x: when_da_compute(
                     measure_multichannels(
-                        masks,  # binary masks
+                        masks,  # sk-like masks
                         da.stack(
                             (pixels[x[0][0]], pixels[x[0][1]]), axis=-1
                         ),  # pixels to combine on a new axis (at the end)
@@ -147,21 +148,21 @@ def when_da_compute(msmts: list[da.array or np.ndarray]):
         )
 
 
-tree_multi = {
-    (0, 1): {"div0": {"max": ["mean"]}},
-}
+# tree_multi = {
+#     (0, 1): {"div0": {"max": ["mean"]}},
+# }
 
-tree = {i: {"max": ["mean"]} for i in range(2)}
+# tree = {i: {"max": ["mean"]} for i in range(2)}
 
-masks = da.zeros((6, 100, 100), dtype=bool)
-ones = da.ones((15, 15))
-for i in range(6):
-    masks[i, 15 * i : 15 * (i + 1), 15 * i : 15 * (i + 1)] = ones
-rng = da.random.default_rng(1)
-pixels = rng.standard_normal(size=(3, 5, 100, 100)).compute()
-result = extract_tree(tree, masks, pixels)
-result_multi = extract_tree_multi(tree_multi, masks, pixels)
-print(result)
+# masks = da.zeros((6, 100, 100), dtype=bool)
+# ones = da.ones((15, 15))
+# for i in range(6):
+#     masks[i, 15 * i : 15 * (i + 1), 15 * i : 15 * (i + 1)] = ones
+# rng = da.random.default_rng(1)
+# pixels = rng.standard_normal(size=(3, 5, 100, 100)).compute()
+# result = extract_tree(tree, masks, pixels)
+# result_multi = extract_tree_multi(tree_multi, masks, pixels)
+# print(result)
 
 # TASKS
 # Add dual imports to aliby's function loader
