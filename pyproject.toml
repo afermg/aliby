@@ -14,16 +14,10 @@ dependencies = [
     "scipy>=1.7.3",
     "scikit-image>=0.18.1",
     "dask>=2021.12.0",
-    "flatten-dict>=0.4.2",
-    "h5py>=3.8.0",
     "zarr>=2.14.0",
-    "tensorflow>=2.13.1",
-    "polars>=1.5.0",
     "pyarrow>=15.0.1",
     "cp-measure>=0.1.7,<0.2",
-    "pandas>=2.2.3,<3",
     "pooch>=1.8.2,<2",
-    "duckdb>=1.2.2",
 ]
 
 [project.optional-dependencies]
@@ -31,12 +25,17 @@ cellpose = ["cellpose>=3.1.1.1"]
 baby = ["baby-seg>=0.30.6"]
 
 [dependency-groups]
+cellpose = [
+    "cellpose>=3.1.1.1",
+]
 dev = [
     "jupyter>=1.0.0,<2",
     "jupytext>=1.15.2,<2",
-    "ipdb>=0.13.13,<0.14",
     "ruff>=0.3.2",
     "ruff-lsp>=0.0.52",
+]
+examples = [
+    "pooch>=1.8.2",
 ]
 
 [tool.hatch.build.targets.sdist]
