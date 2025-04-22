@@ -1,11 +1,18 @@
+"""
+Obtain measurements from images and masks using a functional programming approach.
+"""
+
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from functools import reduce
+from functools import partial, reduce
 from itertools import product
 
 import dask.array as da
+import duckdb
 import numpy as np
+import pyarrow as pa
 
+from agora.utils.masks import transform_2d_to_3d
 from extraction.core.functions.distributors import reduce_z
 from extraction.core.functions.loaders import (
     load_funs,
@@ -28,22 +35,6 @@ def flatten(d, pref=""):
 
 def kv(flat: dict[tuple, list]):
     return [(*k1, v1) for k, v in flat.items() for k1, v1 in product((k,), v)]
-
-
-tree = {
-    None: {
-        "max": [
-            "area",
-            "centroid_x",
-            "centroid_y",
-        ]
-    },
-    1: {
-        "max": [
-            "max2p5pc",
-        ]
-    },
-}
 
 
 def measure(
@@ -80,62 +71,94 @@ def measure_multichannels(
     return result
 
 
+def measure_mono(tileid_x, masks, pixels, REDUCTION_FUNS, CELL_FUNS):
+    tileid, x = tileid_x
+    return when_da_compute(
+        measure(
+            masks[tileid],  # TODO formalise how to handle this
+            pixels[x[0]] if x[0] != "None" else None,
+            REDUCTION_FUNS[x[1]],
+            CELL_FUNS[x[2]],
+        )
+    )
+
+
 def extract_tree(
-    tree: dict[int, dict[str, list[str]]],
-    masks: da.array,
+    tileid_instructions: tuple[da.array, tuple[int or str, str, str, str]],
+    masks: list[da.array],
     pixels: da.array,
+    threaded: bool = True,
 ) -> dict[str, da.array]:
     """
-    Apply functions based on tree on the input dask arrays
+    Apply functions based on tree on the input dask arrays.
+
+    Instructions are # Channel, reduction, metric
     """
-    instructions = kv(flatten(tree))  # Channel, reduction, metric
-    with ThreadPoolExecutor() as ex:
-        result = list(
-            ex.map(
-                lambda x: when_da_compute(
-                    measure(
-                        masks,
-                        pixels[x[0]] if x[0] is not None else None,
-                        REDUCTION_FUNS[x[1]],
-                        CELL_FUNS[x[2]],
-                    )
+    if threaded:  # Threaded or not
+        with ThreadPoolExecutor() as ex:
+            binmasks = list(ex.map(lambda x: transform_2d_to_3d(x)[1], masks))
+            result = ex.map(
+                partial(
+                    measure_mono,
+                    masks=binmasks,
+                    pixels=pixels,
+                    REDUCTION_FUNS=REDUCTION_FUNS,
+                    CELL_FUNS=CELL_FUNS,
                 ),
-                instructions,
+                tileid_instructions,
             )
-        )
-    return instructions, result
+    else:
+        binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
+        result = [
+            measure_mono(
+                tileid_x,
+                masks=binmasks,
+                pixels=pixels,
+                REDUCTION_FUNS=REDUCTION_FUNS,
+                CELL_FUNS=CELL_FUNS,
+            )
+            for tileid_x in tileid_instructions
+        ]
+    return result
 
 
 def extract_tree_multi(
-    tree: dict[tuple[int, int], dict[str, dict[str, list[str]]]],
-    masks: da.array,
+    tileid_instructions: tuple[da.array, tuple[tuple[int, int], str, str, str]],
+    masks: list[da.array],
     pixels: da.array,
 ) -> dict[str, da.array]:
     """
     Similar to extract_tree, but it pulls two channels and combines them before following the rest of the instructions.
+    instructions are  # (channel 1, channel 2), combination, reduction, metric
 
     """
-    instructions = kv(flatten(tree))  # Channel, reduction, metric
     with ThreadPoolExecutor() as ex:
-        result = list(
-            ex.map(
-                lambda x: when_da_compute(
-                    measure_multichannels(
-                        masks,  # sk-like masks
-                        da.stack(
-                            (pixels[x[0][0]], pixels[x[0][1]]), axis=-1
-                        ),  # pixels to combine on a new axis (at the end)
-                        REDUCTION_FUNS[x[2]],  # Function to reduce new channel
-                        CELL_FUNS[x[3]],  # Metric
-                        REDUCTION_FUNS[
-                            x[1]
-                        ],  # Function to combine pixels into new channel
-                    )
-                ),
-                instructions,
-            )
+        binmasks = ex.map(
+            lambda tileid, _: transform_2d_to_3d(masks[tileid]), tileid_instructions
         )
-    return instructions, result
+        result = ex.map(
+            lambda tileid, x: when_da_compute(
+                measure_multichannels(
+                    binmasks[tileid],  # sk-like masks
+                    da.stack(
+                        (pixels[x[0][0]], pixels[x[0][1]]), axis=-1
+                    ),  # pixels to combine on a new axis (at the end)
+                    REDUCTION_FUNS[x[2]],  # Function to reduce new channel
+                    CELL_FUNS[x[3]],  # Metric
+                    REDUCTION_FUNS[x[1]],  # Function to combine pixels into new channel
+                )
+            ),
+            tileid_instructions,
+        )
+    return result
+
+
+def process_tree_masks(tree, masks, pixels, function):
+    instructions = kv(flatten(tree))
+    tileid_instructions = tuple(x for x in product(range(len(masks)), instructions))
+    result = list(function(tileid_instructions, masks, pixels))
+
+    return tileid_instructions, result
 
 
 def when_da_compute(msmts: list[da.array or np.ndarray]):
@@ -146,6 +169,49 @@ def when_da_compute(msmts: list[da.array or np.ndarray]):
         return list(
             ex.map(lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts)
         )
+
+
+def format_extraction(instructions_result: tuple) -> duckdb.duckdb.DuckDBPyRelation:
+    formatted = {k: [] for k in ("tile", "branch", "metric", "values")}
+    for inst, measurements in zip(*instructions_result):
+        if len(measurements):
+            tileid = inst[0]
+            branch = "/".join(str(x) for x in inst[1])
+            if isinstance(measurements[0], dict):
+                for measurement_set in measurements:
+                    for k, values in measurement_set.items():
+                        formatted["branch"].append(branch)
+                        formatted["metric"].append(k)
+                        formatted["values"].append(values)
+                        formatted["tile"].append(tileid)
+            else:
+                for v in measurements:
+                    formatted["tile"].append(tileid)
+                    formatted["branch"].append(branch)
+                    formatted["metric"].append(inst[1][-1])
+                    formatted["values"].append(v)
+
+    breakpoint()
+    arrow_table = pa.Table.from_pydict(formatted)
+    breakpoint()
+
+    return duckdb.sql("SELECT * FROM arrow_table")
+
+
+# tree = {
+#     None: {
+#         "max": [
+#             "area",
+#             "centroid_x",
+#             "centroid_y",
+#         ]
+#     },
+#     1: {
+#         "max": [
+#             "max2p5pc",
+#         ]
+#     },
+# }
 
 
 # tree_multi = {
