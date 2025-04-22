@@ -17,13 +17,12 @@ from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
-from extraction.core.extract_new import (
+from extraction.extract import (
     extract_tree,
     extract_tree_multi,
     format_extraction,
     process_tree_masks,
 )
-from extraction.core.extractor import Extractor, ExtractorParameters
 
 
 def init_step(
@@ -57,13 +56,10 @@ def init_step(
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
         case s if s.startswith("extract"):
-            tiler = other_steps["tile"]
-            step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
-        case s if s.startswith("ext_new"):
             step = partial(
                 process_tree_masks, function=extract_tree, tree=parameters["tree"]
             )
-        case s if s.startswith("ext_new_multi"):
+        case s if s.startswith("extract_multi"):
             step = partial(
                 process_tree_masks,
                 function=extract_tree_multi,
