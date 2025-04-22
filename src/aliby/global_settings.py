@@ -31,6 +31,7 @@ possible_imaging_channels = [
     "cy5",
     "pHluorin405",
     "pHluorin488",
+    "NADH",
 ]
 
 # functions to apply to cell outlines
