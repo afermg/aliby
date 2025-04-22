@@ -1,9 +1,10 @@
 import typing as t
 
+import dask.array as da
 import numpy as np
 
 
-def trap_apply(masks, *args, cell_fun=None, **kwargs):
+def trap_apply(masks, *args, cell_fun=None, **kwargs) -> list[np.ndarray]:
     """
     Apply a cell_function to a mask and a trap_image.
 
@@ -22,7 +23,7 @@ def trap_apply(masks, *args, cell_fun=None, **kwargs):
     return [cell_fun(mask, *args, **kwargs) for mask in masks]
 
 
-def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0):
+def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0) -> np.ndarray:
     """
     Reduce the 3D image to 2d.
 
@@ -35,6 +36,10 @@ def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0):
     axis: int (default 0)
         Axis in which we apply the reduction operation.
     """
+    # TODO Find a fast way to retain dask arrays.
+    if isinstance(pixels, da.core.Array):
+        pixels = pixels.compute()
+
     if isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
         return fun.reduce(pixels, axis=axis)
