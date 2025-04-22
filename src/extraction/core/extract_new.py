@@ -8,7 +8,6 @@ from functools import partial, reduce
 from itertools import product
 
 import dask.array as da
-import duckdb
 import numpy as np
 import pyarrow as pa
 
@@ -171,7 +170,7 @@ def when_da_compute(msmts: list[da.array or np.ndarray]):
         )
 
 
-def format_extraction(instructions_result: tuple) -> duckdb.duckdb.DuckDBPyRelation:
+def format_extraction(instructions_result: tuple) -> pa.lib.Table:
     formatted = {k: [] for k in ("tile", "branch", "metric", "values")}
     for inst, measurements in zip(*instructions_result):
         if len(measurements):
@@ -191,11 +190,8 @@ def format_extraction(instructions_result: tuple) -> duckdb.duckdb.DuckDBPyRelat
                     formatted["metric"].append(inst[1][-1])
                     formatted["values"].append(v)
 
-    breakpoint()
     arrow_table = pa.Table.from_pydict(formatted)
-    breakpoint()
-
-    return duckdb.sql("SELECT * FROM arrow_table")
+    return arrow_table
 
 
 # tree = {

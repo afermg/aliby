@@ -10,14 +10,18 @@ from itertools import cycle
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-import polars as pl
+import pyarrow as pa
 
 from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
-from extraction.core.extract_new import extract_tree, extract_tree_multi
+from extraction.core.extract_new import (
+    extract_tree,
+    extract_tree_multi,
+    format_extraction,
+    process_tree_masks,
+)
 from extraction.core.extractor import Extractor, ExtractorParameters
 
 
@@ -55,9 +59,15 @@ def init_step(
             tiler = other_steps["tile"]
             step = Extractor(ExtractorParameters(parameters["tree"]), tiler=tiler)
         case s if s.startswith("ext_new"):
-            step = partial(extract_tree, tree=parameters["tree"])
+            step = partial(
+                process_tree_masks, function=extract_tree, tree=parameters["tree"]
+            )
         case s if s.startswith("ext_new_multi"):
-            step = partial(extract_tree_multi, tree=parameters["tree_multi"])
+            step = partial(
+                process_tree_masks,
+                function=extract_tree_multi,
+                tree=parameters["tree_multi"],
+            )
         case _:
             raise ("Invalid step name")
 
@@ -151,78 +161,6 @@ def pipeline_step(
     return state
 
 
-def format_extraction(extracted_tp: dict[str, pd.DataFrame]) -> pl.DataFrame:
-    if not len(list(extracted_tp.values())[0]):
-        return pl.DataFrame()
-
-    # If DataFrame contains multiple items (e.g., CellProfiler measurements)
-    # Split them into multiple dict entries
-    to_delete = []
-    new_entries = {}
-    for k, df in extracted_tp.items():
-        if isinstance(df.iloc[:, 0].values[0], dict):
-            to_delete.append(k)
-            exploded = pd.json_normalize(df.iloc[:, 0])
-
-            for col in exploded.columns:
-                new_entry = exploded.loc(axis=1)[[col]]
-                new_entry.columns = df.columns
-                new_entry.index = df.index
-
-                new_name = f"{k}_{col}"
-
-                new_entries[new_name] = new_entry
-
-    for k in to_delete:
-        del extracted_tp[k]
-
-    extracted_tp = {**extracted_tp, **new_entries}
-
-    renamed_columns = []
-    for k, v in extracted_tp.items():
-        if (tp := str(v.columns[0])) is not None:
-            renamed_columns.append(
-                pl.DataFrame(v.reset_index())
-                .with_columns(
-                    pl.col(tp).cast(pl.Float32).alias("value"),
-                    pl.lit(k).alias("Feature"),
-                    pl.lit(tp).alias("tp"),
-                    pl.col("trap").cast(pl.UInt16),
-                )
-                .select(pl.exclude(tp))
-            )
-    concat = pl.concat(renamed_columns)
-    return concat
-
-
-def get_well_fov(wildcard: str) -> tuple[str, str]:
-    """
-    Extract the well and field-of-view from a wildcard-like string.
-    """
-    split_fname = wildcard.split("/")[-1].split("_")
-    well = split_fname[2]
-    fov = split_fname[-1][3:6]
-    return (well, fov)
-
-
-def label_and_concat_extraction(
-    results: list[pl.DataFrame], wildcards: list[str]
-) -> pl.DataFrame:
-    datasets = []
-    for wc, df in zip(wildcards, results):
-        well, fov = get_well_fov(wc)
-        datasets.append(
-            df.with_columns(
-                pl.lit(well).alias("well"),
-                pl.lit(fov).alias("fov"),
-            )
-        )
-
-    extracted_dataset = pl.concat(datasets)
-    # TODO check if we want to remove the trap column
-    return extracted_dataset.select()
-
-
 def _validate_pipeline(pipeline: dict):
     """
     Sanity checks before computationally expensive operations.
@@ -234,7 +172,7 @@ def _validate_pipeline(pipeline: dict):
 # TODO pass sorted images instead of wildcard
 def run_pipeline(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
-):
+) -> pa.lib.Table:
     _validate_pipeline(pipeline)
 
     pipeline = copy(pipeline)
@@ -242,18 +180,19 @@ def run_pipeline(
     data = []
     state = {}
 
-    results_objects = [
-        x.split("_")[1] for x in pipeline["steps"] if x.startswith("extract")
-    ]
     for i in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
-        for obj in results_objects:
-            new_data = format_extraction(state["data"][f"extract_{obj}"][-1])
-            if len(new_data):  # Cover case whence measurements are empty
-                new_data = new_data.with_columns(object=pl.lit(obj))
-                data.append(new_data)
+        for step_name in pipeline["steps"]:
+            if step_name.startswith("ext"):
+                table = format_extraction(state["data"][step_name][-1])
+                if len(table):  # Cover case whence measurements are empty
+                    table = table.append_column(
+                        "object",
+                        pa.array([step_name.split("_")[-1]] * len(table), pa.string()),
+                    )
+                    data.append(table)
 
-    extracted_fov = pl.concat(data)
+    extracted_fov = pa.concat_tables(data)
     return extracted_fov
 
 
@@ -282,7 +221,7 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
         result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
         out_dir.mkdir(parents=True, exist_ok=True)
-        result.write_parquet(out_file)
+        pa.parquet.write_table(result, out_file)
 
     return result
 
