@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from aliby.io.image import dispatch_image
 from aliby.segment.dispatch import dispatch_segmenter
@@ -221,7 +222,7 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
         result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
         out_dir.mkdir(parents=True, exist_ok=True)
-        pa.parquet.write_table(result, out_file)
+        pq.write_table(result, out_file)
 
     return result
 
