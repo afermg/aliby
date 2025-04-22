@@ -139,7 +139,7 @@ requires-dist = [
     { name = "dask", specifier = ">=2021.12.0" },
     { name = "numpy", specifier = "<2" },
     { name = "pooch", specifier = ">=1.8.2,<2" },
-    { name = "pyarrow", specifier = ">=15.0.1" },
+    { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "scikit-image", specifier = ">=0.18.1" },
     { name = "scikit-learn", specifier = ">=1.0.2,<1.3" },
     { name = "scipy", specifier = ">=1.7.3" },
@@ -3380,8 +3380,8 @@ name = "tensorflow-metal"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "six" },
-    { name = "wheel" },
+    { name = "six", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
+    { name = "wheel", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/da/463240cc8ff13a57119db62a676e2edca86fb93905a13527872dadf1926e/tensorflow_metal-1.2.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:bc735e36c97874e41f77ec2e7421ff745d2ec36ee641141c8091e4cc2dbcc819", size = 1357400 },
