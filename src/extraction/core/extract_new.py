@@ -22,7 +22,22 @@ CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_funs()
 REDUCTION_FUNS = load_redfuns()
 
 
-def flatten(d, pref=""):
+def flatten(d: dict, pref: str = "") -> dict:
+    """
+    Flattens a nested dictionary into a single level dictionary.
+
+    Parameters
+    ----------
+    d : dict
+        The dictionary to be flattened.
+    pref : str, optional
+        The prefix for the keys in the flattened dictionary. Defaults to "".
+
+    Returns
+    -------
+    dict
+        The flattened dictionary.
+    """
     return reduce(
         lambda new_d, kv: isinstance(kv[1], dict)
         and {**new_d, **flatten(kv[1], (*pref, kv[0]))}
@@ -32,7 +47,20 @@ def flatten(d, pref=""):
     )
 
 
-def kv(flat: dict[tuple, list]):
+def kv(flat: dict[tuple, list]) -> list:
+    """
+    Creates a list of (key, *values) tuples from a flattened dictionary.
+
+    Parameters
+    ----------
+    flat : dict
+        The flattened dictionary.
+
+    Returns
+    -------
+    list
+        A list of tuples.
+    """
     return [(*k1, v1) for k, v in flat.items() for k1, v1 in product((k,), v)]
 
 
@@ -41,8 +69,29 @@ def measure(
     pixels: da.array or None,
     reduction: Callable,
     metric: Callable,
-) -> da.array:
-    # Core function: Apply a metric on a z-reduced image and mask pairs
+) -> da.core.Array:
+    """
+    Apply a metric on a z-reduced image and mask pairs.
+
+
+    The inputs of this function are data or callable elements.
+
+    Parameters
+    ----------
+    mask : da.array
+        Input mask.
+    pixels : da.array or None, optional
+        Input pixels (default is None).
+    reduction : Callable
+        Reduction function to apply.
+    metric : Callable
+        Metric function to apply.
+
+    Returns
+    -------
+    result : da.array
+        Result of applying the metric.
+    """
     result = da.array([])
     if len(mask):
         if pixels is not None:
@@ -52,25 +101,35 @@ def measure(
     return result
 
 
-def measure_multichannels(
-    mask: da.array,
-    pixels: da.array,
-    reduction: Callable,
-    metric: Callable,
-    channels_reductor: Callable,
-) -> da.array:
+def measure_mono(
+    tileid_x: tuple[int, tuple],
+    masks: da.core.Array,
+    pixels: da.core.Array,
+    REDUCTION_FUNS: dict[str, Callable],
+    CELL_FUNS: dict[str, Callable],
+) -> da.core.Array:
     """
-    Apply reduction to an array over the first axis, then combine these arrays using `channels_reductor` and call the normal `measure`.
+    Applies a metric on a z-reduced image and mask pairs.
+
+    This function coordinates indices, data and callables.
+
+    Parameters
+    ----------
+    mask : dask array
+        The mask to be applied.
+    pixels : dask array or None
+        The pixel values. If None, no pixels are used.
+    reduction : callable
+        The reduction function to apply.
+    metric : callable
+        The metric function to apply.
+
+    Returns
+    -------
+    dask array
+        The result of the metric application.
     """
-    result = da.array([])
-    if len(mask):
-        new_pixels = channels_reductor(pixels).compute()
-        result = measure(mask, new_pixels, reduction, metric)
 
-    return result
-
-
-def measure_mono(tileid_x, masks, pixels, REDUCTION_FUNS, CELL_FUNS):
     tileid, x = tileid_x
     return when_da_compute(
         measure(
@@ -82,6 +141,131 @@ def measure_mono(tileid_x, masks, pixels, REDUCTION_FUNS, CELL_FUNS):
     )
 
 
+def measure_multichannels(
+    mask: da.array,
+    pixels: da.array,
+    reduction: Callable,
+    metric: Callable,
+    channels_reductor: Callable,
+) -> da.array:
+    """
+    Parameters
+    ----------
+    mask : da.array
+        Input array.
+    pixels : da.array
+        Array of pixel values.
+    reduction : Callable
+        Reduction function to apply along the first axis.
+    metric : Callable
+        Metric function to calculate.
+    channels_reductor : Callable
+        Function to reduce channels.
+
+    Returns
+    -------
+    result : da.array
+        Result of applying reduction and combining arrays using channels_reductor.
+    """
+    result = da.array([])
+    if len(mask):
+        new_pixels = channels_reductor(pixels).compute()
+        result = measure_mono(mask, new_pixels, reduction, metric)
+
+    return result
+
+
+def process_tree_masks(
+    tree: dict,
+    masks: da.array,
+    pixels: np.ndarray,
+    function: Callable,
+) -> tuple[list, list]:
+    """
+    Processes a tree of masks and applies the given function.
+
+    Parameters
+    ----------
+    tree : dict
+        The tree to be processed.
+    masks : dask array
+        The mask values.
+    pixels : numpy array
+        The pixel values.
+    function : callable
+        The function to apply.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the instructions and results.
+    """
+    instructions = kv(flatten(tree))
+    tileid_instructions = tuple(x for x in product(range(len(masks)), instructions))
+    result = list(function(tileid_instructions, masks, pixels))
+
+    return tileid_instructions, result
+
+
+def when_da_compute(msmts: list[da.array or np.ndarray]) -> list[np.ndarray]:
+    """
+    Computes a dask array if it exists.
+
+    Parameters
+    ----------
+    msmts : list of dask arrays or numpy arrays
+        The values to be computed.
+
+    Returns
+    -------
+    list
+        A list of computed values.
+    """
+    with ThreadPoolExecutor() as ex:
+        return list(
+            ex.map(lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts)
+        )
+
+
+def format_extraction(
+    instructions_result: tuple[list, list],
+) -> pa.lib.Table:
+    """
+    Formats the extraction results into a pyarrow table.
+
+    Parameters
+    ----------
+    instructions_result : tuple of lists
+        The instructions and results to be formatted.
+
+    Returns
+    -------
+    pyarrow Table
+        The formatted table.
+    """
+    formatted = {k: [] for k in ("tile", "branch", "metric", "values")}
+    for inst, measurements in zip(*instructions_result):
+        if len(measurements):
+            tileid = inst[0]
+            branch = "/".join(str(x) for x in inst[1])
+            if isinstance(measurements[0], dict):
+                for measurement_set in measurements:
+                    for k, values in measurement_set.items():
+                        formatted["branch"].append(branch)
+                        formatted["metric"].append(k)
+                        formatted["values"].append(values)
+                        formatted["tile"].append(tileid)
+            else:
+                for v in measurements:
+                    formatted["tile"].append(tileid)
+                    formatted["branch"].append(branch)
+                    formatted["metric"].append(inst[1][-1])
+                    formatted["values"].append(v)
+
+    arrow_table = pa.Table.from_pydict(formatted)
+    return arrow_table
+
+
 def extract_tree(
     tileid_instructions: tuple[da.array, tuple[int or str, str, str, str]],
     masks: list[da.array],
@@ -89,9 +273,21 @@ def extract_tree(
     threaded: bool = True,
 ) -> dict[str, da.array]:
     """
-    Apply functions based on tree on the input dask arrays.
+    Extracts features from one channels.
 
-    Instructions are # Channel, reduction, metric
+    Parameters
+    ----------
+    tileid_instructions : tuple
+        A tuple containing an array and instructions for tile extraction.
+    masks : list[dask array]
+        A list of mask values for feature extraction.
+    pixels : dask array
+        The pixel values used in the extraction process.
+
+    Returns
+    -------
+    list
+        A list of extracted features from the tree branches.
     """
     if threaded:  # Threaded or not
         with ThreadPoolExecutor() as ex:
@@ -125,11 +321,23 @@ def extract_tree_multi(
     tileid_instructions: tuple[da.array, tuple[tuple[int, int], str, str, str]],
     masks: list[da.array],
     pixels: da.array,
-) -> dict[str, da.array]:
+) -> list:
     """
-    Similar to extract_tree, but it pulls two channels and combines them before following the rest of the instructions.
-    instructions are  # (channel 1, channel 2), combination, reduction, metric
+    Extracts features from multiple channels.
 
+    Parameters
+    ----------
+    tileid_instructions : tuple
+        A tuple containing an array and instructions for tile extraction.
+    masks : list[dask array]
+        A list of mask values for feature extraction.
+    pixels : dask array
+        The pixel values used in the extraction process.
+
+    Returns
+    -------
+    list
+        A list of extracted features from the tree branches.
     """
     with ThreadPoolExecutor() as ex:
         binmasks = ex.map(
@@ -150,85 +358,3 @@ def extract_tree_multi(
             tileid_instructions,
         )
     return result
-
-
-def process_tree_masks(tree, masks, pixels, function):
-    instructions = kv(flatten(tree))
-    tileid_instructions = tuple(x for x in product(range(len(masks)), instructions))
-    result = list(function(tileid_instructions, masks, pixels))
-
-    return tileid_instructions, result
-
-
-def when_da_compute(msmts: list[da.array or np.ndarray]):
-    """
-    Compute array if it is a dask one.
-    """
-    with ThreadPoolExecutor() as ex:
-        return list(
-            ex.map(lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts)
-        )
-
-
-def format_extraction(instructions_result: tuple) -> pa.lib.Table:
-    formatted = {k: [] for k in ("tile", "branch", "metric", "values")}
-    for inst, measurements in zip(*instructions_result):
-        if len(measurements):
-            tileid = inst[0]
-            branch = "/".join(str(x) for x in inst[1])
-            if isinstance(measurements[0], dict):
-                for measurement_set in measurements:
-                    for k, values in measurement_set.items():
-                        formatted["branch"].append(branch)
-                        formatted["metric"].append(k)
-                        formatted["values"].append(values)
-                        formatted["tile"].append(tileid)
-            else:
-                for v in measurements:
-                    formatted["tile"].append(tileid)
-                    formatted["branch"].append(branch)
-                    formatted["metric"].append(inst[1][-1])
-                    formatted["values"].append(v)
-
-    arrow_table = pa.Table.from_pydict(formatted)
-    return arrow_table
-
-
-# tree = {
-#     None: {
-#         "max": [
-#             "area",
-#             "centroid_x",
-#             "centroid_y",
-#         ]
-#     },
-#     1: {
-#         "max": [
-#             "max2p5pc",
-#         ]
-#     },
-# }
-
-
-# tree_multi = {
-#     (0, 1): {"div0": {"max": ["mean"]}},
-# }
-
-# tree = {i: {"max": ["mean"]} for i in range(2)}
-
-# masks = da.zeros((6, 100, 100), dtype=bool)
-# ones = da.ones((15, 15))
-# for i in range(6):
-#     masks[i, 15 * i : 15 * (i + 1), 15 * i : 15 * (i + 1)] = ones
-# rng = da.random.default_rng(1)
-# pixels = rng.standard_normal(size=(3, 5, 100, 100)).compute()
-# result = extract_tree(tree, masks, pixels)
-# result_multi = extract_tree_multi(tree_multi, masks, pixels)
-# print(result)
-
-# TASKS
-# Add dual imports to aliby's function loader
-# Expand new extractor to support them
-# Integrate them into the pipeline
-# Run e coli pipeline
-# Run aliby pipeline
