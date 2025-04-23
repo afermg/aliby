@@ -6,7 +6,6 @@ from copy import copy
 from pathlib import Path
 from typing import Union
 
-from flatten_dict import flatten, unflatten
 from yaml import dump, safe_load
 
 from agora.logging_timer import timer
@@ -24,9 +23,7 @@ class ParametersABC(ABC):
 
     def __init__(self, **kwargs):
         """Define parameters as attributes."""
-        assert (
-            "parameters" not in kwargs
-        ), "No attribute should be named parameters"
+        assert "parameters" not in kwargs, "No attribute should be named parameters"
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -37,19 +34,13 @@ class ParametersABC(ABC):
         Use recursion.
         """
         if isinstance(iterable, dict):
-            if any(
-                [
-                    True
-                    for x in iterable.values()
-                    if isinstance(x, Iterable) or hasattr(x, "to_dict")
-                ]
-            ):
+            if any([
+                True
+                for x in iterable.values()
+                if isinstance(x, Iterable) or hasattr(x, "to_dict")
+            ]):
                 return {
-                    k: (
-                        v.to_dict()
-                        if hasattr(v, "to_dict")
-                        else self.to_dict(v)
-                    )
+                    k: (v.to_dict() if hasattr(v, "to_dict") else self.to_dict(v))
                     for k, v in iterable.items()
                 }
             else:
@@ -109,9 +100,7 @@ class ParametersABC(ABC):
     def update(self, name: str, new_value):
         """Update a parameter in the nested dict of parameters."""
         flat_params_dict = flatten(self.to_dict(), keep_empty_types=(dict,))
-        names_found = [
-            param for param in flat_params_dict.keys() if name in param
-        ]
+        names_found = [param for param in flat_params_dict.keys() if name in param]
         if len(names_found) == 1:
             keys = names_found.pop()
             if type(flat_params_dict[keys]) is not type(new_value):
@@ -125,9 +114,7 @@ class ParametersABC(ABC):
             print(f"Warning:{name} was neither recognised nor updated.")
 
 
-def add_to_collection(
-    collection: t.Collection, element: t.Union[atomic, t.Collection]
-):
+def add_to_collection(collection: t.Collection, element: t.Union[atomic, t.Collection]):
     """Add elements to a collection, a list or set, in place."""
     if not isinstance(element, t.Collection):
         element = [element]
