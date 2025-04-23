@@ -40,16 +40,6 @@ def load_cellfuns():
     # create a dict of functions that apply the core functions to an array of cell_masks
     CELL_FUNS = {}
 
-    def trap_apply_on_mask(f: FunctionType):
-        """
-        Wrapper to ignore pixels and curry the function to be called.
-        """
-
-        def tmp(masks, pixels, cell_fun):
-            return trap_apply(masks, cell_fun=cell_fun)
-
-        return partial(tmp, cell_fun=f)
-
     for f_name, f in cell_funs.items():
         if isfunction(f):
             args = getfullargspec(f).args
@@ -194,3 +184,19 @@ def wrap_cp_corr_features(
         for m in masks.astype(np.uint16)
     ]
     return results
+
+
+def trap_apply_on_mask(f: FunctionType):
+    """
+    Wrapper to ignore pixels and curry the function to be called.
+    """
+
+    # def tmp(masks, pixels, cell_fun):
+    #     return trap_apply(masks, cell_fun=cell_fun)
+
+    # return partial(tmp, cell_fun=f)
+    return partial(ignore_pixels, cell_fun=f)
+
+
+def ignore_pixels(masks, pixels, cell_fun):
+    return trap_apply(masks, cell_fun=cell_fun)
