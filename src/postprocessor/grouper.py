@@ -101,7 +101,7 @@ class Grouper(ABC):
         """
         Concatenate data for one signal from different h5 files.
 
-        Each h5 files corresponds to a different position.
+        Each h5 file corresponds to a different position.
 
         Parameters
         ----------
@@ -212,7 +212,8 @@ class Grouper(ABC):
         """
         Enable different threads for different positions.
 
-        Particularly useful when aggregating multiple elements.
+        Typically arguments used by grouper:
+            f= concat_one_signal
         """
         positions = positions or self.positions
         if pool:
