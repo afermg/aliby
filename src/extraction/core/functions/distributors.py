@@ -4,25 +4,6 @@ import dask.array as da
 import numpy as np
 
 
-def trap_apply(masks, *args, cell_fun=None, **kwargs) -> list[np.ndarray]:
-    """
-    Apply a cell_function to a mask and a trap_image.
-
-    Parameters
-    ----------
-    cell_fun: function
-        Function to apply to the cell (from extraction/cell.py)
-    masks: 3d array
-        Segmentation masks for the cells. Note that cells are in the first dimension (N, Y,X)
-    *args: tuple
-        Trap_image and any other arguments to pass if needed to custom functions.
-    **kwargs: dict
-        Keyword arguments to pass if needed to custom functions.
-    """
-    # apply cell_fun to each cell and return the results as a list
-    return [cell_fun(mask, *args, **kwargs) for mask in masks]
-
-
 def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0) -> np.ndarray:
     """
     Reduce the 3D image to 2d.

@@ -44,11 +44,11 @@ def load_cellfuns():
         if isfunction(f):
             args = getfullargspec(f).args
             if len(args) == 1:
-                # function that applies f to m, an array of masks
-                new_fun = trap_apply_on_mask(f)
+                # function that applies f to m, a binary mask
+                new_fun = partial(ignore_pixels, cell_fun=f)
             else:
-                # function that applies f to m and img, the trap_image
-                new_fun = partial(trap_apply, cell_fun=f)
+                # function that applies f to m and img, a binary mask and a 2 or 3d image.
+                new_fun = f
 
             CELL_FUNS[f_name] = new_fun
 
@@ -198,5 +198,6 @@ def trap_apply_on_mask(f: FunctionType):
     return partial(ignore_pixels, cell_fun=f)
 
 
-def ignore_pixels(masks, pixels, cell_fun):
-    return trap_apply(masks, cell_fun=cell_fun)
+def ignore_pixels(mask, pixels, cell_fun):
+    # return trap_apply(masks, cell_fun=cell_fun)
+    return cell_fun(mask)

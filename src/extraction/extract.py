@@ -99,11 +99,11 @@ def measure(
     result : da.array
         Result of applying the metric.
     """
-    result = da.array([])
-    if len(mask):
-        if pixels is not None:
-            pixels = reduce_z(pixels, reduction)
-        result = metric(mask, pixels)
+    # result = da.array([])
+    # if len(mask):
+    if pixels is not None:
+        pixels = reduce_z(pixels, reduction)
+    result = metric(mask, pixels)
 
     return result
 
@@ -112,8 +112,8 @@ def measure_mono(
     tileid_x: tuple[int, tuple],
     masks: da.core.Array,
     pixels: da.core.Array,
-    REDUCTION_FUNS: dict[str, Callable],
-    CELL_FUNS: dict[str, Callable],
+    REDUCTION_FUNS: dict[str, Callable] = REDUCTION_FUNS,
+    CELL_FUNS: dict[str, Callable] = CELL_FUNS,
 ) -> da.core.Array:
     """
     Applies a metric on a z-reduced image and mask pairs.
@@ -137,20 +137,18 @@ def measure_mono(
         The result of the metric application.
     """
 
-    tileid, (ch, red_z, metric) = tileid_x
-    return when_da_compute(
-        measure(
-            masks[tileid],  # TODO formalise how to handle this
-            pixels[ch] if ch != "None" else None,
-            REDUCTION_FUNS[red_z],
-            CELL_FUNS[metric],
-        )
+    (tile_i, mask_i), (ch, red_z, metric) = tileid_x
+    return measure(
+        masks[tile_i][mask_i],  # TODO formalise how to handle this
+        pixels[ch] if ch != "None" else None,
+        REDUCTION_FUNS[red_z],
+        CELL_FUNS[metric],
     )
 
 
 def measure_multi(
     tileid_x: tuple[int, tuple],
-    masks: da.core.Array,
+    masks: list[da.core.Array],
     pixels: da.core.Array,
     REDUCTION_FUNS: dict[str, Callable],
     CELL_FUNS: dict[str, Callable],
@@ -170,27 +168,25 @@ def measure_multi(
     result : da.array
         Result of applying reduction and combining arrays using channels_reductor.
     """
-    tileid, ((ch0,ch1), red_ch, red_z, metric) = tileid_x
-    result = da.array([])
-    if len(mask):
-        if channels_reductor is None:  # This is a multi-image measurement
-            red_pixels = REDUCTION_FUNS[red_ch](pixels)
-            result = metric(red_pixels[..., ch0], red_pixels[..., ch1], mask)
-        else:  # This is a monoimage measurement, but with a combination of channels
-            new_pixels = channels_reductor(pixels).compute()
-            result = measure_mono(mask, new_pixels, red_z, metric)
+    (tile_i, mask_i), ((ch0, ch1), red_ch, red_z, metric) = tileid_x
+    if red_ch is None:  # This is a multi-image measurement
+        red_pixels = REDUCTION_FUNS[red_ch](pixels)
+        result = metric(red_pixels[..., ch0], red_pixels[..., ch1], masks)
+    else:  # This is a monoimage measurement, but with a combination of channels
+        new_pixels = REDUCTION_FUNS[red_ch](pixels).compute()
+        result = measure_mono(masks[tile_i][mask_i], new_pixels, red_z, metric)
 
     return result
 
 
 def process_tree_masks(
     tree: dict,
-    masks: da.array,
-    pixels: np.ndarray,
-    function: Callable,
+    masks: list[da.array],
+    pixels: da.array,
+    measure_fn: Callable,
 ) -> tuple[list, list]:
     """
-    Processes a tree of masks and applies the given function.
+    Orchestrates the processing of all masks using a tree of instructions.
 
     Parameters
     ----------
@@ -198,10 +194,10 @@ def process_tree_masks(
         The tree to be processed.
     masks : dask array
         The mask values.
-    pixels : numpy array
+    pixels : dask array
         The pixel values.
-    function : callable
-        The function to apply.
+    measure_fn : callable
+        The measurement function to apply, it can be `measure_mono` or `measure_multi`.
 
     Returns
     -------
@@ -209,9 +205,18 @@ def process_tree_masks(
         A tuple containing the instructions and results.
     """
     instructions = kv(flatten(tree))
-    tileid_instructions = tuple(x for x in product(range(len(masks)), instructions))
-    result = list(function(tileid_instructions, masks, pixels))
-
+    masks = when_da_compute(masks)  # TODO delay this in the future
+    tileid_instructions = tuple(
+        product(
+            [
+                (tile_i, mask_i)
+                for tile_i, masks_in_tile in enumerate(masks)
+                for mask_i in range(masks_in_tile.max())
+            ],
+            instructions,
+        )
+    )
+    result = measure_fn(tileid_instructions, masks, pixels)
     return tileid_instructions, result
 
 
@@ -239,7 +244,7 @@ def extract_tree(
     tileid_instructions: tuple[da.array, tuple[int or str, str, str, str]],
     masks: list[da.array],
     pixels: da.array,
-    threaded: bool = True,
+    threaded: bool = False,
 ) -> dict[str, da.array]:
     """
     Extracts features from one channels.
@@ -260,16 +265,18 @@ def extract_tree(
     """
     if threaded:  # Threaded or not
         with ThreadPoolExecutor() as ex:
-            binmasks = [x[1] for x in ex.map(transform_2d_to_3d, masks)]
-            result = ex.map(
-                partial(
-                    measure_mono,
-                    masks=binmasks,
-                    pixels=pixels,
-                    REDUCTION_FUNS=REDUCTION_FUNS,
-                    CELL_FUNS=CELL_FUNS,
-                ),
-                tileid_instructions,
+            binmasks = list(x[1] for x in ex.map(transform_2d_to_3d, masks))
+            result = list(
+                ex.map(
+                    partial(
+                        measure_mono,
+                        masks=binmasks,
+                        pixels=pixels,
+                        REDUCTION_FUNS=REDUCTION_FUNS,
+                        CELL_FUNS=CELL_FUNS,
+                    ),
+                    tileid_instructions,
+                )
             )
     else:
         binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
@@ -287,7 +294,9 @@ def extract_tree(
 
 
 def extract_tree_multi(
-    tileid_instructions: tuple[int, tuple[tuple[int, int], str or None, str or None, str]],
+    tileid_instructions: tuple[
+        int, tuple[tuple[int, int], str or None, str or None, str]
+    ],
     masks: list[da.array],
     pixels: da.array,
     threaded: bool = False,
@@ -333,7 +342,7 @@ def extract_tree_multi(
             )
     else:
         binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
-        result = [measure_multi() for tile_id, instructions tileid_instructions)
+        result = [measure_multi() for tile_id, instructions in tileid_instructions]
 
     return result
 
