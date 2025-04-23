@@ -1,5 +1,12 @@
 """
 Obtain measurements from images and masks using a functional programming approach.
+
+Types of measurements:
+- One mask (e.g., area)
+- One mask, one image (e.g., intensity)
+- Two images combined into a new channel, one mask (e.g., ratiometric probes)
+- Two images, one mask (e.g., correlation)
+- TODO Two masks (e.g., neighbours)
 """
 
 from collections.abc import Callable
@@ -130,23 +137,23 @@ def measure_mono(
         The result of the metric application.
     """
 
-    tileid, x = tileid_x
+    tileid, (ch, red_z, metric) = tileid_x
     return when_da_compute(
         measure(
             masks[tileid],  # TODO formalise how to handle this
-            pixels[x[0]] if x[0] != "None" else None,
-            REDUCTION_FUNS[x[1]],
-            CELL_FUNS[x[2]],
+            pixels[ch] if ch != "None" else None,
+            REDUCTION_FUNS[red_z],
+            CELL_FUNS[metric],
         )
     )
 
 
-def measure_multichannels(
-    mask: da.array,
-    pixels: da.array,
-    reduction: Callable,
-    metric: Callable,
-    channels_reductor: Callable,
+def measure_multi(
+    tileid_x: tuple[int, tuple],
+    masks: da.core.Array,
+    pixels: da.core.Array,
+    REDUCTION_FUNS: dict[str, Callable],
+    CELL_FUNS: dict[str, Callable],
 ) -> da.array:
     """
     Parameters
@@ -157,20 +164,21 @@ def measure_multichannels(
         Array of pixel values.
     reduction : Callable
         Reduction function to apply along the first axis.
-    metric : Callable
-        Metric function to calculate.
-    channels_reductor : Callable
-        Function to reduce channels.
 
     Returns
     -------
     result : da.array
         Result of applying reduction and combining arrays using channels_reductor.
     """
+    tileid, ((ch0,ch1), red_ch, red_z, metric) = tileid_x
     result = da.array([])
     if len(mask):
-        new_pixels = channels_reductor(pixels).compute()
-        result = measure_mono(mask, new_pixels, reduction, metric)
+        if channels_reductor is None:  # This is a multi-image measurement
+            red_pixels = REDUCTION_FUNS[red_ch](pixels)
+            result = metric(red_pixels[..., ch0], red_pixels[..., ch1], mask)
+        else:  # This is a monoimage measurement, but with a combination of channels
+            new_pixels = channels_reductor(pixels).compute()
+            result = measure_mono(mask, new_pixels, red_z, metric)
 
     return result
 
@@ -227,6 +235,109 @@ def when_da_compute(msmts: list[da.array or np.ndarray]) -> list[np.ndarray]:
         )
 
 
+def extract_tree(
+    tileid_instructions: tuple[da.array, tuple[int or str, str, str, str]],
+    masks: list[da.array],
+    pixels: da.array,
+    threaded: bool = True,
+) -> dict[str, da.array]:
+    """
+    Extracts features from one channels.
+
+    Parameters
+    ----------
+    tileid_instructions : tuple
+        A tuple containing an array and instructions for tile extraction.
+    masks : list[dask array]
+        A list of mask values for feature extraction.
+    pixels : dask array
+        The pixel values used in the extraction process.
+
+    Returns
+    -------
+    list
+        A list of extracted features from the tree branches.
+    """
+    if threaded:  # Threaded or not
+        with ThreadPoolExecutor() as ex:
+            binmasks = [x[1] for x in ex.map(transform_2d_to_3d, masks)]
+            result = ex.map(
+                partial(
+                    measure_mono,
+                    masks=binmasks,
+                    pixels=pixels,
+                    REDUCTION_FUNS=REDUCTION_FUNS,
+                    CELL_FUNS=CELL_FUNS,
+                ),
+                tileid_instructions,
+            )
+    else:
+        binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
+        result = [
+            measure_mono(
+                tileid_x,
+                masks=binmasks,
+                pixels=pixels,
+                REDUCTION_FUNS=REDUCTION_FUNS,
+                CELL_FUNS=CELL_FUNS,
+            )
+            for tileid_x in tileid_instructions
+        ]
+    return result
+
+
+def extract_tree_multi(
+    tileid_instructions: tuple[int, tuple[tuple[int, int], str or None, str or None, str]],
+    masks: list[da.array],
+    pixels: da.array,
+    threaded: bool = False,
+) -> list:
+    """
+    Extracts features from multiple channels.
+
+    tile
+    Parameters
+    ----------
+    tileid_instructions : tuple
+        A tuple containing an array and instructions for tile extraction.
+    - index of tile
+    - tuple of channels indices
+    - reduction over channels
+    - reduction over z-stack
+    - measurement
+    masks : list[dask array]
+        A list of mask values for feature extraction.
+    pixels : dask array
+        The pixel values used in the extraction process.
+
+    Returns
+    -------
+    list
+        A list of extracted features from the tree branches.
+    """
+    if threaded:
+        with ThreadPoolExecutor() as ex:
+            binmasks = ex.map(
+                lambda tileid, _: transform_2d_to_3d(masks[tileid]), tileid_instructions
+            )
+            result = ex.map(
+                partial(
+                    measure_multi,
+                    masks=binmasks,
+                    pixels=pixels,
+                    reductor=REDUCTION_FUNS,
+                    CELL_FUNS=CELL_FUNS,
+                    channels_reductor=REDUCTION_FUNS,
+                ),
+                tileid_instructions,
+            )
+    else:
+        binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
+        result = [measure_multi() for tile_id, instructions tileid_instructions)
+
+    return result
+
+
 def format_extraction(
     instructions_result: tuple[list, list],
 ) -> pa.lib.Table:
@@ -264,97 +375,3 @@ def format_extraction(
 
     arrow_table = pa.Table.from_pydict(formatted)
     return arrow_table
-
-
-def extract_tree(
-    tileid_instructions: tuple[da.array, tuple[int or str, str, str, str]],
-    masks: list[da.array],
-    pixels: da.array,
-    threaded: bool = True,
-) -> dict[str, da.array]:
-    """
-    Extracts features from one channels.
-
-    Parameters
-    ----------
-    tileid_instructions : tuple
-        A tuple containing an array and instructions for tile extraction.
-    masks : list[dask array]
-        A list of mask values for feature extraction.
-    pixels : dask array
-        The pixel values used in the extraction process.
-
-    Returns
-    -------
-    list
-        A list of extracted features from the tree branches.
-    """
-    if threaded:  # Threaded or not
-        with ThreadPoolExecutor() as ex:
-            binmasks = list(ex.map(lambda x: transform_2d_to_3d(x)[1], masks))
-            result = ex.map(
-                partial(
-                    measure_mono,
-                    masks=binmasks,
-                    pixels=pixels,
-                    REDUCTION_FUNS=REDUCTION_FUNS,
-                    CELL_FUNS=CELL_FUNS,
-                ),
-                tileid_instructions,
-            )
-    else:
-        binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
-        result = [
-            measure_mono(
-                tileid_x,
-                masks=binmasks,
-                pixels=pixels,
-                REDUCTION_FUNS=REDUCTION_FUNS,
-                CELL_FUNS=CELL_FUNS,
-            )
-            for tileid_x in tileid_instructions
-        ]
-    return result
-
-
-def extract_tree_multi(
-    tileid_instructions: tuple[da.array, tuple[tuple[int, int], str, str, str]],
-    masks: list[da.array],
-    pixels: da.array,
-) -> list:
-    """
-    Extracts features from multiple channels.
-
-    Parameters
-    ----------
-    tileid_instructions : tuple
-        A tuple containing an array and instructions for tile extraction.
-    masks : list[dask array]
-        A list of mask values for feature extraction.
-    pixels : dask array
-        The pixel values used in the extraction process.
-
-    Returns
-    -------
-    list
-        A list of extracted features from the tree branches.
-    """
-    with ThreadPoolExecutor() as ex:
-        binmasks = ex.map(
-            lambda tileid, _: transform_2d_to_3d(masks[tileid]), tileid_instructions
-        )
-        result = ex.map(
-            lambda tileid, x: when_da_compute(
-                measure_multichannels(
-                    binmasks[tileid],  # sk-like masks
-                    da.stack(
-                        (pixels[x[0][0]], pixels[x[0][1]]), axis=-1
-                    ),  # pixels to combine on a new axis (at the end)
-                    REDUCTION_FUNS[x[2]],  # Function to reduce new channel
-                    CELL_FUNS[x[3]],  # Metric
-                    REDUCTION_FUNS[x[1]],  # Function to combine pixels into new channel
-                )
-            ),
-            tileid_instructions,
-        )
-    return result
