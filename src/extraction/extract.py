@@ -159,7 +159,7 @@ def measure_multi(
     mask : da.array
         Input array.
     pixels : da.array
-        Array of pixel values.
+        Array of pixel values. Dimensions are (Z,Y,X,Channels)
     reduction : Callable
         Reduction function to apply along the first axis.
 
@@ -170,11 +170,15 @@ def measure_multi(
     """
     (tile_i, mask_i), ((ch0, ch1), red_ch, red_z, metric) = tileid_x
     if red_ch is None:  # This is a multi-image measurement
-        red_pixels = REDUCTION_FUNS[red_ch](pixels)
+        red_pixels = reduce_z(pixels, REDUCTION_FUNS[red_ch], axis=0)
         result = metric(red_pixels[..., ch0], red_pixels[..., ch1], masks)
     else:  # This is a monoimage measurement, but with a combination of channels
-        new_pixels = REDUCTION_FUNS[red_ch](pixels).compute()
-        result = measure_mono(masks[tile_i][mask_i], new_pixels, red_z, metric)
+        new_pixels = reduce_z(
+            np.stack((pixels[ch0], pixels[ch1])), REDUCTION_FUNS[red_ch], axis=0
+        )[np.newaxis, ...]
+        tileid_x_new = ((tile_i, mask_i), (0, red_z, metric))
+        # Treat as a normal metric from here on
+        result = measure_mono(tileid_x_new, masks=masks, pixels=new_pixels)
 
     return result
 
@@ -342,7 +346,16 @@ def extract_tree_multi(
             )
     else:
         binmasks = [transform_2d_to_3d(mask)[1] for mask in masks]
-        result = [measure_multi() for tile_id, instructions in tileid_instructions]
+        result = [
+            measure_multi(
+                ids_instructions,
+                masks=binmasks,
+                pixels=pixels,
+                REDUCTION_FUNS=REDUCTION_FUNS,
+                CELL_FUNS=CELL_FUNS,
+            )
+            for ids_instructions in tileid_instructions
+        ]
 
     return result
 

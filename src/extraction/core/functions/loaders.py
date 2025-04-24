@@ -8,7 +8,6 @@ from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
-from extraction.core.functions.distributors import trap_apply
 from extraction.core.functions.math_utils import div0
 
 """
@@ -186,18 +185,5 @@ def wrap_cp_corr_features(
     return results
 
 
-def trap_apply_on_mask(f: FunctionType):
-    """
-    Wrapper to ignore pixels and curry the function to be called.
-    """
-
-    # def tmp(masks, pixels, cell_fun):
-    #     return trap_apply(masks, cell_fun=cell_fun)
-
-    # return partial(tmp, cell_fun=f)
-    return partial(ignore_pixels, cell_fun=f)
-
-
 def ignore_pixels(mask, pixels, cell_fun):
-    # return trap_apply(masks, cell_fun=cell_fun)
     return cell_fun(mask)
