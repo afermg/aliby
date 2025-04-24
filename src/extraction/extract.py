@@ -169,9 +169,9 @@ def measure_multi(
         Result of applying reduction and combining arrays using channels_reductor.
     """
     (tile_i, mask_i), ((ch0, ch1), red_ch, red_z, metric) = tileid_x
-    if red_ch is None:  # This is a multi-image measurement
-        red_pixels = reduce_z(pixels, REDUCTION_FUNS[red_ch], axis=0)
-        result = metric(red_pixels[..., ch0], red_pixels[..., ch1], masks)
+    if red_ch == "None":  # This is a multi-image measurement
+        pixels_redz = reduce_z(pixels[[ch0, ch1]], REDUCTION_FUNS[red_z], axis=1)
+        result = CELL_FUNS[metric](masks[tile_i][mask_i], *pixels_redz)
     else:  # This is a monoimage measurement, but with a combination of channels
         new_pixels = reduce_z(
             np.stack((pixels[ch0], pixels[ch1])), REDUCTION_FUNS[red_ch], axis=0

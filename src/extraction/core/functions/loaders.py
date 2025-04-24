@@ -147,39 +147,50 @@ def load_redfuns() -> t.Dict[str, t.Callable]:
 
 
 # Functional solutions to complex problems
+# currenlty all this wrappers assume that the input mask is a binary array
+# In the future we may want to replace this with an array of integer labels instead.
 
 
-def get_sk_features(masks: np.ndarray, pixels: np.ndarray, feature: str):
+def get_sk_features(mask: np.ndarray, pixels: np.ndarray, feature: str):
     """
     Freeze the sklearn function to use feature.
     """
-    return [
-        regionprops_table(
-            mask,
-            intensity_image=pixels,
-            properties=(feature,),
-            cache=False,
-        )[feature][0]
-        for mask in masks.astype(np.uint16)
-    ]  # Assumes masks.dims=(N,Y,X)
+    # return [
+    #     regionprops_table(
+    #         mask,
+    #         intensity_image=pixels,
+    #         properties=(feature,),
+    #         cache=False,
+    #     )[feature][0]
+    #     for mask in masks.astype(np.uint16)
+    # ]
+    return regionprops_table(
+        mask.astype(np.uint16),
+        intensity_image=pixels,
+        properties=(feature,),
+        cache=False,
+    )[feature][0]
 
 
 def wrap_cp_measure_features(
-    masks: np.ndarray, pixels: np.ndarray, fun: t.Callable = None
+    mask: np.ndarray, pixels: np.ndarray, fun: t.Callable = None
 ) -> t.Callable:
-    results = [
-        {k: v[0] for k, v in fun(m, pixels).items()} for m in masks.astype(np.uint16)
-    ]
+    # results = [
+    #     {k: v[0] for k, v in fun(m, pixels).items()} for m in masks.astype(np.uint16)
+    # ]
+    results = fun(mask.astype(np.uint16), pixels)
+
     return results
 
 
 def wrap_cp_corr_features(
-    masks: np.ndarray, pixels1: np.ndarray, pixels2: np.ndarray, fun: t.Callable = None
+    mask: np.ndarray, pixels1: np.ndarray, pixels2: np.ndarray, fun: t.Callable = None
 ) -> t.Callable:
-    results = [
-        {k: v[0] for k, v in fun(m, pixels1, pixels2).items()}
-        for m in masks.astype(np.uint16)
-    ]
+    # results = [
+    #     {k: v[0] for k, v in fun(m, pixels1, pixels2).items()}
+    #     for m in masks.astype(np.uint16)
+    # ]
+    results = fun(pixels1, pixels2, mask)
     return results
 
 
