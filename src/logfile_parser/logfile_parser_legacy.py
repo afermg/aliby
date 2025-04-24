@@ -124,24 +124,18 @@ class Parser(object):
                 for trigger, method in trigger_check_methods.items()
             }
             section_match = {
-                k
-                for trigger_matches in matches.values()
-                for k, _ in trigger_matches
+                k for trigger_matches in matches.values() for k, _ in trigger_matches
             }
 
             # if len(section_match) > 1:
-            assert len(section_match) <= 1, ParseError(
-                "conflicting sections triggered"
-            )
+            assert len(section_match) <= 1, ParseError("conflicting sections triggered")
 
             if len(section_match) == 1:
                 # Update the active section
                 self._set_section(list(section_match)[0])
 
                 # Determine the unmatched part of the line
-                line_unmatched = self.determine_unmatched_part(
-                    matches, line_pp
-                )
+                line_unmatched = self.determine_unmatched_part(matches, line_pp)
 
                 # Skip the matched line if requested
                 if self._active_section.get(
@@ -193,9 +187,7 @@ class Parser(object):
                 )
 
                 # Fill out current row
-                for val, colname, coltype in zip(
-                    row, table_header, column_types
-                ):
+                for val, colname, coltype in zip(row, table_header, column_types):
                     output[section_name][colname].append(
                         _map_to_type(val.strip(), coltype)
                     )
@@ -206,13 +198,10 @@ class Parser(object):
 
                 map_type = active_section.get("map")
                 next_list = [
-                    _map_to_type(el.strip(), map_type)
-                    for el in line.split(sep)
+                    _map_to_type(el.strip(), map_type) for el in line.split(sep)
                 ]
 
-                list_to_append = (
-                    [next_list] if section_type == "lists" else next_list
-                )
+                list_to_append = [next_list] if section_type == "lists" else next_list
                 output[section_name] += list_to_append
 
             elif section_type in {"regex", "regexs"}:
@@ -226,9 +215,7 @@ class Parser(object):
                     output[section_name] = _map_to_type(matches[0], map_type)
                 else:
                     output[section_name] = output.get(section_name, [])
-                    output[section_name] += [
-                        _map_to_type(m, map_type) for m in matches
-                    ]
+                    output[section_name] += [_map_to_type(m, map_type) for m in matches]
 
                 # Terminate after finding the first match
                 self._terminate_after_first_match(active_section, section_type)
@@ -248,15 +235,12 @@ class Parser(object):
         return output
 
     @staticmethod
-    def determine_unmatched_part(
-        matches: t.Dict[str, t.List], line_pp: t.List[str]
-    ):
-
+    def determine_unmatched_part(matches: t.Dict[str, t.List], line_pp: t.List[str]):
         if matches["startswith"]:
             _, t = matches["startswith"][0]
-            line_unmatched = [
-                line[len(t) :] for line in line_pp if line.startswith(t)
-            ][0]
+            line_unmatched = [line[len(t) :] for line in line_pp if line.startswith(t)][
+                0
+            ]
         elif matches["endswith"]:
             _, t = matches["endwith"][0]
             line_unmatched = [
@@ -283,7 +267,6 @@ class Parser(object):
 
     @staticmethod
     def _parse_table(active_section, row):
-
         has_header = active_section.get("has_header", True)
         if has_header:
             row = [col.strip() for col in row]
@@ -307,9 +290,7 @@ class Parser(object):
                 raise ParseError("dict column maps must have a header")
             # First row is a header
             table_header = [colmap.get(rn, (rn, None))[0] for rn in row]
-            column_types = [
-                colmap.get(rn, (None, default_type))[1] for rn in row
-            ]
+            column_types = [colmap.get(rn, (None, default_type))[1] for rn in row]
         else:
             raise ParseError("badly formatted column map")
         return has_header, row, table_header, column_types

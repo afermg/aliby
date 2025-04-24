@@ -115,10 +115,7 @@ def parse_general(line: str, meta: t.Dict) -> None:
 
 def parse_acquisition(bits: t.List[str], meta: t.Dict) -> None:
     """Parse information on the imaging channels."""
-    if (
-        bits[0] in possible_imaging_channels
-        and bits[1] in possible_imaging_channels
-    ):
+    if bits[0] in possible_imaging_channels and bits[1] in possible_imaging_channels:
         meta["channels"].append(bits[0])
         meta["exposure"].append(float(bits[3]))
         meta["number_z_sections"].append(int(bits[4]))

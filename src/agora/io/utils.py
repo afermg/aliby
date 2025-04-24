@@ -1,6 +1,7 @@
 """
 Utility functions and classes
 """
+
 import itertools
 import logging
 import operator

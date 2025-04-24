@@ -60,9 +60,7 @@ def test_approximation(x, ecc, rotation):
     y = maj_from_min(x, ecc)
     im = ellipse(x, y, rotation)
     min_ax, maj_ax = min_maj_approximation(im)
-    assert np.allclose(
-        [min_ax, maj_ax], [x, y], rtol=threshold * min(np.array([x, y]))
-    )
+    assert np.allclose([min_ax, maj_ax], [x, y], rtol=threshold * min(np.array([x, y])))
 
 
 @pytest.mark.parametrize("x", radii)

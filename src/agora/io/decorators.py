@@ -2,6 +2,7 @@
 """
 Convenience decorators to extend commonly-used methods or functions.
 """
+
 import typing as t
 from functools import wraps
 

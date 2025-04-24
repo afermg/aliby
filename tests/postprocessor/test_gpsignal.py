@@ -23,9 +23,7 @@ def test_dummy_signal():
 
 
 def default_values():
-    return dict(
-        dt=1, noruns=5, bounds={0: (0, 2), 1: (1, 3), 2: (-8, 0)}, verbose=True
-    )
+    return dict(dt=1, noruns=5, bounds={0: (0, 2), 1: (1, 3), 2: (-8, 0)}, verbose=True)
 
 
 # TODO: the tolerance threshold still needs to be tuned to expectations

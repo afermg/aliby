@@ -437,10 +437,12 @@ def if_out_of_bounds_pad(
         for s, upper_bound in zip(slices, max_yx)
     ]
     # find extent of padding needed in x and y
-    padding = np.array([
-        (-min(0, s.start), -min(0, upper_bound - s.stop))
-        for s, upper_bound in zip(slices, max_yx)
-    ])
+    padding = np.array(
+        [
+            (-min(0, s.start), -min(0, upper_bound - s.stop))
+            for s, upper_bound in zip(slices, max_yx)
+        ]
+    )
 
     # get the tile including all z stacks
     tile = pixels[:, y, x]

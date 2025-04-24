@@ -277,11 +277,7 @@ class Signal(BridgeH5):
                     if in_minutes:
                         df = self.cols_in_mins(df)
                     # limit data by time and discard NaNs
-                    if (
-                        in_minutes
-                        and tmax_in_mins
-                        and type(tmax_in_mins) is int
-                    ):
+                    if in_minutes and tmax_in_mins and type(tmax_in_mins) is int:
                         df = df[df.columns[df.columns <= tmax_in_mins]]
                         df = df.dropna(how="all")
                     # add mother label to data frame
@@ -300,9 +296,7 @@ class Signal(BridgeH5):
                             how="daughters",
                         )
                         mother_label[valid_indices] = lineage[valid_lineage, 1]
-                        df = add_index_levels(
-                            df, {"mother_label": mother_label}
-                        )
+                        df = add_index_levels(df, {"mother_label": mother_label})
                     return df
         elif isinstance(dataset, list):
             return [
@@ -331,9 +325,7 @@ class Signal(BridgeH5):
         """Get picks from the h5 file."""
         with h5py.File(self.filename, "r") as f:
             if path in f:
-                picks = set(
-                    zip(*[f[path + name] for name in names if name in f[path]])
-                )
+                picks = set(zip(*[f[path + name] for name in names if name in f[path]]))
             else:
                 picks = set()
             return picks
@@ -382,9 +374,7 @@ class Signal(BridgeH5):
 
     @staticmethod
     def _if_merges(name: str, obj):
-        if isinstance(obj, h5py.Dataset) and name.startswith(
-            "modifiers/merges"
-        ):
+        if isinstance(obj, h5py.Dataset) and name.startswith("modifiers/merges"):
             return obj[()]
 
     @staticmethod

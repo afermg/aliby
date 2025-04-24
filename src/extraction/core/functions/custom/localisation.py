@@ -28,9 +28,7 @@ def matlab_style_gauss2D(shape=(3, 3), sigma=0.5):
     return h
 
 
-def gauss3D(
-    shape: t.Tuple[int] = (3, 3, 3), sigma: t.Tuple[float] = (0.5, 0.5, 0.5)
-):
+def gauss3D(shape: t.Tuple[int] = (3, 3, 3), sigma: t.Tuple[float] = (0.5, 0.5, 0.5)):
     """3D gaussian mask - based on MATLAB's fspecial but made 3D."""
     m, n, p = [(ss - 1.0) / 2.0 for ss in shape]
     z, y, x = np.ogrid[-p : p + 1, -m : m + 1, -n : n + 1]
@@ -104,9 +102,7 @@ def nuc_est_conv(
 
     chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
 
-    approx_nuc_radius = np.sqrt(
-        object_radius_estimation * num_cell_fluo / np.pi
-    )
+    approx_nuc_radius = np.sqrt(object_radius_estimation * num_cell_fluo / np.pi)
     if gaussian_sigma is None:
         gaussian_sigma = float(approx_nuc_radius / np.sqrt(chi2inv))
     # Nuc Est Conv
@@ -120,9 +116,7 @@ def nuc_est_conv(
 
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")
     nuc_est_conv = np.max(nuc_conv)
-    nuc_est_conv /= (
-        np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * gaussian_sigma**2
-    )
+    nuc_est_conv /= np.sum(nuc_filter**2) * alpha * np.pi * chi2inv * gaussian_sigma**2
     return nuc_est_conv
 
 
@@ -137,9 +131,7 @@ def nuc_conv_3d(cell_mask, trap_image, pixel_size=0.23, z_spacing=0.6):
     chi2inv = stats.distributions.chi2.ppf(alpha, df=2)
     sd_est = approx_nuc_radius / np.sqrt(chi2inv)
     nuc_filt_hw = np.ceil(2 * approx_nuc_radius)
-    nuc_filter = gauss3D(
-        (2 * nuc_filt_hw + 1,) * 3, (sd_est, sd_est, sd_est * ratio)
-    )
+    nuc_filter = gauss3D((2 * nuc_filt_hw + 1,) * 3, (sd_est, sd_est, sd_est * ratio))
     cell_image = trap_image - np.median(cell_fluo)
     cell_image[~cell_mask] = 0
     nuc_conv = signal.convolve(cell_image, nuc_filter, "same")

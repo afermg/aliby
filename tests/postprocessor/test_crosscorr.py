@@ -14,9 +14,7 @@ def generate_sinusoids_df(
 ):
     t = time_axis
     ts = np.tile(t, num_replicates).reshape((num_replicates, len(t)))
-    s = 3 * np.sin(
-        2 * np.pi * ts + 2 * np.pi * np.random.rand(num_replicates, 1)
-    )
+    s = 3 * np.sin(2 * np.pi * ts + 2 * np.pi * np.random.rand(num_replicates, 1))
     s_df = pd.DataFrame(s)
     return s_df
 

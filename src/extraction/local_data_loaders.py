@@ -54,9 +54,7 @@ def load_paired_images(filenames, typeA="Brightfield", typeB="segoutlines"):
         k: {m.group(2): f for m, f in v}
         for k, v in groupby(valid, key=lambda m: m[0].group(1))
     }
-    valid = [
-        set(v.keys()).issuperset({typeA, typeB}) for v in grouped.values()
-    ]
+    valid = [set(v.keys()).issuperset({typeA, typeB}) for v in grouped.values()]
     if not all(valid):
         raise Exception
     return {
@@ -76,13 +74,7 @@ def load(path=None):
     list of dictionaries containing GFP, Brightfield and segoutlines channel
     """
     if path is None:
-
-        path = (
-            files("aliby").parent.parent
-            / "examples"
-            / "extraction"
-            / "pairs_data"
-        )
+        path = files("aliby").parent.parent / "examples" / "extraction" / "pairs_data"
 
     image_dir = Path(path)
     channels = ["Brightfield", "GFP"]

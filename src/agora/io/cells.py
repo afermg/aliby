@@ -163,9 +163,9 @@ class Cells:
     def mask(self, cell_id, trap_id):
         """Return the times and the filled edge masks for a cell and trap."""
         times, outlines = self.outline(cell_id, trap_id)
-        return times, np.array([
-            ndimage.morphology.binary_fill_holes(o) for o in outlines
-        ])
+        return times, np.array(
+            [ndimage.morphology.binary_fill_holes(o) for o in outlines]
+        )
 
     def at_time(self, timepoint: int, kind="mask") -> t.List[t.List[np.ndarray]]:
         """Return a dict with traps as keys and cell masks as values for a time point."""

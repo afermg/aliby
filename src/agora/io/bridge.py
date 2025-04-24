@@ -25,9 +25,7 @@ class BridgeH5:
         self.filename = filename
         if flag is not None:
             self.hdf = h5py.File(filename, flag)
-            assert (
-                "cell_info" in self.hdf
-            ), "Invalid file. No 'cell_info' found."
+            assert "cell_info" in self.hdf, "Invalid file. No 'cell_info' found."
 
     def log(self, message: str, level: str = "warn"):
         """Log messages at the desired level."""
@@ -85,8 +83,7 @@ class BridgeH5:
         npairs = []
         for tp in self.hdf["cell_info"]["processed_timepoints"][()]:
             tmp_tree = {
-                k: {k2: v2 for k2, v2 in v.items() if k2 <= tp}
-                for k, v in tree.items()
+                k: {k2: v2 for k2, v2 in v.items() if k2 <= tp} for k, v in tree.items()
             }
             npairs.append(self.get_npairs(tree=tmp_tree))
         return np.diff(npairs)
@@ -132,18 +129,14 @@ def groupsort(iterable: Union[tuple, list]):
     Values are grouped by the first element.
     """
     iterable = sorted(iterable, key=lambda x: x[0])
-    grouped = {
-        k: [x[1:] for x in v] for k, v in groupby(iterable, lambda x: x[0])
-    }
+    grouped = {k: [x[1:] for x in v] for k, v in groupby(iterable, lambda x: x[0])}
     return grouped
 
 
 def recursive_groupsort(iterable):
     """Recursive extension of groupsort."""
     if len(iterable[0]) > 1:
-        return {
-            k: recursive_groupsort(v) for k, v in groupsort(iterable).items()
-        }
+        return {k: recursive_groupsort(v) for k, v in groupsort(iterable).items()}
     else:
         # only two elements in list
         return [x[0] for x in iterable]

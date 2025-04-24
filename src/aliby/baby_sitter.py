@@ -71,8 +71,7 @@ class BabyRunner(StepABC):
         tiler_z = self.tiler.shape[-3]
         if f"{tiler_z}z" not in modelset_name:
             raise KeyError(
-                f"Tiler z-stack ({tiler_z}) and model"
-                f" ({modelset_name}) do not match."
+                f"Tiler z-stack ({tiler_z}) and model ({modelset_name}) do not match."
             )
         if parameters is None:
             brain = modelsets.get(modelset_name)
@@ -137,17 +136,13 @@ def get_modelset_name_from_params(
         for x in [imaging_device, channel.lower(), camera, zoom, n_stacks]
     ]
     params_regex = re.compile("-".join(params) + "$")
-    valid_models = [
-        res for res in filter(params_regex.search, possible_models)
-    ]
+    valid_models = [res for res in filter(params_regex.search, possible_models)]
     # check that there are valid models
     if len(valid_models) == 1:
         return valid_models[0]
     else:
         raise KeyError(
-            "Error in finding BABY model sets matching {}".format(
-                ", ".join(params)
-            )
+            "Error in finding BABY model sets matching {}".format(", ".join(params))
         )
 
 
@@ -170,9 +165,9 @@ def format_segmentation(segmentation, tp):
         # assign the trap ID to each cell identified
         tile_dict["trap"] = [i] * len(tile_dict["cell_label"])
         # record mothers for each labelled cell
-        tile_dict["mother_assign_dynamic"] = np.array(
-            tile_dict["mother_assign"]
-        )[np.array(tile_dict["cell_label"], dtype=int) - 1]
+        tile_dict["mother_assign_dynamic"] = np.array(tile_dict["mother_assign"])[
+            np.array(tile_dict["cell_label"], dtype=int) - 1
+        ]
     # merge into a dict with BABY's outputs as keys and
     # lists of results for all cells as values
     merged = {

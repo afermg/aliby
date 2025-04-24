@@ -51,6 +51,4 @@ def test_essential_meta_fields(legacy_log_interface: dict):
     We test the ability of the parser to find channel names and z-stacks
     """
     assert "channels" in legacy_log_interface, "Channels not found at root"
-    assert len(
-        legacy_log_interface["channels"]
-    ), "Channels present but names not found"
+    assert len(legacy_log_interface["channels"]), "Channels present but names not found"

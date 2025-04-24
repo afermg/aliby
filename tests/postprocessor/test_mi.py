@@ -1,6 +1,7 @@
 """
 Mutual information test
 """
+
 # import pytest
 import numpy as np
 import pandas as pd
@@ -134,9 +135,7 @@ MI_IQR = np.array(
 
 def convert_to_df(array, strain_name):
     multiindex_array = [[strain_name] * len(array), list(range(len(array)))]
-    multiindex = pd.MultiIndex.from_arrays(
-        multiindex_array, names=("strain", "cellID")
-    )
+    multiindex = pd.MultiIndex.from_arrays(multiindex_array, names=("strain", "cellID"))
     signal = pd.DataFrame(array, multiindex)
 
     return signal

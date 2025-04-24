@@ -113,9 +113,7 @@ def parse_from_swainlab_grammar(filepath: t.Union[str, PosixPath]):
         res = parse_from_grammar(header, sl_grammar)
     except Exception:
         # removes unwanted windows characters
-        header = extract_header(
-            filepath, errors="ignore", encoding="unicode_escape"
-        )
+        header = extract_header(filepath, errors="ignore", encoding="unicode_escape")
         res = parse_from_grammar(header, sl_grammar)
     return res
 
@@ -174,14 +172,12 @@ def parse_table(
         start_trigger: Keyword = Keyword(start_trigger)
     EOL = LineEnd().suppress()
     field = OneOrMore(CharsNotIn(":,\n"))
-    line = LineStart() + Group(
-        OneOrMore(field + Literal(",").suppress()) + field + EOL
-    )
+    line = LineStart() + Group(OneOrMore(field + Literal(",").suppress()) + field + EOL)
     parser = start_trigger + EOL + Group(OneOrMore(line)) + EOL
     parser_result = parser.search_string(string_input)
-    assert all(
-        [len(row) == len(parser_result[0]) for row in parser_result]
-    ), f"Table {start_trigger} has unequal number of columns"
+    assert all([len(row) == len(parser_result[0]) for row in parser_result]), (
+        f"Table {start_trigger} has unequal number of columns"
+    )
     assert len(parser_result), f"Parsing is empty. {parser}"
     return table_to_df(parser_result.as_list())
 
@@ -212,9 +208,7 @@ def parse_fields(
         + Group(field + Combine(OneOrMore(Literal(":").suppress() + field)))
         + EOL
     )
-    parser = (
-        start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
-    )
+    parser = start_trigger + EOL + Group(OneOrMore(line)) + end_trigger.suppress()
     parser_result = parser.search_string(string_input)
     results = parser_result.as_list()
     assert len(results), "Parsing returned nothing"

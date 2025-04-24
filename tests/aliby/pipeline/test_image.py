@@ -9,9 +9,7 @@ tiler_parameters = {"tile_size": 117, "ref_channel": "Brightfield", "ref_z": 0}
 
 sample_da = da.from_array(np.array([[1, 2], [3, 4]]))
 # Make it 5-dimensional
-sample_da = da.reshape(
-    sample_da, (1, 1, 1, sample_da.shape[-2], sample_da.shape[-1])
-)
+sample_da = da.reshape(sample_da, (1, 1, 1, sample_da.shape[-2], sample_da.shape[-1]))
 
 
 @pytest.mark.parametrize("sample_da", [sample_da])
@@ -32,10 +30,7 @@ def test_pad_array(sample_da, dim, n_empty_slices, image_position):
 
     # select which dimension to index the multidimensional array
     indices = {dim: image_position}
-    ix = [
-        indices.get(dim, slice(None))
-        for dim in range(padded_da.compute().ndim)
-    ]
+    ix = [indices.get(dim, slice(None)) for dim in range(padded_da.compute().ndim)]
 
     # Checks that original image array is there and is at the correct index
     assert np.array_equal(padded_da.compute()[ix], sample_da.compute()[0])

@@ -108,8 +108,7 @@ def find_channels_by_position_legacy(metadata: t.Dict) -> t.Dict:
     """
     if isinstance(metadata, dict) and "positions/posname" in metadata:
         channels_dict = {
-            position_name: []
-            for position_name in metadata["positions/posname"]
+            position_name: [] for position_name in metadata["positions/posname"]
         }
         channels = metadata["channels"]
         for i, position_name in enumerate(metadata["positions/posname"]):

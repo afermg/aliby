@@ -2,7 +2,6 @@
 Basic ParametersIO tests
 """
 
-
 from agora.abc import ParametersABC
 
 

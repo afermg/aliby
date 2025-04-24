@@ -246,9 +246,9 @@ class ImageZarr(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self.meta.update({
-            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
-        })
+        self.meta.update(
+            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
+        )
 
     @property
     def name(self):
@@ -295,9 +295,9 @@ class ImageMultiTiff(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self._meta.update({
-            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
-        })
+        self._meta.update(
+            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
+        )
 
     @property
     def name(self):

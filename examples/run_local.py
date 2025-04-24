@@ -1,4 +1,3 @@
-
 from aliby.pipeline import Pipeline, PipelineParameters
 
 omid = "25681_2022_04_30_flavin_htb2_glucose_10mgpL_01_00"

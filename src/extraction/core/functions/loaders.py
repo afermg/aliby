@@ -1,14 +1,12 @@
 import typing as t
 from functools import partial
 from inspect import getfullargspec, getmembers, isfunction
-from types import FunctionType
 
 import numpy as np
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
 from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
-from extraction.core.functions.math_utils import div0
 
 """
 Load functions for analysing cells and their background.

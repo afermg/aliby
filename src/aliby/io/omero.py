@@ -190,11 +190,13 @@ class Dataset(BridgeOmero):
     @property
     def unique_name(self):
         """Get full name of experiment including its date."""
-        return "_".join((
-            str(self.ome_id),
-            self.date.strftime("%Y_%m_%d").replace("/", "_"),
-            self.name,
-        ))
+        return "_".join(
+            (
+                str(self.ome_id),
+                self.date.strftime("%Y_%m_%d").replace("/", "_"),
+                self.name,
+            )
+        )
 
     def get_position_ids(self):
         """Get dict of image names and IDs from OMERO."""

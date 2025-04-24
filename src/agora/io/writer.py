@@ -334,11 +334,13 @@ class StateWriter(DynamicWriter):
     @staticmethod
     def format_values_traps(states: list, val_name: str):
         """Format either lifetime, p_was_bud, or p_is_mother variables as a list."""
-        formatted = np.array([
-            (trap, clabel_val)
-            for trap, state in enumerate(states)
-            for clabel_val in state[val_name]
-        ])
+        formatted = np.array(
+            [
+                (trap, clabel_val)
+                for trap, state in enumerate(states)
+                for clabel_val in state[val_name]
+            ]
+        )
         return formatted
 
     @staticmethod
@@ -363,9 +365,9 @@ class StateWriter(DynamicWriter):
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
             formatted_state[val_name] = self.format_values_traps(states, val_name)
         bacum_max = max([len(state["ba_cum"]) for state in states])
-        formatted_state["ba_cum"] = np.array([
-            self.pad_if_needed(state["ba_cum"], bacum_max) for state in states
-        ])
+        formatted_state["ba_cum"] = np.array(
+            [self.pad_if_needed(state["ba_cum"], bacum_max) for state in states]
+        )
         return formatted_state
 
     def write(self, data: dict, overwrite: list, tp: int = 0):
@@ -453,9 +455,9 @@ class Writer(BridgeH5):
             # TODO: benchmark I/O speed when using compression
             self.write_index(f, path, data)  # , compression=self.compression)
         # data is a dictionary of dataframes
-        elif isinstance(data, Dict) and np.all([
-            isinstance(x, pd.DataFrame) for x in data.values
-        ]):
+        elif isinstance(data, Dict) and np.all(
+            [isinstance(x, pd.DataFrame) for x in data.values]
+        ):
             for k, df in data.items():
                 self.write_dset(f, path + f"/{k}", df)
         # data is an iterable

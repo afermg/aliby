@@ -97,16 +97,8 @@ def segment_traps(
         (i, region)
         for i, region in enumerate(regionprops(label_image))
         if (min_trap_size < region.major_axis_length < tile_size)
-        and (
-            half_tile_size
-            < region.centroid[0]
-            < image.shape[0] - half_tile_size - 1
-        )
-        and (
-            half_tile_size
-            < region.centroid[1]
-            < image.shape[1] - half_tile_size - 1
-        )
+        and (half_tile_size < region.centroid[0] < image.shape[0] - half_tile_size - 1)
+        and (half_tile_size < region.centroid[1] < image.shape[1] - half_tile_size - 1)
     ]
     if idx_valid_region:
         _, valid_region = zip(*idx_valid_region)
@@ -114,9 +106,7 @@ def segment_traps(
         raise Exception("No valid tiles found.")
     # find centroids of valid regions
     centroids = (
-        np.array([region.centroid for region in valid_region])
-        .round()
-        .astype(int)
+        np.array([region.centroid for region in valid_region]).round().astype(int)
     )
     # make candidate templates as tile_size x tile_size image slices
     candidate_templates = [
@@ -129,9 +119,7 @@ def segment_traps(
     # make a mean template by averaging all the candidate templates
     mean_template = np.stack(candidate_templates).astype(int).mean(axis=0)
     # find traps using the mean trap template
-    traps = identify_trap_locations(
-        image, mean_template, **identify_traps_kwargs
-    )
+    traps = identify_trap_locations(image, mean_template, **identify_traps_kwargs)
     # try again if there are too few traps
     traps_retry = []
     if len(traps) < 30 and downscale != 1:
@@ -213,17 +201,13 @@ def identify_trap_locations(
             for scale in scales
         }
         # find best scale
-        best_scale = max(
-            matches, key=lambda x: np.percentile(matches[x], 99.9)
-        )
+        best_scale = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
         # choose the best result - an image of normalised correlations
         # with the template
         matched = matches[best_scale]
     else:
         # find the image of normalised correlations with the template
-        matched = feature.match_template(
-            img, template, pad_input=True, mode="median"
-        )
+        matched = feature.match_template(img, template, pad_input=True, mode="median")
     # re-scale back the image of normalised correlations
     # find the coordinates of local maxima
     coordinates = feature.peak_local_max(

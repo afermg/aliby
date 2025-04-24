@@ -73,9 +73,7 @@ class DynamicWriter:
         try:
             n = len(data)
         except Exception as e:
-            logging.debug(
-                "DynamicWriter: Attributes have no length: {}".format(e)
-            )
+            logging.debug("DynamicWriter: Attributes have no length: {}".format(e))
             n = 1
         if key in hgroup:
             # append to existing dataset
@@ -100,9 +98,7 @@ class DynamicWriter:
                 dtype=dtype,
                 compression=self.compression,
                 compression_opts=(
-                    self.compression_opts
-                    if self.compression is not None
-                    else None
+                    self.compression_opts if self.compression is not None else None
                 ),
             )
             # write all data, signified by the empty tuple
@@ -335,9 +331,7 @@ class StateWriter(DynamicWriter):
             tp_back, trap, value = zip(*lbl_tuples)
         else:
             # set as empty lists
-            tp_back, trap, value = [
-                [[] for _ in states[0][val_name]] for _ in range(3)
-            ]
+            tp_back, trap, value = [[[] for _ in states[0][val_name]] for _ in range(3)]
         return tp_back, trap, value
 
     @staticmethod
@@ -367,9 +361,7 @@ class StateWriter(DynamicWriter):
         Use one element per per list per state.
         """
         formatted_state = {"max_lbl": [state["max_lbl"] for state in states]}
-        tp_back, trap, cell_label = self.format_values_tpback(
-            states, "cell_lbls"
-        )
+        tp_back, trap, cell_label = self.format_values_tpback(states, "cell_lbls")
         _, _, prev_feats = self.format_values_tpback(states, "prev_feats")
         # store lists in a dict
         formatted_state["tp_back"] = tp_back
@@ -378,15 +370,10 @@ class StateWriter(DynamicWriter):
         formatted_state["prev_feats"] = np.array(prev_feats)
         # one entry per cell label - tp_back independent
         for val_name in ("lifetime", "p_was_bud", "p_is_mother"):
-            formatted_state[val_name] = self.format_values_traps(
-                states, val_name
-            )
+            formatted_state[val_name] = self.format_values_traps(states, val_name)
         bacum_max = max([len(state["ba_cum"]) for state in states])
         formatted_state["ba_cum"] = np.array(
-            [
-                self.pad_if_needed(state["ba_cum"], bacum_max)
-                for state in states
-            ]
+            [self.pad_if_needed(state["ba_cum"], bacum_max) for state in states]
         )
         return formatted_state
 

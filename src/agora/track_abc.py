@@ -148,23 +148,27 @@ class FeatureCalculator(ABC):
                     "Dimension with at least one empty outline slice"
                 )
 
-                cell_feats = np.array([
+                cell_feats = np.array(
                     [
-                        x[0]
-                        for x in regionprops_table(
-                            mask.astype(int), properties=feats2use
-                        ).values()
+                        [
+                            x[0]
+                            for x in regionprops_table(
+                                mask.astype(int), properties=feats2use
+                            ).values()
+                        ]
+                        for mask in masks
                     ]
-                    for mask in masks
-                ])
+                )
 
             elif masks.ndim == 2:  # No overlap between cells
-                cell_feats = np.array([
-                    x
-                    for x in regionprops_table(
-                        masks.astype(int), properties=feats2use
-                    ).values()
-                ]).T
+                cell_feats = np.array(
+                    [
+                        x
+                        for x in regionprops_table(
+                            masks.astype(int), properties=feats2use
+                        ).values()
+                    ]
+                ).T
             else:
                 raise Exception(
                     "TrackerException: masks do not have the appropiate dimensions"

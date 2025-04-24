@@ -34,11 +34,13 @@ class ParametersABC(ABC):
         Use recursion.
         """
         if isinstance(iterable, dict):
-            if any([
-                True
-                for x in iterable.values()
-                if isinstance(x, Iterable) or hasattr(x, "to_dict")
-            ]):
+            if any(
+                [
+                    True
+                    for x in iterable.values()
+                    if isinstance(x, Iterable) or hasattr(x, "to_dict")
+                ]
+            ):
                 return {
                     k: (v.to_dict() if hasattr(v, "to_dict") else self.to_dict(v))
                     for k, v in iterable.items()

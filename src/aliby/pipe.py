@@ -46,9 +46,11 @@ def init_step(
                 parameters["segmenter_kwargs"]["kind"] == "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**{
-                **parameters["segmenter_kwargs"],
-            })
+            step = dispatch_segmenter(
+                **{
+                    **parameters["segmenter_kwargs"],
+                }
+            )
         case "track":
             if (
                 parameters["kind"] == "baby"
