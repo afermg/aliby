@@ -1,3 +1,7 @@
+"""
+Test extraction of measurements with one mask and image.
+"""
+
 import dask.array as da
 
 from extraction.extract import extract_tree, process_tree_masks
