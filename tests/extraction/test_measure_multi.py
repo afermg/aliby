@@ -11,7 +11,12 @@ rng = da.random.default_rng(1)
 pixels = rng.standard_normal(size=(3, 5, 100, 100)).compute()
 tree = {
     (0, 1): {
-        "div0": {
+        "div": {
+            "max": [
+                "max2p5pc",
+            ]
+        },
+        "add": {
             "max": [
                 "max2p5pc",
             ]

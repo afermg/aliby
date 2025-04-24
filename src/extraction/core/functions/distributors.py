@@ -25,5 +25,4 @@ def reduce_z(pixels: np.ndarray, fun: t.Callable, axis: int = 0) -> np.ndarray:
         # optimise the reduction function if possible
         return fun.reduce(pixels, axis=axis)
     else:
-        # WARNING: Very slow, only use when no alternatives exist
-        return np.apply_along_axis(fun, axis, pixels)
+        raise Exception(f"{fun} is an invalid reducer.")

@@ -141,7 +141,7 @@ def load_redfuns() -> t.Dict[str, t.Callable]:
         "max": np.maximum,
         "mean": np.mean,
         "median": np.median,
-        "div0": div0,
+        "div": np.divide,
         "add": np.add,
         "None": None,
     }
