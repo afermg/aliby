@@ -68,7 +68,7 @@ def init_step(
                 tree=parameters["tree_multi"],
             )
         case _:
-            raise ("Invalid step name")
+            raise Exception("Invalid step name")
 
     return step
 
@@ -86,10 +86,12 @@ def run_step(step, *args, **kwargs):
 
 def pipeline_step(
     pipeline: dict,
-    state: dict = {},
+    state: dict = None,
     steps_dir: str = None,
 ) -> dict:
     """Run one step of the pipeline."""
+    if state is None:
+        state = {}
 
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
@@ -179,7 +181,7 @@ def run_pipeline(
     data = []
     state = {}
 
-    for i in range(ntps):
+    for _i in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
         for step_name in pipeline["steps"]:
             if step_name.startswith("ext"):
