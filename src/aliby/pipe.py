@@ -46,26 +46,22 @@ def init_step(
                 parameters["segmenter_kwargs"]["kind"] == "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(
-                **{
-                    **parameters["segmenter_kwargs"],
-                }
-            )
+            step = dispatch_segmenter(**{
+                **parameters["segmenter_kwargs"],
+            })
         case "track":
             if (
                 parameters["kind"] == "baby"
             ):  # Tracker needs to pull info from baby crawler
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
-        case s if s.startswith("extract"):
+        case s if s.startswith("extract_"):
             step = partial(
-                process_tree_masks, function=extract_tree, tree=parameters["tree"]
+                process_tree_masks, measure_fn=extract_tree, tree=parameters["tree"]
             )
-        case s if s.startswith("extract_multi"):
+        case s if s.startswith("extractmulti_"):
             step = partial(
-                process_tree_masks,
-                function=extract_tree_multi,
-                tree=parameters["tree_multi"],
+                process_tree_masks, measure_fn=extract_tree_multi, tree=parameters
             )
         case _:
             raise Exception("Invalid step name")
@@ -181,7 +177,7 @@ def run_pipeline(
     data = []
     state = {}
 
-    for _i in range(ntps):
+    for tp in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
         for step_name in pipeline["steps"]:
             if step_name.startswith("ext"):
@@ -190,6 +186,10 @@ def run_pipeline(
                     table = table.append_column(
                         "object",
                         pa.array([step_name.split("_")[-1]] * len(table), pa.string()),
+                    )
+                    table = table.append_column(
+                        "tp",
+                        pa.array([tp] * len(table), pa.uint8()),
                     )
                     data.append(table)
 

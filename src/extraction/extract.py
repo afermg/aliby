@@ -215,7 +215,7 @@ def process_tree_masks(
             [
                 (tile_i, mask_i)
                 for tile_i, masks_in_tile in enumerate(masks)
-                for mask_i in range(masks_in_tile.max())
+                for mask_i in range(masks_in_tile.max() - 1)
             ],
             instructions,
         )
@@ -224,7 +224,9 @@ def process_tree_masks(
     return tileid_instructions, result
 
 
-def when_da_compute(msmts: list[da.array or np.ndarray]) -> list[np.ndarray]:
+def when_da_compute(
+    msmts: list[da.array or np.ndarray], threaded: bool = False
+) -> list[np.ndarray]:
     """
     Computes a dask array if it exists.
 
@@ -238,10 +240,15 @@ def when_da_compute(msmts: list[da.array or np.ndarray]) -> list[np.ndarray]:
     list
         A list of computed values.
     """
-    with ThreadPoolExecutor() as ex:
-        return list(
-            ex.map(lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts)
-        )
+    if threaded:
+        with ThreadPoolExecutor() as ex:
+            return list(
+                ex.map(
+                    lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts
+                )
+            )
+    else:
+        return [x.compute() if isinstance(x, da.core.Array) else x for x in msmts]
 
 
 def extract_tree(
@@ -330,17 +337,14 @@ def extract_tree_multi(
     """
     if threaded:
         with ThreadPoolExecutor() as ex:
-            binmasks = ex.map(
-                lambda tileid, _: transform_2d_to_3d(masks[tileid]), tileid_instructions
-            )
+            binmasks = list(x[1] for x in ex.map(transform_2d_to_3d, masks))
             result = ex.map(
                 partial(
                     measure_multi,
                     masks=binmasks,
                     pixels=pixels,
-                    reductor=REDUCTION_FUNS,
+                    REDUCTION_FUNS=REDUCTION_FUNS,
                     CELL_FUNS=CELL_FUNS,
-                    channels_reductor=REDUCTION_FUNS,
                 ),
                 tileid_instructions,
             )
@@ -376,24 +380,30 @@ def format_extraction(
     pyarrow Table
         The formatted table.
     """
-    formatted = {k: [] for k in ("tile", "branch", "metric", "values")}
-    for inst, measurements in zip(*instructions_result):
-        if len(measurements):
-            tileid = inst[0]
-            branch = "/".join(str(x) for x in inst[1])
-            if isinstance(measurements[0], dict):
-                for measurement_set in measurements:
-                    for k, values in measurement_set.items():
-                        formatted["branch"].append(branch)
-                        formatted["metric"].append(k)
-                        formatted["values"].append(values)
-                        formatted["tile"].append(tileid)
-            else:
-                for v in measurements:
-                    formatted["tile"].append(tileid)
-                    formatted["branch"].append(branch)
-                    formatted["metric"].append(inst[1][-1])
-                    formatted["values"].append(v)
+    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "values")}
+    for inst, metrics in zip(*instructions_result):
+        tileid, label = inst[0]
+        branch = "/".join(str(x) for x in inst[1])
+        if isinstance(metrics, int):
+            formatted["tile"].append(tileid)
+            formatted["label"].append(label)
+            formatted["branch"].append(branch)
+            formatted["metric"].append(inst[1][-1])
+            formatted["values"].append(metrics)
+        elif isinstance(metrics, dict):
+            for k, values in metrics.items():
+                formatted["branch"].append(branch)
+                formatted["metric"].append(k)
+                formatted["values"].append(values)
+                formatted["tile"].append(tileid)
+                formatted["label"].append(label)
+        elif isinstance(metrics, list):
+            for v in metrics:
+                formatted["tile"].append(tileid)
+                formatted["label"].append(label)
+                formatted["branch"].append(branch)
+                formatted["metric"].append(inst[1][-1])
+                formatted["values"].append(v)
 
     arrow_table = pa.Table.from_pydict(formatted)
     return arrow_table
