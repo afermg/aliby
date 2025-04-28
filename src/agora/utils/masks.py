@@ -2,9 +2,12 @@
 import numpy as np
 
 
-def transform_2d_to_3d(masks: np.ndarray) -> (tuple[int], np.ndarray):
+def transform_2d_to_3d(masks: np.array) -> (tuple[int], np.array):
     """
     Convert a 2d (int) to its equivalent cell labels and 3d bool image.
+
+    This assumes that labels in mask are 1->n and background is zero.
+    All labels must be present for this to be correct.
 
 
     Example:
@@ -29,17 +32,6 @@ def transform_2d_to_3d(masks: np.ndarray) -> (tuple[int], np.ndarray):
                  [False, False]]]))
     """
 
-    cell_labels = np.unique(masks)
-    cell_labels = cell_labels[cell_labels > 0]
-
-    to_compare = np.ones((*masks.shape, 1)) * cell_labels
-
-    masks_3d = masks == np.moveaxis(to_compare, -1, 0)
-    return cell_labels, masks_3d
-
-
-def labels_from_masks(masks: np.ndarray):
-    """
-    Provides a consistent way to transform 2d masks to a list of labels.
-    """
-    return transform_2d_to_3d(masks)[0]
+    cell_labels = np.arange(1, masks.max())
+    masks_3d = np.equal.outer(cell_labels, masks)
+    return masks_3d

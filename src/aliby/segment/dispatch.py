@@ -89,16 +89,29 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                     stitch_threshold=0.1,
                     **kwargs,
                 )
-                result = result[0]
-                ndim = result.ndim
+                labels = result[0]
+                ndim = labels.ndim
                 if ndim == 3:  # Cellpose squeezes dims!
                     # TODO Check that this is the best way to project 3-D labels into 2D
-                    result = result.max(axis=0)
+                    labels_redz = labels.max(axis=0)
+                    # Cover case where the reduction on z removes an entire item
+                    max_val = labels_redz.max()
+                    missing_ix = np.setdiff1d(
+                        np.arange(max_val),
+                        np.unique(labels_redz),
+                        assume_unique=True,
+                    )
+                    if len(missing_ix):
+                        for ix in missing_ix:
+                            labels_redz[labels_redz == max_val] = ix
+                            max_val = labels_redz.max()
+
                 elif not 1 < ndim < 4:
                     raise Exception(
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
-                return [result]
+
+                return [labels_redz]
 
     return segment
 
