@@ -22,7 +22,6 @@ dependencies = [
 
 [project.optional-dependencies]
 cellpose = ["cellpose>=3.1.1.1"]
-baby = ["baby-seg>=0.30.6"]
 
 [dependency-groups]
 cellpose = [
