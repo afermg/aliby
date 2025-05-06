@@ -1,53 +1,24 @@
-"""
-Load functions for analysing cells and their background.
-
-NB inspect.getmembers returns a list of function names and
-functions; inspect.getfullargspec returns a function's arguments.
-"""
+"""Load functions for analysing cells and their background."""
 
 import typing as t
+
+# inspect.getmembers returns a list of function names and functions
+# inspect.getfullargspec returns a function's arguments
+from inspect import getfullargspec, getmembers, isfunction
 from types import FunctionType
-from inspect import getfullargspec, getmembers, isfunction, isbuiltin
 
 import bottleneck as bn
-
 from extraction.core.functions import cell_functions, trap_functions
-from extraction.core.functions.custom import localisation
 from extraction.core.functions.distributors import trap_apply
 from extraction.core.functions.math_utils import div0
 
 
-def load_custom_functions_and_args() -> (
-    t.Tuple[(t.Dict[str, t.Callable], t.Dict[str, t.List[str]])]
-):
-    """
-    Load custom functions.
-
-    Historically these have been for nuclear localisation.
-
-    Return the functions and any additional arguments other
-    than cell_mask and trap_image as dictionaries.
-    """
-    # load functions from module
-    funs = {
-        f[0]: f[1]
-        for f in getmembers(localisation)
-        if isfunction(f[1])
-        and f[1].__module__.startswith("extraction.core.functions")
-    }
-    # load additional arguments if cell_mask and trap_image are arguments
-    args = {
-        k: getfullargspec(v).args[2:]
-        for k, v in funs.items()
-        if set(["cell_mask", "trap_image"]).intersection(
-            getfullargspec(v).args
-        )
-    }
-    # return dictionaries of functions and of arguments
-    return (
-        {k: funs[k] for k in args.keys()},
-        {k: v for k, v in args.items() if v},
-    )
+def load_all_functions():
+    """Load cell and trap functions."""
+    cell_funs = load_cell_functions()
+    trap_funs = load_trap_functions()
+    # return dict of cell funs, dict of trap funs, and dict of both
+    return cell_funs, {**trap_funs, **cell_funs}
 
 
 def load_cell_functions():
@@ -58,7 +29,7 @@ def load_cell_functions():
         if isfunction(f[1])
         and f[1].__module__.startswith("extraction.core.functions")
     }
-    CELL_FUNS = {}
+    cell_funs = {}
     for f_name, f in cell_funs_raw.items():
         if isfunction(f):
 
@@ -77,27 +48,19 @@ def load_cell_functions():
                         f, m, img, channels
                     )
 
-            CELL_FUNS[f_name] = tmp(f)
-    return CELL_FUNS
+            cell_funs[f_name] = tmp(f)
+    return cell_funs
 
 
 def load_trap_functions():
     """Load functions that are applied to an entire tile."""
-    TRAP_FUNS = {
+    trap_funs = {
         f[0]: f[1]
         for f in getmembers(trap_functions)
         if isfunction(f[1])
         and f[1].__module__.startswith("extraction.core.functions")
     }
-    return TRAP_FUNS
-
-
-def load_all_functions():
-    """Combine all automatically loaded functions."""
-    CELL_FUNS = load_cell_functions()
-    TRAP_FUNS = load_trap_functions()
-    # return dict of cell funs, dict of trap funs, and dict of both
-    return CELL_FUNS, TRAP_FUNS, {**TRAP_FUNS, **CELL_FUNS}
+    return trap_funs
 
 
 def load_reduction_functions(
@@ -113,7 +76,7 @@ def load_reduction_functions(
     additional_reducers: function or a dict of functions (optional)
         Functions to perform the reduction.
     """
-    RED_FUNS = {
+    red_funs = {
         "max": bn.nanmax,
         "mean": bn.nanmean,
         "median": bn.nanmedian,
@@ -126,5 +89,5 @@ def load_reduction_functions(
             additional_reducers = [
                 (additional_reducers.__name__, additional_reducers)
             ]
-        RED_FUNS.update(additional_reducers)
-    return RED_FUNS
+        red_funs.update(additional_reducers)
+    return red_funs

@@ -14,10 +14,9 @@ from agora.io.cells import Cells
 from agora.io.dynamic_writer import load_meta
 from agora.io.writer import Writer
 from aliby.tile.tiler import Tiler, find_channel_name
-from extraction.core.functions.distributors import reduce_z, trap_apply
+from extraction.core.functions.distributors import reduce_z
 from extraction.core.functions.loaders import (
     load_all_functions,
-    load_custom_functions_and_args,
     load_reduction_functions,
 )
 
@@ -30,12 +29,7 @@ extraction_result = t.Dict[
     str, t.Dict[reduction_method, t.Dict[str, t.Dict[str, pd.Series]]]
 ]
 
-# Global variables used to load functions that either analyse cells
-# or their background. These global variables both allow the functions
-# to be stored in a dictionary for access only on demand and to be
-# defined simply in extraction/core/functions.
-CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_all_functions()
-CUSTOM_FUNS, CUSTOM_ARGS = load_custom_functions_and_args()
+# global reduction functions
 REDUCTION_FUNS = load_reduction_functions()
 
 
@@ -55,8 +49,6 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
     default_reduction_and_fluorescence_metrics = {
         r: default_fluorescence_metrics for r in default_reductions
     }
-    # uncomment to add nuc_conv_3d (slow)
-    # default_reduction_metrics["None"] = ["nuc_conv_3d"]
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
         # find matching channels in metadata
@@ -219,57 +211,8 @@ class Extractor(StepABC):
         return self._group
 
     def get_functions(self):
-        """Define all functions, including custom ones."""
-        self.load_custom_funs()
-        self.all_cell_funs = set(self.custom_funs.keys()).union(CELL_FUNS)
-        # merge the two dicts
-        self.all_funs = {**self.custom_funs, **ALL_FUNS}
-
-    def load_custom_funs(self):
-        """
-        Incorporate extra arguments of custom functions into their definitions.
-
-        Normal functions only have cell_masks and trap_image as their
-        arguments, and here custom functions are made the same by
-        setting the values of their extra arguments.
-
-        Any other parameters are taken from the experiment's metadata
-        and automatically applied. These parameters therefore must be
-        loaded within an Extractor instance.
-        """
-        # find functions specified in params.tree
-        funs = set(
-            [
-                fun
-                for channel in self.params.tree.values()
-                for reduction in channel.values()
-                for fun in reduction
-            ]
-        )
-        # consider only those already loaded from CUSTOM_FUNS
-        funs = funs.intersection(CUSTOM_FUNS.keys())
-        # find their arguments
-        self.custom_arg_vals = {
-            func_name: {farg: self.get_meta(farg) for farg in func_args}
-            for func_name, func_args in CUSTOM_ARGS.items()
-            if func_name in funs
-        }
-        # define custom functions
-        self.custom_funs = {}
-        for func_name, func in CUSTOM_FUNS.items():
-            if func_name in funs:
-
-                def tmp(func):
-                    # pass extra arguments to custom function
-                    # return a function of cell_masks and trap_image
-                    return lambda cell_masks, trap_image: trap_apply(
-                        func,
-                        cell_masks,
-                        trap_image,
-                        **self.custom_arg_vals.get(func_name, {}),
-                    )
-
-                self.custom_funs[func_name] = tmp(func)
+        """Define all functions."""
+        self.all_cell_funs, self.all_funs = load_all_functions()
 
     def get_tiles(
         self,
@@ -430,9 +373,7 @@ class Extractor(StepABC):
         if tiles is not None:
             for reduction in reduction_cell_funs.keys():
                 reduced_tiles[reduction] = [
-                    self.reduce_dims(
-                        tile_data, method=REDUCTION_FUNS[reduction]
-                    )
+                    reduce_z(tile_data, REDUCTION_FUNS[reduction])
                     for tile_data in tiles
                 ]
         # calculate cell and tile properties
@@ -447,26 +388,6 @@ class Extractor(StepABC):
             for reduction, cell_funs in reduction_cell_funs.items()
         }
         return d
-
-    def reduce_dims(
-        self, img: np.ndarray, method: reduction_method = None
-    ) -> np.ndarray:
-        """
-        Collapse a z-stack into 2d array using method.
-
-        If method is None, return the original data.
-
-        Parameters
-        ----------
-        img: array
-            An array of the image data arranged as (X, Y, Z).
-        method: function
-            The reduction function.
-        """
-        reduced = img
-        if method is not None:
-            reduced = reduce_z(img, method)
-        return reduced
 
     def make_tree_dict(self, tree: extraction_tree):
         """Put extraction tree into a dict."""
