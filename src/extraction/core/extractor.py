@@ -11,14 +11,14 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.writer import Writer
 from agora.io.dynamic_writer import load_meta
+from agora.io.writer import Writer
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.distributors import reduce_z, trap_apply
 from extraction.core.functions.loaders import (
-    load_custom_funs_and_args,
-    load_funs,
-    load_redfuns,
+    load_all_functions,
+    load_custom_functions_and_args,
+    load_reduction_functions,
 )
 
 # define types
@@ -34,9 +34,9 @@ extraction_result = t.Dict[
 # or their background. These global variables both allow the functions
 # to be stored in a dictionary for access only on demand and to be
 # defined simply in extraction/core/functions.
-CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_funs()
-CUSTOM_FUNS, CUSTOM_ARGS = load_custom_funs_and_args()
-REDUCTION_FUNS = load_redfuns()
+CELL_FUNS, TRAP_FUNS, ALL_FUNS = load_all_functions()
+CUSTOM_FUNS, CUSTOM_ARGS = load_custom_functions_and_args()
+REDUCTION_FUNS = load_reduction_functions()
 
 
 def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
@@ -176,7 +176,7 @@ class Extractor(StepABC):
             for op, (input_ch, _, _) in self.params.multichannel_ops.items():
                 if not set(input_ch).issubset(available_channels_bgsub):
                     self.params.multichannel_ops.pop(op)
-        self.load_funs()
+        self.get_functions()
 
     @classmethod
     def from_tiler(
@@ -218,7 +218,7 @@ class Extractor(StepABC):
             self._group = "/extraction/"
         return self._group
 
-    def load_funs(self):
+    def get_functions(self):
         """Define all functions, including custom ones."""
         self.load_custom_funs()
         self.all_cell_funs = set(self.custom_funs.keys()).union(CELL_FUNS)
@@ -368,7 +368,7 @@ class Extractor(StepABC):
         res_idx = (tuple(results), tuple(idx))
         return res_idx
 
-    def apply_cell_funs(
+    def apply_cell_functions(
         self,
         tiles: t.List[np.array],
         masks: t.List[np.array],
@@ -418,7 +418,7 @@ class Extractor(StepABC):
         channels: list of str
             A list comprising the channel corresponding to the data in tiles.
         **kwargs: dict
-            All other arguments passed to Extractor.apply_cell_funs.
+            All other arguments passed to Extractor.apply_cell_functions.
 
         Returns
         ------
@@ -437,7 +437,7 @@ class Extractor(StepABC):
                 ]
         # calculate cell and tile properties
         d = {
-            reduction: self.apply_cell_funs(
+            reduction: self.apply_cell_functions(
                 tiles=reduced_tiles.get(reduction, [None for _ in masks]),
                 masks=masks,
                 cell_funs=cell_funs,
@@ -563,7 +563,7 @@ class Extractor(StepABC):
 
     def extract_multiple_channels(self, cell_labels, img, img_bgsub, masks):
         """
-        Extract as a dict all metrics requiring multiple channels
+        Extract as a dict all metrics requiring multiple channels.
 
         Include 'Brightfield'.
 
@@ -816,16 +816,21 @@ class Extractor(StepABC):
         extract_dict["general/None/image_y"] = y_df.copy()
         half_width = (self.tiler.tile_size - 1) / 2
         traps = np.array(x_df.index.get_level_values("trap"))
-        for tp in x_df.columns:
-            tile_locs = self.tiler.tile_locs.centres_at_time(tp)
-            centroid_coords = np.column_stack(
-                (x_df[tp].values, y_df[tp].values)
-            )
-            coords_in_image = (
-                centroid_coords + tile_locs[traps][:, ::-1] - half_width
-            )
-            extract_dict["general/None/image_x"][tp] = coords_in_image[:, 0]
-            extract_dict["general/None/image_y"][tp] = coords_in_image[:, 1]
+        if np.any(traps):
+            for tp in x_df.columns:
+                tile_locs = self.tiler.tile_locs.centres_at_time(tp)
+                centroid_coords = np.column_stack(
+                    (x_df[tp].values, y_df[tp].values)
+                )
+                coords_in_image = (
+                    centroid_coords + tile_locs[traps][:, ::-1] - half_width
+                )
+                extract_dict["general/None/image_x"][tp] = coords_in_image[
+                    :, 0
+                ]
+                extract_dict["general/None/image_y"][tp] = coords_in_image[
+                    :, 1
+                ]
         if self.tiler.spatial_location is not None:
             extract_dict["general/None/absolute_x"] = (
                 extract_dict["general/None/image_x"].copy()
