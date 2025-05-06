@@ -1,11 +1,9 @@
 """
-Base functions to extract information from a single cell.
+Functions to extract information from a single cell.
 
-These functions are automatically read by extractor.py, and
-so can only have the cell_mask and trap_image as inputs. They
-must return only one value.
-
-They assume that there are no NaNs in the image.
+These functions are automatically read by extractor.py. They
+must return only one value and assume that there are no NaNs
+in the image.
 
 We use the module bottleneck when it performs faster than numpy:
 - median

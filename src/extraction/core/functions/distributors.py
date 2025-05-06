@@ -36,9 +36,8 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     axis: int (default 0)
         Axis in which we apply the reduction operation.
     """
-    # FUTURE replace with py3.10's match-case.
     if hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck":
-        # Bottleneck type
+        # bottleneck type
         return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
     elif isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
