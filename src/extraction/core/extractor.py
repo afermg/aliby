@@ -40,7 +40,7 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
             meta = dict(f["/"].attrs.items())
     base = {
         "tree": {"general": {"None": global_settings.outline_functions}},
-        "multichannel_ops": {},
+        "multichannel_funs": {},
     }
     candidate_channels = set(global_settings.possible_imaging_channels)
     default_reductions = {"max"}
@@ -93,7 +93,7 @@ class ExtractorParameters(ParametersABC):
         self,
         tree: extraction_tree,
         sub_bg: set = set(),
-        multichannel_ops: t.Dict = {},
+        multichannel_funs: t.Dict = {},
     ):
         """
         Initialise.
@@ -106,11 +106,12 @@ class ExtractorParameters(ParametersABC):
             str channel -> U(function, None) reduction -> str metric
             If not of depth three, tree will be filled with None.
         sub_bg: set
-        multichannel_ops: dict
+        multichannel_funs: dict
+            Dict of multichannel functions.
         """
         self.tree = tree
         self.sub_bg = sub_bg
-        self.multichannel_ops = multichannel_ops
+        self.multichannel_funs = multichannel_funs
 
     @classmethod
     def default(cls):
@@ -184,14 +185,6 @@ class Extractor(StepABC):
             self.params.sub_bg = available_channels.intersection(
                 self.params.sub_bg
             )
-            # add background subtracted channels to those available
-            available_channels_bgsub = available_channels.union(
-                [c + "_bgsub" for c in self.params.sub_bg]
-            )
-            # remove any multichannel operations requiring a missing channel
-            for op, (input_ch, _, _) in self.params.multichannel_ops.items():
-                if not set(input_ch).issubset(available_channels_bgsub):
-                    self.params.multichannel_ops.pop(op)
         self.get_functions()
 
     @classmethod
@@ -513,28 +506,33 @@ class Extractor(StepABC):
         Include 'Brightfield'.
 
         Multichannel functions do not use tree_dict.
-        Instead in extraction parameters include, for example,
+        Instead in extraction, parameters include,
+
+            {"multichannel"} : [channels, reduction function,
+                                multichannel function name]
+
+        For example, for the ratio mulitchannel function
 
             {"multichannel": [["CFP", "YFP"], "max", "ratio"]}
 
         If params is an instance of PipelineParameters, use
 
-            params.to_dict()["extraction"]["multichannel_ops"].update(
-            {"multichannel": [["Flavin", "mCherry"], "max", "ratio"]}
+            params.to_dict()["extraction"]["multichannel_funs"].update(
+            {"multichannel": [["CFP", YFP"], "max", "ratio"]}
             )
 
         which will create a Signal called
 
             '/extraction/multichannel/max/ratio'
         """
-        # NB multichannel functions do not use tree_dict
         available_channels = set(list(img.keys()) + list(img_bgsub.keys()))
         d = {}
-        for multichannel_fun_name, (
+        # multichannel_label below is the "multichannel" string
+        for multichannel_label, (
             channels,
             reduction,
             multichannel_function,
-        ) in self.params.multichannel_ops.items():
+        ) in self.params.multichannel_funs.items():
             common_channels = set(channels).intersection(available_channels)
             # all required channels should be available
             if len(common_channels) == len(channels):
@@ -547,12 +545,13 @@ class Extractor(StepABC):
                     # reduce in Z
                     tiles = REDUCTION_FUNS[reduction](channels_stack, axis=1)
                     # set up dict
-                    if multichannel_fun_name not in d:
-                        d[multichannel_fun_name] = {}
-                    if reduction not in d[multichannel_fun_name]:
-                        d[multichannel_fun_name][reduction] = {}
+                    if multichannel_label not in d:
+                        # create "multichannel" key
+                        d[multichannel_label] = {}
+                    if reduction not in d[multichannel_label]:
+                        d[multichannel_label][reduction] = {}
                     # apply multichannel function
-                    d[multichannel_fun_name][reduction][
+                    d[multichannel_label][reduction][
                         multichannel_function + suffix
                     ] = self.apply_cell_function(
                         tiles,
