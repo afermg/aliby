@@ -14,7 +14,6 @@ from agora.io.cells import Cells
 from agora.io.dynamic_writer import load_meta
 from agora.io.writer import Writer
 from aliby.tile.tiler import Tiler, find_channel_name
-from extraction.core.functions.distributors import reduce_z
 from extraction.core.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
@@ -63,6 +62,30 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
     return base
 
 
+def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
+    """
+    Reduce the trap_image to 2d.
+
+    Parameters
+    ----------
+    trap_image: array
+        Images for all the channels associated with a trap
+    fun: function
+        Function to execute the reduction
+    axis: int (default 0)
+        Axis in which we apply the reduction operation.
+    """
+    if hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck":
+        # bottleneck type
+        return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
+    elif isinstance(fun, np.ufunc):
+        # optimise the reduction function if possible
+        return fun.reduce(trap_image, axis=axis)
+    else:
+        # WARNING: Very slow, only use when no alternatives exist
+        return np.apply_along_axis(fun, axis, trap_image)
+
+
 class ExtractorParameters(ParametersABC):
     """Base class to define parameters for extraction."""
 
@@ -91,6 +114,7 @@ class ExtractorParameters(ParametersABC):
 
     @classmethod
     def default(cls):
+        """Override ParametersABC default class method."""
         return cls({})
 
     @classmethod
