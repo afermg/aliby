@@ -10,11 +10,17 @@ We use the module bottleneck when it performs faster than numpy:
 - values containing NaNs (but we make sure this never happens).
 """
 
+import sys
 import typing as t
 
 import bottleneck as bn
 import numpy as np
 from scipy import ndimage
+
+try:
+    from nl_classifier import nl_classifier
+except ModuleNotFoundError:
+    pass
 
 
 def area(cell_mask) -> int:
@@ -302,8 +308,8 @@ def centroid_y(cell_mask):
 ###
 
 
-def ratio(cell_mask, trap_image, channels):
-    """Find the median ratio between two fluorescence channels."""
+def ratio_1_over_2(cell_mask, trap_image, channels):
+    """Find the median ratio between the first and second channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
         img = {}
         for i, ch in enumerate(channels):
@@ -311,21 +317,33 @@ def ratio(cell_mask, trap_image, channels):
         if np.any(img["mCherry"] == 0):
             div = np.nan
         else:
-            div = np.median(img["Flavin"] / img["mCherry"])
+            div = np.median(img[channels[1]] / img[channels[2]])
     else:
         div = np.nan
     return div
 
 
-def test_nn(cell_mask, trap_image, channels):
-    fl = [ch for ch in channels if ch != "Brightfield"][0]
+def ratio_2_over_1(cell_mask, trap_image, channels):
+    """Find the median ratio between the second and first channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
         img = {}
         for i, ch in enumerate(channels):
-            img[ch] = np.zeros(cell_mask.shape)
-            img[ch][cell_mask] = trap_image[..., i][cell_mask]
-        X = np.stack([img["Brightfield"], img[fl]])
-        X = X[np.newaxis, :]
-        return X
+            img[ch] = trap_image[..., i][cell_mask]
+        if np.any(img["mCherry"] == 0):
+            div = np.nan
+        else:
+            div = np.median(img[channels[2]] / img[channels[1]])
     else:
-        return np.nan
+        div = np.nan
+    return div
+
+
+if "nl_classifier" in sys.modules:
+    # define CNN for nuclear localisation
+    nl = nl_classifier()
+
+
+def nucloc(cell_mask, trap_image, channels):
+    """Pedict nuclear localisation from brightfield and fluorescence."""
+    nucloc = nl.predict(cell_mask, trap_image, channels)
+    return nucloc

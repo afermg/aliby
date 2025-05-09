@@ -539,7 +539,11 @@ class Extractor(StepABC):
                 for images, suffix in zip([img, img_bgsub], ["", "_bgsub"]):
                     # channels
                     channels_stack = np.stack(
-                        [images[ch + suffix] for ch in channels],
+                        [
+                            images[ch + suffix]
+                            for ch in channels
+                            if ch + suffix != "Brightfield_bgsub"
+                        ],
                         axis=-1,
                     )
                     # reduce in Z
