@@ -119,10 +119,13 @@ class BaseLocalImage(ABC):
         self.path = Path(path)
 
     def __enter__(self):
+        """For entering 'with' statements."""
         return self
 
     def __exit__(self, *exc):
+        """For exiting from 'with' statements."""
         for e in exc:
+            # print exceptions - do not crash
             if e is not None:
                 print(e)
         return False

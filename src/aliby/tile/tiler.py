@@ -385,24 +385,21 @@ class Tiler(StepABC):
         return None
 
     def get_tiles_timepoint(
-        self, tp: int, channels=None, z: int = 0
+        self, tp: int, channels: str or list[str] = None, z: int = 0
     ) -> np.ndarray:
         """
-        Get a multidimensional array with all tiles for a set of channels
-        and z-stacks.
+        Get all tiles as an array for a set of channels and a z-stack.
 
         Used by extractor.
 
         Parameters
         ---------
         tp: int
-            Index of time point
-        tile_shape: int or tuple of two ints
-            Size of tile in x and y dimensions
+            Index of time point.
         channels: string or list of strings
-            Names of channels of interest
+            Names of channels of interest.
         z: int
-            Index of z-channel of interest
+            Index of z-channel of interest.
 
         Returns
         -------
@@ -410,7 +407,7 @@ class Tiler(StepABC):
             Data arranged as (tiles, channels, Z, X, Y)
         """
         if channels is None:
-            channels = [0]
+            channels = ["Brightfield"]
         elif isinstance(channels, str):
             channels = [channels]
         # convert to indices
