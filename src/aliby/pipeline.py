@@ -17,7 +17,7 @@ import baby.errors
 import numpy as np
 import tensorflow as tf
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.dynamic_writer import LinearBabyWriter, StateWriter, TilerWriter
+from agora.io.dynamic_writer import BabyWriter, TilerWriter
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
 from agora.io.writer import Writer
@@ -344,8 +344,7 @@ class Pipeline(ProcessABC):
         out_file = self.generate_h5file(image_id)
         # instantiate writers
         tiler_writer = TilerWriter(out_file)
-        baby_writer = LinearBabyWriter(out_file)
-        babystate_writer = StateWriter(out_file)
+        baby_writer = BabyWriter(out_file)
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
@@ -421,11 +420,6 @@ class Pipeline(ProcessABC):
                         meta={"last_processed": i},
                         tp=i,
                         tile_size=tiler.tile_size,
-                    )
-                    babystate_writer.write(
-                        data=babyrunner.crawler.tracker_states,
-                        overwrite=babystate_writer.datatypes.keys(),
-                        tp=i,
                     )
                     # run extraction
                     result = extraction.run_tp(i, cell_labels=None, masks=None)
