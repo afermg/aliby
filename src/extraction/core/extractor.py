@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.dynamic_writer import load_meta, add_df_to_h5
+from agora.io.dynamic_writer import load_meta
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.loaders import (
     load_all_functions,
@@ -751,8 +751,8 @@ class Extractor(StepABC):
         # add cells' spatial locations within the image
         self.add_spatial_locations_of_cells(extract_dict)
         # save
-        if save:
-            self.save_to_h5(extract_dict)
+        # if save:
+        #   self.save_to_h5(extract_dict)
         return extract_dict
 
     def add_spatial_locations_of_cells(self, extract_dict):

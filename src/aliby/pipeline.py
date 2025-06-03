@@ -17,7 +17,7 @@ import baby.errors
 import numpy as np
 import tensorflow as tf
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.dynamic_writer import BabyWriter, TilerWriter
+from agora.io.dynamic_writer import BabyWriter, TilerWriter, ExtractorWriter
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
 from agora.io.writer import Writer
@@ -345,6 +345,7 @@ class Pipeline(ProcessABC):
         # instantiate writers
         tiler_writer = TilerWriter(out_file)
         baby_writer = BabyWriter(out_file)
+        extractor_writer = ExtractorWriter(out_file)
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
@@ -423,6 +424,7 @@ class Pipeline(ProcessABC):
                     )
                     # run extraction
                     result = extraction.run_tp(i, cell_labels=None, masks=None)
+                    extractor_writer.write(extract_dict=result)
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(
                         out_file,
