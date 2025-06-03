@@ -485,7 +485,7 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     """
     # get the area of the cells organised by trap and cell number
     s = Signal(filename)
-    df = s.get_raw("/extraction/general/None/area")
+    df = s.get_raw("/extraction/general/null/area")
     # check the latest time points only
     cells_used = df[
         df.columns[-1 - es_parameters["ntps_to_eval"] : -1]

@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.dynamic_writer import load_meta
-from agora.io.writer import Writer
+from agora.io.dynamic_writer import load_meta, add_df_to_h5
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.loaders import (
     load_all_functions,
@@ -39,7 +38,7 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
     base = {
-        "tree": {"general": {"None": global_settings.outline_functions}},
+        "tree": {"general": {"null": global_settings.outline_functions}},
         "multichannel_funs": {},
     }
     candidate_channels = set(global_settings.possible_imaging_channels)
@@ -585,7 +584,7 @@ class Extractor(StepABC):
         tree : dict
             Nested dictionary indicating channels, reduction functions
             and metrics to be used.
-            For example: {'general': {'None': ['area', 'volume', 'eccentricity']}}
+            For example: {'general': {'null': ['area', 'volume', 'eccentricity']}}
         tile_size : int
             Size of the tile to be extracted.
         masks : list of arrays
@@ -705,7 +704,7 @@ class Extractor(StepABC):
         tree: dict (optional)
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
-            For example: {'general': {'None': ['area', 'volume', 'eccentricity']}}
+            For example: {'general': {'null': ['area', 'volume', 'eccentricity']}}
         save: boolean (optional)
             If True, save results to h5 file.
         kwargs: keyword arguments (optional)
@@ -758,10 +757,10 @@ class Extractor(StepABC):
 
     def add_spatial_locations_of_cells(self, extract_dict):
         """Add spatial location within image of each cell to extract_dict."""
-        x_df = extract_dict["general/None/centroid_x"]
-        y_df = extract_dict["general/None/centroid_y"]
-        extract_dict["general/None/image_x"] = x_df.copy()
-        extract_dict["general/None/image_y"] = y_df.copy()
+        x_df = extract_dict["general/null/centroid_x"]
+        y_df = extract_dict["general/null/centroid_y"]
+        extract_dict["general/null/image_x"] = x_df.copy()
+        extract_dict["general/null/image_y"] = y_df.copy()
         half_width = (self.tiler.tile_size - 1) / 2
         traps = np.array(x_df.index.get_level_values("trap"))
         if np.any(traps):
@@ -773,19 +772,19 @@ class Extractor(StepABC):
                 coords_in_image = (
                     centroid_coords + tile_locs[traps][:, ::-1] - half_width
                 )
-                extract_dict["general/None/image_x"][tp] = coords_in_image[
+                extract_dict["general/null/image_x"][tp] = coords_in_image[
                     :, 0
                 ]
-                extract_dict["general/None/image_y"][tp] = coords_in_image[
+                extract_dict["general/null/image_y"][tp] = coords_in_image[
                     :, 1
                 ]
         if self.tiler.spatial_location is not None:
-            extract_dict["general/None/absolute_x"] = (
-                extract_dict["general/None/image_x"].copy()
+            extract_dict["general/null/absolute_x"] = (
+                extract_dict["general/null/image_x"].copy()
                 + self.tiler.spatial_location[0]
             )
-            extract_dict["general/None/absolute_y"] = (
-                extract_dict["general/None/image_y"].copy()
+            extract_dict["general/null/absolute_y"] = (
+                extract_dict["general/null/image_y"].copy()
                 + self.tiler.spatial_location[1]
             )
 
@@ -793,11 +792,9 @@ class Extractor(StepABC):
         """Save the extracted data for one position to the h5 file."""
         if path is None:
             path = self.h5path
-        self.writer = Writer(path)
         for extract_name, data in extract_dict.items():
             dset_path = "/extraction/" + extract_name
-            self.writer.write(dset_path, data)
-        self.writer.id_cache.clear()
+            add_df_to_h5(path, dset_path, data)
 
     def get_meta(self, flds: t.Union[str, t.Collection]):
         """Obtain metadata for one or multiple fields."""

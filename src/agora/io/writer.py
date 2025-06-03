@@ -1,8 +1,11 @@
 """Writer for pipeline steps that  Extractor and Postprocessor."""
 
+import json
 import logging
 from collections.abc import Iterable
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Union
+from pathlib import Path
 
 import aliby.global_settings as global_settings
 import h5py
@@ -311,3 +314,33 @@ def tuple_or_int(x):
         return x[0]
     else:
         return x
+
+
+def add_df_to_h5(h5file, dataset: str, df: pd.DataFrame) -> None:
+    """Add dataframe to h5 file."""
+    if df.empty:
+        return
+    # convert to simple flat structure
+    tp = df.columns.to_list()[0]
+    df_flat = df.reset_index()
+    df_flat = df_flat.rename(columns={tp: "value"})
+    df_flat["time"] = tp
+    # first time point has no cell labels
+    if "cell_label" not in df_flat.columns:
+        df_flat["cell_label"] = -1
+    # convert to fixed data types for h5 file
+    df_flat = df_flat.astype(
+        {
+            "trap": np.int16,
+            "cell_label": np.int16,
+            "time": np.int32,
+            "value": np.float32,
+        }
+    )
+    # store
+    mode = "a" if Path(h5file).exists() else "w"
+    with pd.HDFStore(h5file, mode=mode) as store:
+        if dataset in store:
+            store.append(dataset, df_flat, format="table")
+        else:
+            store.put(dataset, df_flat, format="table")

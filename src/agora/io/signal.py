@@ -48,6 +48,7 @@ class Signal(BridgeH5):
         """Get Signal and apply merging and picking."""
         if isinstance(dset, str):
             record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
+            breakpoint
             if record is not None:
                 picked_merged = self.apply_merging_picking(record)
                 return self.add_name(picked_merged, dset)
@@ -71,7 +72,7 @@ class Signal(BridgeH5):
     def ntimepoints(self):
         """Find the number of time points for one position, or one h5 file."""
         with h5py.File(self.filename, "r") as f:
-            return f["extraction/general/None/area/timepoint"][-1] + 1
+            return f["extraction/general/null/area/timepoint"][-1] + 1
 
     @cached_property
     def tinterval(self) -> int:
@@ -343,25 +344,16 @@ class Signal(BridgeH5):
                 picks = set()
             return picks
 
-    def dataset_to_df(self, f: h5py.File, path: str) -> pd.DataFrame:
+    def dataset_to_df(self, f, dataset):
         """Get data from h5 file as a dataframe."""
-        if path not in f:
-            self.log(f"{path} not in {f}.")
-            return None
-        else:
-            dset = f[path]
-            values, index, columns = [], [], []
-            index_names = copy(self.index_names)
-            valid_names = [lbl for lbl in index_names if lbl in dset.keys()]
-            if valid_names:
-                index = pd.MultiIndex.from_arrays(
-                    [dset[lbl] for lbl in valid_names], names=valid_names
-                )
-                columns = dset.attrs.get("columns", None)
-                if "timepoint" in dset:
-                    columns = f[path + "/timepoint"][()]
-                values = f[path + "/values"][()]
-            df = pd.DataFrame(values, index=index, columns=columns)
+        with pd.HDFStore(f.filename, mode="r") as store:
+            if dataset not in store:
+                raise Exception(f"{dataset} not in {f.filename}.")
+            df = store[dataset]
+            # convert to aliby multi-index format
+            df = df.pivot(
+                columns="time", index=["trap", "cell_label"], values="value"
+            )
             return df
 
     @property

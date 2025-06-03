@@ -54,13 +54,13 @@ class PostProcessorParameters(ParametersABC):
         # and the h5-file location for the results
         targets = {
             "merging_picking": {
-                "merger": "/extraction/general/None/area",
-                "picker": "/extraction/general/None/area",
+                "merger": "/extraction/general/null/area",
+                "picker": "/extraction/general/null/area",
             },
             # lists because bud_metric can be applied to multiple signals
             "processes": [
-                ["buddings", ["/extraction/general/None/volume"]],
-                ["bud_metric", ["/extraction/general/None/volume"]],
+                ["buddings", ["/extraction/general/null/volume"]],
+                ["bud_metric", ["/extraction/general/null/volume"]],
             ],
         }
         param_sets = {
@@ -235,7 +235,7 @@ class PostProcessor(ProcessABC):
             # multiple Signals as output
             for k, v in result.items():
                 self.write_result(
-                    outpath + f"/{k}",
+                    f"{outpath}/{k}",
                     v,
                     metadata={},
                 )

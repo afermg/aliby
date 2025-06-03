@@ -1,10 +1,11 @@
-"""Writers used for pipeline steps that output each time point: Tiler and Baby."""
+"""Writers for pipeline steps."""
 
 import logging
 from pathlib import Path
 
 import h5py
 import numpy as np
+import pandas as pd
 import yaml
 
 
@@ -30,6 +31,40 @@ def load_meta(file: str | Path, group: str = "/") -> dict:
         # convert from yaml format into dict
         meta["parameters"] = yaml.safe_load(meta["parameters"])
     return meta
+
+
+def add_df_to_h5(h5file, dataset: str, df: pd.DataFrame) -> None:
+    """
+    Add dataframe to h5 file.
+
+    Used by Extractor.
+    """
+    if df.empty:
+        return
+    # convert to simple flat structure
+    tp = df.columns.to_list()[0]
+    df_flat = df.reset_index()
+    df_flat = df_flat.rename(columns={tp: "value"})
+    df_flat["time"] = tp
+    # first time point has no cell labels
+    if "cell_label" not in df_flat.columns:
+        df_flat["cell_label"] = -1
+    # convert to fixed data types for h5 file
+    df_flat = df_flat.astype(
+        {
+            "trap": np.int16,
+            "cell_label": np.int16,
+            "time": np.int32,
+            "value": np.float32,
+        }
+    )
+    # store
+    mode = "a" if Path(h5file).exists() else "w"
+    with pd.HDFStore(h5file, mode=mode) as store:
+        if dataset in store:
+            store.append(dataset, df_flat, format="table")
+        else:
+            store.put(dataset, df_flat, format="table")
 
 
 class DynamicWriter:

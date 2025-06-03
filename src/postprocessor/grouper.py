@@ -19,10 +19,10 @@ class Grouper(ABC):
     def __init__(self, dir: Union[str, Path], name_inds=(0, -4)):
         """Find h5 files and load each one."""
         path = Path(dir)
-        assert path.exists(), f"{str(dir)} does not exist"
         self.name = path.name
         self.files = list(path.glob("*.h5"))
-        assert len(self.files), "No valid h5 files in dir"
+        if len(self.files) == 0:
+            raise Exception(f"No valid h5 files in {dir}.")
         self.load_positions()
         self.positions_groups = {
             name: name[name_inds[0] : name_inds[1]]
@@ -30,7 +30,7 @@ class Grouper(ABC):
         }
 
     def load_positions(self) -> None:
-        """Load a Signal for each position, or h5 file."""
+        """Generate a Signal instance from the h5 file for each position."""
         self.positions = {f.name[:-3]: Signal(f) for f in sorted(self.files)}
 
     @property
@@ -261,7 +261,7 @@ class Grouper(ABC):
 
     def no_cells(
         self,
-        path="extraction/general/None/area",
+        path="extraction/general/null/area",
         mode="retained",
         **kwargs,
     ) -> t.Dict[str, int]:
