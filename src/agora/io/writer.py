@@ -1,4 +1,4 @@
-"""Writer for Extractor and Postprocessor."""
+"""Writer for pipeline steps that  Extractor and Postprocessor."""
 
 import logging
 from collections.abc import Iterable

@@ -1,4 +1,4 @@
-"""Writers used for Tiler and Baby."""
+"""Writers used for pipeline steps that output each time point: Tiler and Baby."""
 
 import logging
 from pathlib import Path
@@ -226,7 +226,6 @@ class BabyWriter(DynamicWriter):
     Assume edgemasks of form ((None, tile_size, tile_size), bool).
     """
 
-    compression = "gzip"
     datatypes = {
         "centres": ((None, 2), np.uint16),
         "position": ((None,), np.uint16),
@@ -269,7 +268,7 @@ class BabyWriter(DynamicWriter):
             available_tps = hgroup.get("timepoint", None)
             # write data
             if not available_tps or tp not in np.unique(available_tps[()]):
-                super().write(data, overwrite)
+                super().write(data=data, overwrite=overwrite)
             else:
                 # data already exists
                 print(f"BabyWriter: Skipping tp {tp}")
