@@ -2,34 +2,51 @@
 
 import logging
 from pathlib import Path
-from numpy.typing import NDArray
+
 import h5py
 import numpy as np
 import pandas as pd
-import yaml
+from numpy.typing import NDArray
 
 
-def read_meta_from_h5(file: str | Path, group: str = "/") -> dict:
+def write_meta_to_h5(
+    file: str | Path, meta: dict[str, str | int | list[int] | list[str]]
+):
+    """Write minimal metadata to the root of an h5 file."""
+    with h5py.File(file, "a") as f:
+        root = f
+        for att, data in meta.items():
+            try:
+                if isinstance(data, str):
+                    root.attrs[att] = data.encode("utf-8")
+                elif isinstance(data, (int, float, bool)):
+                    root.attrs[att] = data
+                elif isinstance(data, (list, tuple)):
+                    if data and isinstance(data[0], str):
+                        # create variable-length string array
+                        root.attrs[att] = [s.encode("utf-8") for s in data]
+                    else:
+                        root.attrs[att] = np.array(data)
+                elif isinstance(data, np.ndarray):
+                    root.attrs[att] = data
+                else:
+                    # fallback to string representation
+                    root.attrs[att] = str(data).encode("utf-8")
+            except (TypeError, ValueError) as e:
+                print(f"Warning: Could not store attribute '{att}': {e}")
+
+
+def read_meta_from_h5(file: str | Path) -> dict:
     """
-    Read the metadata from an h5 file.
-
-    Convert to a dictionary, including the "parameters" field
-    which is stored as YAML.
+    Read the minimal metadata from an h5 file as a dict.
 
     Parameters
     ----------
     file: str
         Name of the h5 file
-    group: str, optional
-        The group in the h5 file from which to read the data
     """
-    # load the metadata, stored as attributes, from the h5 file
     with h5py.File(file, "r") as f:
-        # return as a dict
-        meta = dict(f[group].attrs.items())
-    if "parameters" in meta:
-        # convert from yaml format into dict
-        meta["parameters"] = yaml.safe_load(meta["parameters"])
+        meta = dict(f.attrs.items())
     return meta
 
 
