@@ -29,14 +29,7 @@ class MetaData:
     def minimal(self) -> t.Dict:
         """Get minimal microscopy metadata to write to h5 file."""
         if not hasattr(self, "_minimal_meta"):
-            if "legacy" in self.full:
-                self._minimal_meta = {
-                    k: v
-                    for k, v in self.full.items()
-                    if k not in ["spatial_locations", "channels_by_position"]
-                }
-            else:
-                self._minimal_meta = get_minimal_meta_swainlab(self.full)
+            self._minimal_meta = get_minimal_meta_swainlab(self.full)
         return self._minimal_meta
 
 

@@ -2,16 +2,16 @@
 
 import logging
 from pathlib import Path
-
+from numpy.typing import NDArray
 import h5py
 import numpy as np
 import pandas as pd
 import yaml
 
 
-def load_meta(file: str | Path, group: str = "/") -> dict:
+def read_meta_from_h5(file: str | Path, group: str = "/") -> dict:
     """
-    Load the metadata from an h5 file.
+    Read the metadata from an h5 file.
 
     Convert to a dictionary, including the "parameters" field
     which is stored as YAML.
@@ -45,14 +45,13 @@ class CoreWriter:
     compression = "gzip"
     df_compression = "zlib"
     compression_opts = 9
-    metadata = None
 
     def __init__(self, file: str):
-        """Define metadata."""
+        """Initialise by reading metadata."""
         self.file = file
         # load metadata from the h5 file
         if Path(file).exists():
-            self.metadata = load_meta(file)
+            self.metadata = read_meta_from_h5(file)
 
     def log(self, message: str, level: str = "warn"):
         """Log message."""
@@ -107,7 +106,7 @@ class CoreWriter:
             # write all data, signified by the empty tuple
             hgroup[key][()] = data
 
-    def overwrite(self, data, key, hgroup):
+    def overwrite(self, data: NDArray, key: str, hgroup: str):
         """
         Delete and then replace existing dataset in h5 file.
 
@@ -135,9 +134,9 @@ class CoreWriter:
         # write all data, signified by the empty tuple
         hgroup[key][()] = data
 
-    def write(self, data: dict, overwrite: list, meta: dict = {}):
+    def write(self, data: dict[str, NDArray], overwrite: list[str]):
         """
-        Write data and metadata to h5 file.
+        Write data to h5 file.
 
         Parameters
         ----------
@@ -145,8 +144,6 @@ class CoreWriter:
             A dict of datasets and data
         overwrite: list of str
             A list of datasets to overwrite
-        meta: dict, optional
-            Metadata to be written as attributes of the h5 file
         """
         with h5py.File(self.file, "a") as store:
             # open group, creating if necessary
@@ -159,7 +156,7 @@ class CoreWriter:
                 else:
                     try:
                         if key.startswith("attrs/"):
-                            # metadata
+                            # global parameters
                             key = key.split("/")[1]
                             hgroup.attrs[key] = value
                         elif key in overwrite:
@@ -173,11 +170,10 @@ class CoreWriter:
                             f"{key}:{value} could not be written: {e}.",
                             "error",
                         )
-            # write metadata
-            for key, value in meta.items():
-                hgroup.attrs[key] = value
 
-    def add_df(self, dataset: str, df: pd.DataFrame) -> None:
+    def add_df(
+        self, dataset: str, df: pd.DataFrame, overwrite: bool = False
+    ) -> None:
         """Add data frame to h5 file."""
         if df.empty:
             return
@@ -208,13 +204,16 @@ class CoreWriter:
             complevel=self.compression_opts,
         ) as store:
             if dataset in store:
-                store.append(dataset, df_flat, format="table")
+                if overwrite:
+                    store.put(dataset, df_flat, format="table")
+                else:
+                    store.append(dataset, df_flat, format="table")
             else:
                 store.put(dataset, df_flat, format="table")
 
 
 class TilerWriter(CoreWriter):
-    """Write data stored in a Tiler instance to h5 files."""
+    """Write data from Tiler for one time point."""
 
     datatypes = {
         "trap_locations": ((None, 2), np.uint16),
@@ -224,11 +223,9 @@ class TilerWriter(CoreWriter):
     }
     group = "trap_info"
 
-    def write(
-        self, data: dict, overwrite: list, meta: dict = {}, tp: int = None
-    ):
+    def write(self, data: dict, overwrite: list[str], tp: int = None):
         """
-        Write data for time points that have none.
+        Write data for one position and one time point.
 
         Parameters
         ----------
@@ -238,8 +235,6 @@ class TilerWriter(CoreWriter):
             A list of datasets to overwrite
         tp: int
             The time point of interest
-        meta: dict, optional
-            Metadata to be written as attributes of the h5 file
         """
         # append to h5 file
         with h5py.File(self.file, "a") as store:
@@ -251,15 +246,11 @@ class TilerWriter(CoreWriter):
                 # data already exists
                 print(f"Tiler: Skipping timepoint {tp}")
             else:
-                super().write(data=data, overwrite=overwrite, meta=meta)
+                super().write(data=data, overwrite=overwrite)
 
 
 class BabyWriter(CoreWriter):
-    """
-    Write data stored in a Baby instance to h5 files.
-
-    Assume edgemasks of form ((None, tile_size, tile_size), bool).
-    """
+    """Write output from Baby at each time point."""
 
     datatypes = {
         "centres": ((None, 2), np.uint16),
@@ -278,13 +269,12 @@ class BabyWriter(CoreWriter):
     def write(
         self,
         data: dict,
-        overwrite: list,
+        overwrite: list[str],
         tp: int = None,
         tile_size: int = None,
-        meta: dict = {},
     ):
         """
-        Check data does not exist before writing.
+        Write data for one time point and one position.
 
         Parameters
         ----------
@@ -294,8 +284,6 @@ class BabyWriter(CoreWriter):
             A list of datasets to overwrite
         tp: int
             The time point of interest
-        meta: dict, optional
-            Metadata to be written as attributes of the h5 file
         """
         self.datatypes["edgemasks"] = ((None, tile_size, tile_size), bool)
         with h5py.File(self.file, "a") as store:
@@ -307,30 +295,45 @@ class BabyWriter(CoreWriter):
             else:
                 # data already exists
                 print(f"BabyWriter: Skipping tp {tp}")
-            # write metadata
-            for key, value in meta.items():
-                hgroup.attrs[key] = value
 
 
 class ExtractorWriter(CoreWriter):
-    """Write data frames generated by Extractor to h5 files."""
+    """Write data frames generated by Extractor at each time point."""
 
-    def write(self, extract_dict: dict[str, pd.DataFrame]):
-        """Save the extracted data for one position to the h5 file."""
-        for extract_name, df in extract_dict.items():
+    def write(self, data: dict[str, pd.DataFrame]):
+        """Write the extracted data for one position."""
+        for extract_name, df in data.items():
             dset_path = "/extraction/" + extract_name
             self.add_df(dataset=dset_path, df=df)
 
 
 class PostProcessorWriter(CoreWriter):
-    """Write generated by PostProcessor to h5 files."""
+    """Write or overwrite mixed data generated by PostProcessor."""
 
     datatypes = {
-        "merges": float,
+        "merges": ((None, 2), np.uint16),
         "lineage_merged": ((None, 3), np.uint16),
-        "picks": float,
+        "picks": ((None, 2), np.uint16),
     }
     group = "modifiers"
 
-    def write_df(self, dset_path: str, df: pd.DataFrame):
-        self.add_df(dataset=dset_path, df=df)
+    def write(self, data: dict[str, np.ndarray | pd.DataFrame]):
+        """Write postprocessed data for whole timelapse overwriting always."""
+        merge_pick_dict = {
+            key: value for key, value in data.items() if key in self.datatypes
+        }
+        # write picking and merging
+        super().write(
+            data=merge_pick_dict, overwrite=list(self.datatypes.keys())
+        )
+        # write bud data
+        bud_data_dict = {
+            key: value
+            for key, value in data.items()
+            if key not in self.datatypes
+        }
+        for outpath, df in bud_data_dict.items():
+            if isinstance(df, pd.DataFrame):
+                self.add_df(dataset=outpath, df=df, overwrite=True)
+            else:
+                breakpoint()

@@ -13,10 +13,11 @@ from typing import List, Union
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 from postprocessor.core.reshapers.nusavgol import non_uniform_savgol
 
 
-def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> dict:
+def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> NDArray:
     """
     Find all pairs of tracks that should be joined.
 

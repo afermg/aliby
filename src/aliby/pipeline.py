@@ -14,12 +14,19 @@ from pprint import pprint
 
 import baby
 import baby.errors
+import h5py
 import numpy as np
 import tensorflow as tf
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.dynamic_writer import BabyWriter, TilerWriter, ExtractorWriter
+from agora.io.dynamic_writer import (
+    BabyWriter,
+    ExtractorWriter,
+    PostProcessorWriter,
+    TilerWriter,
+)
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
+
 from agora.io.writer import Writer
 from extraction.core.extractor import (
     Extractor,
@@ -329,7 +336,7 @@ class Pipeline(ProcessABC):
         # write minimal microscopy metadata to h5 file
         if config["general"]["use_explog"]:
             Writer(out_file).write(
-                path="/", meta=self.parameters.to_dict()["metadata"]["minimal"]
+                path="/", meta=config["metadata"]["minimal"]
             )
         return out_file
 
@@ -346,6 +353,7 @@ class Pipeline(ProcessABC):
         tiler_writer = TilerWriter(out_file)
         baby_writer = BabyWriter(out_file)
         extractor_writer = ExtractorWriter(out_file)
+        postprocessor_writer = PostProcessorWriter(out_file)
         # start pipeline
         initialise_tensorflow()
         frac_clogged_traps = 0.0
@@ -396,7 +404,6 @@ class Pipeline(ProcessABC):
                         data=result,
                         overwrite=[],
                         tp=i,
-                        meta={"last_processed:": i},
                     )
                     if i == 0:
                         self.log(
@@ -418,13 +425,12 @@ class Pipeline(ProcessABC):
                     baby_writer.write(
                         data=result,
                         overwrite=["mother_assign"],
-                        meta={"last_processed": i},
                         tp=i,
                         tile_size=tiler.tile_size,
                     )
                     # run extraction
                     result = extraction.run_tp(i, cell_labels=None, masks=None)
-                    extractor_writer.write(extract_dict=result)
+                    extractor_writer.write(data=result)
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(
                         out_file,
@@ -447,11 +453,11 @@ class Pipeline(ProcessABC):
                 out_file,
                 PostProcessorParameters.from_dict(config["postprocessing"]),
             ).run()
+            postprocessor_writer.write(data=result)
             self.log(
                 f"{config['tiler']['position_name']}: Analysis finished successfully.",
                 "info",
             )
-            return 1
 
     @property
     def display_config(self):

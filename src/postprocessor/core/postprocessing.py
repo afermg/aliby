@@ -10,7 +10,7 @@ from tqdm import tqdm
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.cells import Cells
 from agora.io.signal import Signal
-from agora.io.writer import Writer
+
 from agora.utils.indexing import (
     assoc_indices_to_2d,
     assoc_indices_to_3d,
@@ -88,9 +88,7 @@ class PostProcessor(ProcessABC):
             An instance of PostProcessorParameters.
         """
         super().__init__(parameters)
-        self.filename = filename
         self.signal = Signal(filename)
-        self.writer = Writer(filename)
         # parameters for merger and picker
         dicted_params = {
             i: parameters["param_sets"]["merging_picking"][i + "_params"]
@@ -137,24 +135,13 @@ class PostProcessor(ProcessABC):
         else:
             new_lineage = lineage
             new_merges = merges
-        new_merges = [np.array(x) for x in new_merges]
         new_lineage = assoc_indices_to_2d(new_lineage)
-        self.writer.write("modifiers/merges", data=new_merges)
-        self.writer.write("modifiers/lineage_merged", new_lineage)
         # run picker
         picked_indices = np.array(
             self.picker.run(
                 self.signal.get(self.targets["merging_picking"]["picker"])
             )
         )
-        if picked_indices.any():
-            self.writer.write(
-                "modifiers/picks",
-                data=pd.MultiIndex.from_arrays(
-                    picked_indices.T, names=["trap", "cell_label"]
-                ),
-                overwrite="overwrite",
-            )
         return new_merges, new_lineage, picked_indices
 
     def run(self):
@@ -165,6 +152,12 @@ class PostProcessor(ProcessABC):
         """
         # run merger, picker, and find lineages
         merges, lineage, picked_indices = self.run_merging_picking()
+        # store result using their h5 dataset names
+        res = {
+            "merges": merges,
+            "lineage_merged": lineage,
+            "picks": picked_indices,
+        }
         # run processes: process is a str; data sets is a list of str
         for bud_process, datasets in tqdm(self.targets["bud_processes"]):
             if bud_process in self.parameters["param_sets"].get(
@@ -179,7 +172,7 @@ class PostProcessor(ProcessABC):
                 parameters = self.parameters_bud_process_funcs[
                     bud_process
                 ].default()
-            # load process - instantiate an object in the class
+            # load bud_process - instantiate an object in the class
             loaded_bud_process = self.bud_process_funcs[bud_process](
                 parameters
             )
@@ -190,13 +183,7 @@ class PostProcessor(ProcessABC):
                 bud_outpath, bud_result = self.run_bud_process(
                     dataset, bud_process, loaded_bud_process
                 )
-        res = {
-            "merges": merges,
-            "lineage": lineage,
-            "picked_indices": picked_indices,
-            "bud_outpath": bud_outpath,
-            "bud_result": bud_result,
-        }
+                res[bud_outpath] = bud_result
         return res
 
     def run_bud_process(self, dataset, bud_process, loaded_bud_process):
@@ -244,32 +231,7 @@ class PostProcessor(ProcessABC):
         # add postprocessing to outpath when required
         if bud_process not in self.parameters["outpaths"]:
             outpath = "/postprocessing/" + bud_process + "/" + outpath
-        # write result
-        if isinstance(result, dict):
-            # multiple Signals as output
-            for k, v in result.items():
-                self.write_result(
-                    f"{outpath}/{k}",
-                    v,
-                    metadata={},
-                )
-        else:
-            # a single Signal as output
-            self.write_result(
-                outpath,
-                result,
-                metadata={},
-            )
         return outpath, result
-
-    def write_result(
-        self,
-        path: str,
-        result: t.Union[t.List, pd.DataFrame, np.ndarray],
-        metadata: t.Dict,
-    ):
-        """Write to h5 file."""
-        self.writer.write(path, result, meta=metadata, overwrite="overwrite")
 
     @staticmethod
     def pick_mother(a, b):

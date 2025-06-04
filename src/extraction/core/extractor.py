@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.dynamic_writer import load_meta
+from agora.io.dynamic_writer import read_meta_from_h5
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.loaders import (
     load_all_functions,
@@ -168,7 +168,7 @@ class Extractor(StepABC):
         self.params = parameters
         if store:
             self.h5path = store
-            self.meta = load_meta(self.h5path)
+            self.meta = read_meta_from_h5(self.h5path)
         else:
             # if no h5 file, use the parameters directly
             self.meta = {"channel": parameters.to_dict()["tree"].keys()}

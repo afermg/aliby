@@ -167,7 +167,7 @@ class Signal(BridgeH5):
         picks: t.Union[t.Collection, bool] = True,
     ):
         """
-        Apply picking and merging to a Signal data frame.
+        Apply merging and picking to a Signal data frame.
 
         Parameters
         ----------
@@ -181,22 +181,19 @@ class Signal(BridgeH5):
             If True, fetch picks from file.
         """
         if isinstance(merges, bool):
-            merges = self.load_merges() if merges else np.array([])
+            merges = self.read_merges() if merges else np.array([])
         if merges.any():
             merged = apply_merges(data, merges)
         else:
             merged = copy(data)
         if isinstance(picks, bool):
             if picks is True:
-                # load picks from h5
-                picks = self.get_picks(
-                    names=merged.index.names, path="modifiers/picks/"
-                )
+                picks = self.read_picks()
             else:
                 return merged
         if len(picks):
             picked_indices = list(
-                set(picks).intersection([tuple(x) for x in merged.index])
+                picks.intersection([tuple(x) for x in merged.index])
             )
             return merged.loc[picked_indices]
         else:
@@ -320,28 +317,26 @@ class Signal(BridgeH5):
                 for dset in dataset
             ]
 
-    def load_merges(self):
-        """Get merge events going up to the first level."""
-        with h5py.File(self.filename, "r") as f:
-            merges = f.get("modifiers/merges", np.array([]))
-            if not isinstance(merges, np.ndarray):
-                merges = merges[()]
-        return merges
-
-    def get_picks(
-        self,
-        names: t.Tuple[str, ...] = ("trap", "cell_label"),
-        path: str = "modifiers/picks/",
-    ) -> t.Set[t.Tuple[int, str]]:
-        """Get picks from the h5 file."""
+    def read_merges(self):
+        """Read merges from the h5 file."""
+        path = "modifiers/merges"
         with h5py.File(self.filename, "r") as f:
             if path in f:
-                picks = set(
-                    zip(*[f[path + name] for name in names if name in f[path]])
-                )
+                merges = f[path][:]
+            else:
+                merges = np.array([])
+        return merges
+
+    def read_picks(self) -> t.Set[t.Tuple[int, str]]:
+        """Read picks from the h5 file."""
+        path = "modifiers/picks"
+        with h5py.File(self.filename, "r") as f:
+            if path in f:
+                picks = f[path][:]
+                picks = set(map(tuple, picks))
             else:
                 picks = set()
-            return picks
+        return picks
 
     def dataset_to_df(self, f, dataset):
         """Get data from h5 file as a data frame."""

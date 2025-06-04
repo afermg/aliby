@@ -42,7 +42,7 @@ def merge_lineage(
     Use merges to update lineage information.
 
     Check if merging causes any buds to have multiple mothers and discard
-    those incorrect merges.
+    these incorrect merges.
 
     Return updated lineage and merge arrays.
     """
