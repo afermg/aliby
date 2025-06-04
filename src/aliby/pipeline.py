@@ -443,7 +443,7 @@ class Pipeline(ProcessABC):
                     )
                     break
             # run post-processing
-            PostProcessor(
+            result = PostProcessor(
                 out_file,
                 PostProcessorParameters.from_dict(config["postprocessing"]),
             ).run()

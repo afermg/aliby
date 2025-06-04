@@ -58,7 +58,7 @@ class PostProcessorParameters(ParametersABC):
                 "picker": "/extraction/general/null/area",
             },
             # lists because bud_metric can be applied to multiple signals
-            "processes": [
+            "bud_processes": [
                 ["buddings", ["/extraction/general/null/volume"]],
                 ["bud_metric", ["/extraction/general/null/volume"]],
             ],
@@ -107,15 +107,15 @@ class PostProcessor(ProcessABC):
             PickerParameters.from_dict(dicted_params["picker"]),
             cells=Cells.from_source(filename),
         )
-        # get processes, such as buddings
-        self.process_funcs = {
-            process: get_process(process)
-            for process, _ in parameters["targets"]["processes"]
+        # get bud processes
+        self.bud_process_funcs = {
+            bud_process: get_process(bud_process)
+            for bud_process, _ in parameters["targets"]["bud_processes"]
         }
-        # get parameters for the processes
-        self.parameters_process_funcs = {
-            process: get_parameters(process)
-            for process, _ in parameters["targets"]["processes"]
+        # get parameters for bud processes
+        self.parameters_bud_process_funcs = {
+            bud_process: get_parameters(bud_process)
+            for bud_process, _ in parameters["targets"]["bud_processes"]
         }
         # locations to be written in the h5 file
         self.targets = parameters["targets"]
@@ -137,13 +137,10 @@ class PostProcessor(ProcessABC):
         else:
             new_lineage = lineage
             new_merges = merges
-        self.lineage = assoc_indices_to_2d(new_lineage)
-        self.writer.write(
-            "modifiers/merges", data=[np.array(x) for x in new_merges]
-        )
-        self.writer.write(
-            "modifiers/lineage_merged", assoc_indices_to_2d(new_lineage)
-        )
+        new_merges = [np.array(x) for x in new_merges]
+        new_lineage = assoc_indices_to_2d(new_lineage)
+        self.writer.write("modifiers/merges", data=new_merges)
+        self.writer.write("modifiers/lineage_merged", new_lineage)
         # run picker
         picked_indices = np.array(
             self.picker.run(
@@ -158,6 +155,7 @@ class PostProcessor(ProcessABC):
                 ),
                 overwrite="overwrite",
             )
+        return new_merges, new_lineage, picked_indices
 
     def run(self):
         """
@@ -166,26 +164,42 @@ class PostProcessor(ProcessABC):
         Processes include identifying buddings and finding bud metrics.
         """
         # run merger, picker, and find lineages
-        self.run_merging_picking()
+        merges, lineage, picked_indices = self.run_merging_picking()
         # run processes: process is a str; data sets is a list of str
-        for process, datasets in tqdm(self.targets["processes"]):
-            if process in self.parameters["param_sets"].get("processes", {}):
+        for bud_process, datasets in tqdm(self.targets["bud_processes"]):
+            if bud_process in self.parameters["param_sets"].get(
+                "bud_processes", {}
+            ):
                 # parameters already assigned
-                parameters = self.parameters_process_funcs[process](
-                    self.parameters[process]
+                parameters = self.parameters_bud_process_funcs[bud_process](
+                    self.parameters[bud_process]
                 )
             else:
                 # assign default parameters
-                parameters = self.parameters_process_funcs[process].default()
+                parameters = self.parameters_bud_process_funcs[
+                    bud_process
+                ].default()
             # load process - instantiate an object in the class
-            loaded_process = self.process_funcs[process](parameters)
+            loaded_bud_process = self.bud_process_funcs[bud_process](
+                parameters
+            )
             if isinstance(parameters, LineageProcessParameters):
-                loaded_process.lineage = self.lineage
-            # apply process to each data set
+                loaded_bud_process.lineage = lineage
+            # apply bud process to each data set
             for dataset in datasets:
-                self.run_process(dataset, process, loaded_process)
+                bud_outpath, bud_result = self.run_bud_process(
+                    dataset, bud_process, loaded_bud_process
+                )
+        res = {
+            "merges": merges,
+            "lineage": lineage,
+            "picked_indices": picked_indices,
+            "bud_outpath": bud_outpath,
+            "bud_result": bud_result,
+        }
+        return res
 
-    def run_process(self, dataset, process, loaded_process):
+    def run_bud_process(self, dataset, bud_process, loaded_bud_process):
         """Run processes to obtain single data sets and write the results."""
         # get pre-processed data
         if isinstance(dataset, list):
@@ -198,19 +212,19 @@ class PostProcessor(ProcessABC):
         if signal is None:
             return None
         elif len(signal) and (
-            not isinstance(loaded_process, LineageProcess)
-            or len(loaded_process.lineage)
+            not isinstance(loaded_bud_process, LineageProcess)
+            or len(loaded_bud_process.lineage)
         ):
-            result = loaded_process.run(signal)
+            result = loaded_bud_process.run(signal)
         else:
             result = pd.DataFrame(
                 [], columns=signal.columns, index=signal.index
             )
             result.columns.names = ["timepoint"]
         # use outpath to write result
-        if process in self.parameters["outpaths"]:
+        if bud_process in self.parameters["outpaths"]:
             # outpath already defined
-            outpath = self.parameters["outpaths"][process]
+            outpath = self.parameters["outpaths"][bud_process]
         elif isinstance(dataset, list):
             # no outpath is defined
             # place the result in the minimum common branch of all signals
@@ -226,10 +240,10 @@ class PostProcessor(ProcessABC):
         elif isinstance(dataset, str):
             outpath = dataset[1:].replace("/", "_")
         else:
-            raise ("Outpath not defined", type(dataset))
+            raise Exception(f"Outpath not defined {type(dataset)}")
         # add postprocessing to outpath when required
-        if process not in self.parameters["outpaths"]:
-            outpath = "/postprocessing/" + process + "/" + outpath
+        if bud_process not in self.parameters["outpaths"]:
+            outpath = "/postprocessing/" + bud_process + "/" + outpath
         # write result
         if isinstance(result, dict):
             # multiple Signals as output
@@ -246,6 +260,7 @@ class PostProcessor(ProcessABC):
                 result,
                 metadata={},
             )
+        return outpath, result
 
     def write_result(
         self,

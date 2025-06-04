@@ -48,7 +48,6 @@ class Signal(BridgeH5):
         """Get Signal and apply merging and picking."""
         if isinstance(dset, str):
             record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
-            breakpoint
             if record is not None:
                 picked_merged = self.apply_merging_picking(record)
                 return self.add_name(picked_merged, dset)
@@ -222,7 +221,7 @@ class Signal(BridgeH5):
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_path)
         except Exception as e:
-            self.log("Exception when visiting h5: {}".format(e), "exception")
+            self.log(f"Exception when visiting h5: {e}")
         return self._available
 
     def get_merged(self, dataset):
@@ -345,7 +344,7 @@ class Signal(BridgeH5):
             return picks
 
     def dataset_to_df(self, f, dataset):
-        """Get data from h5 file as a dataframe."""
+        """Get data from h5 file as a data frame."""
         with pd.HDFStore(f.filename, mode="r") as store:
             if dataset not in store:
                 raise Exception(f"{dataset} not in {f.filename}.")
@@ -363,19 +362,21 @@ class Signal(BridgeH5):
 
     def store_signal_path(
         self,
-        fullname: str,
+        name: str,
         node: t.Union[h5py.Dataset, h5py.Group],
     ):
-        """Store the name of a signal if it is a leaf node and if it starts with extraction."""
+        """Store the name of all signals if leaf nodes."""
         if isinstance(node, h5py.Group) and np.all(
             [isinstance(x, h5py.Dataset) for x in node.values()]
         ):
-            self._if_ext_or_post(fullname, self._available)
-
-    @staticmethod
-    def _if_ext_or_post(name: str, siglist: list):
-        if name.startswith("extraction") or name.startswith("postprocessing"):
-            siglist.append(name)
+            if name.startswith("extraction") or name.startswith(
+                "postprocessing"
+            ):
+                if "_i_table" in name:
+                    # remove part of path added by pytables
+                    self._available.append(name.split("_i_table")[0][:-1])
+                else:
+                    self._available.append(name)
 
     @staticmethod
     def _if_merges(name: str, obj):
