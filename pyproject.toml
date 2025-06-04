@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "alibylite"
-version = "0.0.2"
+version = "1.0.0"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz", "Peter Swain <peter.swain@ed.ac.uk>"]
 packages = [
@@ -20,6 +20,7 @@ build-backend = "poetry.core.masonry.api"
 python = ">=3.11, <3.12"
 numpy = "^1.26.4"
 pandas = "^2.2.3"
+tables = "^3.10.2"
 scikit-image = "^0.25.2"
 scikit-learn = "^1.6.1"
 scipy = "^1.15.2"
