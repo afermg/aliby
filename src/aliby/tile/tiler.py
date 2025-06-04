@@ -34,13 +34,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import dask.array as da
-import h5py
 import numpy as np
 from agora.abc import ParametersABC, StepABC
-from agora.io.writer import BridgeH5
+from agora.io.bridge import BridgeH5
 from aliby.global_settings import imaging_specifications
 from aliby.tile.process_traps import segment_traps
-from aliby.tile.tiles import Tile, TileLocations
+from aliby.tile.tiles import TileLocations
 from skimage.registration import phase_cross_correlation
 
 

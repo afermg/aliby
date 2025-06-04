@@ -352,5 +352,3 @@ class PostProcessorWriter(CoreWriter):
         for outpath, df in bud_data_dict.items():
             if isinstance(df, pd.DataFrame):
                 self.add_df(dataset=outpath, df=df, overwrite=True)
-            else:
-                breakpoint()

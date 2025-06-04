@@ -14,20 +14,18 @@ from pprint import pprint
 
 import baby
 import baby.errors
-import h5py
 import numpy as np
 import tensorflow as tf
 from agora.abc import ParametersABC, ProcessABC
-from agora.io.dynamic_writer import (
+from agora.io.metadata import MetaData
+from agora.io.signal import Signal
+from agora.io.writers import (
     BabyWriter,
     ExtractorWriter,
     PostProcessorWriter,
     TilerWriter,
     write_meta_to_h5,
 )
-from agora.io.metadata import MetaData
-from agora.io.signal import Signal
-
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,

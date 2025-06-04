@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.dynamic_writer import read_meta_from_h5
+from agora.io.writers import read_meta_from_h5
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.loaders import (
     load_all_functions,
