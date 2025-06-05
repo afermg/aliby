@@ -109,11 +109,11 @@ def measure(
 
 def measure_mono(
     tileid_x: tuple[int, tuple],
-    masks: da.core.Array,
-    pixels: da.core.Array,
+    masks: np.ndarray,
+    pixels: np.ndarray,
     REDUCTION_FUNS: dict[str, Callable] = REDUCTION_FUNS,
     CELL_FUNS: dict[str, Callable] = CELL_FUNS,
-) -> da.core.Array:
+) -> np.ndarray:
     """
     Applies a metric on a z-reduced image and mask pairs.
 
@@ -147,8 +147,8 @@ def measure_mono(
 
 def measure_multi(
     tileid_x: tuple[int, tuple],
-    masks: list[da.core.Array],
-    pixels: da.core.Array,
+    masks: list[np.ndarray],
+    pixels: np.ndarray,
     REDUCTION_FUNS: dict[str, Callable],
     CELL_FUNS: dict[str, Callable],
 ) -> np.ndarray:
@@ -220,33 +220,6 @@ def process_tree_masks(
     )
     result = measure_fn(tileid_instructions, masks, pixels)
     return tileid_instructions, result
-
-
-def when_da_compute(
-    msmts: list[np.ndarray or np.ndarray], threaded: bool = False
-) -> list[np.ndarray]:
-    """
-    Computes a numpy array if it exists.
-
-    Parameters
-    ----------
-    msmts : list of numpy arrays or numpy arrays
-        The values to be computed.
-
-    Returns
-    -------
-    list
-        A list of computed values.
-    """
-    if threaded:
-        with ThreadPoolExecutor() as ex:
-            return list(
-                ex.map(
-                    lambda x: x.compute() if isinstance(x, da.core.Array) else x, msmts
-                )
-            )
-    else:
-        return [x.compute() if isinstance(x, da.core.Array) else x for x in msmts]
 
 
 def extract_tree(
