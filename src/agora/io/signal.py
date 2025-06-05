@@ -332,8 +332,20 @@ class Signal(BridgeH5):
         path = "modifiers/picks"
         with h5py.File(self.filename, "r") as f:
             if path in f:
-                picks = f[path][:]
-                picks = set(map(tuple, picks))
+                try:
+                    picks = f[path][:]
+                    picks = set(map(tuple, picks))
+                except TypeError:
+                    # old h5 file
+                    picks = set(
+                        zip(
+                            *[
+                                f[path + "/" + name]
+                                for name in ("trap", "cell_label")
+                                if name in f[path]
+                            ]
+                        )
+                    )
             else:
                 picks = set()
         return picks
@@ -343,11 +355,31 @@ class Signal(BridgeH5):
         with pd.HDFStore(f.filename, mode="r") as store:
             if dataset not in store:
                 raise Exception(f"{dataset} not in {f.filename}.")
-            df = store[dataset]
-            # convert to aliby multi-index format
-            df = df.pivot(
-                columns="time", index=["trap", "cell_label"], values="value"
-            )
+            try:
+                df = store[dataset]
+                # convert to aliby multi-index format
+                df = df.pivot(
+                    columns="time",
+                    index=["trap", "cell_label"],
+                    values="value",
+                )
+            except TypeError:
+                # old h5 file before writer changed
+                dset = f[dataset]
+                values, index, columns = [], [], []
+                index_names = copy(self.index_names)
+                valid_names = [
+                    lbl for lbl in index_names if lbl in dset.keys()
+                ]
+                if valid_names:
+                    index = pd.MultiIndex.from_arrays(
+                        [dset[lbl] for lbl in valid_names], names=valid_names
+                    )
+                    columns = dset.attrs.get("columns", None)
+                    if "timepoint" in dset:
+                        columns = f[dataset + "/timepoint"][()]
+                    values = f[dataset + "/values"][()]
+                df = pd.DataFrame(values, index=index, columns=columns)
             return df
 
     @property
