@@ -168,10 +168,6 @@ class Tiler(StepABC):
         image_metadata["channels"] = image.metadata["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
-        elif isinstance(parameters, dict):
-            parameters = TilerParameters.default(**parameters)
-        else:
-            raise Exception(f"Tiler: parameters unrecognised - {parameters}")
         tiler = cls(
             image.data,
             image_metadata,
@@ -185,7 +181,7 @@ class Tiler(StepABC):
     @lru_cache(maxsize=2)
     def load_image(self, tp: int, c: int) -> np.ndarray:
         """
-        Load image using dask.
+        Load image for one time point and channel using dask.
 
         Assumes the image is arranged as
             no of time points
@@ -203,13 +199,13 @@ class Tiler(StepABC):
 
         Returns
         -------
-        full: an array of images
+        image_all_z: an array of z slices for the entire image
         """
-        full = self.image[tp + self.initial_tp, c]
-        if hasattr(full, "compute"):
+        image_all_z = self.image[tp + self.initial_tp, c]
+        if hasattr(image_all_z, "compute"):
             # if using dask fetch images
-            full = full.compute(scheduler="synchronous")
-        return full
+            image_all_z = image_all_z.compute(scheduler="synchronous")
+        return image_all_z
 
     @property
     def shape(self):
@@ -384,7 +380,10 @@ class Tiler(StepABC):
         return None
 
     def get_tiles_timepoint(
-        self, tp: int, channels: str or list[str] = None, z: int = 0
+        self,
+        tp: int,
+        channels: str or list[str] = None,
+        z: int | list[int] = 0,
     ) -> np.ndarray:
         """
         Get all tiles as an array for a set of channels and a z-stack.
@@ -397,12 +396,12 @@ class Tiler(StepABC):
             Index of time point.
         channels: string or list of strings
             Names of channels of interest.
-        z: int
-            Index of z-channel of interest.
+        z: int or list of int
+            Indices of z-channel of interest.
 
         Returns
         -------
-        res: array
+        final: array
             Data arranged as (tiles, channels, Z, X, Y)
         """
         if channels is None:
@@ -421,12 +420,12 @@ class Tiler(StepABC):
         # get the data as a list of length of the number of channels
         res = []
         for c in channels:
-            # only return requested z
+            # first dimension is number of traps
             tiles = self.get_tp_data(tp, c)[:, z]
-            # insert new axis at index 1 for missing time point
+            # add back channel axis
             tiles = np.expand_dims(tiles, axis=1)
             res.append(tiles)
-        # stack at time-point axis if more than one channel
+        # stack over channels
         final = np.stack(res, axis=1)
         return final
 
