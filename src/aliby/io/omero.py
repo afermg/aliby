@@ -2,17 +2,18 @@
 
 import re
 import typing as t
+from collections.abc import Iterable
 from pathlib import Path
 
 import dask.array as da
 import numpy as np
-import omero
+from agora.io.bridge import BridgeH5
 from dask import delayed
-from omero.gateway import BlitzGateway
-from omero.model import enums as omero_enums
 from yaml import safe_load
 
-from agora.io.bridge import BridgeH5
+import omero
+from omero.gateway import BlitzGateway, ImageWrapper
+from omero.model import enums as omero_enums
 
 # convert OMERO definitions into numpy types
 PIXEL_TYPES = {
@@ -56,7 +57,7 @@ class BridgeOmero:
             Used to fetch specific objects.
         """
         if host is None or username is None or password is None:
-            raise Exception(
+            raise ValueError(
                 f"Invalid credentials. host: {host}, user: {username},"
                 f" pwd: {password}"
             )
@@ -81,7 +82,7 @@ class BridgeOmero:
 
     @property
     def ome_class(self):
-        """Initialise Omero Object Wrapper for instances when applicable."""
+        """Initialise OMERO Object Wrapper for instances when applicable."""
         if not hasattr(self, "_ome_class"):
             if self.conn.isConnected() and self.ome_id is not None:
                 ome_type = [
@@ -97,7 +98,7 @@ class BridgeOmero:
                 self._ome_class = self.conn.getObject(ome_type, self.ome_id)
                 assert self._ome_class, f"{ome_type} {self.ome_id} not found."
             else:
-                raise Exception("No Blitz connection or valid omero id.")
+                raise ConnectionError("No Blitz connection or valid OMERO ID.")
         return self._ome_class
 
     def create_gate(self) -> bool:
@@ -107,7 +108,7 @@ class BridgeOmero:
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
-        self.conn.isConnected()
+        return self.conn.isConnected()
 
     @classmethod
     def server_info_from_h5(cls, filepath: t.Union[str, Path]):
@@ -227,12 +228,14 @@ class Dataset(BridgeOmero):
                 for x in self.ome_class.listAnnotations()
                 if isinstance(x, omero.gateway.FileAnnotationWrapper)
             }
-        if not len(self._files):
-            raise Exception(
+        if not self._files:
+            raise FileNotFoundError(
                 "exception:metadata: experiment has no annotation files."
             )
-        elif len(self.file_annotations) != len(self._files):
-            raise Exception("Number of files and annotations do not match")
+        if len(self.file_annotations) != len(self._files):
+            raise FileNotFoundError(
+                "Number of files and annotations do not match"
+            )
         return self._files
 
     @property
@@ -326,8 +329,8 @@ class Image(BridgeOmero):
 
     @property
     def data(self):
-        """Get image data as a 5D dask array - TCXYZ."""
-        return get_data_lazy(self.ome_class)
+        """Load image data as a 5D dask array - TCXYZ."""
+        return load_data_lazy(self.ome_class)
 
     @property
     def metadata(self):
@@ -348,14 +351,8 @@ class Image(BridgeOmero):
         return meta
 
 
-class UnsafeImage(Image):
-    """
-    Load images from OMERO and gives access to the data and metadata.
-
-    This class is a temporary solution while we find a way to use
-    context managers inside napari. It risks resulting in zombie
-    connections and producing freezes in an OMERO server.
-    """
+class MinimalImage(Image):
+    """Load images from OMERO."""
 
     def __init__(self, image_id, **server_info):
         """
@@ -368,40 +365,72 @@ class UnsafeImage(Image):
             Specifies the host, username, and password as strings
         """
         super().__init__(image_id, **server_info)
-        self.create_gate()
+        success = self.create_gate()
+        if success:
+            print("Connected to OMERO.")
+        else:
+            raise ConnectionError("Failed to connect to OMERO.")
 
     @property
     def data(self):
         """Get image data as a 5D dask array - TCXYZ."""
         try:
-            return get_data_lazy(self.ome_class)
+            return load_data_lazy(self.ome_class)
         except Exception as e:
             print(f"ERROR: Failed fetching image from server: {e}")
+            # disconnect from OMERO
             self.conn.connect(False)
+            raise e
 
 
-def get_data_lazy(image) -> da.Array:
-    """
-    Get 5D dask array - TCXYZ.
+@delayed
+def load_plane(pixels, z, c, tp):
+    """Load a single plane lazily."""
+    return pixels.getPlane(z, c, tp)
 
-    Use delayed reading from OMERO image.
-    """
-    nt, nc, nz, ny, nx = [getattr(image, f"getSize{x}")() for x in "TCZYX"]
+
+def load_data_lazy(image: ImageWrapper) -> da.Array:
+    """Load a 5D dask array (T, C, Z, Y, X) from OMERO image."""
+    nt, nc, nz, ny, nx = (
+        image.getSizeT(),
+        image.getSizeC(),
+        image.getSizeZ(),
+        image.getSizeY(),
+        image.getSizeX(),
+    )
+    # get dtype
     pixels = image.getPrimaryPixels()
-    dtype = PIXEL_TYPES.get(pixels.getPixelsType().value, None)
-    # using dask
-    get_plane = delayed(lambda idx: pixels.getPlane(*idx))
-    # 5D stack: TCZXY
-    t_stacks = []
-    for tpt in range(nt):
-        c_stacks = []
+    omero_type = pixels.getPixelsType().getValue()
+    dtype = PIXEL_TYPES.get(omero_type, np.uint16)
+    # create delayed objects for each plane
+    delayed_planes = []
+    for tp in range(nt):
         for c in range(nc):
-            z_stack = []
             for z in range(nz):
-                plane = da.from_delayed(
-                    get_plane((z, c, tpt)), shape=(ny, nx), dtype=dtype
-                )
-                z_stack.append(plane)
-            c_stacks.append(da.stack(z_stack))
-        t_stacks.append(da.stack(c_stacks))
-    return da.stack(t_stacks)
+                delayed_planes.append(load_plane(pixels, z, c, tp))
+    arrays = [
+        da.from_delayed(delayed_plane, shape=(ny, nx), dtype=dtype)
+        for delayed_plane in delayed_planes
+    ]
+    dask_array = da.stack(arrays).reshape(nt, nc, nz, ny, nx)
+    return dask_array
+
+
+def load_tiles_lazy(
+    image: ImageWrapper,
+    tile_slices: Iterable[tuple[slice, slice]],
+    zs: Iterable[int] = (0,),
+    channel_indices: Iterable[int] = (0,),
+    tps: Iterable[int] = (0,),
+) -> list[da.Array]:
+    """Load tiles from OMERO image as dask arrays."""
+    # shape: (T, C, Z, Y, X)
+    data = load_data_lazy(image)
+    tiles = []
+    for tp in tps:
+        for c in channel_indices:
+            for z in zs:
+                plane = data[tp, c, z]
+                for tile_slice in tile_slices:
+                    tiles.append(plane[tile_slice])
+    return tiles

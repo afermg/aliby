@@ -151,7 +151,6 @@ class Tiler(StepABC):
         image,
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
-        microscopy_metadata: t.Dict = None,
     ):
         """
         Instantiate from an h5 file.
@@ -177,35 +176,6 @@ class Tiler(StepABC):
         if hasattr(tile_locs, "drifts"):
             tiler.no_processed = len(tile_locs.drifts)
         return tiler
-
-    @lru_cache(maxsize=2)
-    def load_image(self, tp: int, c: int) -> np.ndarray:
-        """
-        Load image for one time point and channel using dask.
-
-        Assumes the image is arranged as
-            no of time points
-            no of channels
-            no of z stacks
-            no of pixels in y direction
-            no of pixels in x direction
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        c: integer
-            An index for a channel
-
-        Returns
-        -------
-        image_all_z: an array of z slices for the entire image
-        """
-        image_all_z = self.image[tp + self.initial_tp, c]
-        if hasattr(image_all_z, "compute"):
-            # if using dask fetch images
-            image_all_z = image_all_z.compute(scheduler="synchronous")
-        return image_all_z
 
     @property
     def shape(self):
@@ -295,6 +265,35 @@ class Tiler(StepABC):
             self.tile_locs.drifts[tp] = drift.tolist()
         else:
             self.tile_locs.drifts.append(drift.tolist())
+
+    @lru_cache(maxsize=2)
+    def load_image(self, tp: int, c: int) -> np.ndarray:
+        """
+        Load image for one time point and channel using dask.
+
+        Assumes the image is arranged as
+            no of time points
+            no of channels
+            no of z stacks
+            no of pixels in y direction
+            no of pixels in x direction
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+
+        Returns
+        -------
+        image_all_z: an array of z slices for the entire image
+        """
+        image_all_z = self.image[tp + self.initial_tp, c]
+        if hasattr(image_all_z, "compute"):
+            # if using dask fetch images
+            image_all_z = image_all_z.compute(scheduler="synchronous")
+        return image_all_z
 
     def get_tp_data(self, tp, c) -> np.ndarray:
         """

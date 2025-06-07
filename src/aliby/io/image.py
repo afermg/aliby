@@ -322,7 +322,7 @@ class ImageDir(BaseLocalImage):
                 target_order,
             )
             pixels = self.rechunk_data(img)
-        return pixels
+            return pixels
 
     @property
     def name(self):
@@ -356,7 +356,7 @@ class ImageZarr(BaseLocalImage):
             print(f"ImageZarr: Could not add size info to metadata: {e}.")
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array for lazy-loading local multidimensional zarr files."""
+        """Return 5D dask array for lazy-loading local zarr files."""
         return self._img
 
     def add_size_to_meta(self):

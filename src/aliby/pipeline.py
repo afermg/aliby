@@ -333,14 +333,6 @@ class Pipeline(ProcessABC):
             os.remove(out_file)
         # write minimal microscopy metadata to h5 file
         if config["general"]["use_explog"]:
-            # Writer(out_file).write(
-            #     path="/", meta=config["metadata"]["minimal"]
-            # )
-            # meta = config["metadata"]["minimal"]
-            # with h5py.File(out_file, "a") as f:
-            #     for att, m in meta.items():
-            #         obj = f.require_group("/")
-            #         obj.attrs[att] = m
             write_meta_to_h5(out_file, config["metadata"]["minimal"])
         return out_file
 
