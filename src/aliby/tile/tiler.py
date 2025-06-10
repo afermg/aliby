@@ -40,6 +40,7 @@ from agora.io.bridge import BridgeH5
 from aliby.global_settings import imaging_specifications
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations
+from omero.gateway import ImageWrapper
 from skimage.registration import phase_cross_correlation
 
 
@@ -126,7 +127,7 @@ class Tiler(StepABC):
     @classmethod
     def from_image(
         cls,
-        image,
+        image: ImageWrapper,
         parameters: TilerParameters,
         microscopy_metadata: t.Dict = None,
     ):
@@ -148,7 +149,7 @@ class Tiler(StepABC):
     @classmethod
     def from_h5(
         cls,
-        image,
+        image: ImageWrapper,
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
     ):

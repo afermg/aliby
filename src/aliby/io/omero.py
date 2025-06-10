@@ -10,6 +10,7 @@ import numpy as np
 from agora.io.bridge import BridgeH5
 from dask import delayed
 from yaml import safe_load
+from agora.utils.indexing import wrap_int
 
 import omero
 from omero.gateway import BlitzGateway, ImageWrapper
@@ -108,6 +109,11 @@ class BridgeOmero:
         )
         self.conn.connect()
         self.conn.c.enableKeepAlive(60)
+        return self.conn.isConnected()
+
+    def destroy_gate(self) -> bool:
+        """Disconnect from OMERO."""
+        self.conn.close()
         return self.conn.isConnected()
 
     @classmethod
@@ -375,17 +381,26 @@ class MinimalImage(Image):
     def data(self):
         """Get image data as a 5D dask array - TCXYZ."""
         try:
-            return load_data_lazy(self.ome_class)
+            return load_data_lazy(image=self.ome_class)
         except ConnectionError as e:
             print(f"Failed to fetch image from server: {e}")
             # disconnect from OMERO
             self.conn.connect(False)
             raise e
 
-    @property
-    def tiles(self, tile_slices, tps, zs, channel_indices):
+    def tiles(self, tile_slices, tps, channel_indices, zs):
+        """Get tiles as dask arrays."""
+        tps, channel_indices, zs = (
+            wrap_int(tps),
+            wrap_int(channel_indices),
+            wrap_int(zs),
+        )
         return load_tiles_lazy(
-            self.ome_class, tile_slices, tps, zs, channel_indices
+            image=self.ome_class,
+            tile_slices=tile_slices,
+            tps=tps,
+            channel_indices=channel_indices,
+            zs=zs,
         )
 
 
@@ -426,8 +441,8 @@ def load_tiles_lazy(
     image: ImageWrapper,
     tile_slices: Iterable[tuple[slice, slice]],
     tps: Iterable[int],
-    zs: Iterable[int] = [0],
     channel_indices: Iterable[int] = [0],
+    zs: Iterable[int] = [0],
 ) -> list[da.Array]:
     """Load tiles from OMERO image as dask arrays."""
     if len(tile_slices) != len(tps):

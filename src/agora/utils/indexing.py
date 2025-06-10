@@ -172,3 +172,8 @@ def find_1st_equal(arr, limit):
     indices = np.flatnonzero(arr == limit)
     first_index = indices[0] if len(indices) > 0 else -1
     return first_index
+
+
+def wrap_int(x):
+    """Convert a single integer to a list."""
+    return [x] if isinstance(x, int) else x
