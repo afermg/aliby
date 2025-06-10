@@ -147,7 +147,7 @@ class TileLocations:
         return np.array([tile.centre_at_time(tp) for tile in self.tiles])
 
     @classmethod
-    def from_tiler_init(
+    def from_tiler(
         cls,
         initial_location,
         tile_size: int = None,
@@ -157,7 +157,7 @@ class TileLocations:
         return cls(initial_location, tile_size, max_size, drifts=[])
 
     @classmethod
-    def read_h5(cls, file):
+    def from_h5(cls, file):
         """Instantiate from a h5 file."""
         with h5py.File(file, "r") as hfile:
             tile_info = hfile["trap_info"]

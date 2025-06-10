@@ -162,7 +162,7 @@ class Tiler(StepABC):
             Path to an h5 file.
         parameters: an instance of TileParameters (optional)
         """
-        tile_locs = TileLocations.read_h5(filepath)
+        tile_locs = TileLocations.from_h5(filepath)
         image_metadata = BridgeH5(filepath).meta_h5
         image_metadata["channels"] = image.metadata["channels"]
         if parameters is None:
@@ -232,14 +232,12 @@ class Tiler(StepABC):
                 and half_tile < y < max_size - half_tile
             ]
             # store tiles in an instance of TileLocations
-            self.tile_locs = TileLocations.from_tiler_init(
-                tile_locs, tile_size
-            )
+            self.tile_locs = TileLocations.from_tiler(tile_locs, tile_size)
         else:
             # one tile with its centre at the image's centre
             yx_shape = self.image.shape[-2:]
             tile_locs = [[x // 2 for x in yx_shape]]
-            self.tile_locs = TileLocations.from_tiler_init(
+            self.tile_locs = TileLocations.from_tiler(
                 tile_locs, max_size=min(yx_shape)
             )
 
@@ -311,10 +309,10 @@ class Tiler(StepABC):
         Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
         """
         tiles = []
-        full = self.load_image(tp, c)
+        image_all_z = self.load_image(tp, c)
         for tile in self.tile_locs:
             # pad tile if necessary
-            ndtile = Tiler.get_tile_and_pad(full, tile.as_range(tp))
+            ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
             tiles.append(ndtile)
         return np.stack(tiles)
 
@@ -336,9 +334,9 @@ class Tiler(StepABC):
         ndtile: array
             An array of (x, y) arrays, one for each z stack
         """
-        full = self.load_image(tp, c)
+        image_all_z = self.load_image(tp, c)
         tile = self.tile_locs.tiles[tile_id]
-        ndtile = self.get_tile_and_pad(full, tile.as_range(tp))
+        ndtile = self.get_tile_and_pad(image_all_z, tile.as_range(tp))
         return ndtile
 
     def _run_tp(self, tp: int):

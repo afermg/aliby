@@ -376,11 +376,17 @@ class MinimalImage(Image):
         """Get image data as a 5D dask array - TCXYZ."""
         try:
             return load_data_lazy(self.ome_class)
-        except Exception as e:
-            print(f"ERROR: Failed fetching image from server: {e}")
+        except ConnectionError as e:
+            print(f"Failed to fetch image from server: {e}")
             # disconnect from OMERO
             self.conn.connect(False)
             raise e
+
+    @property
+    def tiles(self, tile_slices, tps, zs, channel_indices):
+        return load_tiles_lazy(
+            self.ome_class, tile_slices, tps, zs, channel_indices
+        )
 
 
 @delayed
@@ -419,18 +425,19 @@ def load_data_lazy(image: ImageWrapper) -> da.Array:
 def load_tiles_lazy(
     image: ImageWrapper,
     tile_slices: Iterable[tuple[slice, slice]],
-    zs: Iterable[int] = (0,),
-    channel_indices: Iterable[int] = (0,),
-    tps: Iterable[int] = (0,),
+    tps: Iterable[int],
+    zs: Iterable[int] = [0],
+    channel_indices: Iterable[int] = [0],
 ) -> list[da.Array]:
     """Load tiles from OMERO image as dask arrays."""
+    if len(tile_slices) != len(tps):
+        raise ValueError("For each time point, you need a tile location.")
     # shape: (T, C, Z, Y, X)
     data = load_data_lazy(image)
     tiles = []
-    for tp in tps:
+    for tp, tile_slice in zip(tps, tile_slices):
         for c in channel_indices:
             for z in zs:
                 plane = data[tp, c, z]
-                for tile_slice in tile_slices:
-                    tiles.append(plane[tile_slice])
+                tiles.append(plane[tile_slice])
     return tiles
