@@ -8,9 +8,9 @@ from pathlib import Path
 import dask.array as da
 import numpy as np
 from agora.io.bridge import BridgeH5
+from agora.utils.indexing import wrap_int
 from dask import delayed
 from yaml import safe_load
-from agora.utils.indexing import wrap_int
 
 import omero
 from omero.gateway import BlitzGateway, ImageWrapper
@@ -441,10 +441,14 @@ def load_tiles_lazy(
     image: ImageWrapper,
     tile_slices: Iterable[tuple[slice, slice]],
     tps: Iterable[int],
-    channel_indices: Iterable[int] = [0],
-    zs: Iterable[int] = [0],
+    channel_indices: Iterable[int],
+    zs: Iterable[int],
 ) -> list[da.Array]:
-    """Load tiles from OMERO image as dask arrays."""
+    """
+    Load tiles from OMERO image as dask arrays.
+
+    Tiles are arranged as z stacks for each channel for each time point.
+    """
     if len(tile_slices) != len(tps):
         raise ValueError("For each time point, you need a tile location.")
     # shape: (T, C, Z, Y, X)
