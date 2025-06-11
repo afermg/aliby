@@ -73,12 +73,13 @@ class BridgeOmero:
         self.create_gate()
         return self
 
-    def __exit__(self, *exc) -> bool:
+    def __exit__(self, exc_type, exc_value, traceback):
         """For Python's with statement."""
-        for e in exc:
-            if e is not None:
-                print(e)
-        self.conn.close()
+        try:
+            if self.conn and self.conn.isConnected():
+                self.conn.close()
+        except Exception as e:
+            print(f"Error while disconnecting from OMERO: {e}")
         return False
 
     @property
@@ -372,9 +373,7 @@ class MinimalImage(Image):
         """
         super().__init__(image_id, **server_info)
         success = self.create_gate()
-        if success:
-            print("Connected to OMERO.")
-        else:
+        if not success:
             raise ConnectionError("Failed to connect to OMERO.")
 
     @property
