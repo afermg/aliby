@@ -60,7 +60,13 @@ class PostProcessorParameters(ParametersABC):
             # lists because bud_metric can be applied to multiple signals
             "bud_processes": [
                 ["buddings", ["/extraction/general/null/volume"]],
-                ["bud_metric", ["/extraction/general/null/volume"]],
+                [
+                    "bud_metric",
+                    [
+                        "/extraction/general/null/volume",
+                        "/extraction/general/null/area",
+                    ],
+                ],
             ],
         }
         param_sets = {
@@ -194,7 +200,7 @@ class PostProcessor(ProcessABC):
         elif isinstance(dataset, str):
             signal = self.signal.get(dataset)
         else:
-            raise Exception("postprocessing: Incorrect dataset.")
+            raise TypeError("postprocessing: Incorrect dataset.")
         # run process on signal
         if signal is None:
             return None

@@ -346,6 +346,7 @@ class Signal(BridgeH5):
         """Get data from h5 file as a data frame."""
         if not f.exists():
             raise FileNotFoundError(f"Cannot find {str(f)}.")
+        df = None
         try:
             with pd.HDFStore(f, mode="r") as store:
                 df = store[dataset]
@@ -355,12 +356,15 @@ class Signal(BridgeH5):
                     index=["trap", "cell_label"],
                     values="value",
                 )
-        except (HDF5ExtError, KeyError, TypeError):
+        except (HDF5ExtError, KeyError):
             # old h5 file before writer changed
-            if "null" in dataset:
-                dataset = dataset.replace("null", "None")
-            with h5py.File(f, "r") as store:
-                dset = store[dataset]
+            dataset = (
+                dataset.replace("null", "None")
+                if "null" in dataset
+                else dataset
+            )
+            with h5py.File(f, "r") as file:
+                dset = file[dataset]
                 values, index, columns = [], [], []
                 index_names = copy(self.index_names)
                 valid_names = [
@@ -372,8 +376,8 @@ class Signal(BridgeH5):
                     )
                     columns = dset.attrs.get("columns", None)
                     if "timepoint" in dset:
-                        columns = store[dataset + "/timepoint"][()]
-                    values = store[dataset + "/values"][()]
+                        columns = file[dataset + "/timepoint"][()]
+                    values = file[dataset + "/values"][()]
                 df = pd.DataFrame(values, index=index, columns=columns)
         return df
 
