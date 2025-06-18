@@ -196,10 +196,11 @@ class PostProcessor(ProcessABC):
     def run_bud_process(self, dataset, bud_process, loaded_bud_process):
         """Run processes to obtain single data sets and write the results."""
         # get pre-processed data
+        # time not in minutes because this data is rewritten to the h5 file
         if isinstance(dataset, list):
-            signal = [self.signal.get(d) for d in dataset]
+            signal = [self.signal.get(d, in_minutes=False) for d in dataset]
         elif isinstance(dataset, str):
-            signal = self.signal.get(dataset)
+            signal = self.signal.get(dataset, in_minutes=False)
         else:
             raise TypeError("postprocessing: Incorrect dataset.")
         # run process on signal

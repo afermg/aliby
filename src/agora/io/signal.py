@@ -41,11 +41,18 @@ class Signal(BridgeH5):
     def get(
         self,
         dset: t.Union[str, t.Collection],
+        in_minutes: bool = True,
         tmax_in_mins: int = None,
     ):
-        """Get Signal and apply merging and picking."""
+        """
+        Get Signal and apply merging and picking.
+
+        For any data to be written to the h5 file, in_minutes should be False.
+        """
         if isinstance(dset, str):
-            record = self.get_raw(dset, tmax_in_mins=tmax_in_mins)
+            record = self.get_raw(
+                dset, in_minutes=in_minutes, tmax_in_mins=tmax_in_mins
+            )
             if record is not None:
                 picked_merged = self.apply_merging_picking(record)
                 return self.add_name(picked_merged, dset)
@@ -63,8 +70,6 @@ class Signal(BridgeH5):
     def cols_in_mins(self, df: pd.DataFrame):
         """Convert numerical columns in a data frame to minutes."""
         df.columns = (df.columns * np.round(self.tinterval / 60)).astype(int)
-        if df.columns.max() > 1000:
-            breakpoint()
         return df
 
     @cached_property
@@ -253,6 +258,8 @@ class Signal(BridgeH5):
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Get raw Signal without merging, picking, and lineage information.
+
+        For any data to be written to the h5 file, in_minutes should be False.
 
         Parameters
         ----------
