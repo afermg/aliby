@@ -112,6 +112,7 @@ class PostProcessor(ProcessABC):
             cells=Cells.from_source(filename),
         )
         # get bud processes
+        # buddings and budmetric functions are in postprocessor/core/reshapers
         self.bud_process_funcs = {
             bud_process: get_process(bud_process)
             for bud_process, _ in parameters["targets"]["bud_processes"]

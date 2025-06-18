@@ -1,4 +1,5 @@
-# TODO Module docstring
+"""LineageProcess subclass of PostProcessABC that supplies lineage information."""
+
 import typing as t
 from abc import abstractmethod
 
@@ -11,7 +12,7 @@ from postprocessor.core.abc import PostProcessABC
 
 
 class LineageProcessParameters(ParametersABC):
-    """Parameters - none are necessary."""
+    """No parameters required."""
 
     _defaults = {}
 
@@ -20,7 +21,7 @@ class LineageProcess(PostProcessABC):
     """
     To analyse lineage data.
 
-    Currently bare bones, but extracts lineage information from a Signal or Cells object.
+    Extracts lineage information from a Signal or Cells object.
     """
 
     def __init__(self, parameters: LineageProcessParameters):
@@ -70,5 +71,5 @@ class LineageProcess(PostProcessABC):
                 elif self.cells is not None:
                     lineage = self.cells.mothers_daughters
         else:
-            raise Exception("No lineage information found")
+            raise AttributeError("No lineage information found")
         return lineage

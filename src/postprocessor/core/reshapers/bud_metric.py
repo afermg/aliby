@@ -40,7 +40,8 @@ class BudMetric(LineageProcess):
                 lineage = self.lineage
             else:
                 # lineage information in the Signal data frame
-                assert "mother_label" in signal.index.names
+                if "mother_label" not in signal.index.names:
+                    raise ValueError("Missing 'mother_label'.")
                 lineage = signal.index.to_list()
         result = get_bud_metric(signal, mother_bud_array_to_dict(lineage))
         return result
@@ -80,7 +81,7 @@ def get_bud_metric(
         list of daughter indices, also defined as (trap, cell_label).
     """
     md_index = signal.index
-    # md_index should only comprise (trap, cell_label)
+    # md_index should comprise only (trap, cell_label)
     if "mother_label" not in md_index.names:
         # dict with daughter indices as keys and mother indices as values
         bud_dict = {
@@ -104,7 +105,7 @@ def get_bud_metric(
         md_index = md_index.intersection(relations)
     else:
         md_index = md_index.droplevel("mother_label")
-    # restrict signal to the cells in md_index moving mother_label to do so
+    # restrict signal to the cells in md_index moving mother_label
     md_signal = (
         signal.reset_index("mother_label")
         .loc(axis=0)[md_index]
