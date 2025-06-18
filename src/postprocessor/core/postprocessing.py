@@ -164,7 +164,7 @@ class PostProcessor(ProcessABC):
             "lineage_merged": lineage,
             "picks": picked_indices,
         }
-        # run processes: process is a str; data sets is a list of str
+        # run processes: process is a str; datasets is a list of str
         for bud_process, datasets in tqdm(self.targets["bud_processes"]):
             if bud_process in self.parameters["param_sets"].get(
                 "bud_processes", {}
@@ -204,7 +204,7 @@ class PostProcessor(ProcessABC):
         # run process on signal
         if signal is None:
             return None
-        elif len(signal) and (
+        if len(signal) and (
             not isinstance(loaded_bud_process, LineageProcess)
             or len(loaded_bud_process.lineage)
         ):
@@ -233,7 +233,7 @@ class PostProcessor(ProcessABC):
         elif isinstance(dataset, str):
             outpath = dataset[1:].replace("/", "_")
         else:
-            raise Exception(f"Outpath not defined {type(dataset)}")
+            raise ValueError(f"Outpath not defined {type(dataset)}")
         # add postprocessing to outpath when required
         if bud_process not in self.parameters["outpaths"]:
             outpath = "/postprocessing/" + bud_process + "/" + outpath

@@ -22,7 +22,7 @@ class Grouper(ABC):
         self.name = path.name
         self.files = list(path.glob("*.h5"))
         if len(self.files) == 0:
-            raise Exception(f"No valid h5 files in {dir}.")
+            raise FileNotFoundError(f"No valid h5 files in {dir}.")
         self.load_positions()
         self.positions_groups = {
             name: name[name_inds[0] : name_inds[1]]
@@ -52,7 +52,7 @@ class Grouper(ABC):
             )
         )
         if len(tintervals) > 1:
-            raise Exception(
+            raise ValueError(
                 "Grouper: Not all positions have the same time interval."
             )
         return tintervals[0]
@@ -180,10 +180,7 @@ class Grouper(ABC):
                     )
                 concat_sorted = concat.sort_index()
                 return concat_sorted
-            else:
-                print(
-                    f"All data sets are missing or contain errors for {path}."
-                )
+            print(f"All data sets are missing or contain errors for {path}.")
         else:
             print("No data found.")
 
@@ -369,7 +366,7 @@ def concat_one_signal(
         # applies picking and merging
         combined = position.get(path, tmax_in_mins=tmax_in_mins)
     else:
-        raise Exception(f"concat_one_signal: {mode} not recognised.")
+        raise ValueError(f"concat_one_signal: {mode} not recognised.")
     if combined is not None:
         # add position and group as indices
         combined["position"] = position_name

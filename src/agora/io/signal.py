@@ -52,7 +52,7 @@ class Signal(BridgeH5):
         elif isinstance(dset, list):
             return [self.get(d) for d in dset]
         else:
-            raise Exception("Error in Signal.get.")
+            raise TypeError("Error in Signal.get.")
 
     @staticmethod
     def add_name(df, name):
@@ -63,6 +63,8 @@ class Signal(BridgeH5):
     def cols_in_mins(self, df: pd.DataFrame):
         """Convert numerical columns in a data frame to minutes."""
         df.columns = (df.columns * np.round(self.tinterval / 60)).astype(int)
+        if df.columns.max() > 1000:
+            breakpoint()
         return df
 
     @cached_property
@@ -78,10 +80,11 @@ class Signal(BridgeH5):
         with h5py.File(self.filename, "r") as f:
             if tinterval_location in f.attrs:
                 res = f.attrs[tinterval_location]
-                if type(res) is list:
-                    return res[0]
+                if isinstance(res, list):
+                    tint = res[0]
                 else:
-                    return res
+                    tint = res
+                return tint
             else:
                 logging.getLogger("aliby").warn(
                     f"{str(self.filename).split('/')[-1]}: using default time "
@@ -122,7 +125,7 @@ class Signal(BridgeH5):
                 # old defunct h5 format
                 return list(f.attrs["channels/channel"])
             else:
-                raise Exception(f"Channels missing in the {self.filename}.")
+                raise KeyError(f"Channels missing in the {self.filename}.")
 
     @lru_cache(2)
     def lineage(
@@ -140,7 +143,7 @@ class Signal(BridgeH5):
             if lineage_location not in f:
                 lineage_location = "postprocessing/lineage"
             if lineage_location not in f:
-                raise Exception(
+                raise KeyError(
                     f"Neither modifiers nor postprocessing in {self.filename}"
                 )
             else:
@@ -157,7 +160,6 @@ class Signal(BridgeH5):
                 ).T
         return lineage
 
-    # @_first_arg_str_to_raw_df
     def apply_merging_picking(
         self,
         data: t.Union[str, pd.DataFrame],
@@ -194,8 +196,7 @@ class Signal(BridgeH5):
                 picks.intersection([tuple(x) for x in merged.index])
             )
             return merged.loc[picked_indices]
-        else:
-            return merged
+        return merged
 
     @cached_property
     def print_available(self):
@@ -215,7 +216,7 @@ class Signal(BridgeH5):
                 self._available = []
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_path)
-        except Exception as e:
+        except KeyError as e:
             self.log(f"Exception when visiting h5: {e}")
         return self._available
 
@@ -277,7 +278,11 @@ class Signal(BridgeH5):
                 if in_minutes:
                     df = self.cols_in_mins(df)
                 # limit data by time and discard NaNs
-                if in_minutes and tmax_in_mins and type(tmax_in_mins) is int:
+                if (
+                    in_minutes
+                    and tmax_in_mins
+                    and isinstance(tmax_in_mins, int)
+                ):
                     df = df[df.columns[df.columns <= tmax_in_mins]]
                     df = df.dropna(how="all")
                 # add mother label to data frame
@@ -344,6 +349,8 @@ class Signal(BridgeH5):
 
     def dataset_to_df(self, f: Path, dataset: str):
         """Get data from h5 file as a data frame."""
+        if isinstance(f, str):
+            f = Path(f)
         if not f.exists():
             raise FileNotFoundError(f"Cannot find {str(f)}.")
         df = None

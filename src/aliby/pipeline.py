@@ -381,12 +381,11 @@ class Pipeline(ProcessABC):
                 tps = image.data.shape[0]
             # potentially skip initial_tp number of images
             if tps < config["tiler"]["initial_tp"]:
-                raise Exception(
+                raise ValueError(
                     f'Initial time point {config["tiler"]["initial_tp"]}'
                     " is greater than the number of time points."
                 )
-            else:
-                all_tps = range(tps - config["tiler"]["initial_tp"])
+            all_tps = range(tps - config["tiler"]["initial_tp"])
             progress_bar = tqdm(all_tps, desc=image.name)
             # run through time points
             for i in progress_bar:
@@ -417,7 +416,7 @@ class Pipeline(ProcessABC):
                         self.log(
                             "WARNING: Bud has been assigned as its own mother."
                         )
-                        raise Exception("Catastrophic Baby error!")
+                        raise ValueError("Catastrophic Baby error!")
                     baby_writer.write(
                         data=result,
                         overwrite=["mother_assign"],
