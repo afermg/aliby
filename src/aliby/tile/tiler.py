@@ -37,7 +37,7 @@ import dask.array as da
 import numpy as np
 from agora.abc import ParametersABC, StepABC
 from agora.io.bridge import BridgeH5
-from aliby.global_settings import imaging_specifications
+from aliby.global_settings import global_settings
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations
 from omero.gateway import ImageWrapper
@@ -48,11 +48,13 @@ class TilerParameters(ParametersABC):
     """Define default values for tile size and the reference channels."""
 
     _defaults = {
-        "tile_size": imaging_specifications["tile_size"],
+        "tile_size": global_settings.imaging_specifications["tile_size"],
         "ref_channel": "Brightfield",
         "ref_z": 0,
         "position_name": None,
-        "magnification": imaging_specifications["magnification"],
+        "magnification": global_settings.imaging_specifications[
+            "magnification"
+        ],
         "initial_tp": 0,
     }
 
@@ -85,7 +87,7 @@ class Tiler(StepABC):
         image_metadata: dictionary
         parameters: an instance of TilerParameters
         tile_locs: (optional)
-        micrscopy_metadata: optional
+        microscopy_metadata: optional
         """
         super().__init__(parameters)
         self.image = image
@@ -111,7 +113,10 @@ class Tiler(StepABC):
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
         # adjust for non-standard magnification
-        if self.tile_size != imaging_specifications["tile_size"]:
+        if (
+            self.tile_size
+            != global_settings.imaging_specifications["tile_size"]
+        ):
             print(
                 "Warning: tile_size has been changed."
                 "\nConsider changing magnification instead."
@@ -121,7 +126,7 @@ class Tiler(StepABC):
             self.tile_size = int(
                 self.tile_size
                 * self.magnification
-                / imaging_specifications["magnification"]
+                / global_settings.imaging_specifications["magnification"]
             )
 
     @classmethod

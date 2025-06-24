@@ -90,7 +90,7 @@ class CoreWriter:
         """
         try:
             n = len(data)
-        except Exception as e:
+        except ValueError as e:
             logging.debug(f"Writer: Attributes have no length: {e}")
             n = 1
         if key in hgroup:
@@ -99,7 +99,7 @@ class CoreWriter:
                 dset = hgroup[key]
                 dset.resize(dset.shape[0] + n, axis=0)
                 dset[-n:] = data
-            except Exception as e:
+            except ValueError as e:
                 logging.debug(
                     "Writer: Inconsistency between dataset shape and "
                     f"new empty data: {e}."
@@ -287,8 +287,8 @@ class BabyWriter(CoreWriter):
         self,
         data: dict,
         overwrite: list[str],
-        tp: int = None,
-        tile_size: int = None,
+        tp: int | None = None,
+        tile_size: int | None = None,
     ):
         """
         Write data for one time point and one position.

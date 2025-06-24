@@ -4,7 +4,7 @@ import copy
 import typing as t
 from pathlib import Path
 
-import aliby.global_settings as global_settings
+from aliby.global_settings import global_settings
 import bottleneck as bn
 import h5py
 import numpy as np
@@ -350,6 +350,7 @@ class Extractor(StepABC):
             )
             for cell_fun in cell_funs
         }
+        # TODO parse type of d and unpack dicts
         return d
 
     def reduce_extract(

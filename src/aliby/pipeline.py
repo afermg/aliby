@@ -39,7 +39,7 @@ from postprocessor.core.postprocessing import (
 )
 from tqdm import tqdm
 
-import aliby.global_settings as global_settings
+from aliby.global_settings import global_settings
 from aliby.baby_sitter import BabyParameters, BabyRunner
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
@@ -120,7 +120,7 @@ class PipelineParameters(ParametersABC):
             conn.cache_logs(directory)
             # get channels to ensure metadata has the correct order
             if "channels" in general:
-                # use the order specifed by the user
+                # use the order specified by the user
                 OMERO_channels = general["channels"]
             elif hasattr(conn, "get_channels"):
                 OMERO_channels = conn.get_channels()

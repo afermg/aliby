@@ -1,7 +1,7 @@
 """Functions for identifying and dealing with ALCATRAS traps."""
 
 import numpy as np
-from aliby.global_settings import imaging_specifications
+from aliby.global_settings import global_settings
 from skimage import feature, transform
 from skimage.filters import threshold_otsu
 from skimage.filters.rank import entropy
@@ -67,7 +67,9 @@ def segment_traps(
         The coordinates of the centroids of the traps.
     """
     # adjust parameters for particular tile size
-    scale_factor = tile_size / imaging_specifications["tile_size"]
+    scale_factor = (
+        tile_size / global_settings.imaging_specifications["tile_size"]
+    )
     disk_radius_frac *= scale_factor
     min_frac_tilesize *= scale_factor
     square_size = int(square_size * scale_factor)
@@ -121,7 +123,7 @@ def segment_traps(
     if idx_valid_region:
         _, valid_region = zip(*idx_valid_region)
     else:
-        raise Exception("No valid tiles found.")
+        raise ValueError("No valid tiles found.")
     # find centroids of valid regions
     centroids = (
         np.array([region.centroid for region in valid_region])

@@ -6,7 +6,7 @@ from copy import copy
 from functools import cached_property, lru_cache
 from pathlib import Path
 
-import aliby.global_settings as global_settings
+from aliby.global_settings import global_settings
 import h5py
 import numpy as np
 import pandas as pd

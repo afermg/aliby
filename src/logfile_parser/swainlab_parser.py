@@ -4,9 +4,11 @@ import re
 import typing as t
 from pathlib import PosixPath
 
-from aliby.global_settings import possible_imaging_channels
+from aliby.global_settings import global_settings
 
-possible_imaging_channels = possible_imaging_channels.copy() + ["Brightfield"]
+possible_imaging_channels = (
+    global_settings.possible_imaging_channels.copy() + ["Brightfield"]
+)
 
 
 def parse_swainlab_logs(filepath: t.Union[str, PosixPath]) -> t.Dict:
