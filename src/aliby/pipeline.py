@@ -29,7 +29,7 @@ from agora.io.writers import (
 from extraction.core.extractor import (
     Extractor,
     ExtractorParameters,
-    extraction_params_from_meta,
+    build_extraction_tree_from_meta,
 )
 from extraction.core.recursive_merge import recursive_merge_extractor
 from pathos.multiprocessing import Pool
@@ -164,7 +164,7 @@ class PipelineParameters(ParametersABC):
             )
         defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
         # defaults for extraction
-        defaults["extraction"] = extraction_params_from_meta(meta.minimal)
+        defaults["extraction"] = build_extraction_tree_from_meta(meta.minimal)
         # merge any input, a nested dict
         if extraction:
             defaults["extraction"] = recursive_merge_extractor(
@@ -365,7 +365,7 @@ class Pipeline(ProcessABC):
             babyrunner = BabyRunner.from_tiler(
                 BabyParameters.from_dict(config["baby"]), tiler=tiler
             )
-            # initialise extraction
+            # initialise Extractor
             extraction = Extractor.from_tiler(
                 ExtractorParameters.from_dict(config["extraction"]),
                 store=out_file,
@@ -424,7 +424,7 @@ class Pipeline(ProcessABC):
                         tile_size=tiler.tile_size,
                     )
                     # run extraction
-                    result = extraction.run_tp(i, cell_labels=None, masks=None)
+                    result = extraction.run_tp(i)
                     extractor_writer.write(data=result)
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(

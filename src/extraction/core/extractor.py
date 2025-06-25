@@ -31,13 +31,13 @@ extraction_result = t.Dict[
 REDUCTION_FUNS = load_reduction_functions()
 
 
-def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
-    """Obtain parameters for extraction from microscopy metadata."""
+def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
+    """Build extraction-tree dict from microscopy metadata."""
     if not isinstance(meta, dict):
         # load meta data
         with h5py.File(meta, "r") as f:
             meta = dict(f["/"].attrs.items())
-    base = {
+    tree_dict = {
         "tree": {"general": {"null": global_settings.outline_functions}},
         "multichannel_funs": {},
     }
@@ -54,11 +54,11 @@ def extraction_params_from_meta(meta: t.Union[dict, Path, str]):
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
     for ch in extant_fluorescence_ch:
-        base["tree"][ch] = copy.deepcopy(
+        tree_dict["tree"][ch] = copy.deepcopy(
             default_reduction_and_fluorescence_metrics
         )
-    base["sub_bg"] = extant_fluorescence_ch
-    return base
+    tree_dict["sub_bg"] = extant_fluorescence_ch
+    return tree_dict
 
 
 def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
@@ -77,12 +77,11 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
     if hasattr(fun, "__module__") and fun.__module__[:10] == "bottleneck":
         # bottleneck type
         return getattr(bn.reduce, fun.__name__)(trap_image, axis=axis)
-    elif isinstance(fun, np.ufunc):
+    if isinstance(fun, np.ufunc):
         # optimise the reduction function if possible
         return fun.reduce(trap_image, axis=axis)
-    else:
-        # WARNING: Very slow, only use when no alternatives exist
-        return np.apply_along_axis(fun, axis, trap_image)
+    # WARNING: Very slow, only use when no alternatives exist
+    return np.apply_along_axis(fun, axis, trap_image)
 
 
 class ExtractorParameters(ParametersABC):
@@ -120,7 +119,7 @@ class ExtractorParameters(ParametersABC):
     @classmethod
     def from_meta(cls, meta):
         """Instantiate from the meta data; used by Pipeline."""
-        return cls(**extraction_params_from_meta(meta))
+        return cls(**build_extraction_tree_from_meta(meta))
 
 
 class Extractor(StepABC):
@@ -184,7 +183,9 @@ class Extractor(StepABC):
             self.params.sub_bg = available_channels.intersection(
                 self.params.sub_bg
             )
-        self.get_functions()
+        self.all_cell_funs, self.all_funs = load_all_functions()
+        # to correct tree for functions returning multiple values
+        self.replace_dict_for_tree = {}
 
     @classmethod
     def from_tiler(
@@ -210,7 +211,7 @@ class Extractor(StepABC):
     def channels(self):
         """Get a tuple of the available channels."""
         if not hasattr(self, "_channels"):
-            if type(self.params.tree) is dict:
+            if isinstance(self.params.tree, dict):
                 self._channels = tuple(self.params.tree.keys())
         return self._channels
 
@@ -225,10 +226,6 @@ class Extractor(StepABC):
         if not hasattr(self, "_out_path"):
             self._group = "/extraction/"
         return self._group
-
-    def get_functions(self):
-        """Define all functions."""
-        self.all_cell_funs, self.all_funs = load_all_functions()
 
     def get_tiles(
         self,
@@ -333,7 +330,7 @@ class Extractor(StepABC):
         masks: t.List[np.array],
         cell_funs: t.List[str],
         channels: t.List[str],
-        **kwargs,
+        cell_labels: t.List[int],
     ) -> t.Dict[str, pd.Series]:
         """
         Return dict with cell_funs as keys and their results as values.
@@ -346,11 +343,30 @@ class Extractor(StepABC):
                 masks=masks,
                 cell_function=cell_fun,
                 channels=channels,
-                **kwargs,
+                cell_labels=cell_labels,
             )
             for cell_fun in cell_funs
         }
-        # TODO parse type of d and unpack dicts
+        # check for any functions returning a dict rather than a single value
+        dict_fns = [
+            cell_fun for cell_fun in d if isinstance(d[cell_fun][0][0], dict)
+        ]
+        for fn in dict_fns:
+            # add to d for each key in returned dict
+            mini_d = {}
+            for res in d[fn][0]:
+                for key in res:
+                    subkey = f"{fn}_{key}"
+                    if subkey in mini_d:
+                        mini_d[subkey].append(res[key])
+                    else:
+                        mini_d[subkey] = [res[key]]
+            idx = d[fn][1]
+            for subkey, value in mini_d.items():
+                d[subkey] = (tuple(value), idx)
+            # delete dict-returning entry in d
+            del d[fn]
+            self.replace_dict_for_tree[fn] = [subkey for subkey in mini_d]
         return d
 
     def reduce_extract(
@@ -359,7 +375,7 @@ class Extractor(StepABC):
         masks: t.List[np.ndarray],
         reduction_cell_funs: t.Dict[reduction_method, t.Collection[str]],
         channels: t.List[str],
-        **kwargs,
+        cell_labels: t.List[int],
     ) -> t.Dict[str, t.Dict[reduction_method, t.Dict[str, pd.Series]]]:
         """
         Reduce to a 2D image and then extract.
@@ -377,8 +393,6 @@ class Extractor(StepABC):
             For example: {'np_max': {'max5px', 'mean', 'median'}}
         channels: list of str
             A list comprising the channel corresponding to the data in tiles.
-        **kwargs: dict
-            All other arguments passed to Extractor.apply_cell_functions.
 
         Returns
         ------
@@ -400,7 +414,7 @@ class Extractor(StepABC):
                 masks=masks,
                 cell_funs=cell_funs,
                 channels=channels,
-                **kwargs,
+                cell_labels=cell_labels,
             )
             for reduction, cell_funs in reduction_cell_funs.items()
         }
@@ -472,7 +486,7 @@ class Extractor(StepABC):
         return bgs
 
     def extract_one_channel(
-        self, tree_dict, cell_labels, img, img_bgsub, masks, **kwargs
+        self, tree_dict, cell_labels, img, img_bgsub, masks
     ):
         """Extract as dict all metrics requiring only a single channel."""
         d = {}
@@ -485,7 +499,6 @@ class Extractor(StepABC):
                 reduction_cell_funs=reduction_cell_funs,
                 cell_labels=cell_labels,
                 channels=[ch],
-                **kwargs,
             )
             if ch != "general":
                 # extract from background-corrected fluorescence images
@@ -495,7 +508,6 @@ class Extractor(StepABC):
                     reduction_cell_funs=reduction_cell_funs,
                     cell_labels=cell_labels,
                     channels=[ch],
-                    **kwargs,
                 )
         return d
 
@@ -511,7 +523,7 @@ class Extractor(StepABC):
             {"multichannel"} : [channels, reduction function,
                                 multichannel function name]
 
-        For example, for the ratio mulitchannel function
+        For example, for the ratio multichannel function
 
             {"multichannel": [["CFP", "YFP"], "max", "ratio"]}
 
@@ -573,7 +585,6 @@ class Extractor(StepABC):
         tree: t.Optional[extraction_tree] = None,
         masks: t.Optional[t.List[np.ndarray]] = None,
         cell_labels: t.Optional[t.List[int]] = None,
-        **kwargs,
     ) -> t.Dict[str, t.Dict[str, t.Dict[str, tuple]]]:
         """
         Extract for an individual time point.
@@ -593,8 +604,6 @@ class Extractor(StepABC):
             (ncells, tile_size, tile_size) and with one mask per cell.
         cell_labels : dict
             A dictionary with trap_ids as keys and cell_labels as values.
-        **kwargs : keyword arguments
-            Passed to extractor.reduce_extract.
 
         Returns
         -------
@@ -620,7 +629,7 @@ class Extractor(StepABC):
         cell_labels = self.get_cell_labels(tp, cell_labels, cells)
         # get masks one per cell per trap
         masks = self.get_masks(tp, masks, cells)
-        # find fluoresence data for all traps at the time point
+        # find fluorescence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
         tiles = self.get_tiles(tp, channels=tree_dict["channels"])
         # generate boolean masks for background for each trap
@@ -636,8 +645,11 @@ class Extractor(StepABC):
         ]
         # perform extraction
         res_one = self.extract_one_channel(
-            tree_dict, cell_labels, img, img_bgsub, masks, **kwargs
+            tree_dict, cell_labels, img, img_bgsub, masks
         )
+        # update tree dict for any functions that returned multiple values
+        for fn, replace_list in self.replace_dict_for_tree.items():
+            replace_in_nesteddict(tree_dict, fn, replace_list)
         res_multiple = self.extract_multiple_channels(
             cell_labels, img, img_bgsub, masks
         )
@@ -685,13 +697,7 @@ class Extractor(StepABC):
                 img_bgsub[ch] = None
         return img, img_bgsub
 
-    def _run_tp(
-        self,
-        tps: t.List[int] = None,
-        tree=None,
-        save=True,
-        **kwargs,
-    ) -> dict:
+    def _run_tp(self, tps: t.List[int] = None, tree=None) -> dict:
         """
         Run extraction for one position and for the specified time points.
 
@@ -706,10 +712,6 @@ class Extractor(StepABC):
             Nested dictionary indicating channels, reduction functions and
             metrics to be used.
             For example: {'general': {'null': ['area', 'volume', 'eccentricity']}}
-        save: boolean (optional)
-            If True, save results to h5 file.
-        kwargs: keyword arguments (optional)
-            Passed to extract_tp.
 
         Returns
         -------
@@ -728,32 +730,26 @@ class Extractor(StepABC):
         extract_dict = {}
         for tp in tps:
             # extract for each time point and convert to dict of pd.Series
-            new = flatten_nesteddict(
-                self.extract_tp(
-                    tp=tp, tile_size=self.tiler.tile_size, tree=tree, **kwargs
-                ),
-                to="series",
-                tp=tp,
+            res = self.extract_tp(
+                tp=tp, tile_size=self.tiler.tile_size, tree=tree
             )
+            new = flatten_nesteddict(res, to="series", tp=tp)
             # concatenate with data extracted from earlier time points
-            for key in new.keys():
+            for key in new:
                 extract_dict[key] = pd.concat(
                     (extract_dict.get(key, None), new[key]), axis=1
                 )
         # add indices to pd.Series containing the extracted data
-        for k in extract_dict.keys():
+        for key in extract_dict:
             indices = ["experiment", "position", "trap", "cell_label"]
             idx = (
-                indices[-extract_dict[k].index.nlevels :]
-                if extract_dict[k].index.nlevels > 1
+                indices[-extract_dict[key].index.nlevels :]
+                if extract_dict[key].index.nlevels > 1
                 else [indices[-2]]
             )
-            extract_dict[k].index.names = idx
+            extract_dict[key].index.names = idx
         # add cells' spatial locations within the image
         self.add_spatial_locations_of_cells(extract_dict)
-        # save
-        # if save:
-        #   self.save_to_h5(extract_dict)
         return extract_dict
 
     def add_spatial_locations_of_cells(self, extract_dict):
@@ -789,14 +785,6 @@ class Extractor(StepABC):
                 + self.tiler.spatial_location[1]
             )
 
-    def save_to_h5(self, extract_dict, path=None):
-        """Save the extracted data for one position to the h5 file."""
-        if path is None:
-            path = self.h5path
-        for extract_name, data in extract_dict.items():
-            dset_path = "/extraction/" + extract_name
-            add_df_to_h5(path, dset_path, data)
-
     def get_meta(self, flds: t.Union[str, t.Collection]):
         """Obtain metadata for one or multiple fields."""
         if isinstance(flds, str):
@@ -805,6 +793,37 @@ class Extractor(StepABC):
         return {
             f: meta_short.get(f, self.default_meta.get(f, None)) for f in flds
         }
+
+
+def flatten_nesteddict_claude(
+    nest: dict, to="series", tp: int = None
+) -> t.Dict[str, pd.Series]:
+    """
+    Convert a nested extraction dict into a dict of pd.Series.
+    Parameters
+    ----------
+    nest: dict of dicts
+        Contains the nested results of extraction.
+    to: str (optional)
+        Specifies the format of the output, either pd.Series (default)
+        or a list
+    tp: int
+        Time point used to name the pd.Series
+    Returns
+    -------
+    d: dict
+        A dict with a concatenated string of channel, reduction metric,
+        and cell metric as keys and either a pd.Series or a list of the
+        corresponding extracted data as values.
+    """
+    d = {}
+    for k0, v0 in nest.items():
+        for k1, v1 in v0.items():
+            for k2, v2 in v1.items():
+                d["/".join((k0, k1, k2))] = (
+                    pd.Series(v2, name=tp) if to == "series" else v2
+                )
+    return d
 
 
 def flatten_nesteddict(
@@ -838,3 +857,37 @@ def flatten_nesteddict(
                     pd.Series(*v2, name=tp) if to == "series" else v2
                 )
     return d
+
+
+def replace_in_nesteddict(tree_dict, original, replacement):
+    """
+    Replace a string with multiple strings in a nested dict.
+
+    Preserve order of entries.
+    """
+
+    def replace_in_structure(obj):
+        if isinstance(obj, dict):
+            # process dictionary items
+            for key, value in obj.items():
+                new_value = replace_in_structure(value)
+                if new_value is not value:
+                    obj[key] = new_value
+            return obj
+        if isinstance(obj, set):
+            if original in obj:
+                # convert to list to preserve order
+                obj_list = list(obj)
+                index = obj_list.index(original)
+                # replace at the same position
+                if isinstance(replacement, str):
+                    obj_list[index] = replacement
+                else:
+                    obj_list[index : index + 1] = replacement
+                return obj_list
+            return obj
+        if isinstance(obj, (list, tuple)):
+            return type(obj)(replace_in_structure(item) for item in obj)
+        return obj
+
+    return replace_in_structure(tree_dict)

@@ -60,13 +60,14 @@ class GlobalSettings:
         # default time interval in seconds
         self.default_time_interval = 300
 
-    def update(self, global_property: str, keyvalue: dict):
-        """Update a specific property dictionary"""
-        getattr(self, global_property).update(keyvalue)
-
-    def get_property(self, global_property: str):
-        """Get an entire property dictionary"""
+    def get(self, global_property: str):
+        """Get a global setting."""
         return getattr(self, global_property)
+
+    @property
+    def get_all(self):
+        """Get all attributes with their values"""
+        return vars(self)
 
 
 global_settings = GlobalSettings()

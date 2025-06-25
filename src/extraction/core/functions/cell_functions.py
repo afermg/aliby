@@ -307,7 +307,12 @@ def centroid_y(cell_mask):
 
 
 def membrane_fluorescence(
-    masked_fl_image, stat=np.median, membrane_thickness=2, get_mask=False
+    cell_mask,
+    trap_image,
+    channels,
+    stat=np.median,
+    membrane_thickness=2,
+    get_mask=False,
 ):
     """
     Use GMM to find membrane fluorescence in a masked fluorescence image.
@@ -316,36 +321,39 @@ def membrane_fluorescence(
     pixels being brightest on average. Take as membrane pixels, the outer
     shells of intracellular pixels assuming a given membrane thickness.
     """
-    masked_pixels = masked_fl_image[masked_fl_image > 0]
-    # use GMM to separate into two classes of dark and bright pixels
-    gmm = GaussianMixture(n_components=2, random_state=42)
-    gmm.fit(masked_pixels.reshape(-1, 1))
-    labels = gmm.predict(masked_pixels.reshape(-1, 1))
-    bright_component = np.argmax(gmm.means_.flatten())
-    label_image = np.zeros_like(masked_fl_image, dtype=int)
-    # add one so that there are no zero labels from the GMM
-    label_image[masked_fl_image > 0] = labels + 1
-    bright_mask = (label_image == bright_component + 1).astype(np.uint8)
-    # remove any disconnected pixels and cause failure for small cells
-    bright_mask = closing(bright_mask, disk(3))
-    # remove outer layer
-    bright_mask = binary_erosion(bright_mask, disk(1))
-    # remove interior pixels
-    membrane_mask = (
-        bright_mask & ~binary_erosion(bright_mask, disk(membrane_thickness))
-    ).astype(bool)
-    res = {
-        "membrane_fl": np.nan,
-        "remaining_fl": np.nan,
-        "membrane_ecc": np.nan,
-    }
+    if channels not in ["cy5", "Brightfield"]:
+        masked_fl_image = np.zeros_like(trap_image)
+        # set masked pixels to fluorescence values
+        masked_fl_image[cell_mask] = trap_image[cell_mask]
+        masked_pixels = masked_fl_image[masked_fl_image > 0]
+        # use GMM to separate into two classes of dark and bright pixels
+        gmm = GaussianMixture(n_components=2, random_state=42)
+        gmm.fit(masked_pixels.reshape(-1, 1))
+        labels = gmm.predict(masked_pixels.reshape(-1, 1))
+        bright_component = np.argmax(gmm.means_.flatten())
+        label_image = np.zeros_like(masked_fl_image, dtype=int)
+        # add one so that there are no zero labels from the GMM
+        label_image[masked_fl_image > 0] = labels + 1
+        bright_mask = (label_image == bright_component + 1).astype(np.uint8)
+        # remove any disconnected pixels and cause failure for small cells
+        bright_mask = closing(bright_mask, disk(3))
+        # remove outer layer
+        bright_mask = binary_erosion(bright_mask, disk(1))
+        # remove interior pixels
+        membrane_mask = (
+            bright_mask
+            & ~binary_erosion(bright_mask, disk(membrane_thickness))
+        ).astype(bool)
+    else:
+        membrane_mask = []
+    res = {"fl": np.nan, "remaining_fl": np.nan, "ecc": np.nan}
     if np.any(membrane_mask):
         # find eccentricity
-        res["membrane_ecc"] = regionprops_table(
+        res["ecc"] = regionprops_table(
             membrane_mask.astype(int), properties=["eccentricity"]
         )["eccentricity"][0]
         # estimate fluorescence values
-        res["membrane_fl"] = stat(masked_fl_image[membrane_mask])
+        res["fl"] = stat(masked_fl_image[membrane_mask])
         remaining_mask = (masked_fl_image > 0).astype(bool)
         remaining_mask[membrane_mask] = 0
         res["remaining_fl"] = stat(masked_fl_image[remaining_mask])
