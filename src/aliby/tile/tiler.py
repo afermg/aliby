@@ -50,7 +50,7 @@ class TilerParameters(ParametersABC):
     _defaults = {
         "tile_size": global_settings.imaging_specifications["tile_size"],
         "ref_channel": "Brightfield",
-        "ref_z": 0,
+        "ref_z": global_settings.imaging_specifications["ref_z"],
         "position_name": None,
         "magnification": global_settings.imaging_specifications[
             "magnification"

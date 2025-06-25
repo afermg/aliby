@@ -5,7 +5,7 @@ class GlobalSettings:
     """Define all hard-coded parameters used by aliby."""
 
     def __init__(self):
-
+        """Define global parameters."""
         # parameters to stop the pipeline when exceeded
         self.earlystop = {
             "min_tp": 100,
@@ -22,6 +22,7 @@ class GlobalSettings:
             "z_spacing": 0.6,
             "magnification": 60,
             "tile_size": 117,
+            "ref_z": 0,
         }
 
         # possible imaging channels excluding Brightfield
@@ -66,7 +67,7 @@ class GlobalSettings:
 
     @property
     def get_all(self):
-        """Get all attributes with their values"""
+        """Get all attributes with their values."""
         return vars(self)
 
 
