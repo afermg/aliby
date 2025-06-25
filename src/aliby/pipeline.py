@@ -366,7 +366,7 @@ class Pipeline(ProcessABC):
                 BabyParameters.from_dict(config["baby"]), tiler=tiler
             )
             # initialise Extractor
-            extraction = Extractor.from_tiler(
+            extractor = Extractor.from_tiler(
                 ExtractorParameters.from_dict(config["extraction"]),
                 store=out_file,
                 tiler=tiler,
@@ -424,7 +424,7 @@ class Pipeline(ProcessABC):
                         tile_size=tiler.tile_size,
                     )
                     # run extraction
-                    result = extraction.run_tp(i)
+                    result = extractor.run_tp(i)
                     extractor_writer.write(data=result)
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(

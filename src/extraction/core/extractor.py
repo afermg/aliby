@@ -41,9 +41,9 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
         "tree": {"general": {"null": global_settings.outline_functions}},
         "multichannel_funs": {},
     }
-    candidate_channels = set(global_settings.possible_imaging_channels)
+    candidate_channels = global_settings.possible_imaging_channels
     default_reductions = {"max"}
-    default_fluorescence_metrics = set(global_settings.fluorescence_functions)
+    default_fluorescence_metrics = global_settings.fluorescence_functions
     default_reduction_and_fluorescence_metrics = {
         r: default_fluorescence_metrics for r in default_reductions
     }
@@ -203,14 +203,6 @@ class Extractor(StepABC):
     ):
         """Initiate from images."""
         return cls(parameters, store=store, tiler=Tiler(*img_meta))
-
-    @property
-    def channels(self):
-        """Get a tuple of the available channels."""
-        if not hasattr(self, "_channels"):
-            if isinstance(self.params.tree, dict):
-                self._channels = tuple(self.params.tree.keys())
-        return self._channels
 
     def get_tiles(
         self,
@@ -550,7 +542,7 @@ class Extractor(StepABC):
         """Put extraction tree into a dict."""
         if tree is None:
             # use default
-            tree = self.params.tree
+            tree = copy.deepcopy(self.params.tree)
         tree_dict = {
             # the whole extraction tree
             "tree": tree,
@@ -634,7 +626,7 @@ class Extractor(StepABC):
         )
         # update tree dict for any functions that returned multiple values
         for fn, replace_list in self.replace_dict_for_tree.items():
-            replace_in_nesteddict(tree_dict, fn, replace_list)
+            tree_dict = replace_in_nesteddict(tree_dict, fn, replace_list)
         res_multiple = self.extract_multiple_channels(
             cell_labels, img, img_bgsub, masks
         )
@@ -769,37 +761,6 @@ class Extractor(StepABC):
             )
 
 
-def flatten_nesteddict_claude(
-    nest: dict, to="series", tp: int = None
-) -> t.Dict[str, pd.Series]:
-    """
-    Convert a nested extraction dict into a dict of pd.Series.
-    Parameters
-    ----------
-    nest: dict of dicts
-        Contains the nested results of extraction.
-    to: str (optional)
-        Specifies the format of the output, either pd.Series (default)
-        or a list
-    tp: int
-        Time point used to name the pd.Series
-    Returns
-    -------
-    d: dict
-        A dict with a concatenated string of channel, reduction metric,
-        and cell metric as keys and either a pd.Series or a list of the
-        corresponding extracted data as values.
-    """
-    d = {}
-    for k0, v0 in nest.items():
-        for k1, v1 in v0.items():
-            for k2, v2 in v1.items():
-                d["/".join((k0, k1, k2))] = (
-                    pd.Series(v2, name=tp) if to == "series" else v2
-                )
-    return d
-
-
 def flatten_nesteddict(
     nest: dict, to="series", tp: int = None
 ) -> t.Dict[str, pd.Series]:
@@ -834,34 +795,31 @@ def flatten_nesteddict(
 
 
 def replace_in_nesteddict(tree_dict, original, replacement):
-    """
-    Replace a string with multiple strings in a nested dict.
-
-    Preserve order of entries.
-    """
-
-    def replace_in_structure(obj):
-        if isinstance(obj, dict):
-            # process dictionary items
-            for key, value in obj.items():
-                new_value = replace_in_structure(value)
-                if new_value is not value:
-                    obj[key] = new_value
-            return obj
-        if isinstance(obj, set):
-            if original in obj:
-                # convert to list to preserve order
-                obj_list = list(obj)
-                index = obj_list.index(original)
-                # replace at the same position
-                if isinstance(replacement, str):
-                    obj_list[index] = replacement
-                else:
-                    obj_list[index : index + 1] = replacement
-                return obj_list
-            return obj
-        if isinstance(obj, (list, tuple)):
-            return type(obj)(replace_in_structure(item) for item in obj)
-        return obj
-
-    return replace_in_structure(tree_dict)
+    """Replace a string with multiple strings in a nested dict."""
+    if isinstance(tree_dict, dict):
+        return {
+            key: replace_in_nesteddict(value, original, replacement)
+            for key, value in tree_dict.items()
+        }
+    elif isinstance(tree_dict, list):
+        new_list = []
+        for item in tree_dict:
+            if item == original:
+                new_list.extend(replacement)
+            else:
+                new_list.append(
+                    replace_in_nesteddict(item, original, replacement)
+                )
+        return new_list
+    elif isinstance(tree_dict, tuple):
+        new_items = []
+        for item in tree_dict:
+            if item == original:
+                new_items.extend(replacement)
+            else:
+                new_items.append(
+                    replace_in_nesteddict(item, original, replacement)
+                )
+        return tuple(new_items)
+    else:
+        return tree_dict
