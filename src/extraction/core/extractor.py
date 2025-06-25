@@ -147,7 +147,7 @@ class Extractor(StepABC):
     def __init__(
         self,
         parameters: ExtractorParameters,
-        store: t.Optional[str] = None,
+        store: str,
         tiler: t.Optional[Tiler] = None,
     ):
         """
@@ -160,17 +160,12 @@ class Extractor(StepABC):
             extraction functions.
         store: str
             Path to the h5 file containing the cell masks.
+            Used by extract_tp.
         tiler: pipeline-core.core.segmentation tiler
             Class that contains or fetches the images used for
             segmentation.
         """
         self.params = parameters
-        if store:
-            self.h5path = store
-            self.meta = read_meta_from_h5(self.h5path)
-        else:
-            # if no h5 file, use the parameters directly
-            self.meta = {"channel": parameters.to_dict()["tree"].keys()}
         if tiler:
             self.tiler = tiler
             available_channels = set((*tiler.channels, "general"))
@@ -183,6 +178,8 @@ class Extractor(StepABC):
             self.params.sub_bg = available_channels.intersection(
                 self.params.sub_bg
             )
+        # used to create a Cells object in extract_tp
+        self.store = store
         self.all_cell_funs, self.all_funs = load_all_functions()
         # to correct tree for functions returning multiple values
         self.replace_dict_for_tree = {}
@@ -214,18 +211,6 @@ class Extractor(StepABC):
             if isinstance(self.params.tree, dict):
                 self._channels = tuple(self.params.tree.keys())
         return self._channels
-
-    @property
-    def current_position(self):
-        """Return position being analysed."""
-        return str(self.h5path).split("/")[-1][:-3]
-
-    @property
-    def group(self):
-        """Return out path to write in the h5 file."""
-        if not hasattr(self, "_out_path"):
-            self._group = "/extraction/"
-        return self._group
 
     def get_tiles(
         self,
@@ -420,23 +405,6 @@ class Extractor(StepABC):
         }
         return d
 
-    def make_tree_dict(self, tree: extraction_tree):
-        """Put extraction tree into a dict."""
-        if tree is None:
-            # use default
-            tree = self.params.tree
-        tree_dict = {
-            # the whole extraction tree
-            "tree": tree,
-            # the extraction tree for fluorescence channels
-            "channels_tree": {
-                ch: v for ch, v in tree.items() if ch != "general"
-            },
-        }
-        # tuple of the fluorescence channels
-        tree_dict["channels"] = (*tree_dict["channels_tree"],)
-        return tree_dict
-
     def get_masks(self, tp, masks, cells):
         """Get the masks as a list with an array of masks for each trap."""
         # find the cell masks for a given trap as a dict with trap_ids as keys
@@ -578,6 +546,23 @@ class Extractor(StepABC):
                     )
         return d
 
+    def make_tree_dict(self, tree: extraction_tree):
+        """Put extraction tree into a dict."""
+        if tree is None:
+            # use default
+            tree = self.params.tree
+        tree_dict = {
+            # the whole extraction tree
+            "tree": tree,
+            # the extraction tree for fluorescence channels
+            "channels_tree": {
+                ch: v for ch, v in tree.items() if ch != "general"
+            },
+        }
+        # tuple of the fluorescence channels
+        tree_dict["channels"] = (*tree_dict["channels_tree"],)
+        return tree_dict
+
     def extract_tp(
         self,
         tp: int,
@@ -623,8 +608,8 @@ class Extractor(StepABC):
         """
         # dict of information from extraction tree
         tree_dict = self.make_tree_dict(tree)
-        # create a Cells object to extract information from the h5 file
-        cells = Cells(self.h5path)
+        # create a Cells object from the h5 file
+        cells = Cells(self.store)
         # find the cell labels as dict with trap_ids as keys
         cell_labels = self.get_cell_labels(tp, cell_labels, cells)
         # get masks one per cell per trap
@@ -722,9 +707,7 @@ class Extractor(StepABC):
         """
         if tree is None:
             tree = self.params.tree
-        if tps is None:
-            tps = list(range(self.meta["time_settings/ntimepoints"][0]))
-        elif isinstance(tps, int):
+        if isinstance(tps, int):
             tps = [tps]
         # store results in dict
         extract_dict = {}
@@ -784,15 +767,6 @@ class Extractor(StepABC):
                 extract_dict["general/null/image_y"].copy()
                 + self.tiler.spatial_location[1]
             )
-
-    def get_meta(self, flds: t.Union[str, t.Collection]):
-        """Obtain metadata for one or multiple fields."""
-        if isinstance(flds, str):
-            flds = [flds]
-        meta_short = {k.split("/")[-1]: v for k, v in self.meta.items()}
-        return {
-            f: meta_short.get(f, self.default_meta.get(f, None)) for f in flds
-        }
 
 
 def flatten_nesteddict_claude(

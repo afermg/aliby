@@ -299,7 +299,7 @@ class Pipeline(ProcessABC):
         if position_filter is not None:
             position_ids = self.filter_positions(position_filter, position_ids)
         if not len(position_ids):
-            raise Exception("No images to segment.")
+            raise ValueError("No images to segment.")
         else:
             print("Positions selected:")
             for pos in position_ids:
