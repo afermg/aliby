@@ -39,6 +39,8 @@ class GlobalSettings:
             "pHluorin405",
             "pHluorin488",
             "NADH",
+            "mTurquoise2",
+            "tdTomatoFRET",
         ]
 
         # functions to apply to cell outlines
