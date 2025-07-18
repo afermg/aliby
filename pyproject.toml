@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "alibylite"
-version = "1.0.0"
+version = "0.2"
 description = "Process and analyse live-cell imaging data"
 authors = ["Alan Munoz", "Peter Swain <peter.swain@ed.ac.uk>"]
 packages = [
