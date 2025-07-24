@@ -166,19 +166,28 @@ def _validate_pipeline(pipeline: dict):
     assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
 
 
-# TODO pass sorted images instead of wildcard
-def run_pipeline(
+def run_pipeline_return_state(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
-) -> pa.lib.Table:
+) -> dict:
     _validate_pipeline(pipeline)
 
     pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
-    data = []
+    all_states = []
     state = {}
-
     for tp in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
+        all_states.append(copy(state))
+    return all_states
+
+
+# TODO pass sorted images instead of wildcard
+def run_pipeline_parse_extraction(
+    pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
+) -> pa.lib.Table:
+    all_states = run_pipeline_return_state(pipeline, img_source, ntps, steps_dir)
+
+    for state in all_states:
         for step_name in pipeline["steps"]:
             if step_name.startswith("ext"):
                 table = format_extraction(state["data"][step_name][-1])
@@ -193,7 +202,8 @@ def run_pipeline(
                     )
                     data.append(table)
 
-    extracted_fov = pa.concat_tables(data)
+    extracted_fov = None
+        extracted_fov = pa.concat_tables(data)
     return extracted_fov
 
 
@@ -219,7 +229,7 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
     print(f"Running {out_file}")
     result = None
     if overwrite or not Path(out_file).exists():
-        result = run_pipeline(**kwargs)
+        result = run_pipeline_parse_extraction(**kwargs)
         out_dir = Path(out_file).parent
         out_dir.mkdir(parents=True, exist_ok=True)
         pq.write_table(result, out_file)
