@@ -31,7 +31,8 @@ def init_step(
     other_steps: callable,
 ) -> callable:
     """
-    Set up the parameters for any step. This mostly includes dispatching a specific step subtype.
+    Set up the parameters for any step. This mostly includes dispatching a specific step subtype,
+    such as "cellpose" for segmentation or "trackastra" for tracking.
     """
     match step_name:
         case "tile":
@@ -70,6 +71,9 @@ def init_step(
 
 
 def run_step(step, *args, **kwargs):
+    """
+    Runs callable or dispatches `run_tp` method if the step is legacy Object Oriented format.
+    """
     if hasattr(step, "run_tp"):  # in case of older OO-style
         result = step.run_tp(*args, **kwargs)
     else:  # Functional version, all relevant kwargs are provided but no more
@@ -85,7 +89,10 @@ def pipeline_step(
     state: dict = None,
     steps_dir: str = None,
 ) -> dict:
-    """Run one step of the pipeline."""
+    """Run one step of the pipeline.
+
+    It keeps track of the state and updates it, filling each step's data key-value.
+    """
     if state is None:
         state = {}
 
@@ -169,42 +176,67 @@ def _validate_pipeline(pipeline: dict):
 def run_pipeline_return_state(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
 ) -> dict:
+    """
+    This pipeline aggregates the states, but upon multithreading it may
+    use too much memory. It may be better to write a function that parses
+    the necessary fields from the state for aggregation or writing.
+
+    The reason behind this is that some methods, such as tracking using trackastra,
+    require the entire time lapse to process
+    """
     _validate_pipeline(pipeline)
 
     pipeline = copy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
-    all_states = []
+    # all_states = []
     state = {}
-    for tp in range(ntps):
+    for _ in range(ntps):
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
-        all_states.append(copy(state))
-    return all_states
+        # all_states.append(copy(state))
+    return state
 
 
 # TODO pass sorted images instead of wildcard
 def run_pipeline_parse_extraction(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
 ) -> pa.lib.Table:
-    all_states = run_pipeline_return_state(pipeline, img_source, ntps, steps_dir)
+    """Wrap the run_pipeline function to obtain extraction result from the states."""
+    _validate_pipeline(pipeline)
 
-    for state in all_states:
+    pipeline = copy(pipeline)
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
+    state = {}
+    data = []
+
+    for tp in range(ntps):
+        state = pipeline_step(pipeline, state, steps_dir=steps_dir)
         for step_name in pipeline["steps"]:
             if step_name.startswith("ext"):
-                table = format_extraction(state["data"][step_name][-1])
-                if len(table):  # Cover case whence measurements are empty
-                    table = table.append_column(
-                        "object",
-                        pa.array([step_name.split("_")[-1]] * len(table), pa.string()),
-                    )
-                    table = table.append_column(
-                        "tp",
-                        pa.array([tp] * len(table), pa.uint8()),
-                    )
-                    data.append(table)
+                table = parse_extraction(state, step_name, tp)
+                data.append(table)
 
-    extracted_fov = None
+    if len(data):
         extracted_fov = pa.concat_tables(data)
+    else:
+        extracted_fov = None
+        print("Warning: Result is empty")
     return extracted_fov
+
+
+def parse_extraction(state: dict[str,], step_name: str, tp: int) -> None:
+    """
+    Parse the extraction results from the state dictionary
+    """
+    table = format_extraction(state["data"][step_name][-1])
+    if len(table):  # Cover case whence measurements are empty
+        table = table.append_column(
+            "object",
+            pa.array([step_name.split("_")[-1]] * len(table), pa.string()),
+        )
+        table = table.append_column(
+            "tp",
+            pa.array([tp] * len(table), pa.uint8()),
+        )
 
 
 def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
