@@ -75,12 +75,28 @@ class BridgeOmero:
 
     def __exit__(self, exc_type, exc_value, traceback):
         """For Python's with statement."""
+        self.destroy_gate()
+        return False
+
+    def create_gate(self) -> bool:
+        """Connect to OMERO."""
+        self.conn = BlitzGateway(
+            host=self.host, username=self.username, passwd=self.password
+        )
+        connected = self.conn.connect()
+        if not connected:
+            raise ConnectionError(
+                f"Failed to connect to OMERO server at {self.host}."
+            )
+
+    def destroy_gate(self) -> bool:
+        """Disconnect from OMERO."""
         try:
             if self.conn and self.conn.isConnected():
                 self.conn.close()
         except Exception as e:
             print(f"Error while disconnecting from OMERO: {e}")
-        return False
+        return self.conn.isConnected()
 
     @property
     def ome_class(self):
@@ -102,20 +118,6 @@ class BridgeOmero:
             else:
                 raise ConnectionError("No Blitz connection or valid OMERO ID.")
         return self._ome_class
-
-    def create_gate(self) -> bool:
-        """Connect to OMERO."""
-        self.conn = BlitzGateway(
-            host=self.host, username=self.username, passwd=self.password
-        )
-        self.conn.connect()
-        self.conn.c.enableKeepAlive(60)
-        return self.conn.isConnected()
-
-    def destroy_gate(self) -> bool:
-        """Disconnect from OMERO."""
-        self.conn.close()
-        return self.conn.isConnected()
 
     @classmethod
     def server_info_from_h5(cls, filepath: t.Union[str, Path]):
@@ -372,20 +374,17 @@ class MinimalImage(Image):
             Specifies the host, username, and password as strings
         """
         super().__init__(image_id, **server_info)
-        success = self.create_gate()
-        if not success:
-            raise ConnectionError("Failed to connect to OMERO.")
 
     @property
     def data(self):
         """Get image data as a 5D dask array - TCXYZ."""
         try:
             return load_data_lazy(image=self.ome_class)
-        except ConnectionError as e:
-            print(f"Failed to fetch image from server: {e}")
+        except ConnectionError as ex:
+            print(f"Failed to fetch image from server: {ex}")
             # disconnect from OMERO
-            self.conn.connect(False)
-            raise e
+            self.destroy_gate()
+            raise ex
 
     def tiles(self, tile_slices, tps, channel_indices, zs):
         """Get tiles as dask arrays."""
