@@ -1,5 +1,6 @@
 #!/usr/bin/env jupyter
 """
+NOTE: This is deprecated in favour of global-based tracking.
 Wrappers for tracking implementations.
 """
 
