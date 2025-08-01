@@ -35,3 +35,10 @@ def transform_2d_to_3d(masks: np.array) -> (tuple[int], np.array):
     cell_labels = np.arange(1, masks.max())
     masks_3d = np.equal.outer(cell_labels, masks)
     return masks_3d
+
+
+def labels_from_masks(masks: np.ndarray):
+    """
+    Provides a consistent way to transform 2d masks to a list of labels.
+    """
+    return transform_2d_to_3d(masks)[0]
