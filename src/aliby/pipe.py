@@ -121,10 +121,8 @@ def pipeline_step(
                     step_name == "track" and kwd == "masks"
                 ):  # Only tracking segmentation masks require multiple time points
                     # Convert tp,tile,y,x to tile,tp,y,x for stitch tracking
-                    passed_data[kwd] = [
-                        [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
-                        for tile in range(len(passed_value[-1]))
-                    ]
+                    last_two_values = np.asarray(passed_value[-2:])
+                    passed_data[kwd] = np.swapaxes(last_two_values, 0, 1)
                 else:  # We only care about the last time point
                     last_value = passed_value[-1]
                     if isinstance(last_value, dict):  # Select a subfield of the data

@@ -21,8 +21,9 @@ def stitch_rois(
     Parameters
     ----------
     masks : list[list[np.ndarray]]
-        A list of numpy integer arrays representing the regions of interest. The fist nesting level is time (..., t-2, t-1)
-        and the second is tiles. The arrays are in a non-overlapping integer representation (i.e., skimage-like).
+        A list of numpy integer arrays representing the regions of interest. The outermost nesting level is time (..., t-2, t-1)
+        and the next one is tiles. The arrays are in a non-overlapping integer representation (i.e., skimage-like).
+
     track_info : list[list[int]], optional
         A list containing information about the tracker state (default is an empty list).
 
