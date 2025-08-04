@@ -6,6 +6,7 @@ https://cellpose.readthedocs.io/en/latest/models.html#full-built-in-models
 """
 
 import numpy as np
+from skimage.segmentation import relabel_sequential
 
 
 def dispatch_segmenter(kind: str, **kwargs) -> callable:
@@ -93,25 +94,17 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                 ndim = labels.ndim
                 if ndim == 3:  # Cellpose squeezes dims!
                     # TODO Check that this is the best way to project 3-D labels into 2D
-                    labels_redz = labels.max(axis=0)
+                    labels = labels.max(axis=0)
+
                     # Cover case where the reduction on z removes an entire item
-                    max_val = labels_redz.max()
-                    missing_ix = np.setdiff1d(
-                        np.arange(max_val),
-                        np.unique(labels_redz),
-                        assume_unique=True,
-                    )
-                    if len(missing_ix):
-                        for ix in missing_ix:
-                            labels_redz[labels_redz == max_val] = ix
-                            max_val = labels_redz.max()
+                    labels = relabel_sequential(labels)[0]
 
                 elif not 1 < ndim < 4:
                     raise Exception(
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
 
-                return [labels_redz]
+                return labels
 
     return segment
 
