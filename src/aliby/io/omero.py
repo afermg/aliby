@@ -91,12 +91,17 @@ class BridgeOmero:
 
     def destroy_gate(self) -> bool:
         """Disconnect from OMERO."""
+        if self.conn is None:
+            return True
         try:
-            if self.conn and self.conn.isConnected():
+            if self.conn.isConnected():
                 self.conn.close()
         except Exception as e:
             print(f"Error while disconnecting from OMERO: {e}")
-        return self.conn.isConnected()
+        finally:
+            # ensure connection is marked as disconnected
+            self.conn = None
+        return True
 
     @property
     def ome_class(self):
