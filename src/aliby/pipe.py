@@ -143,7 +143,12 @@ def pipeline_step(
         if len(steps_to_write) and not (tp % save_interval):
             if step_name in steps_to_write:
                 write_fn = dispatch_write_fn(step_name)
-                write_fn(step_result, steps_dir=steps_dir, tp=tp)
+                write_fn(
+                    step_result,
+                    steps_dir=steps_dir,
+                    step_identifier=step_name,
+                    tp=tp,
+                )
 
         # Update state
         # TODO replace this with a variable to adjust ntps in memory
@@ -197,6 +202,21 @@ def run_pipeline(
     return extracted_fov
 
 
+def run_pipeline_return_state(
+    pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
+) -> pa.lib.Table:
+    _validate_pipeline(pipeline)
+
+    pipeline = copy(pipeline)
+    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
+    state = {}
+
+    for _ in range(ntps):
+        state = pipeline_step(pipeline, state, steps_dir=steps_dir)
+
+    return state
+
+
 def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
     """
     Runs a pipeline and saves the result to a parquet file.
@@ -232,12 +252,20 @@ def dispatch_write_fn(
 ):
     match step_name:
         case s if s.startswith("segment"):
+            return write_ndarray
 
-            def write_masks(result, steps_dir: Path, tp: int):
-                steps_dir.mkdir(exist_ok=True, parents=True)
-                out_file = Path(steps_dir) / f"{step_name}_{tp:04d}.npz"
-                np.savez(out_file, np.array(result))
+        case s if s.startswith("tile"):
+            return write_ndarray
 
-            return write_masks
         case _:
             raise Exception(f"Writing {step_name} is not supported yet")
+
+
+def write_ndarray(result, steps_dir: Path, step_identifier: str or int, tp: int):
+    this_step_path = Path(steps_dir) / step_identifier
+    this_step_path.mkdir(exist_ok=True, parents=True)
+    if step_identifier == "tile":
+        step_identifier = "pixels"
+
+    out_file = this_step_path / f"{tp:04d}.npz"
+    np.savez(out_file, np.array(result))
