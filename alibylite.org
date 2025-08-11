@@ -4,7 +4,7 @@ The microscope visits multiple positions during an experiment. Each position may
 
 We divide all images into *tiles*, one per trap. Baby determines masks, mother-bud pairs, and tracking for each tile. We obtain data on individual cells first for each tile and then for each position for all time points: *cells* and *signal* provide this information for a position; *grouper* concatenates over all positions.
 
-All global parameters, such as possible fluorescence channels and pixel sizes, are stored in *global_settings*.
+All global parameters, such as possible fluorescence channels and pixel sizes, and default functions to apply to cells are stored in *global_settings*.
 
 * aliby/pipeline
 Runs the *tiler*, *baby*, and *extraction* steps of the pipeline, and then *postprocessing*.
@@ -31,10 +31,6 @@ Defines the standard functions, such as area and median, that we apply to pixels
 Determines properties of a tile's background.
 ** extraction/core/functions/distributors.py
 Collapses multiple z-sections to a 2D image.
-** extraction/core/functions/defaults.py
-Defines the standard fluorescence signals and metrics, like median, we extract in *exparams_from_meta*.
-** extraction/core/function/custom/localisation.py
-Defines more complex functions to apply to cells, such as *nuc_est_conv*, which estimates nuclear localisation of a fluorescent protein.
 
 * agora/bridge
 Interfaces with h5 files.
@@ -52,8 +48,6 @@ Signal applies picking and merging of cells using the choices made by *picker* a
 * postprocessor/core/postprocessing
 For one position, the *run* function performs picking, of appropriate cells, and merging, of tracklets, via *run_prepost* and then runs processes, such as the *buddings* and *bud_metric* functions, on signals, such as *volume*, to get new signals, such as *buddings* and *bud_volume*.
 
-*run_process* writes the results to an h5 file.
-
 The class *PostProcessorParameters* lists the obligatory processes we perform, such as running *buddings* and *bud_metric* on *area*.
 
 * postprocessor/core/reshapers/picker
@@ -65,10 +59,6 @@ Core code needed when *picker* uses Baby's lineage information to select mother-
 
 * postprocessor/grouper
 *concat_signal*: Concatenates signals from different h5 files - we have one per position - to generate dataframes for the entire experiment.
- uses either *concat_signal_ind* for independent signals or *concat_standard*.
-
-* aliby/utils/argo
-Gets information on the data available in an OMERO data base.
 
 * aliby/io/omero
 Contains functions to interact with OMERO and extract information on an *Image* corresponding to an OMERO image ID or a *Dataset* corresponding to an OMERO experiment ID.
