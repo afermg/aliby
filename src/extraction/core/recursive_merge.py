@@ -1,3 +1,6 @@
+"""Function to merge parameter dicts for Extraction."""
+
+
 def recursive_merge_extractor(dict1, dict2):
     """Merge two extractor trees."""
     for key, value in dict2.items():
