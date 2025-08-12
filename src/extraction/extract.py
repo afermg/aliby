@@ -262,6 +262,7 @@ def extract_tree(
             )
     else:
         binmasks = [transform_2d_to_3d(mask) for mask in masks]
+        # These should be a list of binary masks
         result = [
             measure_mono(
                 tileid_x,

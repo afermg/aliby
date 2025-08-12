@@ -153,7 +153,8 @@ def pipeline_step(
         # Update state
         # TODO replace this with a variable to adjust ntps in memory
         state["data"][step_name].append(step_result)
-        state["data"][step_name] = state["data"][step_name][-5:]
+        # We carry on all the states, as they are necessary for processing later
+        # state["data"][step_name] = state["data"][step_name][-5:]
 
         # Update or initialise objects
         if step_name not in state["fn"]:
@@ -266,6 +267,10 @@ def write_ndarray(result, steps_dir: Path, step_identifier: str or int, tp: int)
     this_step_path.mkdir(exist_ok=True, parents=True)
     if step_identifier == "tile":
         step_identifier = "pixels"
+        result = result["pixels"]
 
     out_file = this_step_path / f"{tp:04d}.npz"
+    assert isinstance(result, np.ndarray), (
+        f"Output is {type(result)} instead of ndarray"
+    )
     np.savez(out_file, np.array(result))

@@ -64,18 +64,17 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
             from cellpose.models import CellposeModel
 
             # Meta parameters
-            model = kind
+            model_type = kind
             gpu = kwargs.pop("gpu", False)
             device = kwargs.pop("device", None)
+            # print(f"Running cellpose on device {device}")
 
-            argname = "model_type"
             # use custom models if fullpath is provided
-            if model.startswith("/"):
-                argname = "pretrained_model"
+            pretrained = {}
+            if model_type.startswith("/"):
+                pretrained["pretrained_model"] = model_type
             model = CellposeModel(
-                **{
-                    argname: model,
-                },
+                **pretrained,
                 gpu=gpu,
                 device=device,
             )
@@ -104,7 +103,7 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
 
-                return labels
+                return labels[np.newaxis]  # Add "tile" dimension
 
     return segment
 
