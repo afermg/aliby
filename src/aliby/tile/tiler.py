@@ -253,7 +253,16 @@ class Tiler(StepABC):
                 self.no_processed = drift_len
 
         # determine drift for this time point and update tile_locs.drifts
-        self.find_drift(tp)
+        if self.calculate_drift:
+            self.find_drift(tp)
+        else:
+            drift = [0.0, 0.0]
+            # store drift
+            if 0 < tp < len(self.tile_locs.drifts):
+                self.tile_locs.drifts[tp] = drift
+            else:
+                self.tile_locs.drifts.append(drift)
+
         # update no_processed
         self.no_processed = tp + 1
         # return result for writer
