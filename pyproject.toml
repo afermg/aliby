@@ -45,7 +45,7 @@ omero-py = ">=5.19.1"
 optional = true
 [tool.poetry.group.baby.dependencies]
 tensorflow = ">2.0,<=2.14"
-baby-seg = ">=0.30.7"
+baby-seg = ">=0.30.8"
 
 
 [tool.black]
