@@ -1,11 +1,14 @@
-#!/usr/bin/env python3
 """
-Dataset is a group of classes to manage multiple types of experiments:
+Dataset is a group of classes to manage multiple types of experiments.
+
+Includes
  - Remote experiments on an OMERO server (located in src/aliby/io/omero.py)
- - Local experiments in a multidimensional OME-TIFF image containing the metadata
- - Local experiments in a directory containing multiple positions in independent
-images with or without metadata
+ - Local experiments in a multidimensional OME-TIFF image containing the
+    metadata
+ - Local experiments in a directory containing multiple positions in
+    independent images with or without metadata
 """
+
 import os
 import shutil
 import time
@@ -21,7 +24,7 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     """
     Find paths to the data.
 
-    Connect to OMERO if data is remotely available.
+    Connect to OMERO if data is available remotely.
 
     Parameters
     ----------
