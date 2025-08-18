@@ -252,8 +252,11 @@ class Tiler(StepABC):
                 )
                 self.no_processed = drift_len
 
-        # determine drift for this time point and update tile_locs.drifts
+        if not hasattr(self, "calculate_drift"):
+            self.calculate_drift = False
+
         if self.calculate_drift:
+            # determine drift for this time point and update tile_locs.drifts
             self.find_drift(tp)
         else:
             drift = [0.0, 0.0]
