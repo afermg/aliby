@@ -75,7 +75,7 @@ def init_step(
             # Validate that we can contact the server-side
             # Setup also helps check that the remote server exists
             setup_fn, process_fn = dispatch_global_step(step_name)
-            print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
+            # print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
             setup_output = setup_fn(**parameters)
             print(f"NAHUAL: Remote process set up, returned {setup_output}.")
 
@@ -232,10 +232,10 @@ def run_pipeline_return_state(
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
-    for frame in range(ntps):
-        print(f"Processing frame {frame}")
+    for _ in range(ntps):
+        # print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
-        print(f"Finished frame {frame}")
+        # print(f"Finished frame {frame}")
 
     return state
 
