@@ -71,7 +71,7 @@ def init_step(
                 process_tree_masks, measure_fn=extract_tree_multi, tree=parameters
             )
             # Nahual steps (running server in a different process)
-        case s if s.starswith("nahual"):
+        case s if s.startswith("nahual"):
             # Validate that we can contact the server-side
             # Setup also helps check that the remote server exists
             setup_fn, process_fn = dispatch_global_step(step_name)
@@ -232,8 +232,10 @@ def run_pipeline_return_state(
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
-    for _ in range(ntps):
+    for frame in range(ntps):
+        print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
+        print(f"Finished frame {frame}")
 
     return state
 
@@ -271,17 +273,36 @@ def run_pipeline_and_post(
 
     # Run global processing steps (post-processing)
     post_results = {}
+
+    if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
+        return profiles, post_results
+
     for step_name, parameters in pipeline["global_steps"].items():
-        state["fn"] = init_step(step_name, parameters)
-        input_data = get_step_output(
-            state["data"], pipeline["global_passed_data"][step_name]
+        associated_data = [
+            x for x in pipeline["global_passed_data"] if x.startswith(step_name)
+        ]
+        assert len(associated_data), (
+            f"Incorrect pipeline: Missing information of which data to ingest for step {step_name}"
         )
-        post_results[step_name] = state["fn"](input_data)
+        for output_name in associated_data:
+            state["fn"] = init_step(step_name, parameters)
+
+            input_data = get_step_output(
+                state["data"], pipeline["global_passed_data"][output_name]
+            )
+            post_results[output_name] = state["fn"](input_data=input_data)
 
         # Save global steps into files (steps are saved as they go, not at the end)
         if step_name in pipeline["save"]:
             write_fn = dispatch_write_fn(step_name)
-            write_fn(post_results, out_dir, subpath=step_name, filename=fov)
+            for out_dirname in post_results:
+                if out_dirname.startswith(step_name):
+                    write_fn(
+                        post_results[out_dirname],
+                        out_dir / out_dirname,
+                        subpath=step_name,
+                        filename=fov,
+                    )
 
     return profiles, post_results
 
@@ -319,6 +340,7 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
 def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     # Isolate features for every time point
     # We assume that extraction steps start with "ext"
+    profiles = pyarrow.Table.from_pylist([])
     extraction_steps = [
         step_name for step_name in pipeline["steps"] if step_name.startswith("ext")
     ]
@@ -340,7 +362,8 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                 )
                 data.append(table)
 
-    profiles = pyarrow.concat_tables(data)
+    if len(data):
+        profiles = pyarrow.concat_tables(data)
 
     return profiles
 
@@ -350,13 +373,15 @@ def get_step_output(state_data: dict, fetchers: tuple[Callable | str]) -> numpy.
 
     fetchers: if a string, just fetch the entire output, if a function (callable) apply this to the output of every time point
 
+    Returns a
     """
     combined_outputs = []
     for fetcher in fetchers:
         if isinstance(fetcher, str):
-            aggregated_output = [x for x in state_data[fetcher]]
+            # HACK: This is assuming a monotile, we should instead output always assuming tiles
+            aggregated_output = [x[0] for x in state_data[fetcher]]
         elif isinstance(fetcher, Callable):
-            aggregated_output = list(map(fetcher, state_data))
+            aggregated_output = fetcher(state_data)
         else:
             raise Exception(
                 f"Invalid type, expected Callable or string, got {type(fetcher)}"

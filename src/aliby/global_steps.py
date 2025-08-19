@@ -12,22 +12,22 @@ import pyarrow
 
 
 def nahual_trackastra_load_model(
-    address: str, parameters: dict[str, str]
+    parameters: dict[str, str], address: str
 ) -> dict[str, str]:
     model_info = tr.load_model(parameters, address=address)
     return model_info
 
 
 def nahual_trackastra_process_data(
-    address: str, input_data: numpy.ndarray
+    input_data: numpy.ndarray, address: str
 ) -> pyarrow.Table:
     """
-    Send data and receive the response, finally convert the resultant
+    Expand the list  of data and receive the response, finally convert the resultant
     dictionaries into a pyarrow table.
     """
-    tracking = tr.process_data(input_data, address=address)
+    tracking = tr.process_data(data=input_data, address=address)
 
-    tracks = pyarrow.Table.from_pylist(tracking)
+    tracks = pyarrow.Table.from_pydict(tracking)
 
     return tracks
 

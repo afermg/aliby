@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pyarrow
+from pyarrow.parquet import write_table
 
 
 def dispatch_write_fn(
@@ -13,6 +14,9 @@ def dispatch_write_fn(
 
         case s if s.startswith("tile"):
             return write_ndarray
+
+        case s if s.startswith("nahual_trackastra"):
+            return write_parquet
 
         case _:
             raise Exception(f"Writing {step_name} is not supported yet")
@@ -51,4 +55,4 @@ def write_parquet(
     this_outdir.mkdir(exist_ok=True, parents=True)
     out_filepath = this_outdir / f"{filename}.parquet"
 
-    pyarrow.parquet.write_table(result, out_filepath)
+    write_table(result, out_filepath)
