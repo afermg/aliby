@@ -4,16 +4,18 @@
 New and simpler pipeline that uses dictionaries as parameters and to define variable and between-step method execution.
 """
 
-from copy import copy
+from copy import deepcopy
 from functools import partial
 from itertools import cycle
 from pathlib import Path
+from typing import Callable
 
-import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
+import numpy
+import pyarrow
 
+from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
+from aliby.io.write import dispatch_write_fn
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.track.dispatch import dispatch_tracker
@@ -28,14 +30,19 @@ from extraction.extract import (
 def init_step(
     step_name: str,
     parameters: dict[str, str or callable or int or dict],
-    other_steps: callable,
+    other_steps: callable = None,
 ) -> callable:
     """
     Set up the parameters for any step. This mostly includes dispatching a specific step subtype.
+
+    If we need to perform some validation before commiting to a pipeline (e.g., checking the
+    servers for a nahual process), this is the place to do it.
     """
     match step_name:
         case "tile":
-            image_kwargs = parameters["image_kwargs"]
+            image_kwargs = parameters[
+                "image_kwargs"
+            ]  # TODO replace with pop() and simplify next line
             tiler_kwargs = {k: v for k, v in parameters.items() if k != "image_kwargs"}
             image_type = dispatch_image(source=image_kwargs["source"])
             image = image_type(**image_kwargs)
@@ -63,6 +70,17 @@ def init_step(
             step = partial(
                 process_tree_masks, measure_fn=extract_tree_multi, tree=parameters
             )
+            # Nahual steps (running server in a different process)
+        case s if s.starswith("nahual"):
+            # Validate that we can contact the server-side
+            # Setup also helps check that the remote server exists
+            setup_fn, process_fn = dispatch_global_step(step_name)
+            print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
+            setup_output = setup_fn(**parameters)
+            print(f"NAHUAL: Remote process set up, returned {setup_output}.")
+
+            # For the final step we provide the address used for setting the remote up
+            step = partial(process_fn, address=parameters["address"])
         case _:
             raise Exception("Invalid step name")
 
@@ -146,7 +164,7 @@ def pipeline_step(
                 write_fn(
                     step_result,
                     steps_dir=steps_dir,
-                    step_identifier=step_name,
+                    subpath=step_name,
                     tp=tp,
                 )
 
@@ -172,13 +190,12 @@ def _validate_pipeline(pipeline: dict):
     assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
 
 
-# TODO pass sorted images instead of wildcard
 def run_pipeline(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
-) -> pa.lib.Table:
+) -> pyarrow.Table:
     _validate_pipeline(pipeline)
 
-    pipeline = copy(pipeline)
+    pipeline = deepcopy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     data = []
     state = {}
@@ -191,24 +208,27 @@ def run_pipeline(
                 if len(table):  # Cover case whence measurements are empty
                     table = table.append_column(
                         "object",
-                        pa.array([step_name.split("_")[-1]] * len(table), pa.string()),
+                        pyarrow.array(
+                            [step_name.split("_")[-1]] * len(table), pyarrow.string()
+                        ),
                     )
                     table = table.append_column(
                         "tp",
-                        pa.array([tp] * len(table), pa.uint8()),
+                        pyarrow.array([tp] * len(table), pyarrow.uint8()),
                     )
                     data.append(table)
 
-    extracted_fov = pa.concat_tables(data)
+    extracted_fov = pyarrow.concat_tables(data)
+
     return extracted_fov
 
 
 def run_pipeline_return_state(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
-) -> pa.lib.Table:
+) -> dict:
     _validate_pipeline(pipeline)
 
-    pipeline = copy(pipeline)
+    pipeline = deepcopy(pipeline)
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
@@ -216,6 +236,54 @@ def run_pipeline_return_state(
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
 
     return state
+
+
+def run_pipeline_and_post(
+    pipeline: dict,
+    img_source: str or list[str],
+    ntps: int,
+    out_dir: Path = None,
+    fov: str = None,
+) -> tuple[pyarrow.Table, pyarrow.Table]:
+    """
+    Run a step-based pipeline and at the end run a series of post-processiong steps,
+    such as tracking of the whole time series.
+
+    Parameters
+    -----
+
+    Notes
+    -----
+    It returns the profiles in a tidy format
+    (i.e., the frame number or time point is its own column).
+
+    Assumptions:
+    - extraction fields start with 'ext', and then are followed by the object name (e.g., cyto, nuclei)
+    - The pipeline's output is nested in the following order: step -> time point -> tile.
+    """
+    steps_dir = out_dir / "steps" / fov
+
+    # Main processing loop
+    state = run_pipeline_return_state(pipeline, img_source, ntps, steps_dir=steps_dir)
+
+    # Aggregate profiles from the state output
+    profiles = get_profiles_from_state(state, pipeline)
+
+    # Run global processing steps (post-processing)
+    post_results = {}
+    for step_name, parameters in pipeline["global_steps"].items():
+        state["fn"] = init_step(step_name, parameters)
+        input_data = get_step_output(
+            state["data"], pipeline["global_passed_data"][step_name]
+        )
+        post_results[step_name] = state["fn"](input_data)
+
+        # Save global steps into files (steps are saved as they go, not at the end)
+        if step_name in pipeline["save"]:
+            write_fn = dispatch_write_fn(step_name)
+            write_fn(post_results, out_dir, subpath=step_name, filename=fov)
+
+    return profiles, post_results
 
 
 def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
@@ -243,34 +311,56 @@ def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None
         result = run_pipeline(**kwargs)
         out_dir = Path(out_file).parent
         out_dir.mkdir(parents=True, exist_ok=True)
-        pq.write_table(result, out_file)
+        pyarrow.parquet.write_table(result, out_file)
 
     return result
 
 
-def dispatch_write_fn(
-    step_name: str,
-):
-    match step_name:
-        case s if s.startswith("segment"):
-            return write_ndarray
+def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
+    # Isolate features for every time point
+    # We assume that extraction steps start with "ext"
+    extraction_steps = [
+        step_name for step_name in pipeline["steps"] if step_name.startswith("ext")
+    ]
+    data = []
+    for ext_step in extraction_steps:
+        # Data is stored in the following order: step -> time points -> tiles
+        for tp, ext_output in enumerate(state["data"][ext_step]):
+            table: pyarrow.PyTable = format_extraction(ext_output)
+            if len(table):  # Cover case whence measurements are empty
+                table = table.append_column(
+                    "object",
+                    pyarrow.array(
+                        [ext_step.split("_")[-1]] * len(table), pyarrow.string()
+                    ),
+                )
+                table = table.append_column(
+                    "tp",
+                    pyarrow.array([tp] * len(table), pyarrow.uint8()),
+                )
+                data.append(table)
 
-        case s if s.startswith("tile"):
-            return write_ndarray
+    profiles = pyarrow.concat_tables(data)
 
-        case _:
-            raise Exception(f"Writing {step_name} is not supported yet")
+    return profiles
 
 
-def write_ndarray(result, steps_dir: Path, step_identifier: str or int, tp: int):
-    this_step_path = Path(steps_dir) / step_identifier
-    this_step_path.mkdir(exist_ok=True, parents=True)
-    if step_identifier == "tile":
-        step_identifier = "pixels"
-        result = result["pixels"]
+def get_step_output(state_data: dict, fetchers: tuple[Callable | str]) -> numpy.ndarray:
+    """Dynamic fetcher for other outputs. It aggregates data over time points.
 
-    out_file = this_step_path / f"{tp:04d}.npz"
-    assert isinstance(result, np.ndarray), (
-        f"Output is {type(result)} instead of ndarray"
-    )
-    np.savez(out_file, np.array(result))
+    fetchers: if a string, just fetch the entire output, if a function (callable) apply this to the output of every time point
+
+    """
+    combined_outputs = []
+    for fetcher in fetchers:
+        if isinstance(fetcher, str):
+            aggregated_output = [x for x in state_data[fetcher]]
+        elif isinstance(fetcher, Callable):
+            aggregated_output = list(map(fetcher, state_data))
+        else:
+            raise Exception(
+                f"Invalid type, expected Callable or string, got {type(fetcher)}"
+            )
+        combined_outputs.append(aggregated_output)
+
+    return numpy.asarray(combined_outputs)
