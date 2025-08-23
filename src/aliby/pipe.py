@@ -299,8 +299,8 @@ def run_pipeline_and_post(
                 if out_dirname.startswith(step_name):
                     write_fn(
                         post_results[out_dirname],
-                        out_dir / out_dirname,
-                        subpath=step_name,
+                        out_dir,
+                        subpath=out_dirname,
                         filename=fov,
                     )
 
