@@ -74,13 +74,15 @@ def init_step(
         case s if s.startswith("nahual"):
             # Validate that we can contact the server-side
             # Setup also helps check that the remote server exists
-            setup_fn, process_fn = dispatch_global_step(step_name)
+
+            address = parameters["address"]  # Must have!
+            setup, process = dispatch_global_step(step_name)
             # print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
-            setup_output = setup_fn(**parameters)
+            setup_output = setup(parameters["parameters"], address=address)
             print(f"NAHUAL: Remote process set up, returned {setup_output}.")
 
             # For the final step we provide the address used for setting the remote up
-            step = partial(process_fn, address=parameters["address"])
+            step = partial(process, address=address)
         case _:
             raise Exception("Invalid step name")
 
