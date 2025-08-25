@@ -307,6 +307,9 @@ def extract_tree_multi(
     list
         A list of extracted features from the tree branches.
     """
+    assert isinstance(masks, list) or masks.ndim >= 3, (
+        "Masks dimensions < 2. It should include batch/tile dimension."
+    )
     if threaded:
         with ThreadPoolExecutor() as ex:
             binmasks = list(x for x in ex.map(transform_2d_to_3d, masks))

@@ -61,6 +61,7 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             return segment
 
         case "nahual_baby":
+            # TODO update this with setup_process_dispatch
             from nahual.client.baby import load_model, process_data
 
             # Have a sensible set of defaults
@@ -104,9 +105,9 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
 
             # Meta parameters
             model_type = kind
-            gpu = kwargs.pop("gpu", False)
-            device = kwargs.pop("device", None)
-            # print(f"Running cellpose on device {device}")
+            setup_params = kwargs.get("setup_params", {})
+            gpu = setup_params.pop("gpu", True)
+            device = setup_params.pop("device", None)
 
             # use custom models if fullpath is provided
             pretrained = {}
