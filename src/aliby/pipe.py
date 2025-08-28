@@ -53,9 +53,7 @@ def init_step(
                 parameters["segmenter_kwargs"]["kind"] == "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**{
-                **parameters["segmenter_kwargs"],
-            })
+            step = dispatch_segmenter(**{**parameters["segmenter_kwargs"]})
         case "track":
             if (
                 parameters["kind"] == "baby"
@@ -248,6 +246,7 @@ def run_pipeline_and_post(
     ntps: int,
     out_dir: Path = None,
     fov: str = None,
+    overwrite: bool = True,
 ) -> tuple[pyarrow.Table, pyarrow.Table]:
     """
     Run a step-based pipeline and at the end run a series of post-processiong steps,
@@ -266,33 +265,45 @@ def run_pipeline_and_post(
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
     steps_dir = out_dir / "steps" / fov
+    profiles_file = out_dir / "profiles" / f"{fov}.parquet"
+
+    profiles = None
+    post_results = None
 
     # Main processing loop
-    state = run_pipeline_return_state(pipeline, img_source, ntps, steps_dir=steps_dir)
-
-    # Aggregate profiles from the state output
-    profiles = get_profiles_from_state(state, pipeline)
-
-    # Run global processing steps (post-processing)
-    post_results = {}
-
-    if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
-        return profiles, post_results
-
-    for step_name, parameters in pipeline["global_steps"].items():
-        associated_data = [
-            x for x in pipeline["global_passed_data"] if x.startswith(step_name)
-        ]
-        assert len(associated_data), (
-            f"Incorrect pipeline: Missing information of which data to ingest for step {step_name}"
+    if overwrite or not profiles_file.exists():
+        print(f"Processing {fov}")
+        state = run_pipeline_return_state(
+            pipeline, img_source, ntps, steps_dir=steps_dir
         )
-        for output_name in associated_data:
-            state["fn"] = init_step(step_name, parameters)
 
-            input_data = get_step_output(
-                state["data"], pipeline["global_passed_data"][output_name]
+        # Aggregate profiles from the state output
+        profiles = get_profiles_from_state(state, pipeline)
+
+        # Save files
+        profiles_file.parent.mkdir(parents=True, exist_ok=True)
+        pyarrow.parquet.write_table(profiles, profiles_file)
+
+        # Run global processing steps (post-processing)
+        post_results = {}
+
+        if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
+            return profiles, post_results
+
+        for step_name, parameters in pipeline["global_steps"].items():
+            associated_data = [
+                x for x in pipeline["global_passed_data"] if x.startswith(step_name)
+            ]
+            assert len(associated_data), (
+                f"Incorrect pipeline: Missing information of which data to ingest for step {step_name}"
             )
-            post_results[output_name] = state["fn"](input_data=input_data)
+            for output_name in associated_data:
+                state["fn"] = init_step(step_name, parameters)
+
+                input_data = get_step_output(
+                    state["data"], pipeline["global_passed_data"][output_name]
+                )
+                post_results[output_name] = state["fn"](input_data=input_data)
 
         # Save global steps into files (steps are saved as they go, not at the end)
         if step_name in pipeline["save"]:
@@ -305,38 +316,40 @@ def run_pipeline_and_post(
                         subpath=out_dirname,
                         filename=fov,
                     )
+    else:
+        print(f"Skipping {fov}, as it exists")
 
     return profiles, post_results
 
 
-def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
-    """
-    Runs a pipeline and saves the result to a parquet file.
+# def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
+#     """
+#     Runs a pipeline and saves the result to a parquet file.
 
-    Parameters
-    ----------
-    base_pipeline : dict
-        The base pipeline configuration.
-    img_source : str or list[str]
-        Input files for the pipeline. It can be a list of files
-    or an expression with a wildcard.
-    out_file : str or Path
-        Output file path for the result.
+#     Parameters
+#     ----------
+#     base_pipeline : dict
+#         The base pipeline configuration.
+#     img_source : str or list[str]
+#         Input files for the pipeline. It can be a list of files
+#     or an expression with a wildcard.
+#     out_file : str or Path
+#         Output file path for the result.
 
-    Returns
-    -------
-    result
-        The result of running the pipeline.
-    """
-    print(f"Running {out_file}")
-    result = None
-    if overwrite or not Path(out_file).exists():
-        result = run_pipeline(**kwargs)
-        out_dir = Path(out_file).parent
-        out_dir.mkdir(parents=True, exist_ok=True)
-        pyarrow.parquet.write_table(result, out_file)
+#     Returns
+#     -------
+#     result
+#         The result of running the pipeline.
+#     """
+#     print(f"Running {out_file}")
+#     result = None
+#     if overwrite or not Path(out_file).exists():
+#         result = run_pipeline(**kwargs)
+#         out_dir = Path(out_file).parent
+#         out_dir.mkdir(parents=True, exist_ok=True)
+#         pyarrow.parquet.write_table(result, out_file)
 
-    return result
+#     return result
 
 
 def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
