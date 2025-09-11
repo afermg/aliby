@@ -190,39 +190,6 @@ def _validate_pipeline(pipeline: dict):
     assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
 
 
-def run_pipeline(
-    pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
-) -> pyarrow.Table:
-    _validate_pipeline(pipeline)
-
-    pipeline = deepcopy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
-    data = []
-    state = {}
-
-    for tp in range(ntps):
-        state = pipeline_step(pipeline, state, steps_dir=steps_dir)
-        for step_name in pipeline["steps"]:
-            if step_name.startswith("ext"):
-                table = format_extraction(state["data"][step_name][-1])
-                if len(table):  # Cover case whence measurements are empty
-                    table = table.append_column(
-                        "object",
-                        pyarrow.array(
-                            [step_name.split("_")[-1]] * len(table), pyarrow.string()
-                        ),
-                    )
-                    table = table.append_column(
-                        "tp",
-                        pyarrow.array([tp] * len(table), pyarrow.uint8()),
-                    )
-                    data.append(table)
-
-    extracted_fov = pyarrow.concat_tables(data)
-
-    return extracted_fov
-
-
 def run_pipeline_return_state(
     pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
 ) -> dict:
@@ -244,7 +211,7 @@ def run_pipeline_and_post(
     pipeline: dict,
     img_source: str or list[str],
     ntps: int,
-    out_dir: Path = None,
+    output_path: Path = None,
     fov: str = None,
     overwrite: bool = True,
 ) -> tuple[pyarrow.Table, pyarrow.Table]:
@@ -264,15 +231,15 @@ def run_pipeline_and_post(
     - extraction fields start with 'ext', and then are followed by the object name (e.g., cyto, nuclei)
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
-    steps_dir = out_dir / "steps" / fov
-    profiles_file = out_dir / "profiles" / f"{fov}.parquet"
+    steps_dir = output_path / "steps" / fov
+    profiles_file = output_path / "profiles" / f"{fov}.parquet"
 
     profiles = None
     post_results = None
 
     # Main processing loop
     if overwrite or not profiles_file.exists():
-        print(f"Processing {fov}")
+        # print(f"Processing {fov}")
         state = run_pipeline_return_state(
             pipeline, img_source, ntps, steps_dir=steps_dir
         )
@@ -308,48 +275,18 @@ def run_pipeline_and_post(
         # Save global steps into files (steps are saved as they go, not at the end)
         if step_name in pipeline["save"]:
             write_fn = dispatch_write_fn(step_name)
-            for out_dirname in post_results:
-                if out_dirname.startswith(step_name):
+            for output_pathname in post_results:
+                if output_pathname.startswith(step_name):
                     write_fn(
-                        post_results[out_dirname],
-                        out_dir,
-                        subpath=out_dirname,
+                        post_results[output_pathname],
+                        output_path,
+                        subpath=output_pathname,
                         filename=fov,
                     )
     else:
         print(f"Skipping {fov}, as it exists")
 
     return profiles, post_results
-
-
-# def run_pipeline_save(out_file: Path, overwrite: bool = False, **kwargs) -> None:
-#     """
-#     Runs a pipeline and saves the result to a parquet file.
-
-#     Parameters
-#     ----------
-#     base_pipeline : dict
-#         The base pipeline configuration.
-#     img_source : str or list[str]
-#         Input files for the pipeline. It can be a list of files
-#     or an expression with a wildcard.
-#     out_file : str or Path
-#         Output file path for the result.
-
-#     Returns
-#     -------
-#     result
-#         The result of running the pipeline.
-#     """
-#     print(f"Running {out_file}")
-#     result = None
-#     if overwrite or not Path(out_file).exists():
-#         result = run_pipeline(**kwargs)
-#         out_dir = Path(out_file).parent
-#         out_dir.mkdir(parents=True, exist_ok=True)
-#         pyarrow.parquet.write_table(result, out_file)
-
-#     return result
 
 
 def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:

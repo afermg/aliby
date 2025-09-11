@@ -93,7 +93,8 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             setup, process = dispatch_setup_process(tool)
 
             setup_params = kwargs.get("setup_params", {})
-            setup_params = kwargs.get("eval_params", {})
+            # eval_params = kwargs.get("eval_params", {})
+
             info = setup(setup_params, address=address)
             print(f"Cellpose via nahual set up. Remote returned {info}")
 

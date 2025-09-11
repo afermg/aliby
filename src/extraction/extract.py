@@ -98,8 +98,6 @@ def measure(
     result : np.ndarray
         Result of applying the metric.
     """
-    # result = np.ndarray([])
-    # if len(mask):
     if pixels is not None:
         pixels = reduce_z(pixels, reduction)
     result = metric(mask, pixels)
