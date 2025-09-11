@@ -13,12 +13,17 @@ from nahual.process import dispatch_setup_process
 
 
 def nahual_trackastra_process_format(
-    input_data: numpy.ndarray, address: str, process: Callable
+    # input_data: numpy.ndarray, address: str, process: Callable
+    input_data: numpy.ndarray,
+    address: str,
+    process: Callable,
 ) -> pyarrow.Table:
     """
     Expand the list  of data and receive the response, finally convert the resultant
     dictionaries into a pyarrow table.
     """
+    # HACK to parse the outputs of tiler
+
     tracking = process(data=input_data, address=address)
 
     tracks = pyarrow.Table.from_pydict(tracking)

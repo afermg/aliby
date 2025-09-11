@@ -32,7 +32,7 @@ def write_ndarray(result, steps_dir: Path, subpath: str or int, tp: int) -> None
         subpath = "pixels"
 
     out_file = this_step_path / f"{tp:04d}.npz"
-    np.savez(out_file, np.array(result))
+    np.savez_compressed(out_file, np.array(result))
 
 
 def write_parquet(

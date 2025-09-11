@@ -5,11 +5,13 @@ See all the available models at
 https://cellpose.readthedocs.io/en/latest/models.html#full-built-in-models
 """
 
+from functools import partial
+
 import numpy as np
 from skimage.segmentation import relabel_sequential
 
 
-def dispatch_segmenter(kind: str, **kwargs) -> callable:
+def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
     match kind:
         case "baby":
             import itertools
@@ -58,16 +60,55 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
 
             return segment
 
-        case _:  # One of the cellpose models
+        case "nahual_baby":
+            # TODO update this with setup_process_dispatch
+            from nahual.client.baby import load_model, process_data
+
+            # Have a sensible set of defaults
+            extra_args = dict((
+                ("refine_outlines", ("", "true")),
+                ("with_edgemasks", ("", "true")),
+            ))
+
+            modelset = kwargs.pop("modelset")
+            assert modelset is not None, f"Missing modelset on {kind} segmentation"
+            session_id = load_model(address, modelset)
+
+            for k, v in kwargs.items():
+                extra_args[k] = v
+
+            return partial(
+                process_data,
+                address=id,
+                session_id=session_id,
+                extra_args=extra_args.items(),
+            )
+        case "nahual_cellpose":
+            # Examples over at https://github.com/afermg/nahual/blob/master/examples/
+            # Cellpose via a nahual running server
+            from nahual.process import dispatch_setup_process
+
+            tool = kind.removeprefix("nahual_")
+
+            setup, process = dispatch_setup_process(tool)
+
+            setup_params = kwargs.get("setup_params", {})
+            # eval_params = kwargs.get("eval_params", {})
+
+            info = setup(setup_params, address=address)
+            print(f"Cellpose via nahual set up. Remote returned {info}")
+
+            return partial(process, address=address)
+        case "cellpose":  # One of the cellpose models
             # cellpose does without all the ABC stuff
             # It returns a function to segment
             from cellpose.models import CellposeModel
 
             # Meta parameters
             model_type = kind
-            gpu = kwargs.pop("gpu", False)
-            device = kwargs.pop("device", None)
-            # print(f"Running cellpose on device {device}")
+            setup_params = kwargs.get("setup_params", {})
+            gpu = setup_params.pop("gpu", True)
+            device = setup_params.pop("device", None)
 
             # use custom models if fullpath is provided
             pretrained = {}
@@ -104,6 +145,9 @@ def dispatch_segmenter(kind: str, **kwargs) -> callable:
                     )
 
                 return labels[np.newaxis]  # Add "tile" dimension
+
+        case _:
+            raise Exception(f"Invalid segmentation method {kind}")
 
     return segment
 
