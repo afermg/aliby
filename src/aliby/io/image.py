@@ -63,7 +63,7 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     elif isinstance(source, (str, Path)) and Path(source).is_file():
         instantiator = ImageLocalOME
     else:
-        raise Exception(f"Invalid data source at {source}.")
+        raise ValueError(f"Invalid data source at {source}.")
     return instantiator
 
 

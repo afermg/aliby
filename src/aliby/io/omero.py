@@ -364,33 +364,6 @@ class Image(BridgeOmero):
         meta["name"] = self.ome_class.getName()
         return meta
 
-
-class MinimalImage(Image):
-    """Load images from OMERO."""
-
-    def __init__(self, image_id, **server_info):
-        """
-        Connect to the OMERO server.
-
-        Parameters
-        ----------
-        image_id: integer
-        server_info: dictionary
-            Specifies the host, username, and password as strings
-        """
-        super().__init__(image_id, **server_info)
-
-    @property
-    def data(self):
-        """Get image data as a 5D dask array - TCXYZ."""
-        try:
-            return load_data_lazy(image=self.ome_class)
-        except ConnectionError as ex:
-            print(f"Failed to fetch image from server: {ex}")
-            # disconnect from OMERO
-            self.destroy_gate()
-            raise ex
-
     def tiles(self, tile_slices, tps, channel_indices, zs):
         """Get tiles as dask arrays."""
         tps, channel_indices, zs = (
