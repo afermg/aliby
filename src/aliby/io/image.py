@@ -119,6 +119,13 @@ def find_image_size_from_tiff_direc(directory_path):
             timepoints.add(int(match.group(1)))
             channels.add(match.group(2))
             z_sections.add(int(match.group(3)))
+        else:
+            raise ValueError(
+                f"{filepath.name} is named incorrectly.\n"
+                "Files should be named following myo1_t0001_GFP_z01.tiff: "
+                "for position myo1, the first time point, the GFP"
+                " channel, and the first z slice."
+            )
     return len(timepoints), len(channels), len(z_sections)
 
 
