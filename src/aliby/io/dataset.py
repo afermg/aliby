@@ -17,7 +17,7 @@ from itertools import groupby
 from pathlib import Path
 
 
-def dispatch_dataset(expt_id: int or str, is_zarr: bool = False, **kwargs):
+def dispatch_dataset(expt_id: int or str, is_zarr: bool = True, **kwargs):
     """
     Find paths to the data.
 
@@ -40,14 +40,19 @@ def dispatch_dataset(expt_id: int or str, is_zarr: bool = False, **kwargs):
 
         # data available on an Omero server
         return Dataset(expt_id, **kwargs)
-    elif isinstance(expt_id, str):
+    elif isinstance(expt_id, (str, Path)):
         # data available locally
         expt_path = Path(expt_id)
-        if expt_path.is_dir() and is_zarr:
-            # data in multiple folders, such as zarr
-            return DatasetZarr(expt_path)
-        else:
+        assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
+        if is_zarr == True:  # data in multiple folders, such as zarr
+            return DatasetZarr(expt_path, **kwargs)
+        else:  # It is a directory containing all images inside (possibly nested)
             return DatasetDir(expt_path, **kwargs)
+
+        raise Exception(f"Cannot dispatch dataset.. Invalid input path {expt_path}.")
+    raise Exception(
+        "Invalid experiment id, it must be the id of an omero server or a Path"
+    )
 
 
 class DatasetLocalABC(ABC):

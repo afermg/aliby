@@ -230,10 +230,10 @@ class ImageZarr(BaseLocalImage):
     skeletons/scripts/howto_omero/convert_clone_zarr_to_tiff.py
     """
 
-    def __init__(self, path: t.Union[str, Path], **kwargs):
+    def __init__(self, source: t.Union[str, Path], **kwargs):
         """Initialise using file name."""
-        super().__init__(path)
-        self.set_meta()
+        super().__init__(source)
+        # self.set_meta()
         try:
             self._img = zarr.open(self.path)
             self.add_size_to_meta()
@@ -246,9 +246,9 @@ class ImageZarr(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self.meta.update(
-            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
-        )
+        self.meta.update({
+            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
+        })
 
     @property
     def name(self):
@@ -295,9 +295,9 @@ class ImageMultiTiff(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self._meta.update(
-            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
-        )
+        self._meta.update({
+            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
+        })
 
     @property
     def name(self):

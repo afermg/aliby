@@ -1,5 +1,6 @@
 #!/usr/bin/env jupyter
 
+
 """
 New and simpler pipeline that uses dictionaries as parameters and to define variable and between-step method execution.
 """
@@ -146,17 +147,22 @@ def pipeline_step(
 
         # Run step
         args = []
-        if (
-            step_name.startswith("segment")
-            and parameters["segmenter_kwargs"]["kind"] != "baby"
-        ):  # Pass correct images from tiler
+        if step_name.startswith(
+            "segment"
+        ):  # Pass correct images from tiler, except for "baby" which does everything by itself
+            segment_kind = parameters["segmenter_kwargs"]["kind"]
+            # if segment_kind != "nahual_baby":
             source_step, method, param_name = passed_methods.get(step_name)
             args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+            if segment_kind.endswith(
+                "baby"
+            ):  # We will expand the args so this is necessary TODO Homogenize
+                args = (args,)
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
         # Save state
-        steps_to_write = pipeline.get("save")
+        steps_to_write = pipeline.get("save", [])
         save_interval = pipeline.get("save_interval", 0)
         if len(steps_to_write) and not (tp % save_interval):
             if step_name in steps_to_write:
@@ -167,7 +173,6 @@ def pipeline_step(
                     subpath=step_name,
                     tp=tp,
                 )
-
         # Update state
         # TODO replace this with a variable to adjust ntps in memory
         state["data"][step_name].append(step_result)
@@ -210,7 +215,6 @@ def run_pipeline_return_state(
 def run_pipeline_and_post(
     pipeline: dict,
     img_source: str or list[str],
-    ntps: int,
     output_path: Path = None,
     fov: str = None,
     overwrite: bool = True,
@@ -231,11 +235,15 @@ def run_pipeline_and_post(
     - extraction fields start with 'ext', and then are followed by the object name (e.g., cyto, nuclei)
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
+    if output_path is None:
+        output_path = Path(pipeline["io"]["output_path"])
+
     steps_dir = output_path / "steps" / fov
     profiles_file = output_path / "profiles" / f"{fov}.parquet"
 
     profiles = None
     post_results = None
+    ntps = pipeline["io"].get("ntps", 2)
 
     # Main processing loop
     if overwrite or not profiles_file.exists():

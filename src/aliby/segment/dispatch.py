@@ -65,10 +65,10 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             from nahual.client.baby import load_model, process_data
 
             # Have a sensible set of defaults
-            extra_args = dict((
-                ("refine_outlines", ("", "true")),
-                ("with_edgemasks", ("", "true")),
-            ))
+            extra_args = {
+                "refine_outlines": ("", "true"),
+                "with_edgemasks": ("", "true"),
+            }
 
             modelset = kwargs.pop("modelset")
             assert modelset is not None, f"Missing modelset on {kind} segmentation"
@@ -79,7 +79,7 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
 
             return partial(
                 process_data,
-                address=id,
+                address=address,
                 session_id=session_id,
                 extra_args=extra_args.items(),
             )
