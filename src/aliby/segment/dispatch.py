@@ -13,52 +13,52 @@ from skimage.segmentation import relabel_sequential
 
 def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
     match kind:
-        case "baby":
-            import itertools
-            import logging
-            import os
+        # case "baby":
+        #     import itertools
+        #     import logging
+        #     import os
 
-            from scipy.ndimage import binary_fill_holes
+        #     from scipy.ndimage import binary_fill_holes
 
-            from aliby.baby_client import BabyParameters, BabyRunner
+        #     from aliby.baby_client import BabyParameters, BabyRunner
 
-            # stop warnings from TensorFlow
-            os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-            logging.getLogger("tensorflow").setLevel(logging.ERROR)
+        #     # stop warnings from TensorFlow
+        #     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+        #     logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
-            initialise_tensorflow()
-            segmenter_cls, segmenter_params = BabyRunner, BabyParameters
+        #     initialise_tensorflow()
+        #     segmenter_cls, segmenter_params = BabyRunner, BabyParameters
 
-            assert "tiler" in kwargs, "A Tiler must be passed to baby seg"
-            tiler = kwargs["tiler"]  # Assume tiler is passed
-            baby_kwargs = {k: v for k, v in kwargs.items() if k != "tiler"}
-            segment = segmenter_cls.from_tiler(
-                segmenter_params.default(**baby_kwargs),
-                tiler=tiler,
-            )
+        #     assert "tiler" in kwargs, "A Tiler must be passed to baby seg"
+        #     tiler = kwargs["tiler"]  # Assume tiler is passed
+        #     baby_kwargs = {k: v for k, v in kwargs.items() if k != "tiler"}
+        #     segment = segmenter_cls.from_tiler(
+        #         segmenter_params.default(**baby_kwargs),
+        #         tiler=tiler,
+        #     )
 
-            # Monkey patch segmentation class so this returns masks only
-            # https://github.com/julianpietsch/baby/issues/5
+        #     # Monkey patch segmentation class so this returns masks only
+        #     # https://github.com/julianpietsch/baby/issues/5
 
-            def wrap_segmentation(tp, *args, **kwargs):
-                segmentation = segment._run_tp(tp, *args, **kwargs)
-                # refill edgemasks
-                masks = [binary_fill_holes(x) for x in segmentation["edgemasks"]]
-                # group by tile to match extractor input
-                masks_by_tile = {
-                    x[0]: np.stack([y[1] for y in x[1]])
-                    for x in itertools.groupby(
-                        zip(segmentation["trap"], masks), lambda x: x[0]
-                    )
-                }
-                return [
-                    masks_by_tile.get(i, np.array([]))
-                    for i in range(len(segment.tiler.tile_locs))
-                ]
+        #     def wrap_segmentation(tp, *args, **kwargs):
+        #         segmentation = segment._run_tp(tp, *args, **kwargs)
+        #         # refill edgemasks
+        #         masks = [binary_fill_holes(x) for x in segmentation["edgemasks"]]
+        #         # group by tile to match extractor input
+        #         masks_by_tile = {
+        #             x[0]: np.stack([y[1] for y in x[1]])
+        #             for x in itertools.groupby(
+        #                 zip(segmentation["trap"], masks), lambda x: x[0]
+        #             )
+        #         }
+        #         return [
+        #             masks_by_tile.get(i, np.array([]))
+        #             for i in range(len(segment.tiler.tile_locs))
+        #         ]
 
-            segment.run_tp = wrap_segmentation
+        #     segment.run_tp = wrap_segmentation
 
-            return segment
+        #     return segment
 
         case "nahual_baby":
             # TODO update this with setup_process_dispatch

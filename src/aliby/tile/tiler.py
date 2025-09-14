@@ -89,25 +89,26 @@ class Tiler(StepABC):
 
         params_d = parameters.to_dict()
 
-        if "position_name" in params_d:  # SwainLab Experiment
-            from aliby.tile.meta import find_channel_swainlab
+        # if "position_name" in params_d:  # SwainLab Experiment
+        # from aliby.tile.meta import find_channel_swainlab
 
-            self.channels = find_channel_swainlab(meta, params_d["position_name"])
-            self.position_name = params_d["position_name"]
-            # get reference channel - used for segmentation
-            if "zsections" in meta:
-                self.z_perchannel = {
-                    ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
-                }
-        else:  # Data with little metadata
-            self.channels = meta.get("channels", list(range(pixels.shape[-4])))
-            self.tile_size = self.tile_size or self.pixels.shape[-2:]
-            # get reference channel - used for segmentation
-            ref_channel_index = parameters.ref_channel
-            if isinstance(ref_channel_index, str):
-                ref_channel_index = self.channels.index(parameters.ref_channel)
-            self.ref_channel_index = ref_channel_index
-            self.tile_locs = tile_locations
+        # self.channels = find_channel_swainlab(meta, params_d["position_name"])
+        # self.position_name = params_d["position_name"]
+        # # get reference channel - used for segmentation
+        # if "zsections" in meta:
+        #     self.z_perchannel = {
+        #         ch: zsect for ch, zsect in zip(self.channels, meta["zsections"])
+        #     }
+        # else:  # Data with little metadata
+        # self.channels = meta.get("channels", list(range(pixels.shape[-4])))
+        self.channels = list(range(pixels.shape[-4]))
+        self.tile_size = self.tile_size or self.pixels.shape[-2:]
+        # get reference channel - used for segmentation
+        ref_channel_index = parameters.ref_channel
+        if isinstance(ref_channel_index, str):
+            ref_channel_index = self.channels.index(parameters.ref_channel)
+        self.ref_channel_index = ref_channel_index
+        self.tile_locs = tile_locations
 
     @classmethod
     def from_image(
@@ -188,8 +189,8 @@ class Tiler(StepABC):
         Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
         """
         tiles = []
+        breakpoint()
         full = self.load_image(tp, c)
-
         for tile in self.tile_locs:
             if drift:
                 # pad tile if necessary
@@ -271,7 +272,7 @@ class Tiler(StepABC):
         # return result for writer
         return {
             "drift": self.tile_locs.to_dict(tp),
-            "pixels": self.get_pixels(tp).compute(),
+            "pixels": self.get_pixels(tp),
         }
 
     def get_pixels(self, tp: int) -> da.array:
@@ -488,12 +489,13 @@ def set_areas_of_interest(
     """
     shape = pixels.shape
     # only tile if the image fits more than one non-overlaping tile
-    if tile_size and min(shape) // 2 > min(tile_size) // 2:
+    if tile_size is not None and min(shape) // 2 > min(tile_size) // 2:
         half_tile = min(tile_size) // 2
         # max_size is the minimum of the numbers of x and y pixels
         max_size = min(shape[-2:])
         # find the tiles
-        tile_locs = segment_traps(pixels, tile_size)
+        min_tile_size = min(tile_size)  # Use smaller end for trap segmentation
+        tile_locs = segment_traps(pixels, min_tile_size)
         # keep only tiles that are not near an edge
         tile_locs = [
             [x, y]
