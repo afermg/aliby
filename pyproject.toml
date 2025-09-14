@@ -19,9 +19,9 @@ dependencies = [
     "pooch>=1.8.2,<2",
     "scikit-learn>=1.2.2",
     "loguru>=0.7.3",
-    "nahual>=0.0.5",
     "pandas>=2.3.2",
     "centrosome>=1.3.1",
+    "nahual",
 ]
 
 [project.optional-dependencies]
@@ -81,4 +81,4 @@ ignore = ["E501"]
 unfixable = ["B"]
 
 [tool.uv.sources]
-nahual = { path = "../nahual" }
+nahual = { path = "../nahual", editable = true }
