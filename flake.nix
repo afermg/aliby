@@ -29,22 +29,23 @@
           config.cudaSupport = true;
         };
 
-        libList =
+        libList = [
+          # Add needed packages here
+          pkgs.gcc # Numpy
+          pkgs.stdenv.cc.cc
+          pkgs.libGL
+          pkgs.glib
+          pkgs.zlib
+        ]
+        ++ pkgs.lib.optionals pkgs.stdenv.isLinux (
+          with pkgs;
           [
-            # Add needed packages here
-            pkgs.stdenv.cc.cc
-            pkgs.libGL
-            pkgs.glib
-          ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux (
-            with pkgs;
-            [
-              cudatoolkit
+            # cudatoolkit
 
-              # This is required for most app that uses graphics api
-              # linuxPackages.nvidia_x11
-            ]
-          );
+            # This is required for most app that uses graphics api
+            # linuxPackages.nvidia_x11
+          ]
+        );
       in
       with pkgs;
       {
@@ -65,7 +66,8 @@
                 python311Packages.venvShellHook
                 # We # We now recommend to use uv for package management inside nix env
                 pkgs.uv
-              ] ++ libList;
+              ]
+              ++ libList;
               venvDir = "./.venv";
               postVenvCreation = ''
                 unset SOURCE_DATE_EPOCH
