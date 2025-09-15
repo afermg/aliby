@@ -12,6 +12,7 @@ into directories, with each time point and channel having its own image file.
 ImageDummy is a dummy class for silent failure testing.
 """
 
+import re
 import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
@@ -21,15 +22,9 @@ import dask.array as da
 import numpy as np
 import xmltodict
 import zarr
+from agora.io.metadata import parse_microscopy_logs
 from aliby.io.omero import Image
 from dask.array.image import imread
-
-try:
-    from importlib_resources import files
-except ModuleNotFoundError:
-    from importlib.resources import files
-
-from agora.io.metadata import parse_microscopy_logs
 from tifffile import TiffFile
 
 
@@ -68,7 +63,7 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     elif isinstance(source, (str, Path)) and Path(source).is_file():
         instantiator = ImageLocalOME
     else:
-        raise Exception(f"Invalid data source at {source}.")
+        raise ValueError(f"Invalid data source at {source}.")
     return instantiator
 
 
@@ -108,6 +103,32 @@ def filename_to_dict_indices(stem: str):
     }
 
 
+def find_image_size_from_tiff_direc(directory_path):
+    """
+    Find nos of timepoints, channels, z_sections from a tiff directory.
+
+    Assume files are named like position_t0001_GFP_z01.tiff.
+    """
+    timepoints = set()
+    channels = set()
+    z_sections = set()
+    pattern = r"_t(\d+)_([^_]+)_z(\d+)\.tiff$"
+    for filepath in Path(directory_path).glob("*.tiff"):
+        match = re.search(pattern, filepath.name)
+        if match:
+            timepoints.add(int(match.group(1)))
+            channels.add(match.group(2))
+            z_sections.add(int(match.group(3)))
+        else:
+            raise ValueError(
+                f"{filepath.name} is named incorrectly.\n"
+                "Files should be named following myo1_t0001_GFP_z01.tiff: "
+                "for position myo1, the first time point, the GFP"
+                " channel, and the first z slice."
+            )
+    return len(timepoints), len(channels), len(z_sections)
+
+
 class BaseLocalImage(ABC):
     """Set path and provide method for context management."""
 
@@ -115,7 +136,7 @@ class BaseLocalImage(ABC):
     default_dimorder = "tczyx"
 
     def __init__(self, path: t.Union[str, Path]):
-        # If directory, assume contents are naturally sorted
+        """Initiate with data directory."""
         self.path = Path(path)
 
     def __enter__(self):
@@ -155,13 +176,11 @@ class BaseLocalImage(ABC):
         return self.meta
 
     def set_meta(self):
-        """Load metadata using parser dispatch."""
-        logs_metadata = parse_microscopy_logs(self.path)
-        if logs_metadata is None:
+        """Load metadata from microscopy logs."""
+        self.meta = parse_microscopy_logs(self.path)
+        if self.meta is None:
             # try to deduce metadata
             self.meta = files_to_image_sizes(self.path)
-        else:
-            self.meta = logs_metadata
 
     @abstractmethod
     def get_data_lazy(self) -> da.Array:
@@ -183,9 +202,8 @@ class ImageLocalOME(BaseLocalImage):
     """
     Local OMERO Image class.
 
-    This is a derivative Image class. It fetches an image from
-    OMEXML data format, in which a multidimensional tiff image
-    contains the metadata.
+    Fetch an image from OMEXML data format, in which a multidimensional
+    tiff image contains the metadata.
     """
 
     def __init__(self, path: str, dimorder=None, **kwargs):
@@ -223,10 +241,12 @@ class ImageLocalOME(BaseLocalImage):
 
     @property
     def name(self):
+        """Get name of experiment."""
         return self.meta["name"]
 
     @property
     def date(self):
+        """Get date of experiment."""
         date_str = [
             x
             for x in self.meta["StructuredAnnotations"]["TagAnnotation"]
@@ -280,70 +300,50 @@ class ImageLocalOME(BaseLocalImage):
 
 class ImageDir(BaseLocalImage):
     """
-    Standard image class for tiff files.
+    Read tiff files.
 
-    Image class for the case in which all images are split in one or
-    multiple folders with time-points and channels as independent files.
-    It inherits from BaseLocalImage so we only override methods that are critical.
+    Each position should has a separate directory and the files must
+    be named following the convention:
+       position_t0001_channel_z01.tiff
 
-    Assumptions:
-    - One folder per position.
-    - Images are flat.
-    - Channel, Time, z-stack and the others are determined by filenames.
-    - Provides Dimorder as it is set in the filenames, or expects order
+    We assume that the images are shaped Y times X.
+    The data is put in the order of TCZYX.
     """
 
     def __init__(self, path: t.Union[str, Path], **kwargs):
-        """Initialise using file name."""
+        """Initialise and define metadata."""
         super().__init__(path)
-        self.image_id = str(self.path.stem)
-        self.meta = files_to_image_sizes(self.path)
+        self.set_meta()
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
         img = imread(str(self.path / "*.tiff"))
-        # If extra channels, pick the first stack of the last dimensions
-        while len(img.shape) > 3:
-            img = img[..., 0]
-        if self.meta:
-            self.meta["size_x"], self.meta["size_y"] = img.shape[-2:]
-            # Reshape using metadata
-            img = da.reshape(img, self.meta.values())
-            original_order = [
-                i[-1] for i in self.meta.keys() if i.startswith("size")
-            ]
-            # Swap axis to conform with normal order
-            target_order = [
-                self.default_dimorder.index(x) for x in original_order
-            ]
-            img = da.moveaxis(
-                img,
-                list(range(len(original_order))),
-                target_order,
+        if len(img.shape) != 3:
+            raise ValueError(
+                "The image loaded from tiff files is the wrong shape."
             )
-            pixels = self.rechunk_data(img)
-            return pixels
+        ntps, nch, nz = find_image_size_from_tiff_direc(self.path)
+        self.meta["size_y"], self.meta["size_x"] = img.shape[-2:]
+        # reshape assuming TCZYX
+        img = da.reshape(
+            img, (ntps, nch, nz, self.meta["size_y"], self.meta["size_x"])
+        )
+        pixels = self.rechunk_data(img)
+        return pixels
 
     @property
     def name(self):
-        """Return name of image directory."""
+        """Return the file name without its suffix."""
         return self.path.stem
 
     @property
     def dimorder(self):
-        # Assumes only dimensions start with "size"
-        return [
-            k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")
-        ]
+        """Assume the default order for tiff files."""
+        return "TCZYX"
 
 
 class ImageZarr(BaseLocalImage):
-    """
-    Read zarr compressed files.
-
-    These files are generated by the script
-    skeletons/scripts/howto_omero/convert_clone_zarr_to_tiff.py
-    """
+    """Read zarr compressed files."""
 
     def __init__(self, path: t.Union[str, Path], **kwargs):
         """Initialise using file name."""

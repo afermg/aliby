@@ -43,24 +43,30 @@ def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:
         File containing metadata or folder containing naming conventions.
     """
     filedir = Path(filedir)
-    if filedir.is_file() or str(filedir).endswith(".zarr"):
+    if (
+        filedir.is_file()
+        or str(filedir).endswith(".zarr")
+        or any(filedir.glob("*.tiff"))
+    ):
         # log file is in parent directory
         filedir = filedir.parent
-    filepath = find_file(filedir, "*.log")
-    if filepath:
-        # log files ending in .log
-        full_meta = parse_swainlab_logs(filepath)
-    else:
-        # legacy log files ending in .txt
-        full_meta = metadata_legacy.parse_legacy_logs(filedir)
+    for suffix in ["*.log", "*.txt"]:
+        filepath = find_metafile(filedir, suffix)
+        if filepath:
+            if suffix == "*.log":
+                # current log files ending in .log
+                full_meta = parse_swainlab_logs(filepath)
+                break
+            elif suffix == "*.txt":
+                # legacy log files ending in .txt
+                full_meta = metadata_legacy.parse_legacy_logs(filedir)
     if full_meta is None:
         raise Exception("No microscopy metadata found.")
-    else:
-        return full_meta
+    return full_meta
 
 
-def find_file(root_dir, regex):
-    """Find files in a directory using regex."""
+def find_metafile(root_dir, regex):
+    """Find metadata files in a directory using regex."""
     # ignore aliby.log files
     file = [
         f
@@ -71,7 +77,7 @@ def find_file(root_dir, regex):
         return None
     elif len(file) > 1:
         print(
-            "Warning:Metadata: More than one log file found."
+            "Warning: Metadata: More than one log file found."
             " Defaulting to first option."
         )
         return sorted(file)[0]

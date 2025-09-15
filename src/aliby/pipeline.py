@@ -300,10 +300,9 @@ class Pipeline(ProcessABC):
             position_ids = self.filter_positions(position_filter, position_ids)
         if not len(position_ids):
             raise ValueError("No images to segment.")
-        else:
-            print("Positions selected:")
-            for pos in position_ids:
-                print("\t" + pos.split(".")[0])
+        print("Positions selected:")
+        for pos in position_ids:
+            print("\t" + pos.split(".")[0])
         print(f"Number of CPU cores available: {multiprocessing.cpu_count()}")
         # create and run pipelines
         distributed = config["general"]["distributed"]

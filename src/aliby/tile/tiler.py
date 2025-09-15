@@ -315,7 +315,9 @@ class Tiler(StepABC):
         Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
         """
         tiles = []
+        # load full image
         image_all_z = self.load_image(tp, c)
+        # decompose into tiles
         for tile in self.tile_locs:
             # pad tile if necessary
             ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
