@@ -11,7 +11,7 @@ import numpy as np
 from agora.utils.indexing import find_1st_equal
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
-from scipy.sparse.base import isdense
+from scipy.sparse import issparse
 
 
 class Cells:
@@ -74,7 +74,7 @@ class Cells:
     @staticmethod
     def asdense(array: np.ndarray):
         """Convert sparse array to dense array."""
-        if not isdense(array):
+        if issparse(array):
             array = array.todense()
         return array
 
