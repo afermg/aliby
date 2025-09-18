@@ -92,8 +92,10 @@ class BabyRunner(StepABC):
         return cls(tiler, parameters)
 
     def get_data(self, tp):
-        """Get image and re-arrange axes."""
-        img_from_tiler = self.tiler.get_tp_data(tp, self.brightfield_channel)
+        """Get brightfield image and re-arrange axes."""
+        img_from_tiler = self.tiler.get_tp_data_for_one_channel(
+            tp, self.brightfield_channel
+        )
         # move z axis to the last axis; Baby expects (n, x, y, z)
         img = np.moveaxis(img_from_tiler, 1, destination=-1)
         return img

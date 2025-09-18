@@ -192,14 +192,14 @@ tests-mypy = ["mypy (>=1.11.1) ; platform_python_implementation == \"CPython\" a
 
 [[package]]
 name = "baby-seg"
-version = "0.30.7"
+version = "0.30.8"
 description = "Birth Annotator for Budding Yeast"
 optional = false
 python-versions = ">=3.6"
 groups = ["baby"]
 files = [
-    {file = "baby_seg-0.30.7-py3-none-any.whl", hash = "sha256:2d3de5fe82a84dd733ca49268a1c36c445adea2a5526a18c916f814acf8b3f6b"},
-    {file = "baby_seg-0.30.7.tar.gz", hash = "sha256:aa54324a64581fe0faf53114c65db4cddef339efaa18bd152dc84c587ffe53af"},
+    {file = "baby_seg-0.30.8-py3-none-any.whl", hash = "sha256:5709cb0352e3e925bcf191ac3d10fba3361a157f4e92c079ff51ae4ccda4e642"},
+    {file = "baby_seg-0.30.8.tar.gz", hash = "sha256:387e556fee88ff828d3882ffed32034db5e5f1eba73efea94f872c63ec97173e"},
 ]
 
 [package.dependencies]
@@ -3489,29 +3489,30 @@ propcache = ">=0.2.0"
 
 [[package]]
 name = "zarr"
-version = "3.0.5"
+version = "3.1.2"
 description = "An implementation of chunked, compressed, N-dimensional arrays for Python"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = [
-    {file = "zarr-3.0.5-py3-none-any.whl", hash = "sha256:e56f8cf1f8105a118a9cdadb78f3b44363b9c67f326a569d79271a1f1cb338e1"},
-    {file = "zarr-3.0.5.tar.gz", hash = "sha256:4ac0a09d66875d398ab53c95fd4bddca2f3d757a04454831fc2d54bfbafcb7e5"},
+    {file = "zarr-3.1.2-py3-none-any.whl", hash = "sha256:c3e180f53ee0ef91b86f7feff6f9dd381ddd1b512d1a46580530966a493387b6"},
+    {file = "zarr-3.1.2.tar.gz", hash = "sha256:688e4eb79045c110128cd16f301f2f58fa19507b1803dcbea0ea894e66e06274"},
 ]
 
 [package.dependencies]
 donfig = ">=0.8"
 numcodecs = {version = ">=0.14", extras = ["crc32c"]}
-numpy = ">=1.25"
+numpy = ">=1.26"
 packaging = ">=22.0"
 typing-extensions = ">=4.9"
 
 [package.extras]
-docs = ["astroid (<4)", "numcodecs[msgpack]", "numpydoc", "pydata-sphinx-theme", "rich", "s3fs", "sphinx (==8.1.3)", "sphinx-autoapi (==3.4.0)", "sphinx-autobuild (>=2021.3.14)", "sphinx-copybutton", "sphinx-design", "sphinx-issues", "sphinx-reredirects", "towncrier"]
+docs = ["astroid (<4)", "numcodecs[msgpack]", "numpydoc", "pydata-sphinx-theme", "pytest", "rich", "s3fs (>=2023.10.0)", "sphinx (==8.1.3)", "sphinx-autoapi (==3.4.0)", "sphinx-autobuild (>=2021.3.14)", "sphinx-copybutton", "sphinx-design", "sphinx-issues", "sphinx-reredirects", "towncrier"]
 gpu = ["cupy-cuda12x"]
 optional = ["rich", "universal-pathlib"]
-remote = ["fsspec (>=2023.10.0)"]
-test = ["botocore", "coverage", "fsspec (>=2023.10.0)", "hypothesis", "moto[s3,server]", "mypy", "pytest", "pytest-accept", "pytest-asyncio", "pytest-cov", "requests", "rich", "s3fs", "universal-pathlib"]
+remote = ["fsspec (>=2023.10.0)", "obstore (>=0.5.1)"]
+remote-tests = ["botocore", "fsspec (>=2023.10.0)", "moto[s3,server]", "obstore (>=0.5.1)", "requests", "s3fs (>=2023.10.0)"]
+test = ["coverage (>=7.10)", "hypothesis", "mypy", "packaging", "pytest (<8.4)", "pytest-accept", "pytest-asyncio", "pytest-cov", "pytest-xdist", "rich", "tomlkit", "uv"]
 
 [[package]]
 name = "zeroc-ice"
@@ -3553,4 +3554,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <3.12"
-content-hash = "c6ec741c467b817aac054efcbf9fdea259f81591f99004dc9d975f28232c31eb"
+content-hash = "17900715d3b6ce293bff2173183d1b116afbe9f3f1e1ba56d5ea816a64f5695c"

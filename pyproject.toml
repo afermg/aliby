@@ -32,7 +32,7 @@ h5py = "^3.13.0"
 pathos = "^0.3.3"
 tqdm = "^4.67.1"
 xmltodict = "^0.14.2"
-zarr = "^3.0.3"
+zarr = "^3.0.8"
 
 
 [tool.poetry.group.omero]

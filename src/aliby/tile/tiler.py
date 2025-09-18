@@ -270,8 +270,9 @@ class Tiler(StepABC):
         else:
             self.tile_locs.drifts.append(drift.tolist())
 
-    @lru_cache(maxsize=2)
-    def load_image(self, tp: int, c: int) -> np.ndarray:
+    def load_image(
+        self, tp: int, c: int, lazy: bool = True
+    ) -> t.Union[np.ndarray, da.Array]:
         """
         Load image for one time point and channel using dask.
 
@@ -288,43 +289,21 @@ class Tiler(StepABC):
             An index for a time point
         c: integer
             An index for a channel
+        lazy: bool, optional
+            If True, return dask array without computing. Default is False.
 
         Returns
         -------
         image_all_z: an array of z slices for the entire image
+            Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
         image_all_z = self.image[tp + self.initial_tp, c]
-        if hasattr(image_all_z, "compute"):
+        if not lazy and hasattr(image_all_z, "compute"):
             # if using dask fetch images
             image_all_z = image_all_z.compute(scheduler="synchronous")
         return image_all_z
 
-    def get_tp_data(self, tp, c) -> np.ndarray:
-        """
-        Return all tiles corrected for drift.
-
-        Parameters
-        ----------
-        tp: integer
-            An index for a time point
-        c: integer
-            An index for a channel
-
-        Returns
-        ----------
-        Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
-        """
-        tiles = []
-        # load full image
-        image_all_z = self.load_image(tp, c)
-        # decompose into tiles
-        for tile in self.tile_locs:
-            # pad tile if necessary
-            ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
-            tiles.append(ndtile)
-        return np.stack(tiles)
-
-    def get_tile_data(self, tile_id: int, tp: int, c: int):
+    def get_tile_data(self, tile_id: int, tp: int, c: int, lazy: bool=True) -> da.Array:
         """
         Return a tile corrected for drift and padding.
 
@@ -336,13 +315,15 @@ class Tiler(StepABC):
             Index of time points.
         c: integer
             Index of channel.
+        lazy: bool
+            If True, return a dask array.
 
         Returns
         -------
-        ndtile: array
+        ndtile: dask array
             An array of (x, y) arrays, one for each z stack
         """
-        image_all_z = self.load_image(tp, c)
+        image_all_z = self.load_image(tp, c, lazy=lazy)
         tile = self.tile_locs.tiles[tile_id]
         ndtile = self.get_tile_and_pad(image_all_z, tile.as_range(tp))
         return ndtile
@@ -384,12 +365,46 @@ class Tiler(StepABC):
             self.run_tp(frame)
         return None
 
+    def get_tp_data_for_one_channel(
+        self, tp, c, lazy: bool = False
+    ) -> t.Union[np.ndarray, da.Array]:
+        """
+        Return all tiles corrected for drift.
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+        c: integer
+            An index for a channel
+        lazy: bool, optional
+            If True, return dask array without computing. Default is False.
+
+        Returns
+        ----------
+        Array of tiles with shape (no tiles, z-sections, y, x)
+        Returns np.ndarray if lazy=False, da.Array if lazy=True
+        """
+        tiles = []
+        # load full image
+        image_all_z = self.load_image(tp, c, lazy=True)
+        # decompose into tiles
+        for tile in self.tile_locs:
+            # pad tile if necessary
+            ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
+            tiles.append(ndtile)
+        result = da.stack(tiles)
+        if not lazy:
+            result = result.compute(scheduler="synchronous")
+        return result
+
     def get_tiles_timepoint(
         self,
         tp: int,
         channels: str or list[str] = None,
         z: int | list[int] = 0,
-    ) -> np.ndarray:
+        lazy: bool = False,
+    ) -> t.Union[np.ndarray, da.Array]:
         """
         Get all tiles as an array for a set of channels and a z-stack.
 
@@ -403,11 +418,14 @@ class Tiler(StepABC):
             Names of channels of interest.
         z: int or list of int
             Indices of z-channel of interest.
+        lazy: bool, optional
+            If True, return dask array without computing. Default is False.
 
         Returns
         -------
         final: array
             Data arranged as (tiles, channels, Z, X, Y)
+            Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
         if channels is None:
             channels = ["Brightfield"]
@@ -426,12 +444,14 @@ class Tiler(StepABC):
         res = []
         for c in channels:
             # first dimension is number of traps
-            tiles = self.get_tp_data(tp, c)[:, z]
+            tiles = self.get_tp_data_for_one_channel(tp, c, lazy=True)[:, z]
             # add back channel axis
-            tiles = np.expand_dims(tiles, axis=1)
+            tiles = da.expand_dims(tiles, axis=1)
             res.append(tiles)
         # stack over channels
-        final = np.stack(res, axis=1)
+        final = da.stack(res, axis=1)
+        if not lazy:
+            final = final.compute(scheduler="synchronous")
         return final
 
     def get_channel_index(self, channel: str or int) -> int or None:
@@ -471,9 +491,9 @@ class Tiler(StepABC):
 
         Returns
         -------
-        tile: array
+        tile: dask array
             A tile with all z stacks for the given slices.
-            If some padding is needed, the median of the image is used.
+            If some padding is needed, the mean of the image is used.
             If much padding is needed, a tile of NaN is returned.
         """
         # number of pixels in the y direction
@@ -490,12 +510,12 @@ class Tiler(StepABC):
             tile_size = slices[0].stop - slices[0].start
             if (padding > tile_size / 4).any():
                 # fill with NaN because too much of the tile is outside of the image
-                tile = np.full(
+                tile = da.full(
                     (image_array.shape[0], tile_size, tile_size), np.nan
                 )
             else:
-                # pad tile with median value of the tile
-                tile = np.pad(tile, [[0, 0]] + padding.tolist(), "median")
+                # pad tile with mean value of the tile
+                tile = da.pad(tile, [[0, 0]] + padding.tolist(), "mean")
         return tile
 
 
