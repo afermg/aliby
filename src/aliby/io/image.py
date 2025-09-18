@@ -183,7 +183,7 @@ class BaseLocalImage(ABC):
             self.meta = files_to_image_sizes(self.path)
 
     @abstractmethod
-    def get_data_lazy(self) -> da.Array:
+    def get_data_lazy(self):
         """Define in child class."""
         pass
 
