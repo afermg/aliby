@@ -303,7 +303,9 @@ class Tiler(StepABC):
             image_all_z = image_all_z.compute(scheduler="synchronous")
         return image_all_z
 
-    def get_tile_data(self, tile_id: int, tp: int, c: int, lazy: bool=True) -> da.Array:
+    def get_tile_data(
+        self, tile_id: int, tp: int, c: int, lazy: bool = True
+    ) -> da.Array:
         """
         Return a tile corrected for drift and padding.
 
