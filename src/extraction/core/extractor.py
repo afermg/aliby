@@ -6,6 +6,7 @@ from pathlib import Path
 
 from aliby.global_settings import global_settings
 import bottleneck as bn
+import dask.array as da
 import h5py
 import numpy as np
 import pandas as pd
@@ -209,12 +210,12 @@ class Extractor(StepABC):
         tp: int,
         channels: t.Optional[t.List[t.Union[str, int]]] = None,
         z: t.Optional[t.List[str]] = None,
-    ) -> t.Optional[np.ndarray]:
+        lazy: bool = True,
+    ) -> t.Optional[t.Union[np.ndarray, da.Array]]:
         """
         Find tiles for a given time point, channels, and z-stacks.
 
-        Any additional keyword arguments are passed to
-        tiler.get_tiles_timepoint
+        Use memory-efficient lazy loading.
 
         Parameters
         ----------
@@ -224,6 +225,14 @@ class Extractor(StepABC):
             Channels of interest.
         z: list of integers (optional)
             Indices for the z-stacks of interest.
+        lazy: bool, optional
+            If True, return dask array for memory efficiency. Default is True.
+
+        Returns
+        -------
+        tiles: dask array or numpy array
+            Tiles with dimensions (tiles, channels, z, y, x)
+            Returns dask array if lazy=True, numpy array if lazy=False
         """
         if channels is None:
             # find channels from tiler
@@ -237,13 +246,24 @@ class Extractor(StepABC):
         if z is None:
             # include all Z channels
             z = list(range(self.tiler.shape[-3]))
-        # get the image data via tiler
-        tiles = (
-            self.tiler.get_tiles_timepoint(tp, channels=channel_ids, z=z)
-            if channel_ids
-            else None
-        )
-        # tiles has dimensions (tiles, channels, 1, Z, X, Y)
+        # use lazy loading by default for memory efficiency
+        if lazy:
+            tiles = (
+                self.tiler.get_tiles_timepoint_lazy(
+                    tp, channels=channel_ids, z=z
+                )
+                if channel_ids
+                else None
+            )
+        else:
+            # use numpy arrays
+            tiles = (
+                self.tiler.get_tiles_timepoint(
+                    tp, channels=channel_ids, z=z, lazy=lazy
+                )
+                if channel_ids
+                else None
+            )
         return tiles
 
     def apply_cell_function(
@@ -608,7 +628,7 @@ class Extractor(StepABC):
         masks = self.get_masks(tp, masks, cells)
         # find fluorescence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
-        tiles = self.get_tiles(tp, channels=tree_dict["channels"])
+        tiles = self.get_tiles(tp, channels=tree_dict["channels"], lazy=False)
         # generate boolean masks for background for each trap
         bgs = self.get_background_masks(masks, tile_size)
         # get fluorescence images and background-corrected images as dicts
@@ -617,9 +637,9 @@ class Extractor(StepABC):
             tree_dict, tiles, bgs
         )
         # brightfield images
-        img["Brightfield"] = self.get_tiles(tp, channels=["Brightfield"])[
-            :, 0, 0, ...
-        ]
+        img["Brightfield"] = self.get_tiles(
+            tp, channels=["Brightfield"], lazy=False
+        )[:, 0, 0, ...]
         # perform extraction
         res_one = self.extract_one_channel(
             tree_dict, cell_labels, img, img_bgsub, masks

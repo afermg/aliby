@@ -303,6 +303,33 @@ class Tiler(StepABC):
             image_all_z = image_all_z.compute(scheduler="synchronous")
         return image_all_z
 
+    def get_lazy_tile_view(self, tile_id: int, tp: int, c: int) -> da.Array:
+        """
+        Return a lazy dask array view of a single tile.
+
+        Do not load full image.
+
+        Parameters
+        ----------
+        tile_id: integer
+            Index of tile.
+        tp: integer
+            Index of time points.
+        c: integer
+            Index of channel.
+
+        Returns
+        -------
+        tile_view: dask array
+            A lazy view of the tile region with shape (z, y, x)
+        """
+        tile = self.tile_locs.tiles[tile_id]
+        tile_range = tile.as_range(tp)
+        # create lazy slice directly from the original dask array
+        y_slice, x_slice = tile_range
+        # return lazy view of just the tile region
+        return self.image[tp + self.initial_tp, c, :, y_slice, x_slice]
+
     def get_tile_data(
         self, tile_id: int, tp: int, c: int, lazy: bool = True
     ) -> da.Array:
@@ -318,16 +345,21 @@ class Tiler(StepABC):
         c: integer
             Index of channel.
         lazy: bool
-            If True, return a dask array.
+            If True, return a dask array (default True for memory
+            efficiency).
 
         Returns
         -------
         ndtile: dask array
-            An array of (x, y) arrays, one for each z stack
+            An array of (z, y, x) arrays, one for each z stack
         """
-        image_all_z = self.load_image(tp, c, lazy=lazy)
+        # use lazy loading by default to avoid memory issues
+        image_all_z = self.image[tp + self.initial_tp, c]
         tile = self.tile_locs.tiles[tile_id]
         ndtile = self.get_tile_and_pad(image_all_z, tile.as_range(tp))
+        # only compute if explicitly requested
+        if not lazy:
+            ndtile = ndtile.compute(scheduler="synchronous")
         return ndtile
 
     def _run_tp(self, tp: int):
@@ -348,8 +380,8 @@ class Tiler(StepABC):
             drift_len = len(self.tile_locs.drifts)
             if self.no_processed != drift_len:
                 warnings.warn(
-                    "Tiler: the number of processed tiles and the number of drifts"
-                    " calculated do not match."
+                    "Tiler: the number of processed tiles and the number of "
+                    "drifts calculated do not match."
                 )
                 self.no_processed = drift_len
         # determine drift for this time point and update tile_locs.drifts
@@ -368,10 +400,12 @@ class Tiler(StepABC):
         return None
 
     def get_tp_data_for_one_channel(
-        self, tp, c, lazy: bool = False
+        self, tp, c, lazy: bool = True
     ) -> t.Union[np.ndarray, da.Array]:
         """
         Return all tiles corrected for drift.
+
+        Use memory-efficient lazy loading.
 
         Parameters
         ----------
@@ -380,7 +414,8 @@ class Tiler(StepABC):
         c: integer
             An index for a channel
         lazy: bool, optional
-            If True, return dask array without computing. Default is False.
+            If True, return dask array without computing.
+            Default is True for memory efficiency.
 
         Returns
         ----------
@@ -388,17 +423,54 @@ class Tiler(StepABC):
         Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
         tiles = []
-        # load full image
-        image_all_z = self.load_image(tp, c, lazy=True)
-        # decompose into tiles
+        # use lazy tile views instead of loading full image
+        image_all_z = self.image[tp + self.initial_tp, c]
+        # decompose into tiles using lazy views
         for tile in self.tile_locs:
-            # pad tile if necessary
+            # pad tile if necessary - this remains lazy until computed
             ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
             tiles.append(ndtile)
         result = da.stack(tiles)
         if not lazy:
             result = result.compute(scheduler="synchronous")
         return result
+
+    def get_tiles_lazy(
+        self, tp: int, c: int, tile_ids: t.List[int] = None
+    ) -> da.Array:
+        """
+        Get multiple tiles with optimised chunking for memory efficiency.
+
+        Create lazy arrays for each tile and stack with appropriate
+        chunking to minimise memory usage.
+
+        Parameters
+        ----------
+        tp: integer
+            Time point index
+        c: integer
+            Channel index
+        tile_ids: list of integers, optional
+            List of tile indices to retrieve.
+            If None, all tiles are returned.
+
+        Returns
+        -------
+        tiles_array: dask array
+            Lazy array with shape (n_tiles, z, y, x) and optimised chunking
+        """
+        if tile_ids is None:
+            tile_ids = list(range(len(self.tile_locs)))
+        # create lazy arrays for each tile using efficient tile views
+        tiles = []
+        for tile_id in tile_ids:
+            tile_array = self.get_lazy_tile_view(tile_id, tp, c)
+            tiles.append(tile_array)
+        # stack into a single dask array with appropriate chunking
+        # one tile per chunk in the first dimension for efficient processing
+        result = da.stack(tiles)
+        # rechunk to optimize for tile-wise access
+        return result.rechunk((1, -1, -1, -1))
 
     def get_tiles_timepoint(
         self,
@@ -456,6 +528,57 @@ class Tiler(StepABC):
             final = final.compute(scheduler="synchronous")
         return final
 
+    def get_tiles_timepoint_lazy(
+        self,
+        tp: int,
+        channels: t.Union[str, t.List[str], t.List[int]] = None,
+        z: t.Union[int, t.List[int]] = 0,
+    ) -> da.Array:
+        """
+        Use lazy loading to implement get_tiles_timepoint.
+
+        Use optimized dask arrays to avoid loading the entire
+        dataset into memory.
+
+        Parameters
+        ----------
+        tp: int
+            Index of time point.
+        channels: string, list of strings, or list of ints
+            Names or indices of channels of interest.
+        z: int or list of int
+            Indices of z-stack of interest.
+
+        Returns
+        -------
+        final: dask array
+            Lazy array arranged as (tiles, channels, z, y, x)
+        """
+        if channels is None:
+            channels = ["Brightfield"]
+        elif isinstance(channels, str):
+            channels = [channels]
+        # convert to indices
+        channel_indices = [
+            (
+                self.channels.index(channel)
+                if isinstance(channel, str)
+                else channel
+            )
+            for channel in channels
+        ]
+        # get the data as a list of length of the number of channels
+        res = []
+        for c in channel_indices:
+            # Use lazy tile loading to avoid memory issues
+            tiles = self.get_tiles_lazy(tp, c)[:, z]
+            # add back channel axis
+            tiles = da.expand_dims(tiles, axis=1)
+            res.append(tiles)
+        # stack over channels - remains lazy
+        final = da.stack(res, axis=1)
+        return final
+
     def get_channel_index(self, channel: str or int) -> int or None:
         """
         Find index for channel using regex.
@@ -511,7 +634,7 @@ class Tiler(StepABC):
         if padding.any():
             tile_size = slices[0].stop - slices[0].start
             if (padding > tile_size / 4).any():
-                # fill with NaN because too much of the tile is outside of the image
+                # fill with NaN: too much of the tile is outside of the image
                 tile = da.full(
                     (image_array.shape[0], tile_size, tile_size), np.nan
                 )

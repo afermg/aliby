@@ -1,3 +1,5 @@
+"""Functions to manage Baby passing the correct data."""
+
 import itertools
 import re
 import typing as t
@@ -94,7 +96,7 @@ class BabyRunner(StepABC):
     def get_data(self, tp):
         """Get brightfield image and re-arrange axes."""
         img_from_tiler = self.tiler.get_tp_data_for_one_channel(
-            tp, self.brightfield_channel
+            tp, self.brightfield_channel, lazy=False
         )
         # move z axis to the last axis; Baby expects (n, x, y, z)
         img = np.moveaxis(img_from_tiler, 1, destination=-1)
