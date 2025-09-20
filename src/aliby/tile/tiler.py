@@ -462,10 +462,7 @@ class Tiler(StepABC):
         if tile_ids is None:
             tile_ids = list(range(len(self.tile_locs)))
         # create lazy arrays for each tile using efficient tile views
-        tiles = []
-        for tile_id in tile_ids:
-            tile_array = self.get_lazy_tile_view(tile_id, tp, c)
-            tiles.append(tile_array)
+        tiles = [self.get_lazy_tile_view(tile_id, tp, c) for tile_id in tile_ids]
         # stack into a single dask array with appropriate chunking
         # one tile per chunk in the first dimension for efficient processing
         result = da.stack(tiles)
@@ -618,7 +615,7 @@ class Tiler(StepABC):
         -------
         tile: dask array
             A tile with all z stacks for the given slices.
-            If some padding is needed, the mean of the image is used.
+            If some padding is needed, edge values are replicated.
             If much padding is needed, a tile of NaN is returned.
         """
         # number of pixels in the y direction
@@ -639,8 +636,8 @@ class Tiler(StepABC):
                     (image_array.shape[0], tile_size, tile_size), np.nan
                 )
             else:
-                # pad tile with mean value of the tile
-                tile = da.pad(tile, [[0, 0]] + padding.tolist(), "mean")
+                # pad tile with edge values to maintain lazy evaluation
+                tile = da.pad(tile, [[0, 0]] + padding.tolist(), "edge")
         return tile
 
 
