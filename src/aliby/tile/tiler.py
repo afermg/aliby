@@ -30,7 +30,6 @@ import logging
 import re
 import typing as t
 import warnings
-from functools import lru_cache
 from pathlib import Path
 
 import dask.array as da
@@ -462,7 +461,9 @@ class Tiler(StepABC):
         if tile_ids is None:
             tile_ids = list(range(len(self.tile_locs)))
         # create lazy arrays for each tile using efficient tile views
-        tiles = [self.get_lazy_tile_view(tile_id, tp, c) for tile_id in tile_ids]
+        tiles = [
+            self.get_lazy_tile_view(tile_id, tp, c) for tile_id in tile_ids
+        ]
         # stack into a single dask array with appropriate chunking
         # one tile per chunk in the first dimension for efficient processing
         result = da.stack(tiles)
