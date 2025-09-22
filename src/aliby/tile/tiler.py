@@ -355,7 +355,9 @@ class Tiler(StepABC):
         # use lazy loading by default to avoid memory issues
         image_all_z = self.image[tp + self.initial_tp, c]
         tile = self.tile_locs.tiles[tile_id]
-        ndtile = self.get_tile_and_pad(image_all_z, tile.as_range(tp))
+        ndtile = self.get_tile_and_pad(
+            image_all_z, tile.as_range(tp), self.tile_size
+        )
         # only compute if explicitly requested
         if not lazy:
             ndtile = ndtile.compute(scheduler="synchronous")
@@ -427,7 +429,9 @@ class Tiler(StepABC):
         # decompose into tiles using lazy views
         for tile in self.tile_locs:
             # pad tile if necessary - this remains lazy until computed
-            ndtile = Tiler.get_tile_and_pad(image_all_z, tile.as_range(tp))
+            ndtile = Tiler.get_tile_and_pad(
+                image_all_z, tile.as_range(tp), tile.size
+            )
             tiles.append(ndtile)
         result = da.stack(tiles)
         if not lazy:
@@ -600,7 +604,7 @@ class Tiler(StepABC):
             return None
 
     @staticmethod
-    def get_tile_and_pad(image_array, slices):
+    def get_tile_and_pad(image_array, slices, tile_size=None):
         """
         Pad slices if out of bounds.
 
@@ -630,7 +634,9 @@ class Tiler(StepABC):
             [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
         )
         if padding.any():
-            tile_size = slices[0].stop - slices[0].start
+            if tile_size is None:
+                # use slice size to guess tile_size
+                tile_size = slices[0].stop - slices[0].start
             if (padding > tile_size / 4).any():
                 # fill with NaN: too much of the tile is outside of the image
                 tile = da.full(
