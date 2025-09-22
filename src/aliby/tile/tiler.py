@@ -230,11 +230,17 @@ class Tiler(StepABC):
             # find the tiles
             tile_locs = segment_traps(initial_image, tile_size)
             # keep only tiles that are not near an edge
+            # add extra margin to account for potential drift
+            drift_margin = half_tile // 8
             tile_locs = [
                 [x, y]
                 for x, y in tile_locs
-                if half_tile < x < max_size - half_tile
-                and half_tile < y < max_size - half_tile
+                if half_tile + drift_margin
+                < x
+                < max_size - half_tile - drift_margin
+                and half_tile + drift_margin
+                < y
+                < max_size - half_tile - drift_margin
             ]
             # store tiles in an instance of TileLocations
             self.tile_locs = TileLocations.from_tiler(tile_locs, tile_size)
@@ -306,7 +312,8 @@ class Tiler(StepABC):
         """
         Return a lazy dask array view of a single tile.
 
-        Do not load full image.
+        Do not load full image. Ensures consistent tile size by padding
+        if necessary.
 
         Parameters
         ----------
@@ -321,13 +328,12 @@ class Tiler(StepABC):
         -------
         tile_view: dask array
             A lazy view of the tile region with shape (z, y, x)
+            Guaranteed to have consistent tile_size dimensions.
         """
         tile = self.tile_locs.tiles[tile_id]
         tile_range = tile.as_range(tp)
-        # create lazy slice directly from the original dask array
-        y_slice, x_slice = tile_range
-        # return lazy view of just the tile region
-        return self.image[tp + self.initial_tp, c, :, y_slice, x_slice]
+        image_all_z = self.image[tp + self.initial_tp, c]
+        return self.get_tile_and_pad(image_all_z, tile_range, self.tile_size)
 
     def get_tile_data(
         self, tile_id: int, tp: int, c: int, lazy: bool = True
