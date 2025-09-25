@@ -189,7 +189,6 @@ class Tiler(StepABC):
         Numpy ndarray of tiles with shape (no tiles, z-sections, y, x)
         """
         tiles = []
-        breakpoint()
         full = self.load_image(tp, c)
         for tile in self.tile_locs:
             if drift:
