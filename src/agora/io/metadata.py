@@ -43,6 +43,7 @@ def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:
         File containing metadata or folder containing naming conventions.
     """
     filedir = Path(filedir)
+    full_meta = None
     if (
         filedir.is_file()
         or str(filedir).endswith(".zarr")
@@ -61,7 +62,7 @@ def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:
                 # legacy log files ending in .txt
                 full_meta = metadata_legacy.parse_legacy_logs(filedir)
     if full_meta is None:
-        raise Exception("No microscopy metadata found.")
+        print("Warning: No microscopy metadata found.")
     return full_meta
 
 

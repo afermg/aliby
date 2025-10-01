@@ -213,7 +213,7 @@ class Extractor(StepABC):
         lazy: bool = True,
     ) -> t.Optional[t.Union[np.ndarray, da.Array]]:
         """
-        Find tiles for a given time point, channels, and z-stacks.
+        Find tiles for a given time point and given channels and z-stacks.
 
         Use memory-efficient lazy loading.
 
@@ -241,10 +241,9 @@ class Extractor(StepABC):
             # a subset of channels was specified
             channel_ids = [self.tiler.get_channel_index(ch) for ch in channels]
         else:
-            # a list of the indices of the z stacks
             channel_ids = None
         if z is None:
-            # include all Z channels
+            # include all z channels
             z = list(range(self.tiler.shape[-3]))
         # use lazy loading by default for memory efficiency
         if lazy:

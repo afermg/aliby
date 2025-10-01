@@ -102,7 +102,10 @@ class Tiler(StepABC):
         else:
             self.channels = list(range(image_metadata.get("size_c", 0)))
         # get spatial location of position
-        if microscopy_metadata is not None:
+        if (
+            microscopy_metadata is not None
+            and "spatial_locations" in microscopy_metadata["full"]
+        ):
             self.spatial_location = microscopy_metadata["full"][
                 "spatial_locations"
             ][self.position_name]
@@ -143,9 +146,13 @@ class Tiler(StepABC):
         image: an instance of Image
         parameters: an instance of TilerPameters
         """
+        if microscopy_metadata is not None:
+            meta = microscopy_metadata["minimal"] | image.metadata
+        else:
+            meta = image.metadata
         return cls(
             image.data,
-            image_metadata=image.metadata,
+            image_metadata=meta,
             parameters=parameters,
             microscopy_metadata=microscopy_metadata,
         )

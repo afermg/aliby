@@ -26,6 +26,7 @@ from agora.io.metadata import parse_microscopy_logs
 from aliby.io.omero import Image
 from dask.array.image import imread
 from tifffile import TiffFile
+from skimage import io
 
 
 def instantiate_image(
@@ -67,31 +68,14 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     return instantiator
 
 
-def files_to_image_sizes(path: Path, suffix="tiff"):
-    """Deduce image sizes from the naming convention of tiff files."""
-    filenames = list(path.glob(f"*.{suffix}"))
-    try:
-        # deduce order from filenames
-        dimorder = "".join(
-            map(lambda x: x[0], filenames[0].stem.split("_")[1:])
-        )
-        dim_value = list(
-            map(
-                lambda f: filename_to_dict_indices(f.stem),
-                path.glob("*.tiff"),
-            )
-        )
-        maxes = [max(map(lambda x: x[dim], dim_value)) for dim in dimorder]
-        mins = [min(map(lambda x: x[dim], dim_value)) for dim in dimorder]
-        dim_shapes = [
-            max_val - min_val + 1 for max_val, min_val in zip(maxes, mins)
-        ]
-        meta = {
-            "size_" + dim: shape for dim, shape in zip(dimorder, dim_shapes)
-        }
-    except Exception as e:
-        print("Warning: files_to_image_sizes failed." f"\nError: {e}")
-        meta = {}
+def files_to_image_shape(path: Path, suffix="tiff"):
+    """Deduce the image shape from the naming convention of tiff files."""
+    meta = {}
+    meta["size_t"], meta["size_c"], meta["size_z"] = (
+        find_image_size_from_tiff_direc(path)
+    )
+    tiff_files = list(path.glob(f"*.{suffix}"))
+    meta["size_y"], meta["size_x"] = io.imread(tiff_files[0]).shape[:2]
     return meta
 
 
@@ -179,8 +163,8 @@ class BaseLocalImage(ABC):
         """Load metadata from microscopy logs."""
         self.meta = parse_microscopy_logs(self.path)
         if self.meta is None:
-            # try to deduce metadata
-            self.meta = files_to_image_sizes(self.path)
+            # try to deduce metadata on the image shape
+            self.meta = files_to_image_shape(self.path)
 
     @abstractmethod
     def get_data_lazy(self):

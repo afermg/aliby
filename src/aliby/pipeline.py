@@ -11,7 +11,7 @@ import re
 import typing as t
 from pathlib import Path
 from pprint import pprint
-
+from types import SimpleNamespace
 import baby
 import baby.errors
 import numpy as np
@@ -78,6 +78,7 @@ class PipelineParameters(ParametersABC):
         baby={},
         extraction={},
         postprocessing={},
+        metadata=None,
     ):
         """
         Initialise parameters for steps of the pipeline.
@@ -96,6 +97,14 @@ class PipelineParameters(ParametersABC):
             Parameters for extraction.
         postprocessing: dict (optional)
             Parameters for post-processing.
+        metadata: dict (optional)
+            Minimal information on the experiment.
+            For example,
+                metadata = {
+                    "channels": ["Brightfield", "GFP", "cy5", "mCherry"],
+                    "time_settings/ntimepoints": 240,
+                    "time_settings/timeinterval": 300,
+                    }
         """
         if (
             isinstance(general["expt_id"], Path)
@@ -126,9 +135,15 @@ class PipelineParameters(ParametersABC):
                 OMERO_channels = conn.get_channels()
             else:
                 OMERO_channels = None
-        meta = MetaData(directory, OMERO_channels)
+        if metadata is not None:
+            if isinstance(metadata, dict):
+                meta = SimpleNamespace(minimal=metadata, full={})
+            else:
+                raise ValueError("metadata must be a dict.")
+        else:
+            meta = MetaData(directory, OMERO_channels)
         # define default values for general parameters
-        tps = meta.full["time_settings/ntimepoints"]
+        tps = meta.minimal["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
                 expt_id=expt_id,
