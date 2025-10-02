@@ -14,14 +14,16 @@ params = PipelineParameters.default(
         "expt_id": omero_dir + omid,
         "distributed": 2,
         "directory": h5dir,
-        # specify position to segment
+        # optional: specify position to segment
         "filter": "fy4_007",
-        # specify final time point
+        # optional: specify final time point
         # "tps": 4,
     },
 )
 
 
 # initialise and run pipeline
+# optional: specify OMERO channels if the order on OMERO breaks
+# convention, with Brightfield not first
 p = Pipeline(params, OMERO_channels=["Brightfield", "Flavin"])
 p.run()
