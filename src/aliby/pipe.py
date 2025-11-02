@@ -13,6 +13,7 @@ from typing import Callable
 
 import numpy
 import pyarrow
+import pyarrow as pa
 
 from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
@@ -193,10 +194,18 @@ def _validate_pipeline(pipeline: dict):
     """
     steps_to_write = pipeline.get("save")
     assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
+    assert "ntps" in pipeline.get("io", {}), (
+        "You must pass the number of time points to analyse."
+    )
+    for k in pipeline["steps"]:
+        if k.startswith("nahual"):
+            assert "address" in pipeline["steps"][k], (
+                "If using a nahual-deployed model you must provide an address."
+            )
 
 
 def run_pipeline_return_state(
-    pipeline: dict, img_source: str or list[str], ntps: int, steps_dir: str = None
+    pipeline: dict, img_source: str or list[str], steps_dir: str = None
 ) -> dict:
     _validate_pipeline(pipeline)
 
@@ -204,6 +213,7 @@ def run_pipeline_return_state(
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
+    ntps = pipeline.get("io", {"ntps": 20})["ntps"]
     for _ in range(ntps):
         # print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
@@ -248,9 +258,7 @@ def run_pipeline_and_post(
     # Main processing loop
     if overwrite or not profiles_file.exists():
         # print(f"Processing {fov}")
-        state = run_pipeline_return_state(
-            pipeline, img_source, ntps, steps_dir=steps_dir
-        )
+        state = run_pipeline_return_state(pipeline, img_source, steps_dir=steps_dir)
 
         # Aggregate profiles from the state output
         profiles = get_profiles_from_state(state, pipeline)
@@ -262,6 +270,7 @@ def run_pipeline_and_post(
         # Run global processing steps (post-processing)
         post_results = {}
 
+        ntps = pipeline["io"]["ntps"]
         if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
             return profiles, post_results
 
@@ -272,6 +281,8 @@ def run_pipeline_and_post(
             assert len(associated_data), (
                 f"Incorrect pipeline: Missing information of which data to ingest for step {step_name}"
             )
+            # TODO if nahual data is present, validate that the maximum target_label is below
+            # the maximum label in the profiles
             for output_name in associated_data:
                 state["fn"] = init_step(step_name, parameters)
 
@@ -300,7 +311,18 @@ def run_pipeline_and_post(
 def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     # Isolate features for every time point
     # We assume that extraction steps start with "ext"
-    profiles = pyarrow.Table.from_pylist([])
+    profiles = pyarrow.Table.from_pylist(
+        [],
+        schema=pa.schema([
+            pa.field("tile", pa.int64()),
+            pa.field("label", pa.int64()),
+            pa.field("branch", pa.string()),
+            pa.field("metric", pa.string()),
+            pa.field("value", pa.float64()),
+            pa.field("object", pa.string()),
+            pa.field("tp", pa.int64()),
+        ]),
+    )
     extraction_steps = [
         step_name for step_name in pipeline["steps"] if step_name.startswith("ext")
     ]

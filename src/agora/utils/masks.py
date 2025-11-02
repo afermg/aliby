@@ -32,6 +32,6 @@ def transform_2d_to_3d(masks: np.array) -> (tuple[int], np.array):
                  [False, False]]]))
     """
 
-    cell_labels = np.arange(1, masks.max())
+    cell_labels = np.arange(1, masks.max() + 1)
     masks_3d = np.equal.outer(cell_labels, masks)
     return masks_3d

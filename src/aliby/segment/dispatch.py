@@ -88,6 +88,8 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             # Cellpose via a nahual running server
             from nahual.process import dispatch_setup_process
 
+            assert address is not None, "You must provide an address if using Nahual."
+
             tool = kind.removeprefix("nahual_")
 
             setup, process = dispatch_setup_process(tool)

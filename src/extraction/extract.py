@@ -132,11 +132,17 @@ def measure_mono(
     -------
     numpy array
         The result of the metric application.
+
+
+    Notes
+    -----
+    By convention tiles are 1-indexed (to follow skimage),
+    So we ought to subtract one to make it mask indices.
     """
 
-    (tile_i, mask_i), (ch, red_z, metric) = tileid_x
+    (tile_i, mask_label), (ch, red_z, metric) = tileid_x
     return measure(
-        masks[tile_i][mask_i],  # TODO formalise how to handle this
+        masks[tile_i][mask_label - 1],  # TODO formalise how to handle this
         pixels[ch] if ch != "None" else None,
         REDUCTION_FUNS[red_z],
         CELL_FUNS[metric],
@@ -168,7 +174,7 @@ def measure_multi(
     (tile_i, mask_i), ((ch0, ch1), red_ch, red_z, metric) = tileid_x
     if red_ch == "None":  # This is a multi-image measurement
         pixels_redz = reduce_z(pixels[[ch0, ch1]], REDUCTION_FUNS[red_z], axis=1)
-        result = CELL_FUNS[metric](masks[tile_i][mask_i], *pixels_redz)
+        result = CELL_FUNS[metric](masks[tile_i][mask_i - 1], *pixels_redz)
     else:  # This is a monoimage measurement, but with a combination of channels
         new_pixels = reduce_z(
             np.stack((pixels[ch0], pixels[ch1])), REDUCTION_FUNS[red_ch], axis=0
@@ -211,12 +217,15 @@ def process_tree_masks(
             [
                 (tile_i, mask_i)
                 for tile_i, masks_in_tile in enumerate(masks)
-                for mask_i in range(masks_in_tile.max() - 1)
+                for mask_i in range(
+                    1, masks_in_tile.max() + 1
+                )  # Labels should not be 0-indexed, and it should match the nuber of masks!
             ],
             instructions,
         )
     )
     result = measure_fn(tileid_instructions, masks, pixels)
+
     return tileid_instructions, result
 
 
@@ -234,7 +243,7 @@ def extract_tree(
     tileid_instructions : tuple
         A tuple containing an array and instructions for tile extraction.
     masks : list[numpy array]
-        A list of mask values for feature extraction.
+        A list of mask values for feature extraction. Note that it is a list because the first dimension are tiles.
     pixels : numpy array
         The pixel values used in the extraction process.
 
@@ -353,30 +362,35 @@ def format_extraction(
     pyarrow Table
         The formatted table.
     """
-    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "values")}
+    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
     for inst, metrics in zip(*instructions_result):
         tileid, label = inst[0]
         branch = "/".join(str(x) for x in inst[1])
-        if isinstance(metrics, int):
+        if isinstance(
+            metrics, int
+        ):  # When an instruction results in a scalaer (e.g., max2p5pc)
             formatted["tile"].append(tileid)
             formatted["label"].append(label)
             formatted["branch"].append(branch)
             formatted["metric"].append(inst[1][-1])
-            formatted["values"].append(metrics)
-        elif isinstance(metrics, dict):
+            formatted["value"].append(metrics)
+        elif isinstance(
+            metrics, dict
+        ):  # When it results in a dictionary (e.g., cp_measure measurements)
             for k, values in metrics.items():
-                formatted["branch"].append(branch)
-                formatted["metric"].append(k)
-                formatted["values"].append(values)
-                formatted["tile"].append(tileid)
-                formatted["label"].append(label)
-        elif isinstance(metrics, list):
-            for v in metrics:
+                for value in values:
+                    formatted["branch"].append(branch)
+                    formatted["metric"].append(k)
+                    formatted["value"].append(value)
+                    formatted["tile"].append(tileid)
+                    formatted["label"].append(label)
+        elif isinstance(metrics, list):  # When it results in a list of values (e.g., ?)
+            for value in metrics:
                 formatted["tile"].append(tileid)
                 formatted["label"].append(label)
                 formatted["branch"].append(branch)
                 formatted["metric"].append(inst[1][-1])
-                formatted["values"].append(v)
+                formatted["value"].append(value)
 
     arrow_table = pa.Table.from_pydict(formatted)
     return arrow_table
