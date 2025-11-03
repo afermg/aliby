@@ -74,14 +74,15 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             assert modelset is not None, f"Missing modelset on {kind} segmentation"
             session_id = load_model(address, modelset)
 
-            for k, v in kwargs.items():
-                extra_args[k] = v
+            if "extra_args" in kwargs:
+                for k, v in kwargs["extra_args"]:
+                    extra_args[k] = v
 
             return partial(
                 process_data,
                 address=address,
                 session_id=session_id,
-                extra_args=extra_args.items(),
+                extra_args=tuple(extra_args.items()),
             )
         case "nahual_cellpose":
             # Examples over at https://github.com/afermg/nahual/blob/master/examples/

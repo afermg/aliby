@@ -51,14 +51,14 @@ def init_step(
 
             step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
         case s if s.startswith("segment"):
-            if (
-                parameters["segmenter_kwargs"]["kind"] == "baby"
+            if parameters["segmenter_kwargs"]["kind"].endswith(
+                "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
             step = dispatch_segmenter(**{**parameters["segmenter_kwargs"]})
         case "track":
-            if (
-                parameters["kind"] == "baby"
+            if parameters["kind"].endswith(
+                "baby"
             ):  # Tracker needs to pull info from baby crawler
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
