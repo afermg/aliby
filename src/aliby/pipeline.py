@@ -166,6 +166,22 @@ class PipelineParameters(ParametersABC):
                     defaults["general"][k][k2] = v2
             else:
                 defaults["general"][k] = v
+        # reset default z section
+        if "number_z_sections" in defaults["metadata"]["full"]:
+            # current metadata
+            ref_z = (
+                defaults["metadata"]["full"]["number_z_sections"][
+                    "Brightfield"
+                ]
+                // 2
+            )
+            global_settings.imaging_specifications["ref_z"] = ref_z
+        elif "zsectioning/nsections" in defaults["metadata"]["full"]:
+            # old metadata
+            ref_z = (
+                defaults["metadata"]["full"]["zsectioning/nsections"][0] // 2
+            )
+            global_settings.imaging_specifications["ref_z"] = ref_z
         # default Tiler parameters and update with any input tiler
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         # generate a backup channel for when logfile meta is available

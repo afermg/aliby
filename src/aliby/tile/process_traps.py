@@ -12,8 +12,12 @@ from skimage.util import img_as_ubyte
 
 try:
     from skimage.morphology import footprint_rectangle
+
+    HAS_FOOTPRINT_RECTANGLE = True
 except ImportError:
     from skimage.morphology import square
+
+    HAS_FOOTPRINT_RECTANGLE = False
 
 
 def half_floor(x, tile_size):
@@ -35,7 +39,8 @@ def segment_traps(
     min_frac_tilesize=0.3,
     **identify_traps_kwargs,
 ):
-    """Find a trap template using an entropy filter and Otsu thresholding.
+    """
+    Find a trap template using an entropy filter and Otsu thresholding.
 
     Pass template to identify_trap_locations. To obtain candidate traps
     the major axis length of a tile must be smaller than tilesize.
@@ -55,9 +60,6 @@ def segment_traps(
         Parameter for a morphological closing applied to thresholded
         image
     min_frac_tilesize: float (optional)
-    max_frac_tilesize: float (optional)
-        Used to determine bounds on the major axis length of regions
-        suspected of containing traps.
     identify_traps_kwargs:
         Passed to identify_trap_locations
 
@@ -73,30 +75,27 @@ def segment_traps(
     disk_radius_frac *= scale_factor
     min_frac_tilesize *= scale_factor
     square_size = int(square_size * scale_factor)
-    # keep a memory of the image in case we need to re-run
-    img = image
     # bounds on major axis length of traps
     min_trap_size = min_frac_tilesize * tile_size
     # shrink image
     if downscale != 1:
         img = transform.rescale(image, downscale)
     # generate an entropy image using a disk footprint
-    disk_radius = int(min([disk_radius_frac * x for x in img.shape]))
+    disk_radius = int(min(img.shape) * disk_radius_frac)
     entropy_image = entropy(img_as_ubyte(img), disk(disk_radius))
     if downscale != 1:
         # upscale
         entropy_image = transform.rescale(entropy_image, 1 / downscale)
     # find Otsu threshold for entropy image
     thresh = threshold_otsu(entropy_image)
-    # apply morphological closing to thresholded, and so binary, image
-    if "footprint_rectangle" in globals():
+    # apply morphological closing to thresholded image
+    if HAS_FOOTPRINT_RECTANGLE:
         bw = closing(
             entropy_image > thresh,
             footprint_rectangle((square_size, square_size)),
         )
     else:
         bw = closing(entropy_image > thresh, square(square_size))
-
     # remove artifacts connected to image border
     cleared = clear_border(bw)
     # label distinct regions of the image
@@ -139,7 +138,7 @@ def segment_traps(
         for x, y in centroids
     ]
     # make a mean template by averaging all the candidate templates
-    mean_template = np.stack(candidate_templates).astype(int).mean(axis=0)
+    mean_template = np.stack(candidate_templates).mean(axis=0)
     # find traps using the mean trap template
     traps = identify_trap_locations(
         image, mean_template, **identify_traps_kwargs
@@ -163,7 +162,8 @@ def identify_trap_locations(
     downscale=0.35,
     trap_size=None,
 ):
-    """Identify the traps in a single image based on a trap template.
+    """
+    Identify the traps in a single image based on a trap template.
 
     Requires the trap template to be similar to the image
     (same camera, same magnification - ideally the same experiment).
@@ -193,20 +193,21 @@ def identify_trap_locations(
     """
     if trap_size is None:
         trap_size = trap_template.shape[0]
-    # careful: the image is float16!
-    img = transform.rescale(image.astype(float), downscale)
+    # careful: the image is float16
+    img = transform.rescale(image.astype(np.float16), downscale)
     template = transform.rescale(trap_template, downscale)
     # try multiple rotations of template to determine
     # which best matches the image
-    # result is squared because the sign of the correlation is unimportant
+    # result uses absolute value because the sign is unimportant
     matches = {
-        rotation: feature.match_template(
-            img,
-            transform.rotate(template, rotation, cval=np.median(img)),
-            pad_input=True,
-            mode="median",
+        rotation: np.abs(
+            feature.match_template(
+                img,
+                transform.rotate(template, rotation, cval=np.median(img)),
+                pad_input=True,
+                mode="median",
+            )
         )
-        ** 2
         for rotation in [0, 90, 180, 270]
     }
     # find best rotation
@@ -218,13 +219,14 @@ def identify_trap_locations(
         # best matches the image
         scales = np.linspace(0.5, 2, 10)
         matches = {
-            scale: feature.match_template(
-                img,
-                transform.rescale(template, scale),
-                mode="median",
-                pad_input=True,
+            scale: np.abs(
+                feature.match_template(
+                    img,
+                    transform.rescale(template, scale),
+                    mode="median",
+                    pad_input=True,
+                )
             )
-            ** 2
             for scale in scales
         }
         # find best scale

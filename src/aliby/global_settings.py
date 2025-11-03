@@ -22,6 +22,7 @@ class GlobalSettings:
             "z_spacing": 0.6,
             "magnification": 60,
             "tile_size": 117,
+            # with the correct metadata, ref_z is reset to the middle z stack
             "ref_z": 0,
         }
 
