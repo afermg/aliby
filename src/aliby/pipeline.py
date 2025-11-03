@@ -185,7 +185,7 @@ class PipelineParameters(ParametersABC):
         # default Tiler parameters and update with any input tiler
         defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
         # generate a backup channel for when logfile meta is available
-        # but not image metadata.
+        # but not image metadata
         backup_ref_channel = None
         if "channels" in meta.full and isinstance(
             defaults["tiler"]["ref_channel"], str

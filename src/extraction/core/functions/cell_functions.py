@@ -399,6 +399,7 @@ def ratio_2_over_1(cell_mask, trap_image, channels):
     return div
 
 
+# check if imported
 if "nl_classifier" in sys.modules:
     # define CNN for nuclear localisation
     nl = nl_classifier()

@@ -1,3 +1,5 @@
+"""Script to run aliby to process a directory of zarr files."""
+
 from aliby.pipeline import Pipeline, PipelineParameters
 
 omero_dir = "/Swainlab/omero_backup/"

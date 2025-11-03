@@ -1,3 +1,5 @@
+"""Script to run aliby to process a directory of tiff files."""
+
 from pathlib import Path
 
 from aliby.pipeline import Pipeline, PipelineParameters

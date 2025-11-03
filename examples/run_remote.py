@@ -1,3 +1,5 @@
+"""Script to run aliby using OMERO."""
+
 from aliby.pipeline import PipelineParameters, Pipeline
 
 params = PipelineParameters.default(
@@ -10,7 +12,8 @@ params = PipelineParameters.default(
         "password": pass,
     }
 )
-# specify OMERO_channels if the channels on OMERO have a different order from the logfiles
+# specify OMERO_channels if the channels on OMERO have a different
+# order from the logfiles
 p = Pipeline(params)
 
 p.run()

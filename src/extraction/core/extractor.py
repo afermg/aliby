@@ -635,20 +635,22 @@ class Extractor(StepABC):
         img, img_bgsub = self.get_imgs_background_subtract(
             tree_dict, tiles, bgs
         )
-        # brightfield images
+        # add brightfield images
         img["Brightfield"] = self.get_tiles(
             tp, channels=["Brightfield"], lazy=False
         )[:, 0, 0, ...]
-        # perform extraction
+        # perform extraction for functions requiring one channel
         res_one = self.extract_one_channel(
             tree_dict, cell_labels, img, img_bgsub, masks
         )
         # update tree dict for any functions that returned multiple values
         for fn, replace_list in self.replace_dict_for_tree.items():
             tree_dict = replace_in_nesteddict(tree_dict, fn, replace_list)
+        # perform extraction for functions requiring multiple channels
         res_multiple = self.extract_multiple_channels(
             cell_labels, img, img_bgsub, masks
         )
+        # combine the results
         res = {**res_one, **res_multiple}
         return res
 
