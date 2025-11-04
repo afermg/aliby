@@ -26,6 +26,9 @@ class GlobalSettings:
             "ref_z": 0,
         }
 
+        # default time interval in seconds
+        self.default_time_interval = 300
+
         # possible imaging channels excluding Brightfield
         self.possible_imaging_channels = [
             "Citrine",
@@ -60,9 +63,6 @@ class GlobalSettings:
             "std",
             "imBackground",
         ]
-
-        # default time interval in seconds
-        self.default_time_interval = 300
 
     def get(self, global_property: str):
         """Get a global setting."""
