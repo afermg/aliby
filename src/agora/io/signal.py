@@ -348,7 +348,7 @@ class Signal(BridgeH5):
                     index=["trap", "cell_label"],
                     values="value",
                 )
-        except (HDF5ExtError, KeyError):
+        except (HDF5ExtError, KeyError, TypeError):
             # old h5 file before writer changed
             dataset = (
                 dataset.replace("null", "None")
