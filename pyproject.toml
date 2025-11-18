@@ -40,6 +40,9 @@ dev = [
 examples = [
     "pooch>=1.8.2",
 ]
+test = [
+    "pytest>=8.4.2",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [

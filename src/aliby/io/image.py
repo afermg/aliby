@@ -222,6 +222,37 @@ class ImageDir(BaseLocalImage):
         return [k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")]
 
 
+class ImageZarrArray(BaseLocalImage):
+    """An image is a group inside a Zarr"""
+
+    def __init__(
+        self,
+        zarr_arr: zarr.core.array.Array,
+        capture_order: str = "CYX",
+        dimorder: str = "TCZYX",
+    ):
+        self.zarr_arr = zarr_arr
+        self.path = zarr_arr.store
+        self.dimorder = dimorder
+
+        da_pixels = da.array(zarr_arr)
+        self._img = adjust_dimensions(
+            da_pixels, capture_order=capture_order, dimorder=dimorder
+        )
+
+    def get_data_lazy(self) -> da.Array:
+        return self._img
+
+    # def add_size_to_meta(self):
+    #     pass
+
+    def name(self) -> str:
+        return self.zarr_arr.name
+
+    def dimorder(self) -> str:
+        return self.dimorder
+
+
 class ImageZarr(BaseLocalImage):
     """
     Read zarr compressed files.
