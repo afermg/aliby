@@ -17,7 +17,9 @@ from itertools import groupby
 from pathlib import Path
 
 
-def dispatch_dataset(expt_id: int or str, is_zarr: bool = True, **kwargs):
+def dispatch_dataset(
+    expt_id: int or str, is_zarr: bool = True, is_monozarr: bool = False, **kwargs
+):
     """
     Find paths to the data.
 
@@ -44,8 +46,11 @@ def dispatch_dataset(expt_id: int or str, is_zarr: bool = True, **kwargs):
         # data available locally
         expt_path = Path(expt_id)
         assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
-        if is_zarr == True:  # data in multiple folders, such as zarr
-            return DatasetZarr(expt_path, **kwargs)
+        if is_zarr is True:  # data in multiple folders, such as zarr
+            if is_monozarr:
+                return DatasetMonoZarr(expt_path)
+            else:
+                return DatasetZarr(expt_path, **kwargs)
         else:  # It is a directory containing all images inside (possibly nested)
             return DatasetDir(expt_path, **kwargs)
 
@@ -120,7 +125,14 @@ class DatasetMonoZarr(DatasetLocalABC):
         super().__init__(dpath)
 
     def get_position_ids(self):
-        pass
+        import zarr
+
+        store = zarr.storage.LocalStore(self.path)
+        root = zarr.group(store)
+
+        position_ids = {key: root[key] for key in root.keys()}
+
+        return position_ids
 
 
 class DatasetZarr(DatasetLocalABC):
