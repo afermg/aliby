@@ -113,8 +113,21 @@ class DatasetLocalABC(ABC):
         pass
 
 
+class DatasetMonoZarr(DatasetLocalABC):
+    """The images are arrays at the root level of a zarr file."""
+
+    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
+        super().__init__(dpath)
+
+    def get_position_ids(self):
+        pass
+
+
 class DatasetZarr(DatasetLocalABC):
-    """Find paths to a data set, comprising multiple images in different folders."""
+    """Find paths to a data set, comprising multiple images in different folders.
+
+    Each position (or site) is one zarr file.
+    """
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
