@@ -84,7 +84,7 @@ def init_step(
             # For the final step we provide the address used for setting the remote up
             step = partial(process, address=address)
         case _:
-            raise Exception("Invalid step name")
+            raise Exception(f"Invalid step name {step_name=}")
 
     return step
 
@@ -111,7 +111,9 @@ def pipeline_step(
 
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
-    passed_methods = pipeline["passed_methods"]
+    passed_methods = pipeline[
+        "passed_methods"
+    ]  # TODO This is used to pass data from Tiler, replace with passed_data
     tp = list(state.get("tps", {None: 0}).values())[0]
     if not tp:  # Initialise steps
         state = {"tps": dict(zip(steps, cycle([0]))), "data": {}, "fn": {}}

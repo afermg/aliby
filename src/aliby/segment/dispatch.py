@@ -117,6 +117,7 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
             pretrained = {}
             if model_type.startswith("/"):
                 pretrained["pretrained_model"] = model_type
+
             model = CellposeModel(
                 **pretrained,
                 gpu=gpu,
