@@ -274,12 +274,16 @@ class Tiler(StepABC):
             "pixels": self.get_pixels(tp),
         }
 
-    def get_pixels(self, tp: int) -> da.array:
+    def get_pixels(self, tp: int) -> np.ndarray:
         """
         Load multidimensional image for a given time point.
         Note that this one does not apply image tracking.
         """
-        return self.pixels[tp]
+        full = self.pixels[tp]
+        if hasattr(full, "compute"):
+            # if using dask fetch images
+            full = full.compute(scheduler="synchronous")
+        return full
 
     @lru_cache(maxsize=2)
     def load_image(self, tp: int, c: int) -> np.ndarray:
