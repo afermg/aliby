@@ -111,6 +111,9 @@ def pipeline_step(
 
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
+    # Specifies method calls between steps to get data.
+    # Format: {consumer_step: (producer_step, method_name, parameter_key)}
+    # parameter_key is pulled from the "parameters" subdict
     passed_methods = pipeline[
         "passed_methods"
     ]  # TODO This is used to pass data from Tiler, replace with passed_data
@@ -127,6 +130,9 @@ def pipeline_step(
         # Pass input data if available
         this_step_receives = pipeline["passed_data"].get(step_name, {})
 
+        # Specifies method calls between steps to get data.
+        # Format: {consumer_step: (producer_step, method_name, parameter_key)}
+        # parameter_key is pulled from the "parameters" subdict
         passed_data = {}
         for kwd, from_step in this_step_receives:
             passed_value = state["data"].get(from_step, [])
@@ -168,6 +174,7 @@ def pipeline_step(
         steps_to_write = pipeline.get("save", [])
         save_interval = pipeline.get("save_interval", 0)
         if len(steps_to_write) and not (tp % save_interval):
+            print(f"Saving {step_name} to {steps_dir}")
             if step_name in steps_to_write:
                 write_fn = dispatch_write_fn(step_name)
                 write_fn(

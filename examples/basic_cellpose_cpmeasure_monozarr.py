@@ -3,6 +3,10 @@
 
 from itertools import combinations, product
 from pathlib import Path
+from time import perf_counter
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 from aliby.io.dataset import dispatch_dataset
 from aliby.pipe import run_pipeline_and_post
@@ -20,18 +24,29 @@ def _create_extract_multich_tree(channels: list[int]) -> dict:
     }
 
 
-fpath = "/work/datasets/jump_toy/zstd.zarr"
+fpath = "../../../../../work/datasets/jump_toy_compress/zstd.zarr/"
 dset = dispatch_dataset(fpath, is_monozarr=True)
 image_paths = dset.get_position_ids()
+# t2_plate = [v for k, v in image_paths.items() if "BR00121438" in k]
+t2_plate = [v for k, v in image_paths.items() if "BR00125163" in k]
 
+# input_path = t2_plate[0]
 input_path = list(image_paths.values())[0]
+
+for i, v in enumerate(np.array(input_path)):
+    plt.imshow(v)
+    plt.savefig(f"{i}_new.png")
+    plt.close()
+
+# %%
 fluo_base_config = {
     "input_path": input_path,
     "capture_order": "CYX",
     "ntps": 1,
-    "segmentation_channel": {"nuclei": 1, "cell": 4},
+    # AGP, DNA, ER, Mito, RNA
+    "segmentation_channel": {"nuclei": 1, "cell": 2},
 }
-fl_channels = range(1, 3)
+fl_channels = range(0, 5)
 
 segmentation_channel: dict[str, int] = fluo_base_config["segmentation_channel"]
 seg_params = {
@@ -50,13 +65,13 @@ extract_base = dict(
         **{
             i: {
                 "max": [
-                    # "radial_zernikes",
                     "intensity",
                     "sizeshape",
-                    # "ferret",
-                    # "texture",
-                    # "radial_distribution",
-                    # "zernike",
+                    "ferret",
+                    "texture",
+                    "radial_distribution",
+                    "zernike",
+                    "radial_zernikes",
                     # "granularity", # Too time-consuming, deactivated for now
                 ]
             }
@@ -77,9 +92,9 @@ ext_params = {
 
 base_pipeline = {
     "io": {**fluo_base_config},
-    "nchannels": 2,
+    "nchannels": len(fl_channels),
     "fl_channels": fl_channels,
-    "extract_multich_tree": _create_extract_multich_tree(range(1, 3)),
+    # "extract_multich_tree": _create_extract_multich_tree(fl_channels),
     "steps": dict(
         tile=dict(
             image_kwargs=dict(
@@ -109,8 +124,10 @@ base_pipeline = {
     },
 }
 
+# %%
 output_path = Path("output")
 capture_order: str = base_pipeline["io"]["capture_order"]
+t0 = perf_counter()
 result, _ = run_pipeline_and_post(
     pipeline=base_pipeline,
     img_source=input_path,
@@ -118,3 +135,4 @@ result, _ = run_pipeline_and_post(
     fov=input_path.name[1:],
     overwrite=True,
 )
+print(f"It took {perf_counter() - t0} seconds")

@@ -242,7 +242,7 @@ class ImageZarrArray(BaseLocalImage):
             da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
         )
 
-    def get_data_lazy(self) -> da.Array:
+    def get_data_lazy(self) -> np.ndarray:
         return self._img
 
     # def add_size_to_meta(self):
