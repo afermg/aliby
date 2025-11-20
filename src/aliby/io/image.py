@@ -58,6 +58,8 @@ def dispatch_image(source: str or int or dict[str, str] or Path):
         img_type = Image
     elif isinstance(source, (list, tuple)):  # Local files
         img_type = ImageList
+    elif isinstance(source, zarr.core.array.Array):
+        img_type = ImageZarrArray
     else:
         match Path(source):
             case s if "*" in str(s):  # Wildcard
@@ -227,17 +229,17 @@ class ImageZarrArray(BaseLocalImage):
 
     def __init__(
         self,
-        zarr_arr: zarr.core.array.Array,
+        source: zarr.core.array.Array,
         capture_order: str = "CYX",
         dimorder: str = "TCZYX",
     ):
-        self.zarr_arr = zarr_arr
-        self.path = zarr_arr.store
+        self.zarr_arr = source
+        self.path = source.store
+        self.capture_order = capture_order
         self.dimorder = dimorder
-
-        da_pixels = da.array(zarr_arr)
+        da_pixels = da.array(self.zarr_arr)
         self._img = adjust_dimensions(
-            da_pixels, capture_order=capture_order, dimorder=dimorder
+            da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
         )
 
     def get_data_lazy(self) -> da.Array:
@@ -531,7 +533,6 @@ def adjust_dimensions(lazy: da.array, capture_order: str, dimorder: str) -> da.a
         "Post-adjustment captureorder and dimorder do not match."
     )
     # sort capture_order to match dimorder
-    lazy = da.moveaxis(
-        lazy, [capture_order.index(i) for i in dimorder], range(len(dimorder))
-    )
+    new_order = [capture_order.index(i) for i in dimorder]
+    lazy = da.moveaxis(lazy, new_order, range(len(new_order)))
     return lazy
