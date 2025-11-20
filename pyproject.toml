@@ -21,7 +21,6 @@ dependencies = [
     "loguru>=0.7.3",
     "pandas>=2.3.2",
     "centrosome>=1.3.1",
-    "nahual",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +38,9 @@ dev = [
 ]
 examples = [
     "pooch>=1.8.2",
+]
+nahual = [
+    "nahual>=0.0.6",
 ]
 test = [
     "pytest>=8.4.2",
@@ -82,6 +84,3 @@ ignore = ["E501"]
 
 # 3. Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
-
-[tool.uv.sources]
-nahual = { path = "../nahual", editable = true }
