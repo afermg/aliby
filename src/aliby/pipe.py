@@ -64,11 +64,16 @@ def init_step(
             step = dispatch_tracker(**parameters)
         case s if s.startswith("extract_"):
             step = partial(
-                process_tree_masks, measure_fn=extract_tree, tree=parameters["tree"]
+                process_tree_masks,
+                measure_fn=extract_tree,
+                tree=parameters["tree"],
+                **parameters["kwargs"],
             )
         case s if s.startswith("extractmulti_"):
             step = partial(
-                process_tree_masks, measure_fn=extract_tree_multi, tree=parameters
+                process_tree_masks,
+                measure_fn=extract_tree_multi,
+                tree=parameters ** parameters["kwargs"],
             )
             # Nahual steps (running server in a different process)
         case s if s.startswith("nahual"):

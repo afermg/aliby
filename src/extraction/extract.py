@@ -9,9 +9,8 @@ Types of measurements:
 - TODO Two masks (e.g., neighbours)
 """
 
-import os
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from itertools import product
 
@@ -194,6 +193,8 @@ def process_tree_masks(
     masks: list[np.ndarray],
     pixels: np.ndarray,
     measure_fn: Callable,
+    ncores: int or None = None,
+    progress_bar: bool = False,
 ) -> tuple[list, list]:
     """
     Orchestrates the processing of all masks using a tree of instructions.
@@ -227,7 +228,9 @@ def process_tree_masks(
             instructions,
         )
     )
-    result = measure_fn(tileid_instructions, masks, pixels)
+    result = measure_fn(
+        tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
+    )
 
     return tileid_instructions, result
 
@@ -236,7 +239,8 @@ def extract_tree(
     tileid_instructions: tuple[np.ndarray, tuple[int or str, str, str, str]],
     masks: list[np.ndarray],
     pixels: np.ndarray,
-    threaded: bool = True,
+    ncores: bool = True,
+    progress_bar: bool = False,
 ) -> dict[str, np.ndarray]:
     """
     Extracts features from one channels.
@@ -257,39 +261,9 @@ def extract_tree(
     """
     result = []
     if len(tileid_instructions):
-        if threaded:  # Threaded or not
-            with ProcessPoolExecutor() as ex:
-                binmasks = list(x for x in ex.map(transform_2d_to_3d, masks))
-                # result = list(
-                #     ex.map(
-                #         partial(
-                #             measure_mono,
-                #             masks=binmasks,
-                #             pixels=pixels,
-                #             REDUCTION_FUNS=REDUCTION_FUNS,
-                #             CELL_FUNS=CELL_FUNS,
-                #         ),
-                #         tileid_instructions,
-                #     )
-                # )
-                result = list(
-                    Parallel(n_jobs=min(len(tileid_instructions), 200))(
-                        delayed(
-                            partial(
-                                measure_mono,
-                                masks=binmasks,
-                                pixels=pixels,
-                                REDUCTION_FUNS=REDUCTION_FUNS,
-                                CELL_FUNS=CELL_FUNS,
-                            )
-                        )(x)
-                        for x in tqdm(tileid_instructions)
-                    )
-                )
-        else:
-            binmasks = [transform_2d_to_3d(mask) for mask in masks]
-            # These should be a list of binary masks
-            result = []
+        # These should be a list of binary masks
+        binmasks = [transform_2d_to_3d(mask) for mask in masks]
+        if ncores is None:  # Threaded or not
             for tileid_x in tqdm(tileid_instructions):
                 measurement = measure_mono(
                     tileid_x,
@@ -299,6 +273,21 @@ def extract_tree(
                     CELL_FUNS=CELL_FUNS,
                 )
                 result.append(measurement)
+        else:
+            result = list(
+                Parallel(n_jobs=min(len(tileid_instructions), ncores))(
+                    delayed(
+                        partial(
+                            measure_mono,
+                            masks=binmasks,
+                            pixels=pixels,
+                            REDUCTION_FUNS=REDUCTION_FUNS,
+                            CELL_FUNS=CELL_FUNS,
+                        )
+                    )(x)
+                    for x in tqdm(tileid_instructions)
+                )
+            )
     return result
 
 
@@ -308,7 +297,8 @@ def extract_tree_multi(
     ],
     masks: list[np.ndarray],
     pixels: np.ndarray,
-    threaded: bool = False,
+    ncores: None or int = None,
+    progress_bar: bool = False,
 ) -> list:
     """
     Extracts features from multiple channels.
@@ -336,31 +326,34 @@ def extract_tree_multi(
     assert isinstance(masks, list) or masks.ndim >= 3, (
         "Masks dimensions < 2. It should include batch/tile dimension."
     )
-    if threaded:
-        with ThreadPoolExecutor() as ex:
-            binmasks = list(x for x in ex.map(transform_2d_to_3d, masks))
-            result = ex.map(
-                partial(
-                    measure_multi,
+    if len(tileid_instructions):
+        binmasks = [transform_2d_to_3d(mask) for mask in masks]
+        if ncores is None:
+            result = list(
+                Parallel(
+                    delayed(
+                        partial(
+                            measure_multi,
+                            masks=binmasks,
+                            pixels=pixels,
+                            REDUCTION_FUNS=REDUCTION_FUNS,
+                            CELL_FUNS=CELL_FUNS,
+                        )
+                    )(x)
+                    for x in tileid_instructions
+                )
+            )
+        else:
+            result = [
+                measure_multi(
+                    ids_instructions,
                     masks=binmasks,
                     pixels=pixels,
                     REDUCTION_FUNS=REDUCTION_FUNS,
                     CELL_FUNS=CELL_FUNS,
-                ),
-                tileid_instructions,
-            )
-    else:
-        binmasks = [transform_2d_to_3d(mask) for mask in masks]
-        result = [
-            measure_multi(
-                ids_instructions,
-                masks=binmasks,
-                pixels=pixels,
-                REDUCTION_FUNS=REDUCTION_FUNS,
-                CELL_FUNS=CELL_FUNS,
-            )
-            for ids_instructions in tileid_instructions
-        ]
+                )
+                for ids_instructions in tileid_instructions
+            ]
 
     return result
 
