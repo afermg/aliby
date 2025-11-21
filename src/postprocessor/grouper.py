@@ -1,16 +1,17 @@
+"""Class to concatenate signals across different microscope positions."""
+
 import typing as t
 from abc import ABC
 from collections import Counter
 from functools import cached_property as property
 from pathlib import Path
 from typing import Union
-from tqdm import tqdm
+
 import h5py
 import numpy as np
 import pandas as pd
-from pathos.multiprocessing import Pool
-
 from agora.io.signal import Signal
+from tqdm import tqdm
 
 
 class Grouper(ABC):
@@ -92,7 +93,7 @@ class Grouper(ABC):
     def concat_signal(
         self,
         path: str,
-        pool: t.Optional[int] = None,
+        cutoff: float,
         mode: str = "retained",
         selected_positions: t.List[str] = None,
         **kwargs,
@@ -106,8 +107,6 @@ class Grouper(ABC):
         ----------
         path : str
            Signal location within h5 file.
-        pool : int (optional)
-           Number of threads used; if 0 or None only one core is used.
         mode: str
            If "retained" (default), return Signal with merging, picking, and lineage
             information applied but only for cells present for at least some
@@ -139,14 +138,20 @@ class Grouper(ABC):
                 if key in selected_positions
             }
         if good_positions:
+            # pass mode to Signal
             kwargs["mode"] = mode
-            records = self.pool_function(
-                path=path,
-                f=concat_one_signal,
-                pool=pool,
-                positions=good_positions,
-                **kwargs,
-            )
+            # find signals
+            records = [
+                concat_one_signal(
+                    path=path,
+                    position=position,
+                    group=self.positions_groups[name],
+                    position_name=name,
+                    cutoff=cutoff,
+                    **kwargs,
+                )
+                for name, position in good_positions.items()
+            ]
             # check for errors
             errors = [
                 position
@@ -189,46 +194,6 @@ class Grouper(ABC):
                 f" contain {path}."
             )
         return good_positions
-
-    def pool_function(
-        self,
-        path: str,
-        f: t.Callable,
-        pool: t.Optional[int] = None,
-        positions: t.Dict[str, Signal] = None,
-        **kwargs,
-    ):
-        """
-        Enable different threads for different positions.
-
-        Typically arguments used by grouper:
-            f= concat_one_signal
-        """
-        positions = positions or self.positions
-        if pool:
-            with Pool(pool) as p:
-                records = p.map(
-                    lambda x: f(
-                        path=path,
-                        position=x[1],
-                        group=self.positions_groups[x[0]],
-                        position_name=x[0],
-                        **kwargs,
-                    ),
-                    positions.items(),
-                )
-        else:
-            records = [
-                f(
-                    path=path,
-                    position=position,
-                    group=self.positions_groups[name],
-                    position_name=name,
-                    **kwargs,
-                )
-                for name, position in positions.items()
-            ]
-        return records
 
     @property
     def no_tiles(self):
@@ -303,9 +268,9 @@ def concat_one_signal(
     path: str,
     position: Signal,
     group: str,
-    mode: str = "retained",
-    position_name=None,
-    cutoff: float = 0,
+    cutoff: float,
+    mode: str,
+    position_name: str,
     **kwargs,
 ) -> pd.DataFrame:
     """

@@ -94,18 +94,16 @@ class Signal(BridgeH5):
                 )
                 return global_settings.default_time_interval
 
-    def retained(self, signal, cutoff: float = 0):
+    def retained(self, signal, cutoff: float):
         """Get retained cells for a Signal or list of Signals."""
-        # get data frame
         if isinstance(signal, str):
             signal = self.get(signal)
-        elif isinstance(signal, list):
-            signal = [self.get(s) for s in signal]
-        # apply cutoff
-        if isinstance(signal, pd.DataFrame):
             return self.apply_cutoff(signal, cutoff)
         elif isinstance(signal, list):
+            signal = [self.get(s) for s in signal]
             return [self.apply_cutoff(s, cutoff) for s in signal]
+        else:
+            raise ValueError("signal not recognised in Signal.retained.")
 
     @staticmethod
     def apply_cutoff(df, cutoff):
