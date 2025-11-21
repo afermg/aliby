@@ -18,10 +18,12 @@ name = "aliby"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cellpose" },
     { name = "centrosome" },
     { name = "cp-measure" },
     { name = "dask" },
     { name = "loguru" },
+    { name = "nahual" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pooch" },
@@ -40,9 +42,6 @@ cellpose = [
 ]
 
 [package.dev-dependencies]
-cellpose = [
-    { name = "cellpose" },
-]
 dev = [
     { name = "jupyter" },
     { name = "jupytext" },
@@ -52,20 +51,19 @@ dev = [
 examples = [
     { name = "pooch" },
 ]
-nahual = [
-    { name = "nahual" },
-]
 test = [
     { name = "pytest" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cellpose", specifier = ">=3.1.1.1" },
     { name = "cellpose", marker = "extra == 'cellpose'", specifier = ">=3.1.1.1" },
     { name = "centrosome", specifier = ">=1.3.1" },
     { name = "cp-measure", specifier = ">=0.1.7,<0.2" },
     { name = "dask", specifier = ">=2021.12.0" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "nahual", specifier = ">=0.0.6" },
     { name = "numpy", specifier = ">=1.18" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "pooch", specifier = ">=1.8.2,<2" },
@@ -78,7 +76,6 @@ requires-dist = [
 provides-extras = ["cellpose"]
 
 [package.metadata.requires-dev]
-cellpose = [{ name = "cellpose", specifier = ">=3.1.1.1" }]
 dev = [
     { name = "jupyter", specifier = ">=1.0.0,<2" },
     { name = "jupytext", specifier = ">=1.15.2,<2" },
@@ -86,7 +83,6 @@ dev = [
     { name = "ruff-lsp", specifier = ">=0.0.52" },
 ]
 examples = [{ name = "pooch", specifier = ">=1.8.2" }]
-nahual = [{ name = "nahual", specifier = ">=0.0.6" }]
 test = [{ name = "pytest", specifier = ">=8.4.2" }]
 
 [[package]]
@@ -977,7 +973,7 @@ name = "importlib-metadata"
 version = "8.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp" },
+    { name = "zipp", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/66/650a33bd90f786193e4de4b3ad86ea60b53c89b669a5c7be931fac31cdb0/importlib_metadata-8.7.0.tar.gz", hash = "sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000", size = 56641 }
 wheels = [
