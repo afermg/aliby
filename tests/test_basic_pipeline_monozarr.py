@@ -1,9 +1,14 @@
 #!/usr/bin/env jupyter
 """Test a basic pipeline with a unique zarr directory as input."""
 
+import shutil
+from concurrent.futures import ThreadPoolExecutor
 from itertools import combinations, product
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, strftime
+
+from joblib import Parallel, delayed
+from loguru import logger
 
 from aliby.io.dataset import dispatch_dataset
 from aliby.pipe import run_pipeline_and_post
@@ -21,13 +26,22 @@ def _create_extract_multich_tree(channels: list[int]) -> dict:
     }
 
 
-# fpath = "/work/datasets/jump_toy_compress/zstd.zarr/"
-fpath = "/work/datasets/jump_target2_subset_BR00121438/zstd.zarr/"
+dataset = "jump_target2_subset_BR00121438"
+fpath = f"/work/datasets/{dataset}/zstd.zarr/"
+output_path = Path("/work/datasets/aliby_output") / dataset
+
 dset = dispatch_dataset(fpath, is_monozarr=True)
 image_paths = dset.get_position_ids()
 
 # %%
 input_paths = list(image_paths.values())
+
+logger.add(f"{dataset}.log")
+if __name__ == "__main__":
+    timestamp = strftime("%s%m%d%H%M")
+
+    logger.add(output_path / f"{timestamp}_{dataset}.log")
+    shutil.copy(__file__, output_path / f"{timestamp}_script.py")
 
 
 def process_input_path(input_path: str):
@@ -35,10 +49,10 @@ def process_input_path(input_path: str):
         "input_path": input_path,
         "capture_order": "CYX",
         "ntps": 1,
-        "segmentation_channel": {"nuclei": 1, "cell": 4},
+        "segmentation_channel": {"nuclei": 1, "cell": 2},
         # "gstep_params": {},
     }
-    fl_channels = range(1, 3)
+    fl_channels = range(5)
 
     segmentation_channel: dict[str, int] = fluo_base_config["segmentation_channel"]
     seg_params = {
@@ -88,9 +102,9 @@ def process_input_path(input_path: str):
 
     base_pipeline = {
         "io": {**fluo_base_config},
-        "nchannels": 2,
+        "nchannels": 5,
         "fl_channels": fl_channels,
-        "extract_multich_tree": _create_extract_multich_tree(range(1, 3)),
+        "extract_multich_tree": _create_extract_multich_tree(fl_channels),
         "steps": dict(
             tile=dict(
                 image_kwargs=dict(
@@ -120,29 +134,27 @@ def process_input_path(input_path: str):
             f"segment_{obj}": ("tile", "get_tp_data", "img_channel")
             for obj in segmentation_channel
         },
+        "save": (
+            # "tile",
+            *seg_params.keys(),
+        ),
+        "save_interval": 1,
     }
 
-    expt_name = str(input_path).split("/")[5]
-    output_path = Path("/work/datasets/") / expt_name / input_path.path
-
-    # t0 = perf_counter()
     result, _ = run_pipeline_and_post(
         pipeline=base_pipeline,
         img_source=input_path,
         output_path=output_path,
         fov=input_path.path,
-        overwrite=True,
+        overwrite=False,
     )
-    # print(f"Data {i} took {perf_counter() - t0} seconds")
 
 
-from concurrent.futures import ProcessPoolExecutor
-from functools import partial
+if True:
+    result = Parallel(21)(delayed(process_input_path)(x) for x in input_paths)
+else:
+    from tqdm import tqdm
 
-with ProcessPoolExecutor() as p:
-    result = list(
-        p.map(
-            process_input_path,
-            input_paths,
-        )
-    )
+    t0 = perf_counter()
+    result = [process_input_path(input_path) for input_path in tqdm(input_paths)]
+    print(f"Processing took {perf_counter() - t0} seconds")

@@ -173,9 +173,9 @@ def pipeline_step(
         # Save state
         steps_to_write = pipeline.get("save", [])
         save_interval = pipeline.get("save_interval", 0)
-        if len(steps_to_write) and (tp == 0 or not (tp % save_interval)):
-            print(f"Saving {step_name} to {steps_dir}")
+        if len(steps_to_write) and (tp == 0 or (tp % save_interval) == 0):
             if step_name in steps_to_write:
+                print(f"Saving {step_name} to {steps_dir}")
                 write_fn = dispatch_write_fn(step_name)
                 write_fn(
                     step_result,

@@ -9,13 +9,16 @@ Types of measurements:
 - TODO Two masks (e.g., neighbours)
 """
 
+import os
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial, reduce
 from itertools import product
 
 import numpy as np
 import pyarrow as pa
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 from agora.utils.masks import transform_2d_to_3d
 from extraction.core.functions.distributors import reduce_z
@@ -233,7 +236,7 @@ def extract_tree(
     tileid_instructions: tuple[np.ndarray, tuple[int or str, str, str, str]],
     masks: list[np.ndarray],
     pixels: np.ndarray,
-    threaded: bool = False,
+    threaded: bool = True,
 ) -> dict[str, np.ndarray]:
     """
     Extracts features from one channels.
@@ -252,34 +255,50 @@ def extract_tree(
     list
         A list of extracted features from the tree branches.
     """
-    if threaded:  # Threaded or not
-        with ThreadPoolExecutor() as ex:
-            binmasks = list(x for x in ex.map(transform_2d_to_3d, masks))
-            result = list(
-                ex.map(
-                    partial(
-                        measure_mono,
-                        masks=binmasks,
-                        pixels=pixels,
-                        REDUCTION_FUNS=REDUCTION_FUNS,
-                        CELL_FUNS=CELL_FUNS,
-                    ),
-                    tileid_instructions,
+    result = []
+    if len(tileid_instructions):
+        if threaded:  # Threaded or not
+            with ProcessPoolExecutor() as ex:
+                binmasks = list(x for x in ex.map(transform_2d_to_3d, masks))
+                # result = list(
+                #     ex.map(
+                #         partial(
+                #             measure_mono,
+                #             masks=binmasks,
+                #             pixels=pixels,
+                #             REDUCTION_FUNS=REDUCTION_FUNS,
+                #             CELL_FUNS=CELL_FUNS,
+                #         ),
+                #         tileid_instructions,
+                #     )
+                # )
+                result = list(
+                    Parallel(n_jobs=min(len(tileid_instructions), 200))(
+                        delayed(
+                            partial(
+                                measure_mono,
+                                masks=binmasks,
+                                pixels=pixels,
+                                REDUCTION_FUNS=REDUCTION_FUNS,
+                                CELL_FUNS=CELL_FUNS,
+                            )
+                        )(x)
+                        for x in tqdm(tileid_instructions)
+                    )
                 )
-            )
-    else:
-        binmasks = [transform_2d_to_3d(mask) for mask in masks]
-        # These should be a list of binary masks
-        result = [
-            measure_mono(
-                tileid_x,
-                masks=binmasks,
-                pixels=pixels,
-                REDUCTION_FUNS=REDUCTION_FUNS,
-                CELL_FUNS=CELL_FUNS,
-            )
-            for tileid_x in tileid_instructions
-        ]
+        else:
+            binmasks = [transform_2d_to_3d(mask) for mask in masks]
+            # These should be a list of binary masks
+            result = []
+            for tileid_x in tqdm(tileid_instructions):
+                measurement = measure_mono(
+                    tileid_x,
+                    masks=binmasks,
+                    pixels=pixels,
+                    REDUCTION_FUNS=REDUCTION_FUNS,
+                    CELL_FUNS=CELL_FUNS,
+                )
+                result.append(measurement)
     return result
 
 
