@@ -3,10 +3,10 @@ name = "aliby"
 version = "0.2.0"
 description = "Process and analyse live-cell imaging data"
 authors = [
-    { name = "Alan Munoz" },
+    { name = "Alan Munoz", email = "alan@quasimorphic.com" },
     { name = "Peter Swain", email = "peter.swain@ed.ac.uk" },
 ]
-requires-python = ">=3.9, <3.12"
+requires-python = ">=3.10, <3.13"
 readme = "README.md"
 dependencies = [
     "numpy>=1.18",
