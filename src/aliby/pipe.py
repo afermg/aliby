@@ -1,6 +1,4 @@
 #!/usr/bin/env jupyter
-
-
 """
 New and simpler pipeline that uses dictionaries as parameters and to define variable and between-step method execution.
 """
@@ -67,13 +65,14 @@ def init_step(
                 process_tree_masks,
                 measure_fn=extract_tree,
                 tree=parameters["tree"],
-                **parameters["kwargs"],
+                **parameters.get("kwargs", {}),
             )
         case s if s.startswith("extractmulti_"):
             step = partial(
                 process_tree_masks,
                 measure_fn=extract_tree_multi,
-                tree=parameters ** parameters["kwargs"],
+                tree=parameters["tree"],
+                **parameters.get("kwargs", {}),
             )
             # Nahual steps (running server in a different process)
         case s if s.startswith("nahual"):

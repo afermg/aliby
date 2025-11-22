@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 def dispatch_dataset(
-    expt_id: int or str, is_zarr: bool = True, is_monozarr: bool = False, **kwargs
+    expt_id: int or str, is_zarr: bool = False, is_monozarr: bool = False, **kwargs
 ):
     """
     Find paths to the data.
@@ -48,7 +48,7 @@ def dispatch_dataset(
         assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
         if is_zarr is True:  # data in multiple folders, such as zarr
             if is_monozarr:
-                return DatasetMonoZarr(expt_path)
+                return DatasetMonoZarr(expt_path, **kwargs)
             else:
                 return DatasetZarr(expt_path, **kwargs)
         else:  # It is a directory containing all images inside (possibly nested)
@@ -239,7 +239,7 @@ def organize_by_regex(
     is a list with the remaining dimensions (e.g., time point, channel, z-stack) sorted in the order defined by -dimorder_out-.
     """
     regex = re.compile(regex)
-    str_paths = list(map(str, sorted(Path(path).rglob("*.tif"))))
+    str_paths = list(map(str, sorted(Path(path).rglob("*.tif?"))))
     captures = list(map(lambda x: regex.match(x), str_paths))
     valid = [
         (*capture.groups(), pth) for pth, capture in zip(str_paths, captures) if capture

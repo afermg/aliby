@@ -354,8 +354,7 @@ class ImageMultiTiff(BaseLocalImage):
 
 class ImageList(BaseLocalImage):
     """
-    Image subclass that uses a wildcard or a (pre-sorted) list of images to associate images to channels. Assumes that every file is a 2-D array and the metadata that pertains to dimensions is encoded
-    in the filename. the metadata must be extracted using regular expressions
+    Image subclass that uses a wildcard or a (pre-sorted) list of images to associate images to channels. Assumes that every file is a 2-D array and the metadata that pertains to dimensions is encoded in the filename. the metadata must be extracted using regular expressions
     """
 
     def __init__(
@@ -364,6 +363,7 @@ class ImageList(BaseLocalImage):
         regex: str,
         capture_order: str,
         dimorder: str or None = None,  # output dimorder
+        input_dimensions: str = "YX",
         **kwargs,
     ):
         """
@@ -372,6 +372,7 @@ class ImageList(BaseLocalImage):
         self.path = source
         self.regex = regex
         self.capture_order = capture_order  #  or "CWTFZ"
+        self.input_dimensions = input_dimensions
         self._dimorder = dimorder or "TCZYX"
         if isinstance(source, str):  # The source is a wildcard
             self.image_filenames = sorted(
@@ -389,44 +390,86 @@ class ImageList(BaseLocalImage):
         return {}
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array."""
+        """Return 5D dask array from a list of images with a variable set of dimensions."""
         # Reshape first dimensions based on capture order
         lazy_arrays = [dask.delayed(imageio.imread)(fn) for fn in self.image_filenames]
         sample = lazy_arrays[0].compute()
+
+        # Perform some basic checks of data integrity
+        assert (
+            len(set("TCZ").intersection(self.dimorder_d))
+            or self.input_dimensions != "YX"
+        ), "Insuficient information to build multidimensional array."
+        assert len(self.input_dimensions) == sample.ndim, (
+            "The number of dimensions in one of the input files must match self.input_dimensions"
+        )
 
         lazy_arrays = [
             da.from_delayed(x, shape=sample.shape, dtype=sample.dtype)
             for x in lazy_arrays
         ]
 
-        # Maintain the original order
-        order, shape = list(
-            zip(*[(k, self.dimorder_d[k]) for k in self.dimorder_d if k in "TCZ"])
-        )
-
-        arr = np.zeros(
-            shape + (1, 1),
-            dtype=object,
-        )
-        nd_shape = np.array(
-            np.where(
-                np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape) + 1
+        if set(self.input_dimensions) == set("YX"):  # The most common case
+            # Maintain the original order
+            index_rank, shape = list(
+                zip(*[(k, v) for k, v in self.dimorder_d.items() if k in "TCZ"])
             )
-        ).transpose()
 
-        for i, (d1, d2, d3) in enumerate(nd_shape):
-            arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
+            arr = np.zeros(
+                shape + (1, 1),
+                dtype=object,
+            )
+            nd_shape = np.array(
+                np.where(
+                    np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape)
+                    + 1
+                )
+            ).transpose()
 
-        a = da.block(arr.tolist())
-        # rechunk to the last 3 dimensions. Leave time and channel unchunked
-        pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
-        # Move axes to match dimorder
-        source_target = {
-            order.index(y): i
-            for i, y in enumerate([x for x in self.dimorder if x in order])
-        }
+            for i, (d1, d2, d3) in enumerate(nd_shape):
+                arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
 
-        pixels = da.moveaxis(pixels, source_target.keys(), source_target.values())
+            a = da.block(arr.tolist())
+            # rechunk to the last 3 dimensions. Leave time and channel unchunked
+            pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
+            # Move axes to match dimorder
+            source_target = {
+                index_rank.index(y): i
+                for i, y in enumerate([x for x in self.dimorder if x in index_rank])
+            }
+
+            pixels = da.moveaxis(pixels, source_target.keys(), source_target.values())
+        else:
+            # This only covers YXC, TODO solve the general case
+            assert all(x in "TCZYX" for x in self.input_dimensions), (
+                "Input dimensions must only contain 'TCZYX'"
+            )
+            # Output must have shape TCZYX
+
+            self.dimorder_d = {dim: ix for ix, dim in enumerate(self.input_dimensions)}
+            # NOTE: This was hardcoded! later on use input_dimensions instead.
+            stacked = da.stack(lazy_arrays, axis=-1)[..., da.newaxis]
+            pixels = adjust_dimensions(stacked, capture_order="YXCTZ", dimorder="TCZYX")
+            # sample_shape = sample.shape
+
+            # nd_shape = np.array(
+            #     np.where(
+            #         np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape)
+            #         + 1
+            #     )
+            # ).transpose()
+
+            # missing_dims = set("TCZYX").difference(self.input_dimensions)
+            # arr_shape = (
+            #     sample.shape,
+            #     *[1 for _ in missing_dims],
+            # )
+            # arr = np.zeros(
+            #     arr_shape,
+            #     dtype=object,
+            # )
+            # for i in range(sample.ndim):
+            #     self.dimorder_d
 
         return pixels
 

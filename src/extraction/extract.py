@@ -239,7 +239,7 @@ def extract_tree(
     tileid_instructions: tuple[np.ndarray, tuple[int or str, str, str, str]],
     masks: list[np.ndarray],
     pixels: np.ndarray,
-    ncores: bool = True,
+    ncores: bool = False,
     progress_bar: bool = False,
 ) -> dict[str, np.ndarray]:
     """
@@ -326,11 +326,23 @@ def extract_tree_multi(
     assert isinstance(masks, list) or masks.ndim >= 3, (
         "Masks dimensions < 2. It should include batch/tile dimension."
     )
+    result = []
     if len(tileid_instructions):
         binmasks = [transform_2d_to_3d(mask) for mask in masks]
         if ncores is None:
+            result = [
+                measure_multi(
+                    ids_instructions,
+                    masks=binmasks,
+                    pixels=pixels,
+                    REDUCTION_FUNS=REDUCTION_FUNS,
+                    CELL_FUNS=CELL_FUNS,
+                )
+                for ids_instructions in tileid_instructions
+            ]
+        else:
             result = list(
-                Parallel(
+                Parallel(n_jobs=min(len(tileid_instructions), ncores))(
                     delayed(
                         partial(
                             measure_multi,
@@ -343,17 +355,6 @@ def extract_tree_multi(
                     for x in tileid_instructions
                 )
             )
-        else:
-            result = [
-                measure_multi(
-                    ids_instructions,
-                    masks=binmasks,
-                    pixels=pixels,
-                    REDUCTION_FUNS=REDUCTION_FUNS,
-                    CELL_FUNS=CELL_FUNS,
-                )
-                for ids_instructions in tileid_instructions
-            ]
 
     return result
 
