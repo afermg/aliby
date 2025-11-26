@@ -1,3 +1,5 @@
+"""Functions to identify cells in lineages."""
+
 import numpy as np
 import pandas as pd
 
@@ -78,7 +80,6 @@ def validate_lineage(
         c_index = 0
     elif how == "daughters":
         c_index = 1
-
     # if buds have two mothers, pick the first one
     lineage = lineage[
         ~pd.DataFrame(lineage[:, 1, :]).duplicated().values, :, :

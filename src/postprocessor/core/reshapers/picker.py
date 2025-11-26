@@ -1,3 +1,5 @@
+"""Define picker class to select cells, particularly those in lineages."""
+
 import typing as t
 
 import numpy as np
