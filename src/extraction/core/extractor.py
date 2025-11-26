@@ -58,7 +58,8 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
         tree_dict["tree"][ch] = copy.deepcopy(
             default_reduction_and_fluorescence_metrics
         )
-    tree_dict["sub_bg"] = extant_fluorescence_ch
+    # subtract background from all fluorescence channels
+    tree_dict["sub_bg"] = set(extant_fluorescence_ch)
     return tree_dict
 
 
@@ -105,6 +106,7 @@ class ExtractorParameters(ParametersABC):
             str channel -> U(function, None) reduction -> str metric
             If not of depth three, tree will be filled with None.
         sub_bg: set
+            A set of strings of the channels to correct for background.
         multichannel_funs: dict
             Dict of multichannel functions.
         """
@@ -192,7 +194,11 @@ class Extractor(StepABC):
         store: str,
         tiler: Tiler,
     ):
-        """Initiate from a tiler instance."""
+        """
+        Initiate from a tiler instance.
+
+        Used by pipeline.py.
+        """
         return cls(parameters, store=store, tiler=tiler)
 
     @classmethod

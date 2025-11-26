@@ -166,7 +166,7 @@ class PipelineParameters(ParametersABC):
                     defaults["general"][k][k2] = v2
             else:
                 defaults["general"][k] = v
-        # reset default z section
+        # reset default z section using metadata
         if "number_z_sections" in defaults["metadata"]["full"]:
             # current metadata
             ref_z = (
