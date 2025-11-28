@@ -203,8 +203,8 @@ def process_tree_masks(
     ----------
     tree : dict
         The tree to be processed.
-    masks : numpy array
-        The mask values.
+    masks : list of numpy arrays
+        The mask values, the list level at the top indicates multiple tiles.
     pixels : numpy array
         The pixel values.
     measure_fn : callable
@@ -215,6 +215,8 @@ def process_tree_masks(
     tuple
         A tuple containing the instructions and results.
     """
+    if not isinstance(masks, list):  # Hacky fix when tile level is not provided
+        masks = [masks]
     instructions = kv(flatten(tree))
     tileid_instructions = tuple(
         product(
