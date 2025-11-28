@@ -64,7 +64,7 @@
               packages = [
                 python_with_pkgs
                 python3Packages.venvShellHook
-                # We # We now recommend to use uv for package management inside nix env
+                # We now recommend to use uv for package management inside nix env
                 pkgs.uv
               ]
               ++ libList;

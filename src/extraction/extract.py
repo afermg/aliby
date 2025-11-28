@@ -10,7 +10,6 @@ Types of measurements:
 """
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from itertools import product
 
