@@ -24,6 +24,7 @@ from extraction.extract import (
     extract_tree_multi,
     format_extraction,
     process_tree_masks,
+    process_tree_masks_overlap,
 )
 
 
@@ -61,8 +62,12 @@ def init_step(
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
         case s if s.startswith("extract_"):
+            # Whether to use overlapping masks or not
+            process = process_tree_masks
+            if parameters.get("overlap"):
+                process = process_tree_masks_overlap
             step = partial(
-                process_tree_masks,
+                process,
                 measure_fn=extract_tree,
                 tree=parameters["tree"],
                 **parameters.get("kwargs", {}),
@@ -144,8 +149,8 @@ def pipeline_step(
             if len(passed_value):
                 if (
                     step_name == "track" and kwd == "masks"
-                ):  # Only tracking segmentation masks require multiple time points
-                    # Convert tp,tile,y,x to tile,tp,y,x for stitch tracking
+                ):  # Only tracking  masks require multiple time points
+                    # Convert tp,tile,y,x -> tile,tp,y,x for stitch tracking
                     passed_data[kwd] = [
                         [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
                         for tile in range(len(passed_value[-1]))
@@ -187,6 +192,7 @@ def pipeline_step(
                     subpath=step_name,
                     tp=tp,
                 )
+
         # Update state
         # TODO replace this with a variable to adjust ntps in memory
         state["data"][step_name].append(step_result)

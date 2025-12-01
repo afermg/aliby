@@ -16,6 +16,7 @@ from itertools import product
 import numpy as np
 import pyarrow as pa
 from joblib import Parallel, delayed
+from skimage.segmentation import relabel_sequential
 from tqdm import tqdm
 
 from agora.utils.masks import transform_2d_to_3d
@@ -203,7 +204,7 @@ def process_tree_masks(
     tree : dict
         The tree to be processed.
     masks : list of numpy arrays
-        The mask values, the list level at the top indicates multiple tiles.
+        The mask values, the list level at the top indicates multiple tiles. timensions are F(tiles)YX.
     pixels : numpy array
         The pixel values.
     measure_fn : callable
@@ -358,6 +359,71 @@ def extract_tree_multi(
             )
 
     return result
+
+
+def process_tree_masks_overlap(  # overlap
+    tree: dict,
+    masks: list[np.ndarray],
+    pixels: np.ndarray,
+    measure_fn: Callable,
+    ncores: int or None = None,
+    progress_bar: bool = False,
+    overlap: bool = True,
+) -> tuple[list, list]:
+    """
+    Orchestrates the processing of all masks using a tree of instructions.
+
+    Parameters
+    ----------
+    tree : dict
+        The tree to be processed.
+    masks : list of numpy arrays
+        The mask values, the list level at the top indicates multiple tiles. Their dimension is N(non-overlapping)YX.
+    pixels : numpy array
+        The pixel values.
+    measure_fn : callable
+        The measurement function to apply, it can be `measure_mono` or `measure_multi`.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the instructions and results.
+    """
+    if not isinstance(masks, list):  # Hacky fix when tile level is not provided
+        masks = [masks]
+
+    # Currently the only overlapping masks are produced using baby,
+    # which also come in non-sequential order.
+    # Map into a
+    instructions = kv(flatten(tree))
+
+    tile_mask_indices = []
+    inverse_mappings = {}
+    for tile_i, masks_in_tile in enumerate(masks):
+        for overlap_stack_i in range(len(masks_in_tile)):
+            relabeled, _, inverse_mapping = relabel_sequential(
+                masks_in_tile[overlap_stack_i]
+            )
+            for mask_i in range(
+                1, max(inverse_mapping) + 1
+            ):  # Labels should not be 0-indexed, and it should match the nuber of masks!
+                tile_mask_indices = (
+                    tile_i,
+                    overlap_stack_i,
+                    mask_i,
+                )
+                inverse_mappings[tile_mask_indices] = inverse_mapping
+
+    tileid_instructions = tuple(product(tile_mask_indices, instructions))
+    result = measure_fn(
+        tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
+    )
+
+    # Revert reduced map to expanded one (with global identifiers)
+    # for keys, v in result.items():
+    #     tile_i, overlap_stack_i, mask_i = keys
+    #     original_labels = inverse_mappings[keys]
+    return tileid_instructions, result, inverse_mappings
 
 
 def format_extraction(
