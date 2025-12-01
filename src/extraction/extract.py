@@ -400,19 +400,12 @@ def process_tree_masks_overlap(  # overlap
     tile_mask_indices = []
     inverse_mappings = {}
     for tile_i, masks_in_tile in enumerate(masks):
-        for overlap_stack_i in range(len(masks_in_tile)):
-            relabeled, _, inverse_mapping = relabel_sequential(
-                masks_in_tile[overlap_stack_i]
-            )
-            for mask_i in range(
-                1, max(inverse_mapping) + 1
-            ):  # Labels should not be 0-indexed, and it should match the nuber of masks!
-                tile_mask_indices = (
-                    tile_i,
-                    overlap_stack_i,
-                    mask_i,
-                )
-                inverse_mappings[tile_mask_indices] = inverse_mapping
+        for stack_i in range(len(masks_in_tile)):
+            relabeled, _, inverse_mapping = relabel_sequential(masks_in_tile[stack_i])
+            inverse_mappings[(tile_i, stack_i)] = inverse_mapping
+            # Labels should not be 0-indexed, and it should match the nuber of masks!
+            for mask_i in range(1, max(inverse_mapping) + 1):
+                tile_mask_indices = (tile_i, stack_i, mask_i)
 
     tileid_instructions = tuple(product(tile_mask_indices, instructions))
     result = measure_fn(
@@ -451,6 +444,59 @@ def format_extraction(
         ):  # When an instruction results in a scalaer (e.g., max2p5pc)
             formatted["tile"].append(tileid)
             formatted["label"].append(label)
+            formatted["branch"].append(branch)
+            formatted["metric"].append(inst[1][-1])
+            formatted["value"].append(metrics)
+        elif isinstance(
+            metrics, dict
+        ):  # When it results in a dictionary (e.g., cp_measure measurements)
+            for k, values in metrics.items():
+                for value in values:
+                    formatted["branch"].append(branch)
+                    formatted["metric"].append(k)
+                    formatted["value"].append(value)
+                    formatted["tile"].append(tileid)
+                    formatted["label"].append(label)
+        elif isinstance(metrics, list):  # When it results in a list of values (e.g., ?)
+            for value in metrics:
+                formatted["tile"].append(tileid)
+                formatted["label"].append(label)
+                formatted["branch"].append(branch)
+                formatted["metric"].append(inst[1][-1])
+                formatted["value"].append(value)
+
+    arrow_table = pa.Table.from_pydict(formatted)
+    return arrow_table
+
+
+def format_extraction_overlap(
+    instructions_result: tuple[list, list, list],
+) -> pa.lib.Table:
+    """
+    Formats the extraction results into a pyarrow table.
+
+    Parameters
+    ----------
+    instructions_result : tuple of lists
+        The instructions and results to be formatted.
+
+    Returns
+    -------
+    pyarrow Table
+        The formatted table.
+    """
+    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
+    inverse_mappings = instructions_result[-1]
+    instructions_result = instructions_result[:2]
+    for inst, metrics in zip(*instructions_result):
+        tileid, stack_id, label = inst[0]
+        branch = "/".join(str(x) for x in inst[1])
+        inverse_mapping = inverse_mappings[tileid, stack_id]
+        if isinstance(
+            metrics, int
+        ):  # When an instruction results in a scalaer (e.g., max2p5pc)
+            formatted["tile"].append(tileid)
+            formatted["label"].append(inverse_mapping[label])
             formatted["branch"].append(branch)
             formatted["metric"].append(inst[1][-1])
             formatted["value"].append(metrics)
