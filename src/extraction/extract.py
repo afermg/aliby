@@ -151,8 +151,52 @@ def measure_mono(
     )
 
 
-def measure_multi(
+def measure_mono_overlap(
     tileid_x: tuple[int, tuple],
+    masks: np.ndarray,
+    pixels: np.ndarray,
+    REDUCTION_FUNS: dict[str, Callable] = REDUCTION_FUNS,
+    CELL_FUNS: dict[str, Callable] = CELL_FUNS,
+) -> np.ndarray:
+    """
+    Applies a metric on a z-reduced image and mask pairs.
+
+    This function coordinates indices, data and callables.
+
+    Parameters
+    ----------
+    mask : numpy array
+        The mask to be applied.
+    pixels : numpy array or None
+        The pixel values. If None, no pixels are used.
+    reduction : callable
+        The reduction function to apply.
+    metric : callable
+        The metric function to apply.
+
+    Returns
+    -------
+    numpy array
+        The result of the metric application.
+
+
+    Notes
+    -----
+    By convention tiles are 1-indexed (to follow skimage),
+    So we ought to subtract one to make it mask indices.
+    """
+
+    (tile_i, stack_i, mask_label), (ch, red_z, metric) = tileid_x
+    return measure(
+        masks[tile_i][stack_i][mask_label - 1],  # TODO formalise how to handle this
+        pixels[ch] if ch != "None" else None,
+        REDUCTION_FUNS[red_z],
+        CELL_FUNS[metric],
+    )
+
+
+def measure_multi(
+    tileid_x: tuple[int, tuple[int, int, str]],
     masks: list[np.ndarray],
     pixels: np.ndarray,
     REDUCTION_FUNS: dict[str, Callable],
@@ -218,15 +262,18 @@ def process_tree_masks(
     if not isinstance(masks, list):  # Hacky fix when tile level is not provided
         masks = [masks]
     instructions = kv(flatten(tree))
+
+    # Obtain the product of all instructions and individual masks
+    ind_masks = []
+    for tile_i, masks_in_tile in enumerate(masks):
+        if len(masks_in_tile):  # In case 0-case is an empty array
+            for mask_i in range(1, masks_in_tile.max() + 1):
+                # Labels should not be 0-indexed, and it should match the nuber of masks!
+                ind_masks.append((tile_i, mask_i))
+
     tileid_instructions = tuple(
         product(
-            [
-                (tile_i, mask_i)
-                for tile_i, masks_in_tile in enumerate(masks)
-                for mask_i in range(
-                    1, masks_in_tile.max() + 1
-                )  # Labels should not be 0-indexed, and it should match the nuber of masks!
-            ],
+            ind_masks,
             instructions,
         )
     )
@@ -243,6 +290,7 @@ def extract_tree(
     pixels: np.ndarray,
     ncores: bool = False,
     progress_bar: bool = False,
+    overlap: bool = False,
 ) -> dict[str, np.ndarray]:
     """
     Extracts features from one channels.
@@ -264,10 +312,11 @@ def extract_tree(
     result = []
     if len(tileid_instructions):
         # These should be a list of binary masks
-        binmasks = [transform_2d_to_3d(mask) for mask in masks]
+        binmasks = [transform_2d_to_3d(mask) if len(mask) else None for mask in masks]
         if ncores is None:  # Threaded or not
+            measure_fn = measure_mono_overlap if overlap else measure_mono
             for tileid_x in tqdm(tileid_instructions):
-                measurement = measure_mono(
+                measurement = measure_fn(
                     tileid_x,
                     masks=binmasks,
                     pixels=pixels,
@@ -394,7 +443,6 @@ def process_tree_masks_overlap(  # overlap
 
     # Currently the only overlapping masks are produced using baby,
     # which also come in non-sequential order.
-    # Map into a
     instructions = kv(flatten(tree))
 
     tile_mask_indices = []
@@ -403,15 +451,18 @@ def process_tree_masks_overlap(  # overlap
         for stack_i in range(len(masks_in_tile)):
             relabeled, _, inverse_mapping = relabel_sequential(masks_in_tile[stack_i])
             inverse_mappings[(tile_i, stack_i)] = inverse_mapping
+
             # Labels should not be 0-indexed, and it should match the nuber of masks!
-            for mask_i in range(1, max(inverse_mapping) + 1):
-                tile_mask_indices = (tile_i, stack_i, mask_i)
+            in_values = inverse_mapping.in_values
+            for mask_i in in_values[in_values > 0]:
+                tile_mask_indices.append((tile_i, stack_i, mask_i))
 
     tileid_instructions = tuple(product(tile_mask_indices, instructions))
     result = measure_fn(
         tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
     )
 
+    breakpoint()
     # Revert reduced map to expanded one (with global identifiers)
     # for keys, v in result.items():
     #     tile_i, overlap_stack_i, mask_i = keys

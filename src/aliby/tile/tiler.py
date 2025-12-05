@@ -33,6 +33,7 @@ import re
 import typing as t
 import warnings
 from functools import lru_cache
+from itertools import product
 
 import dask.array as da
 import numpy as np
@@ -41,6 +42,29 @@ from skimage.registration import phase_cross_correlation
 from agora.abc import ParametersABC, StepABC
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations
+
+
+def dispatch_tiler(kind: str):
+    match kind:
+        case "crop":
+            return crop_image
+        case _:
+            return Tiler
+
+
+def crop_image(pixels: np.ndarray, tile_size: int):
+    """A simple tiling method. Crop an image into multiple tiles, adding a new dimension."""
+    w, h = pixels.shape
+
+    grid = product(
+        range(0, h - h % tile_size, tile_size), range(0, w - w % tile_size, tile_size)
+    )
+    new_pixels = np.zeros((len(grid), *pixels.shape))
+    for i, j in grid:
+        box = (j, i, j + tile_size, i + tile_size)
+        new_pixels = pixels.crop(box)
+
+    return new_pixels
 
 
 class TilerParameters(ParametersABC):
@@ -168,6 +192,32 @@ class Tiler(StepABC):
         else:
             self.tile_locs.drifts.append(drift.tolist())
 
+    def get_fczyx(
+        self,
+        tp: int,
+        drift: bool = True,
+    ) -> np.ndarray:
+        """
+        Return all tiles corrected for drift.
+
+        Parameters
+        ----------
+        tp: integer
+            An index for a time point
+
+        Returns
+        ----------
+        Numpy ndarray of tiles with shape (#tiles,channels, z-sections, y, x)
+        """
+        channels = []
+        nch = range(self.pixels.shape[-4])
+        for ch in nch:
+            tiles = self.get_tp_data(tp, ch)
+            channels.append(tiles)
+
+        cfzyx = np.array(channels)
+        return np.swapaxes(cfzyx, 0, 1)
+
     def get_tp_data(
         self,
         tp: int,
@@ -271,7 +321,7 @@ class Tiler(StepABC):
         # return result for writer
         return {
             "drift": self.tile_locs.to_dict(tp),
-            "pixels": self.get_pixels(tp),
+            "pixels": self.get_fczyx(tp),
         }
 
     def get_pixels(self, tp: int) -> np.ndarray:
@@ -279,11 +329,12 @@ class Tiler(StepABC):
         Load multidimensional image for a given time point.
         Note that this one does not apply image tracking.
         """
-        full = self.pixels[tp]
-        if hasattr(full, "compute"):
+        # full = self.pixels[tp]
+        tiles = self.get_tp_data(tp)
+        if hasattr(tiles, "compute"):
             # if using dask fetch images
-            full = full.compute(scheduler="synchronous")
-        return full
+            tiles = tiles.compute(scheduler="synchronous")
+        return tiles
 
     @lru_cache(maxsize=2)
     def load_image(self, tp: int, c: int) -> np.ndarray:

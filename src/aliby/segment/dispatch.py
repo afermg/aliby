@@ -11,7 +11,9 @@ import numpy as np
 from skimage.segmentation import relabel_sequential
 
 
-def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
+def dispatch_segmenter(
+    kind: str, channel_to_segment: int, address: str = None, **kwargs
+) -> callable:
     match kind:
         case "nahual_baby":
             # TODO update this with setup_process_dispatch
@@ -35,6 +37,7 @@ def dispatch_segmenter(kind: str, address: str = None, **kwargs) -> callable:
                 process_data,
                 address=address,
                 session_id=session_id,
+                channel_to_segment=channel_to_segment,
                 extra_args=tuple(extra_args.items()),
             )
         case "nahual_cellpose":

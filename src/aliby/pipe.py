@@ -64,11 +64,13 @@ def init_step(
         case s if s.startswith("extract_"):
             # Whether to use overlapping masks or not
             process = process_tree_masks
+            measure_fn = extract_tree
             if parameters.get("overlap"):
                 process = process_tree_masks_overlap
+                measure_fn = partial(extract_tree, overlap=True)
             step = partial(
                 process,
-                measure_fn=extract_tree,
+                measure_fn=measure_fn,
                 tree=parameters["tree"],
                 **parameters.get("kwargs", {}),
             )
@@ -123,9 +125,9 @@ def pipeline_step(
     # Specifies method calls between steps to get data.
     # Format: {consumer_step: (producer_step, method_name, parameter_key)}
     # parameter_key is pulled from the "parameters" subdict
-    passed_methods = pipeline[
-        "passed_methods"
-    ]  # TODO This is used to pass data from Tiler, replace with passed_data
+    # passed_methods = pipeline[
+    #     "passed_methods"
+    # ]  # TODO This is used to pass data from Tiler, replace with passed_data
     tp = list(state.get("tps", {None: 0}).values())[0]
     if not tp:  # Initialise steps
         state = {"tps": dict(zip(steps, cycle([0]))), "data": {}, "fn": {}}
@@ -164,19 +166,31 @@ def pipeline_step(
                     # passed_data[kwd] = passed_value
 
         # Run step
-        args = []
-        if step_name.startswith(
-            "segment"
-        ):  # Pass correct images from tiler, except for "baby" which does everything by itself
-            segment_kind = parameters["segmenter_kwargs"]["kind"]
-            # if segment_kind != "nahual_baby":
-            source_step, method, param_name = passed_methods.get(step_name)
-            args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
-            if segment_kind.endswith(
-                "baby"
-            ):  # We will expand the args so this is necessary TODO Homogenize
-                args = (args,)
 
+        # HACK Adjust some edge cases to match BABY & Cellpose segmentation and downstream
+        # args = []
+        # if step_name.startswith("segment") or (
+        #     step_name.startswith("extract")
+        #     and any(x for x in steps if x.endswith("baby"))
+        # ):
+        #     # Pass correct images from tiler, except for "baby" which does everything by itself
+        #     segment_kind = parameters["segmenter_kwargs"]["kind"]
+        #     # if segment_kind != "nahual_baby":
+        #     source_step, method, param_name = passed_methods.get(step_name)
+
+        #     # Use tiler to pull data
+        #     args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+        #     if segment_kind.endswith(
+        #         "baby"
+        #     ):  # We will expand the args so this is necessary TODO Homogenize
+        #         args = (args,)
+
+        # if step_name.startswith("extract") and any(x for x in steps if "baby" in x):
+        #     # source_step, method, param_name = passed_methods.get(step_name)
+        #     # args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+        #     passed_data["pixels"] = args
+        #     args = []
+        args = []
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
         # Save state
