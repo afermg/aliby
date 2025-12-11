@@ -17,7 +17,7 @@ from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
 from aliby.io.write import dispatch_write_fn
 from aliby.segment.dispatch import dispatch_segmenter
-from aliby.tile.tiler import Tiler, TilerParameters
+from aliby.tile.tiler import Tiler, TilerParameters, dispatch_tiler
 from aliby.track.dispatch import dispatch_tracker
 from extraction.extract import (
     extract_tree,
@@ -41,14 +41,11 @@ def init_step(
     """
     match step_name:
         case "tile":
-            image_kwargs = parameters[
-                "image_kwargs"
-            ]  # TODO replace with pop() and simplify next line
-            tiler_kwargs = {k: v for k, v in parameters.items() if k != "image_kwargs"}
+            image_kwargs = parameters.pop("image_kwargs")
+            tiler_constructor = dispatch_tiler(parameters.pop("kind", None), parameters)
             image_type = dispatch_image(source=image_kwargs["source"])
             image = image_type(**image_kwargs)
-
-            step = Tiler.from_image(image, TilerParameters(**tiler_kwargs))
+            step = tiler_constructor(image)
         case s if s.startswith("segment"):
             if parameters["segmenter_kwargs"]["kind"].endswith(
                 "baby"
@@ -58,7 +55,7 @@ def init_step(
         case "track":
             if parameters["kind"].endswith(
                 "baby"
-            ):  # Tracker needs to pull info from baby crawler
+            ):  # tracker needs to pull info from baby crawler
                 parameters["crawler"] = other_steps["segment"].crawler
             step = dispatch_tracker(**parameters)
         case s if s.startswith("extract_"):
@@ -122,12 +119,7 @@ def pipeline_step(
 
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
-    # Specifies method calls between steps to get data.
-    # Format: {consumer_step: (producer_step, method_name, parameter_key)}
-    # parameter_key is pulled from the "parameters" subdict
-    # passed_methods = pipeline[
-    #     "passed_methods"
-    # ]  # TODO This is used to pass data from Tiler, replace with passed_data
+
     tp = list(state.get("tps", {None: 0}).values())[0]
     if not tp:  # Initialise steps
         state = {"tps": dict(zip(steps, cycle([0]))), "data": {}, "fn": {}}
@@ -190,6 +182,7 @@ def pipeline_step(
         #     # args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
         #     passed_data["pixels"] = args
         #     args = []
+
         args = []
         step_result = run_step(step, *args, tp=tp, **passed_data)
 

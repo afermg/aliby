@@ -32,8 +32,9 @@ import logging
 import re
 import typing as t
 import warnings
-from functools import lru_cache
+from functools import lru_cache, partial
 from itertools import product
+from typing import Callable
 
 import dask.array as da
 import numpy as np
@@ -42,29 +43,6 @@ from skimage.registration import phase_cross_correlation
 from agora.abc import ParametersABC, StepABC
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations
-
-
-def dispatch_tiler(kind: str):
-    match kind:
-        case "crop":
-            return crop_image
-        case _:
-            return Tiler
-
-
-def crop_image(pixels: np.ndarray, tile_size: int):
-    """A simple tiling method. Crop an image into multiple tiles, adding a new dimension."""
-    w, h = pixels.shape
-
-    grid = product(
-        range(0, h - h % tile_size, tile_size), range(0, w - w % tile_size, tile_size)
-    )
-    new_pixels = np.zeros((len(grid), *pixels.shape))
-    for i, j in grid:
-        box = (j, i, j + tile_size, i + tile_size)
-        new_pixels = pixels.crop(box)
-
-    return new_pixels
 
 
 class TilerParameters(ParametersABC):
@@ -76,6 +54,80 @@ class TilerParameters(ParametersABC):
         "ref_z": 0,
         "track_drift": True,
     }
+
+
+def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
+    """Returns a Tiler class constructor that requires an Image (class)."""
+    match kind:
+        case "crop":
+            tiler = CropTiler
+        case _:
+            tiler = Tiler
+    return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
+
+
+def tile_last2(pix: np.ndarray, tile_size: int):
+    """
+    Parameters
+    ----------
+    pix:  any numpy array with ndim ≥ 2
+    tile_size : extent of the tiles in both x and y-axes.
+    returns: Array with one extra dimension
+        shape == pix.shape[:-2] + (n_tiles, tile_h, tile_w)
+    """
+
+    *lead, H, W = pix.shape
+
+    # number of tiles along each axis
+    n_th = (H - tile_size) // tile_size + 1
+    n_tw = (W - tile_size) // tile_size + 1
+    n_tiles = n_th * n_tw
+
+    # pre-allocate output
+    tiles = np.empty((n_tiles, *lead, tile_size, tile_size), dtype=pix.dtype)
+
+    # fill slices
+    idx = 0
+    for i in range(0, H - tile_size + 1, tile_size):
+        for j in range(0, W - tile_size + 1, tile_size):
+            sl = (slice(None),) * (pix.ndim - 2) + (
+                slice(i, i + tile_size),
+                slice(j, j + tile_size),
+            )
+            tiles[idx] = pix[sl]
+            idx += 1
+    return tiles
+
+
+class CropTiler(StepABC):
+    """Tiler that crops the input image."""
+
+    def __init__(self, pixels: da.core.Array, tile_size: int, **kwargs):
+        self.pixels = pixels
+        self.tile_size = tile_size
+
+    @classmethod
+    def from_image(cls, image, parameters):
+        return cls(image.data, **parameters.to_dict())
+
+    def get_fczyx(self, tp: int, tile_size: int) -> np.ndarray:
+        """
+        Load multidimensional image for a given time point.
+        Note that this one does not apply image tracking.
+        """
+        breakpoint()
+        pix = self.pixels[tp]
+        if hasattr(pix, "compute"):
+            # if using dask fetch images
+            pix = pix.compute(scheduler="synchronous")
+        tiles = tile_last2(pix, tile_size)
+
+        return tiles
+
+    def _run_tp(self, tp: int):
+        return {
+            "pixels": self.get_fczyx(tp, tile_size=self.tile_size),
+        }
 
 
 class Tiler(StepABC):

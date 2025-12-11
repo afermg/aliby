@@ -188,8 +188,8 @@ def measure_mono_overlap(
 
     (tile_i, stack_i, mask_label), (ch, red_z, metric) = tileid_x
     return measure(
-        masks[tile_i][stack_i][mask_label - 1],  # TODO formalise how to handle this
-        pixels[ch] if ch != "None" else None,
+        masks[tile_i][mask_label - 1, stack_i],  # TODO formalise how to handle this
+        pixels[tile_i, ch] if ch != "None" else None,
         REDUCTION_FUNS[red_z],
         CELL_FUNS[metric],
     )
@@ -431,7 +431,7 @@ def process_tree_masks_overlap(  # overlap
     pixels : numpy array
         The pixel values.
     measure_fn : callable
-        The measurement function to apply, it can be `measure_mono` or `measure_multi`.
+        The measurement function to apply, it can be `measure_mono_overlap` or `measure_multi_overlap`.
 
     Returns
     -------
@@ -445,29 +445,31 @@ def process_tree_masks_overlap(  # overlap
     # which also come in non-sequential order.
     instructions = kv(flatten(tree))
 
-    tile_mask_indices = []
+    tile_stack_mask = []
     inverse_mappings = {}
     for tile_i, masks_in_tile in enumerate(masks):
-        for stack_i in range(len(masks_in_tile)):
-            relabeled, _, inverse_mapping = relabel_sequential(masks_in_tile[stack_i])
+        for stack_i, stack_pixels in enumerate(masks_in_tile):
+            relabeled, _, inverse_mapping = relabel_sequential(stack_pixels)
             inverse_mappings[(tile_i, stack_i)] = inverse_mapping
 
             # Labels should not be 0-indexed, and it should match the nuber of masks!
             in_values = inverse_mapping.in_values
             for mask_i in in_values[in_values > 0]:
-                tile_mask_indices.append((tile_i, stack_i, mask_i))
+                tile_stack_mask.append((tile_i, stack_i, mask_i))
 
-    tileid_instructions = tuple(product(tile_mask_indices, instructions))
+    tileid_instructions = tuple(product(tile_stack_mask, instructions))
     result = measure_fn(
         tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
     )
 
-    breakpoint()
     # Revert reduced map to expanded one (with global identifiers)
-    # for keys, v in result.items():
-    #     tile_i, overlap_stack_i, mask_i = keys
-    #     original_labels = inverse_mappings[keys]
-    return tileid_instructions, result, inverse_mappings
+    updated_result = {}
+    for keys, v in result.items():
+        tile_i, mask_i = keys
+        orig_labels = inverse_mappings[keys]
+        updated_result[(tile_i, orig_labels)]
+
+    return tileid_instructions, updated_result
 
 
 def format_extraction(
@@ -488,11 +490,12 @@ def format_extraction(
     """
     formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
     for inst, metrics in zip(*instructions_result):
-        tileid, label = inst[0]
+        tileid = inst[0]
+        label = inst[-1]  # To support both (tile_i, label) & (tile_i, stack_i, label)
         branch = "/".join(str(x) for x in inst[1])
         if isinstance(
             metrics, int
-        ):  # When an instruction results in a scalaer (e.g., max2p5pc)
+        ):  # When an instruction results in a scalar (e.g., max2p5pc)
             formatted["tile"].append(tileid)
             formatted["label"].append(label)
             formatted["branch"].append(branch)
