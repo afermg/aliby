@@ -1,6 +1,20 @@
-# ALIBYlite (Analyser of Live-cell Imaging for Budding Yeast)
+# ALIBY: End-to-end processing for high throughput microscopy
 
-End-to-end processing of cell microscopy time-lapses. ALIBY automates segmentation, tracking, lineage predictions and post-processing.
+This framework orchestrates a multitude of different tools to process imaging data.
+
+NOTE: This past year ALIBY went through heavy refactoring. The documentation is under (re)construction.
+
+By modality:
+- Time series microscopy
+- Fluorescence microscopy (e.g., Cell Painting)
+
+By procedure
+- Segmentation (e.g., [Cellpose](https://github.com/MouseLand/cellpose)) + Feature (e.g., [cp_measure](https://github.com/afermg/cp_measure), engineered features)
+- Deep Learning models (e.g., DinoV3, OpenPhenom)
+
+By backend
+- Within the same environment (Cellpose -> cp_measure)
+- Communicating with other environments (via [Nahual](https://github.com/afermg/nahual))
 
 ## Installation
 
@@ -11,12 +25,10 @@ Once uv is installed, we suggest running
 ```bash
 git clone git@github.com:afermg/aliby.git
 cd aliby
-uv sync # --extra cellpose
+uv sync --all-extras
 ```
 
-## Nix installation (experimental)
-This is still under works and it is not guaranteed to work as-is on MacOS, but in Linux running the Nix package manager it should make the setup trivial.
-
+## Nix installation
 For reproducible environments using [Nix](https://github.com/NixOS/nix) flakes and [envrc](https://github.com/numtide/devshell).
 
 To run a self-contained virtual environment shell session
