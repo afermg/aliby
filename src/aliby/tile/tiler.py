@@ -115,7 +115,6 @@ class CropTiler(StepABC):
         Load multidimensional image for a given time point.
         Note that this one does not apply image tracking.
         """
-        breakpoint()
         pix = self.pixels[tp]
         if hasattr(pix, "compute"):
             # if using dask fetch images

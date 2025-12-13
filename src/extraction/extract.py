@@ -473,7 +473,7 @@ def process_tree_masks_overlap(  # overlap
 
 
 def format_extraction(
-    instructions_result: tuple[list, list],
+    instructions_result: tuple[list, list] | np.ndarray,
 ) -> pa.lib.Table:
     """
     Formats the extraction results into a pyarrow table.
@@ -517,6 +517,13 @@ def format_extraction(
                 formatted["label"].append(label)
                 formatted["branch"].append(branch)
                 formatted["metric"].append(inst[1][-1])
+                formatted["value"].append(value)
+        elif isinstance(metrics, np.ndarray):  # Embedders
+            for (r, c), value in np.ndenumerate(metrics):
+                formatted["tile"].append(r)
+                formatted["label"].append(0)
+                formatted["metric"].append(f"X_{c}")
+                formatted["branch"].append("nahual")
                 formatted["value"].append(value)
 
     arrow_table = pa.Table.from_pydict(formatted)

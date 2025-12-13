@@ -84,13 +84,31 @@ def init_step(
             # Setup also helps check that the remote server exists
 
             address = parameters["address"]  # Must have!
-            setup, process = dispatch_global_step(step_name)
-            # print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
-            setup_output = setup(parameters["parameters"], address=address)
-            print(f"NAHUAL: Remote process set up, returned {setup_output}.")
+            assert address is not None, (
+                f"If using Nahual you must have an address, currently it is {address}"
+            )
+            if step_name.startswith("nahual_embed"):
+                from nahual.process import dispatch_setup_process
 
-            # For the final step we provide the address used for setting the remote up
-            step = partial(process, address=address)
+                setup_params = parameters["setup_params"]
+                model_name = setup_params["model_name"]
+                setup, process = dispatch_setup_process(model_name)
+
+                setup_params = parameters.get("setup_params", {})
+                # eval_params = kwargs.get("eval_params", {})
+
+                info = setup(setup_params, address=address)
+                print(f"Cellpose via nahual set up. Remote returned {info}")
+
+                return partial(process, address=address)
+            if step_name.startswith("nahual_track"):
+                setup, process = dispatch_global_step(step_name)
+                # print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
+                setup_output = setup(parameters["parameters"], address=address)
+                print(f"NAHUAL: Remote process set up, returned {setup_output}.")
+
+                # For the final step we provide the address used for setting the remote up
+                step = partial(process, address=address)
         case _:
             raise Exception(f"Invalid step name {step_name=}")
 
@@ -137,15 +155,19 @@ def pipeline_step(
         # Format: {consumer_step: (producer_step, method_name, parameter_key)}
         # parameter_key is pulled from the "parameters" subdict
         passed_data = {}
-        for kwd, from_step in this_step_receives:
+        for kwd, from_step, *varname in this_step_receives:
             passed_value = state["data"].get(from_step, [])
+
+            step_argname = kwd
+            if len(varname):  # Use a different variable name to match the step
+                step_argname = varname[0]
 
             if len(passed_value):
                 if (
                     step_name == "track" and kwd == "masks"
                 ):  # Only tracking  masks require multiple time points
                     # Convert tp,tile,y,x -> tile,tp,y,x for stitch tracking
-                    passed_data[kwd] = [
+                    passed_data[step_argname] = [
                         [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
                         for tile in range(len(passed_value[-1]))
                     ]
@@ -153,7 +175,7 @@ def pipeline_step(
                     last_value = passed_value[-1]
                     if isinstance(last_value, dict):  # Select a subfield of the data
                         last_value = last_value[kwd]
-                    passed_data[kwd] = last_value
+                    passed_data[step_argname] = last_value
 
                     # passed_data[kwd] = passed_value
 
@@ -290,8 +312,9 @@ def run_pipeline_and_post(
         profiles = get_profiles_from_state(state, pipeline)
 
         # Save files
-        profiles_file.parent.mkdir(parents=True, exist_ok=True)
-        pyarrow.parquet.write_table(profiles, profiles_file)
+        if len(profiles):
+            profiles_file.parent.mkdir(parents=True, exist_ok=True)
+            pyarrow.parquet.write_table(profiles, profiles_file)
 
         # Run global processing steps (post-processing)
         post_results = {}
@@ -317,7 +340,7 @@ def run_pipeline_and_post(
                 )
                 post_results[output_name] = state["fn"](input_data=input_data)
 
-        # Save global steps into files (steps are saved as they go, not at the end)
+        # Save global steps into files (per-tp steps are saved as they go, not at the end)
         if step_name in pipeline["save"]:
             write_fn = dispatch_write_fn(step_name)
             for output_pathname in post_results:
@@ -349,13 +372,19 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
             pa.field("tp", pa.int64()),
         ]),
     )
-    extraction_steps = [
-        step_name for step_name in pipeline["steps"] if step_name.startswith("ext")
+    feature_steps = [
+        step_name
+        for step_name in pipeline["steps"]
+        if step_name.startswith("extract") or step_name.startswith("nahual_embed")
     ]
     data = []
-    for ext_step in extraction_steps:
+    for ext_step in feature_steps:
         # Data is stored in the following order: step -> time points -> tiles
         for tp, ext_output in enumerate(state["data"][ext_step]):
+            if isinstance(ext_output, numpy.ndarray):  # Format arbitrary embedders
+                # We give it empty instructions that will be ignored
+                ext_output = (cycle((("__", "__"),)), (ext_output,))
+
             table: pyarrow.PyTable = format_extraction(ext_output)
             if len(table):  # Cover case whence measurements are empty
                 table = table.append_column(
