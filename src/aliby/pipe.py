@@ -93,12 +93,13 @@ def init_step(
                 setup_params = parameters["setup_params"]
                 model_name = setup_params["model_name"]
                 setup, process = dispatch_setup_process(model_name)
-
-                setup_params = parameters.get("setup_params", {})
                 # eval_params = kwargs.get("eval_params", {})
 
-                info = setup(setup_params, address=address)
-                print(f"Cellpose via nahual set up. Remote returned {info}")
+                info = setup(
+                    setup_params,
+                    address=address,
+                )
+                print(f"Embedder via nahual set up. Remote returned {info}")
 
                 return partial(process, address=address)
             if step_name.startswith("nahual_track"):
