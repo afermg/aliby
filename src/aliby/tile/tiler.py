@@ -176,7 +176,9 @@ class Tiler(StepABC):
         """
         tile_locs = TileLocations.from_h5(filepath)
         image_metadata = BridgeH5(filepath).meta_h5
-        image_metadata["channels"] = image.metadata["channels"]
+        if "channels" in image.metadata:
+            # update h5 metadata using the image
+            image_metadata["channels"] = image.metadata["channels"]
         if parameters is None:
             parameters = TilerParameters.default()
         tiler = cls(

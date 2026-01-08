@@ -43,7 +43,11 @@ class BridgeH5:
         """Return metadata, defining it if necessary."""
         if not hasattr(self, "_meta_h5"):
             with h5py.File(self.filename, "r") as f:
-                self._meta_h5 = dict(f.attrs)
+                # load metadata from h5; ensure arrays are lists
+                self._meta_h5 = {
+                    k: v.tolist() if isinstance(v, np.ndarray) else v
+                    for k, v in f.attrs.items()
+                }
         return self._meta_h5
 
     @property
