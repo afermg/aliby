@@ -43,7 +43,7 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
         "multichannel_funs": {},
     }
     candidate_channels = global_settings.possible_imaging_channels
-    default_reductions = {"max"}
+    default_reductions = {"max", "mean"}
     default_fluorescence_metrics = global_settings.fluorescence_functions
     default_reduction_and_fluorescence_metrics = {
         r: default_fluorescence_metrics for r in default_reductions
