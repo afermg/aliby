@@ -1,6 +1,6 @@
 """Functions for identifying and dealing with ALCATRAS traps."""
 
-from typing import Any, Optional, Union
+from typing import Any, Union
 import numpy as np
 import numpy.typing as npt
 from aliby.global_settings import global_settings
@@ -43,6 +43,7 @@ def segment_traps(
     disk_radius_frac: float = 0.01,
     square_size: int = 3,
     min_frac_tilesize: float = 0.3,
+    debug: bool = False,
     **identify_traps_kwargs: Any,
 ) -> npt.NDArray[np.int_]:
     """
@@ -77,7 +78,7 @@ def segment_traps(
     if hasattr(image, "compute"):
         # convert to numpy if dask
         image = image.compute()
-    # TODO
+    # correct image for any flatfield issues
     image = correct_illumination(image, sigma=200)
     # adjust parameters for particular tile size
     scale_factor = (
@@ -161,8 +162,8 @@ def segment_traps(
     if len(traps) < 30 and downscale != 1:
         print("Tiler:TrapIdentification: Trying again.")
         traps_retry = segment_traps(image, tile_size, downscale=1)
-    # TODO: uncomment to help debug
-    # plot_trap_locations(image, traps, tile_size)
+    if debug:
+        plot_trap_locations(image, traps, tile_size)
     # return results with the most number of traps
     if len(traps_retry) < len(traps):
         return traps
@@ -170,12 +171,123 @@ def segment_traps(
         return traps_retry
 
 
+def _score_correlation(
+    matched: npt.NDArray[np.floating[Any]],
+    k: int = 30,
+) -> float:
+    """
+    Score a correlation image by the mean of the top k values.
+
+    Parameters
+    ----------
+    matched : 2D array
+        The correlation image from template matching.
+    k : int
+        Number of top values to average (should approximate expected
+        trap count).
+
+    Returns
+    -------
+    score : float
+        Mean of the top k correlation values.
+    """
+    flat = matched.ravel()
+    # pick top correlations - faster than sorting
+    top_k = np.partition(flat, -k)[-k:]
+    return float(np.mean(top_k))
+
+
+def _find_best_rotation(
+    img: npt.NDArray[np.floating[Any]],
+    template: npt.NDArray[np.floating[Any]],
+    rotations: list[float],
+) -> tuple[float, npt.NDArray[np.floating[Any]]]:
+    """
+    Find the rotation angle that best matches the template to the image.
+
+    Parameters
+    ----------
+    img : 2D array
+        The image to match against.
+    template : 2D array
+        The template to rotate and match.
+    rotations : list of floats
+        Rotation angles in degrees to try.
+
+    Returns
+    -------
+    best_rotation : float
+        The rotation angle with the best match.
+    best_matched : 2D array
+        The correlation image for the best rotation.
+    """
+    fill_value = np.median(img)
+    rotation_matches = {
+        rotation: np.abs(
+            feature.match_template(
+                img,
+                transform.rotate(template, rotation, cval=fill_value),
+                pad_input=True,
+                mode="median",
+            )
+        )
+        for rotation in rotations
+    }
+    best_rotation = max(
+        rotation_matches,
+        key=lambda x: _score_correlation(rotation_matches[x]),
+    )
+    return best_rotation, rotation_matches[best_rotation]
+
+
+def _find_best_scale(
+    img: npt.NDArray[np.floating[Any]],
+    template: npt.NDArray[np.floating[Any]],
+    scales: npt.NDArray[np.floating[Any]],
+) -> tuple[float, npt.NDArray[np.floating[Any]]]:
+    """
+    Find the scale factor that best matches the template to the image.
+
+    Parameters
+    ----------
+    img : 2D array
+        The image to match against.
+    template : 2D array
+        The template to scale and match.
+    scales : 1D array
+        Scale factors to try.
+
+    Returns
+    -------
+    best_scale : float
+        The scale factor with the best match.
+    best_matched : 2D array
+        The correlation image for the best scale.
+    """
+    scale_matches = {
+        scale: np.abs(
+            feature.match_template(
+                img,
+                transform.rescale(template, scale),
+                pad_input=True,
+                mode="median",
+            )
+        )
+        for scale in scales
+    }
+    best_scale = max(
+        scale_matches,
+        key=lambda x: _score_correlation(scale_matches[x]),
+    )
+    return best_scale, scale_matches[best_scale]
+
+
 def identify_trap_locations(
     image: npt.NDArray[np.floating[Any]],
     trap_template: npt.NDArray[np.floating[Any]],
     optimize_scale: bool = True,
     downscale: float = 0.35,
-    trap_size: Optional[int] = None,
+    trap_size: int | None = None,
 ) -> npt.NDArray[np.int_]:
     """
     Identify the traps in a single image based on a trap template.
@@ -208,49 +320,25 @@ def identify_trap_locations(
     """
     if trap_size is None:
         trap_size = trap_template.shape[0]
-    # careful: the image is float16
-    img = transform.rescale(image.astype(np.float16), downscale)
+    # downscale image and template for faster processing
+    img = transform.rescale(image.astype(np.float32), downscale)
     template = transform.rescale(trap_template, downscale)
-    # try multiple rotations of template to determine
-    # which best matches the image
-    # result uses absolute value because the sign is unimportant
-    matches = {
-        rotation: np.abs(
-            feature.match_template(
-                img,
-                transform.rotate(template, rotation, cval=np.median(img)),
-                pad_input=True,
-                mode="median",
-            )
-        )
-        for rotation in [0, 90, 180, 270]
-    }
-    # find best rotation
-    best_rotation = max(matches, key=lambda x: np.percentile(matches[x], 99.9))
-    # rotate template by best rotation
+    # coarse rotation search at 90 degree intervals
+    best_rotation, _ = _find_best_rotation(img, template, [0, 90, 180, 270])
+    # fine rotation search around the best coarse rotation
+    fine_rotations = list(
+        np.linspace(best_rotation - 10, best_rotation + 10, 5)
+    )
+    best_rotation, _ = _find_best_rotation(img, template, fine_rotations)
+    # apply best rotation to template
     template = transform.rotate(template, best_rotation, cval=np.median(img))
     if optimize_scale:
-        # try multiple scales appled to template to determine which
-        # best matches the image
-        scales = np.linspace(0.5, 2, 10)
-        matches = {
-            scale: np.abs(
-                feature.match_template(
-                    img,
-                    transform.rescale(template, scale),
-                    mode="median",
-                    pad_input=True,
-                )
-            )
-            for scale in scales
-        }
-        # find best scale
-        best_scale = max(
-            matches, key=lambda x: np.percentile(matches[x], 99.9)
-        )
-        # choose the best result - an image of normalised correlations
-        # with the template
-        matched = matches[best_scale]
+        # coarse scale search
+        coarse_scales = np.linspace(0.6, 1.8, 7)
+        best_scale, _ = _find_best_scale(img, template, coarse_scales)
+        # fine scale search around best coarse scale
+        fine_scales = np.linspace(best_scale - 0.1, best_scale + 0.1, 5)
+        best_scale, matched = _find_best_scale(img, template, fine_scales)
     else:
         # find the image of normalised correlations with the template
         matched = feature.match_template(
@@ -290,7 +378,7 @@ def plot_trap_locations(
     trap_coordinates: npt.NDArray[np.int_],
     tile_size: int,
     figsize: tuple[float, float] = (9, 9),
-    marker_size: Optional[float] = None,
+    marker_size: float | None = None,
 ) -> tuple[Figure, Axes]:
     """
     Visualise the image with predicted trap locations overlaid.
