@@ -48,8 +48,8 @@ def process_input_path(input_path: str):
         setup_params=dict(
             repo_or_dir="facebookresearch/dinov2",
             model_name="dinov2_vits14_lc",
-            execution_params=dict(channels=(0, 1, 2)),
         ),
+        selected_channels=[0, 1, 2],
     )
 
     base_pipeline = {
@@ -107,5 +107,4 @@ for dataset_dir, dset in tqdm(zip(dataset_paths, dsets), total=len(dsets)):
         result = []
         for input_path in input_paths:
             new_result = process_input_path(input_path)
-            breakpoint()
             result.append(new_result)

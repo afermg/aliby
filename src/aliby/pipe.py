@@ -92,8 +92,18 @@ def init_step(
 
                 setup_params = parameters["setup_params"]
                 model_name = setup_params["model_name"]
+
                 setup, process = dispatch_setup_process(model_name)
                 # eval_params = kwargs.get("eval_params", {})
+
+                # If channel_ids exist subindex the input array
+                selected_channels = parameters.get("selected_channels")
+                if selected_channels:
+                    process = partial(
+                        slice_channels_process,
+                        process=process,
+                        selected_channels=selected_channels,
+                    )
 
                 info = setup(
                     setup_params,
@@ -114,6 +124,36 @@ def init_step(
             raise Exception(f"Invalid step name {step_name=}")
 
     return step
+
+
+def slice_channels_process(
+    data: numpy.ndarray,
+    process: Callable,
+    selected_channels: list[int] | numpy.ndarray,
+    **kwargs,
+) -> numpy.ndarray:
+    """
+    Apply a processing function to a subset of channels in a NumPy array.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        The input array, expected to be at least 2D where the second
+        dimension represents channels.
+    process : callable
+        A function to be applied to the sliced data. It should accept the
+        sliced array as its first argument.
+    selected_channels : list of int or numpy.ndarray
+        Indices of the channels to select from the input data.
+    **kwargs : dict, optional
+        Additional keyword arguments to be passed to the `process` function.
+
+    Returns
+    -------
+    any
+        The result of the `process` function applied to the selected data.
+    """
+    return process(data[:, selected_channels], **kwargs)
 
 
 def run_step(step, *args, **kwargs):
