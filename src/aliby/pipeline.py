@@ -335,6 +335,9 @@ class Pipeline(ProcessABC):
         for pos in position_ids:
             print("\t" + pos.split(".")[0])
         print(f"Number of CPU cores available: {multiprocessing.cpu_count()}")
+        if "time_settings/ntimepoints" in config["metadata"]["minimal"]:
+            ntps = config["metadata"]["minimal"]["time_settings/ntimepoints"]
+            print(f"Processing {ntps} timepoints.")
         # create and run pipelines
         distributed = config["general"]["distributed"]
         if distributed != 0:
@@ -447,12 +450,26 @@ class Pipeline(ProcessABC):
                             "WARNING: Bud has been assigned as its own mother."
                         )
                         raise ValueError("Catastrophic Baby error!")
-                    baby_writer.write(
-                        data=result,
-                        overwrite=["mother_assign"],
-                        tp=i,
-                        tile_size=tiler.tile_size,
-                    )
+                    # check Baby's result
+                    if np.any(
+                        [
+                            True if not value else False
+                            for key, value in result.items()
+                        ]
+                    ):
+                        self.log(
+                            f"WARNING: Baby failed at timepoint {i}."
+                            " Skipping the rest of this position."
+                        )
+                        break
+                    else:
+                        # Baby successful
+                        baby_writer.write(
+                            data=result,
+                            overwrite=["mother_assign"],
+                            tp=i,
+                            tile_size=tiler.tile_size,
+                        )
                     # run extraction
                     result = extractor.run_tp(i)
                     extractor_writer.write(data=result)
@@ -480,7 +497,8 @@ class Pipeline(ProcessABC):
             ).run()
             postprocessor_writer.write(data=result)
             self.log(
-                f"{config['tiler']['position_name']}: Analysis finished successfully.",
+                f"{config['tiler']['position_name']}: Analysis finished"
+                f" at time {i} out of {len(all_tps)} time points.",
                 "info",
             )
 

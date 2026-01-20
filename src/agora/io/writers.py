@@ -187,6 +187,7 @@ class CoreWriter:
                             f"{key}:{value} could not be written: {e}.",
                             "error",
                         )
+                        return e
 
     def add_df(
         self, dataset: str, df: pd.DataFrame, overwrite: bool = False
@@ -308,10 +309,12 @@ class BabyWriter(CoreWriter):
             available_tps = hgroup.get("timepoint", None)
             # write data
             if not available_tps or tp not in np.unique(available_tps[()]):
-                super().write(data=data, overwrite=overwrite)
+                error = super().write(data=data, overwrite=overwrite)
+                if error is not None:
+                    self.log(f"Baby failed to write at timepoint {tp}.")
             else:
                 # data already exists
-                print(f"BabyWriter: Skipping tp {tp}")
+                self.log(f"BabyWriter: Skipping timepoint {tp}")
 
 
 class ExtractorWriter(CoreWriter):
