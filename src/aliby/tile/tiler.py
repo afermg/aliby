@@ -66,6 +66,16 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
     return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
 
 
+def standard_scale_last2(pix: np.ndarray):
+    """Remove the mean and scale to unit variance at a per-image and channel basis."""
+    mean = np.mean(pix, axis=(-3, -2, -1))
+    variance = np.var(pix, axis=(-3, -2, -1))
+
+    # We transpose for casting to work. We scale per-channel.
+    standardised = ((pix.T - mean) / variance).T
+    return standardised
+
+
 def tile_last2(pix: np.ndarray, tile_size: int):
     """
     Parameters
@@ -102,9 +112,16 @@ def tile_last2(pix: np.ndarray, tile_size: int):
 class CropTiler(StepABC):
     """Tiler that crops the input image."""
 
-    def __init__(self, pixels: da.core.Array, tile_size: int, **kwargs):
+    def __init__(
+        self,
+        pixels: da.core.Array,
+        tile_size: int,
+        standard_scale: bool = True,
+        **kwargs,
+    ):
         self.pixels = pixels
         self.tile_size = tile_size
+        self.standard_scale = standard_scale
 
     @classmethod
     def from_image(cls, image, parameters):
@@ -119,6 +136,8 @@ class CropTiler(StepABC):
         if hasattr(pix, "compute"):
             # if using dask fetch images
             pix = pix.compute(scheduler="synchronous")
+        if self.standard_scale:
+            pix = standard_scale_last2(pix)
         tiles = tile_last2(pix, tile_size)
 
         return tiles

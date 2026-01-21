@@ -91,9 +91,9 @@ def init_step(
                 from nahual.process import dispatch_setup_process
 
                 setup_params = parameters["setup_params"]
-                model_name = setup_params["model_name"]
+                model_group = parameters["model_group"]
 
-                setup, process = dispatch_setup_process(model_name)
+                setup, process = dispatch_setup_process(model_group)
                 # eval_params = kwargs.get("eval_params", {})
 
                 # If channel_ids exist subindex the input array
