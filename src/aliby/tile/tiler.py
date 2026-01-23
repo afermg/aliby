@@ -66,6 +66,15 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
     return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
 
 
+def minmax_8bit_last2(pix: np.ndarray):
+    pix_max = np.max(pix, axis=(-3, -2, -1))
+    pix_min = np.min(pix, axis=(-3, -2, -1))
+
+    minmax_8bit = (((pix.T - pix_min) / (pix_max - pix_min)) * 255).astype(np.uint8).T
+
+    return minmax_8bit
+
+
 def standard_scale_last2(pix: np.ndarray):
     """Remove the mean and scale to unit variance at a per-image and channel basis."""
     mean = np.mean(pix, axis=(-3, -2, -1))
@@ -117,11 +126,13 @@ class CropTiler(StepABC):
         pixels: da.core.Array,
         tile_size: int,
         standard_scale: bool = True,
+        minmax_8bit: bool = False,
         **kwargs,
     ):
         self.pixels = pixels
         self.tile_size = tile_size
         self.standard_scale = standard_scale
+        self.minmax_8bit = minmax_8bit
 
     @classmethod
     def from_image(cls, image, parameters):
@@ -136,8 +147,13 @@ class CropTiler(StepABC):
         if hasattr(pix, "compute"):
             # if using dask fetch images
             pix = pix.compute(scheduler="synchronous")
+
         if self.standard_scale:
             pix = standard_scale_last2(pix)
+
+        if self.minmax_8bit:
+            pix = minmax_8bit_last2(pix)
+
         tiles = tile_last2(pix, tile_size)
 
         return tiles
@@ -316,7 +332,10 @@ class Tiler(StepABC):
                 tiled_pixels = if_out_of_bounds_pad(full, tile.as_range(tp))
 
             tiles.append(tiled_pixels)
-        return np.stack(tiles)
+
+        stack_5d = np.stack(tiles)
+
+        return stack_5d
 
     def get_tile_data(self, tile_id: int, tp: int, c: int) -> np.ndarray:
         """
