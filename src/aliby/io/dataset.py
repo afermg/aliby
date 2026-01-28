@@ -125,14 +125,16 @@ class DatasetMonoZarr(DatasetLocalABC):
         super().__init__(dpath)
 
     def get_position_ids(self):
-        import zarr
+        positions = {}
+        with os.scandir(self.path) as it:
+            for entry in it:
+                # skip hidden folders and files (e.g., .zattrs)
+                if not entry.name.startswith("."):
+                    name = entry.name
+                    positions[name] = {"store_path": self.path, "key": name}
 
-        store = zarr.storage.LocalStore(self.path)
-        root = zarr.group(store)
-
-        position_ids = {key: root[key] for key in root.keys()}
-
-        return position_ids
+        # result = {k:  for k in tqdm(position_ids)}
+        return positions
 
 
 class DatasetZarr(DatasetLocalABC):

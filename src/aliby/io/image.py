@@ -49,7 +49,7 @@ def instantiate_image(source: t.Union[str, int, t.Dict[str, str], Path], **kwarg
     return dispatch_image(source)(source, **kwargs)
 
 
-def dispatch_image(source: str or int or dict[str, str] or Path):
+def dispatch_image(source: str | int | dict[str, str] | Path):
     """Pick the appropriate Image class for the source of data."""
     img_type = None
     if isinstance(source, int):
@@ -57,8 +57,10 @@ def dispatch_image(source: str or int or dict[str, str] or Path):
 
         img_type = Image
     elif isinstance(source, (list, tuple)):  # Local files
+        assert len(source), f"Empty source f{source}"
         img_type = ImageList
-    elif isinstance(source, zarr.core.array.Array):
+    elif isinstance(source, dict):
+        # Zarr dataset + key to array
         img_type = ImageZarrArray
     else:
         match Path(source):
@@ -229,20 +231,26 @@ class ImageZarrArray(BaseLocalImage):
 
     def __init__(
         self,
-        source: zarr.core.array.Array,
+        source: dict[str, str],
         capture_order: str = "CYX",
         dimorder: str = "TCZYX",
     ):
-        self.zarr_arr = source
-        self.path = source.store
+        # Only load the zarr store path and the group key.
+        self.key = source["key"]
+        self.path = source["store_path"]
         self.capture_order = capture_order
         self.dimorder = dimorder
-        da_pixels = da.array(self.zarr_arr)
-        self._img = adjust_dimensions(
-            da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
-        )
 
     def get_data_lazy(self) -> np.ndarray:
+        if not hasattr(self, "_img"):
+            store = zarr.storage.LocalStore(self.path)
+            root_group = zarr.group(store)
+            zarr_arr = root_group[self.key]
+
+            da_pixels = da.array(zarr_arr)
+            self._img = adjust_dimensions(
+                da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
+            )
         return self._img
 
     # def add_size_to_meta(self):
