@@ -51,6 +51,7 @@ class GlobalSettings:
         self.outline_functions = [
             "area",
             "volume",
+            "conical_volume",
             "eccentricity",
             "centroid_x",
             "centroid_y",

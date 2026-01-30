@@ -172,7 +172,7 @@ def volume(cell_mask) -> float:
     """
     Estimate the volume of the cell.
 
-    Assumes the cell is an ellipsoid with the mask providing
+    Assume the cell is an ellipsoid with the mask providing
     a cross-section through its median plane.
 
     Parameters
@@ -187,6 +187,12 @@ def volume(cell_mask) -> float:
 def conical_volume(cell_mask):
     """
     Estimate the volume of the cell.
+
+    Assume the cell has a shape where height at any point equals the distance
+    to the nearest edge.
+
+    For a circular cell, this produces a cone, and the analytical
+    integral of distance-to-edge gives volume = ⅓πR³, so we multiply by 4.
 
     Parameters
     ----------
@@ -204,7 +210,7 @@ def spherical_volume(cell_mask):
     """
     Estimate the volume of the cell.
 
-    Assumes the cell is a sphere with the mask providing
+    Assume the cell is a sphere with the mask providing
     a cross-section through its median plane.
 
     Parameters
