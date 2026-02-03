@@ -14,7 +14,10 @@ import time
 import typing as t
 from abc import ABC, abstractmethod
 from itertools import groupby
+from operator import itemgetter
 from pathlib import Path
+
+from tqdm import tqdm
 
 
 def dispatch_dataset(
@@ -199,7 +202,7 @@ class DatasetDir(DatasetLocalABC):
 
 
 def _get_position_ids(
-    path: str, regex: str, capture_order: str
+    path: str, regex: str, capture_order: str, out_dimorder: str = "TCZYX"
 ) -> dict[str, list[str]]:
     """
     Return a dict of a list for filepaths that define each position sorted alphabetically.
@@ -207,68 +210,57 @@ def _get_position_ids(
     a list of stings indicated the associated files.
     """
 
-    captured_indices = sorted(
-        capture_order.index(x) for x in set("WF").intersection(capture_order)
-    )  # Indices of groups to replace with wildcard
-    assert len(captured_indices), (
-        "capture_order is missing Wells or field-of-view indicator"
-    )
-    # Sort by time, channel and z-stack
-    sort_files_by = tuple(
-        capture_order.index(x) for x in [x for x in capture_order if x in "TCZ"]
-    )
-    sorted_groups = organize_by_regex(
-        path, regex, tuple(captured_indices), sort_files_by
-    )
-
+    sorted_groups = sort_groups_by_regex(path, regex, capture_order, out_dimorder)
     assert len(sorted_groups), "No files were found."
 
     return sorted_groups
 
 
-# @cache
-def organize_by_regex(
-    path: str,
-    regex: str,
-    group_by_capture: tuple[int],
-    sort_by_capture: tuple[int],
-) -> dict[str, list[str]]:
-    """
-    Use a regex to group filenames of the same field-of-view (or, in
-    some cases, well+field-of-view).
+def multisort(xs, specs):
+    for key in specs:
+        xs.sort(key=itemgetter(key))
 
-    It returns the a dictionary where the key is a combination of well+field of view and the value
-    is a list with the remaining dimensions (e.g., time point, channel, z-stack) sorted in the order defined by -dimorder_out-.
-    """
-    regex = re.compile(regex)
-    str_paths = list(map(str, sorted(Path(path).rglob("*.tif?"))))
-    captures = list(map(lambda x: regex.match(x), str_paths))
+    return xs
+
+
+def sort_groups_by_regex(
+    datasets_path: str, regex: str, capture_order, out_dimorder: str = "TCZYX"
+) -> dict[tuple[str], str]:
+    regex_ = re.compile(regex)
+    str_paths = []
+    with os.scandir(datasets_path) as it:
+        for entry in tqdm(it, desc="Reading files"):
+            if not entry.name.startswith("."):
+                name = entry.name
+                str_paths.append(name)
+
+    print("Capturing regex")
+    captures = map(lambda x: regex_.match(x), str_paths)
     valid = [
         (*capture.groups(), pth) for pth, capture in zip(str_paths, captures) if capture
     ]
 
-    def key_fn(x):
-        return tuple(x[i] for i in group_by_capture)
+    # sort groups to have all equal values together
+    # Keys that define a "site"
+    grouper_keys = [
+        capture_order.index(x) + 1 for x in capture_order if x not in out_dimorder
+    ]
+    # Keys that define dimensions in an individual image. Sorted based on dimnames
+    dim_keys = tuple(
+        capture_order.index(x) + 1
+        for x in [y for y in out_dimorder if y in capture_order]
+    )
+    print("Sorting keys")
+    sorted_keys = multisort(valid, [*grouper_keys, *dim_keys])
 
-    sorted_keys = sorted(valid, key=key_fn)
-    iterator = groupby(sorted_keys, key=key_fn)
+    # %%
+    print("Grouping items")
+    iterator = groupby(sorted_keys, key=lambda x: [x[i - 1] for i in grouper_keys])
 
     sorted_groups = {}
     for key, group in iterator:
+        # files are presorted
         files = [x[-1] for x in group]
-        sorted_groups[key] = sort_by_regex_groups(files, regex, sort_by_capture)
+        sorted_groups[tuple(key)] = [Path(datasets_path) / file for file in files]
+
     return sorted_groups
-
-
-def sort_by_regex_groups(
-    files: tuple[str], regex: re.Pattern, sort_by_capture: tuple[int]
-):
-    """
-    Sort groups of files based on a given regex. It assumes that they are have the same length
-    and format, and sorts based on the captured sections with indexes defined in :sort_by: (for example, if :sort_by=(3,0): the lists are sorted based on the third and first capture group, in that order).
-    """
-    spans = regex.match(files[0]).regs[1:]
-    sorted_files = sorted(
-        files, key=lambda x: [x[slice(*spans[i])] for i in sort_by_capture]
-    )
-    return sorted_files
