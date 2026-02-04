@@ -128,16 +128,7 @@ class DatasetMonoZarr(DatasetLocalABC):
         super().__init__(dpath)
 
     def get_position_ids(self):
-        positions = {}
-        with os.scandir(self.path) as it:
-            for entry in it:
-                # skip hidden folders and files (e.g., .zattrs)
-                if not entry.name.startswith("."):
-                    name = entry.name
-                    positions[name] = {"store_path": self.path, "key": name}
-
-        # result = {k:  for k in tqdm(position_ids)}
-        return positions
+        return scan_directory(self.path)
 
 
 class DatasetZarr(DatasetLocalABC):
@@ -194,45 +185,20 @@ class DatasetDir(DatasetLocalABC):
         self.regex = regex
         self.capture_order = capture_order
 
-    def get_position_ids(self, regex: str = None, capture_order: str = None):
+    def get_position_ids(
+        self, regex: str = None, capture_order: str = None
+    ) -> list[dict[str, tuple]]:
         regex = regex or self.regex
         capture_order = capture_order or self.capture_order
 
-        return _get_position_ids(self.path, regex, capture_order)
-
-
-def _get_position_ids(
-    path: str, regex: str, capture_order: str, out_dimorder: str = "TCZYX"
-) -> dict[str, list[str]]:
-    """
-    Return a dict of a list for filepaths that define each position sorted alphabetically.
-    The key is the name of the position/field-of-view and the value is
-    a list of stings indicated the associated files.
-    """
-
-    sorted_groups = sort_groups_by_regex(path, regex, capture_order, out_dimorder)
-    assert len(sorted_groups), "No files were found."
-
-    return sorted_groups
-
-
-def multisort(xs, specs):
-    for key in specs:
-        xs.sort(key=itemgetter(key))
-
-    return xs
+        return sort_groups_by_regex(self.path, regex, capture_order)
 
 
 def sort_groups_by_regex(
     datasets_path: str, regex: str, capture_order, out_dimorder: str = "TCZYX"
-) -> dict[tuple[str], str]:
+) -> dict[str, str | tuple | list]:
     regex_ = re.compile(regex)
-    str_paths = []
-    with os.scandir(datasets_path) as it:
-        for entry in tqdm(it, desc="Reading files"):
-            if not entry.name.startswith("."):
-                name = entry.name
-                str_paths.append(name)
+    str_paths = scan_directory(datasets_path)
 
     print("Capturing regex")
     captures = map(lambda x: regex_.match(x), str_paths)
@@ -254,13 +220,37 @@ def sort_groups_by_regex(
     sorted_keys = multisort(valid, [*grouper_keys, *dim_keys])
 
     # %%
-    print("Grouping items")
     iterator = groupby(sorted_keys, key=lambda x: [x[i - 1] for i in grouper_keys])
 
-    sorted_groups = {}
-    for key, group in iterator:
+    position_ids = []
+    for key, group in tqdm(iterator, desc="Grouping items"):
         # files are presorted
         files = [x[-1] for x in group]
-        sorted_groups[tuple(key)] = [Path(datasets_path) / file for file in files]
+        position_ids.append({
+            "key": key,
+            "path": [str(Path(datasets_path) / file) for file in files],
+        })
 
-    return sorted_groups
+    assert len(position_ids), "No files were found."
+
+    # Returns [{key: (well, site), path: [file1, file2]}]
+    return position_ids
+
+
+def scan_directory(path: str) -> list[str]:
+    """Fast directory scanning."""
+    paths = []
+    with os.scandir(path) as it:
+        for entry in tqdm(it, desc="Reading files"):
+            if not entry.name.startswith("."):
+                name = entry.name
+                paths.append(name)
+
+    return paths
+
+
+def multisort(xs, specs):
+    for key in specs:
+        xs.sort(key=itemgetter(key))
+
+    return xs

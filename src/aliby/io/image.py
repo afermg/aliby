@@ -408,6 +408,7 @@ class ImageList(BaseLocalImage):
             len(set("TCZ").intersection(self.dimorder_d))
             or self.input_dimensions != "YX"
         ), "Insuficient information to build multidimensional array."
+
         assert len(self.input_dimensions) == sample.ndim, (
             "The number of dimensions in one of the input files must match self.input_dimensions"
         )
@@ -419,34 +420,77 @@ class ImageList(BaseLocalImage):
 
         if set(self.input_dimensions) == set("YX"):  # The most common case
             # Maintain the original order
+            # index_rank, shape = list(
+            #     zip(*[(k, v) for k, v in self.dimorder_d.items() if k in "TCZ"])
+            # )
             index_rank, shape = list(
                 zip(*[(k, v) for k, v in self.dimorder_d.items() if k in "TCZ"])
             )
 
-            arr = np.zeros(
-                shape + (1, 1),
-                dtype=object,
-            )
-            nd_shape = np.array(
-                np.where(
-                    np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape)
-                    + 1
-                )
-            ).transpose()
+            # Pad the missing dimensions
 
-            for i, (d1, d2, d3) in enumerate(nd_shape):
+            expected_dims = tuple([self.dimorder_d.get(k, 1) for k in "TCZ"])
+            arr = np.zeros(expected_dims + (1, 1), dtype=object)
+            # nd_shape = np.array(
+            #     np.where(
+            #         np.arange(np.prod(tuple(self.dimorder_d.values()))).reshape(shape)
+            #         + 1
+            #     )
+            # ).transpose()
+
+            # assert nd_shape.nidn == 3, "nd_shape.ndim is not 3"
+            # TODO make sure this reshaping hapens in the right order
+            grid = np.arange(np.product(expected_dims), dtype=np.int32).reshape(
+                *expected_dims
+            )
+
+            """
+            Fills a 5-D array with 2-D arrays in a specified order.
+
+            :param arr: The 5-D numpy array to fill.
+            :param order: A list or tuple of the first three dimension indices,
+                          e.g., [2, 0, 1], specifying the fill priority.
+            :param filler_func: A function that takes a 3-tuple index (i, j, k)
+                                and returns the corresponding 2-D array.
+            """
+            # Get the shape of the dimensions to be iterated over
+            filling_order = [0, 1, 2]  # TODO Generalize this based on capture_order
+            d0, d1, d2 = expected_dims
+
+            import itertools
+
+            # Generate all possible 3-D indices (i, j, k)
+            all_indices = itertools.product(range(d0), range(d1), range(d2))
+
+            # Sort these indices based on the custom order
+            # The key extracts values from an index tuple in the desired order
+            sorted_indices = sorted(
+                all_indices, key=lambda idx: tuple(idx[d] for d in filling_order)
+            )
+
+            # Iterate through the sorted indices and fill the array
+            for i, (d1, d2, d3) in enumerate(sorted_indices):
                 arr[d1, d2, d3, 0, 0] = lazy_arrays[i]
 
             a = da.block(arr.tolist())
             # rechunk to the last 3 dimensions. Leave time and channel unchunked
-            pixels = da.rechunk(a, (1, 1, self.dimorder_d["Z"], *sample.shape))
+            # TODO remove hardcoded TCZ
+            pixels = da.rechunk(
+                a,
+                (
+                    self.dimorder_d.get("T", 1),
+                    self.dimorder_d.get("C", 1),
+                    self.dimorder_d.get("Z", 1),
+                    *sample.shape,
+                ),
+            )
             # Move axes to match dimorder
-            source_target = {
-                index_rank.index(y): i
-                for i, y in enumerate([x for x in self.dimorder if x in index_rank])
-            }
+            # source_target = {
+            #     index_rank.index(y): i
+            #     for i, y in enumerate([x for x in self.dimorder if x in index_rank])
+            # }
 
-            pixels = da.moveaxis(pixels, source_target.keys(), source_target.values())
+            # pixels = da.moveaxis(pixels, source_target.keys(), source_target.values())
         else:
             # This only covers YXC, TODO solve the general case
             assert all(x in "TCZYX" for x in self.input_dimensions), (
@@ -505,8 +549,8 @@ def get_dims_from_names(
     Capture order in this context means only the order in which matches occur in a regex.
     """
     regex_ = re.compile(regex)
-    sorted_files = sorted(image_filenames)
-    matches = [regex_.match(x).groups() for x in sorted_files]
+    # sorted_files = sorted(image_filenames)
+    matches = [regex_.match(x).groups() for x in image_filenames]
     dim_size = {
         dim: len(set([y[i] for y in matches])) for i, dim in enumerate(capture_order)
     }
