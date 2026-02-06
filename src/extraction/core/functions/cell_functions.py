@@ -168,7 +168,7 @@ def std(cell_mask, trap_image):
     return np.std(trap_image[cell_mask])
 
 
-def volume(cell_mask) -> float:
+def ellipsoidal_volume(cell_mask) -> float:
     """
     Estimate the volume of the cell.
 
@@ -184,7 +184,7 @@ def volume(cell_mask) -> float:
     return (4 * np.pi * min_ax**2 * maj_ax) / 3
 
 
-def conical_volume(cell_mask):
+def volume(cell_mask):
     """
     Estimate the volume of the cell.
 
