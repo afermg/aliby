@@ -9,15 +9,17 @@ from itertools import cycle
 from pathlib import Path
 from typing import Callable
 
+import numcodecs
 import numpy
 import pyarrow
 import pyarrow as pa
+from imagecodecs.numcodecs import Jpegxl
 
 from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
 from aliby.io.write import dispatch_write_fn
 from aliby.segment.dispatch import dispatch_segmenter
-from aliby.tile.tiler import Tiler, TilerParameters, dispatch_tiler
+from aliby.tile.tiler import dispatch_tiler
 from aliby.track.dispatch import dispatch_tracker
 from extraction.extract import (
     extract_tree,
@@ -26,6 +28,10 @@ from extraction.extract import (
     process_tree_masks,
     process_tree_masks_overlap,
 )
+
+numcodecs.register_codec(Jpegxl)
+
+# from aliby.tile.tiler import Tiler, TilerParameters,
 
 
 def init_step(
@@ -178,6 +184,7 @@ def pipeline_step(
 
     steps = pipeline["steps"]
     passed_data = pipeline["passed_data"]
+    passed_methods = pipeline.get("passed_methods", {})
 
     tp = list(state.get("tps", {None: 0}).values())[0]
     if not tp:  # Initialise steps
@@ -247,6 +254,13 @@ def pipeline_step(
         #     args = []
 
         args = []
+        if (
+            step_name.startswith("segment")
+            and parameters["segmenter_kwargs"]["kind"] != "baby"
+        ):  # Pass correct images from tiler
+            source_step, method, param_name = passed_methods.get(step_name)
+            args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
         # Save state
@@ -317,6 +331,7 @@ def run_pipeline_and_post(
     output_path: Path = None,
     fov: str = None,
     overwrite: bool = True,
+    logger=None,
 ) -> tuple[pyarrow.Table, pyarrow.Table]:
     """
     Run a step-based pipeline and at the end run a series of post-processiong steps,
@@ -393,7 +408,8 @@ def run_pipeline_and_post(
                         filename=fov,
                     )
     else:
-        print(f"Skipping {fov}, as it exists")
+        if logger is not None:
+            logger.log(f"Skipping {fov}, as it exists")
 
     return profiles, post_results
 

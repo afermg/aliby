@@ -128,7 +128,16 @@ class DatasetMonoZarr(DatasetLocalABC):
         super().__init__(dpath)
 
     def get_position_ids(self):
-        return scan_directory(self.path)
+        positions = {}
+        with os.scandir(self.path) as it:
+            for entry in it:
+                # skip hidden folders and files (e.g., .zattrs)
+                if not entry.name.startswith("."):
+                    name = entry.name
+                    positions[name] = {"store_path": self.path, "key": name}
+
+        # result = {k:  for k in tqdm(position_ids)}
+        return positions
 
 
 class DatasetZarr(DatasetLocalABC):
@@ -216,7 +225,6 @@ def sort_groups_by_regex(
         capture_order.index(x) + 1
         for x in [y for y in out_dimorder if y in capture_order]
     )
-    print("Sorting keys")
     sorted_keys = multisort(valid, [*grouper_keys, *dim_keys])
 
     # %%
@@ -237,20 +245,20 @@ def sort_groups_by_regex(
     return position_ids
 
 
-def scan_directory(path: str) -> list[str]:
+def scan_directory(path: str, id_type: str = "name") -> list[str]:
     """Fast directory scanning."""
     paths = []
     with os.scandir(path) as it:
         for entry in tqdm(it, desc="Reading files"):
             if not entry.name.startswith("."):
-                name = entry.name
-                paths.append(name)
+                path_or_name = getattr(entry, id_type)
+                paths.append(path_or_name)
 
     return paths
 
 
 def multisort(xs, specs):
-    for key in specs:
+    for key in tqdm(specs, desc="Sorting keys"):
         xs.sort(key=itemgetter(key))
 
     return xs

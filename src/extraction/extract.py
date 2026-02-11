@@ -145,7 +145,7 @@ def measure_mono(
     (tile_i, mask_label), (ch, red_z, metric) = tileid_x
     return measure(
         masks[tile_i][mask_label - 1],  # TODO formalise how to handle this
-        pixels[ch] if ch != "None" else None,
+        pixels[tile_i, ch] if ch != "None" else None,
         REDUCTION_FUNS[red_z],
         CELL_FUNS[metric],
     )
@@ -248,9 +248,9 @@ def process_tree_masks(
     tree : dict
         The tree to be processed.
     masks : list of numpy arrays
-        The mask values, the list level at the top indicates multiple tiles. timensions are F(tiles)YX.
+        The mask values, the list level at the top indicates multiple tiles. timensions are F(tiles/batch)YX.
     pixels : numpy array
-        The pixel values.
+        The image.
     measure_fn : callable
         The measurement function to apply, it can be `measure_mono` or `measure_multi`.
 
@@ -309,6 +309,7 @@ def extract_tree(
     list
         A list of extracted features from the tree branches.
     """
+
     result = []
     if len(tileid_instructions):
         # These should be a list of binary masks
@@ -490,8 +491,10 @@ def format_extraction(
     """
     formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
     for inst, metrics in zip(*instructions_result):
-        tileid = inst[0]
-        label = inst[-1]  # To support both (tile_i, label) & (tile_i, stack_i, label)
+        tileid = inst[0][0]
+        label = inst[0][
+            -1
+        ]  # To support both (tile_i, label) & (tile_i, stack_i, label)
         branch = "/".join(str(x) for x in inst[1])
         if isinstance(
             metrics, int
