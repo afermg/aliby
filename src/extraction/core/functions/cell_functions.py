@@ -25,6 +25,11 @@ try:
 except ModuleNotFoundError:
     pass
 
+try:
+    from maby import VacuoleIdentifier
+except ModuleNotFoundError:
+    pass
+
 
 def area(cell_mask) -> int:
     """
@@ -410,8 +415,21 @@ if "nl_classifier" in sys.modules:
     # define CNN for nuclear localisation
     nl = nl_classifier()
 
+    def nucloc(cell_mask, trap_image, channels):
+        """Pedict nuclear localisation from brightfield and fluorescence using CNN."""
+        nucloc = nl.predict(cell_mask, trap_image, channels)
+        return nucloc
 
-def nucloc(cell_mask, trap_image, channels):
-    """Pedict nuclear localisation from brightfield and fluorescence."""
-    nucloc = nl.predict(cell_mask, trap_image, channels)
-    return nucloc
+
+if "maby" in sys.modules:
+    # define U-net for identifying vacuole
+    # TODO should probably be defined elsewhere to avoid repeated calls
+    vi = VacuoleIdentifier()
+
+    def identify_vacuole(cell_mask, trap_image):
+        """Identify vacuole from brightfield using U-net."""
+        vac_mask = vi.predict(trap_image, cell_mask, projection="mean")
+        cyt_mask = cell_mask & ~vac_mask
+        return vac_mask, cyt_mask
+
+    # run for all cell functions, like mean, etc.
