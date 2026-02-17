@@ -297,9 +297,10 @@ def _validate_pipeline(pipeline: dict):
     """
     steps_to_write = pipeline.get("save")
     assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
-    assert "ntps" in pipeline.get("io", {}), (
-        "You must pass the number of time points to analyse."
-    )
+    # Deprecated: ntps should be autodetected
+    # assert "ntps" in pipeline.get("io", {}), (
+    #     "You must pass the number of time points to analyse."
+    # )
     for k in pipeline["steps"]:
         if k.startswith("nahual"):
             assert "address" in pipeline["steps"][k], (
@@ -316,7 +317,10 @@ def run_pipeline_return_state(
     pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
-    ntps = pipeline.get("io", {"ntps": 20})["ntps"]
+    # ntps = pipeline.get("io", {"ntps": 20})["ntps"]
+    # By default do only the first time point
+    # We don't have information on dimensionality yet
+    ntps = pipeline["io"].get("ntps", 1)  # {"ntps": 1})["ntps"]
     for _ in range(ntps):
         # print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
