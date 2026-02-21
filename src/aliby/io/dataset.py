@@ -207,6 +207,9 @@ def sort_groups_by_regex(
     datasets_path: str, regex: str, capture_order, out_dimorder: str = "TCZYX"
 ) -> dict[str, str | tuple | list]:
     regex_ = re.compile(regex)
+
+    # Currently scan_directory only checks one level.
+    # TODO make recursive? specify local vs global paths?
     str_paths = scan_directory(datasets_path)
 
     print("Capturing regex")
@@ -234,6 +237,11 @@ def sort_groups_by_regex(
     for key, group in tqdm(iterator, desc="Grouping items"):
         # files are presorted
         files = [x[-1] for x in group]
+
+        # Convert tuple keys into string for consistency downstream
+        if not isinstance(key, str):
+            key = "__".join(key)
+
         position_ids.append({
             "key": key,
             "path": [str(Path(datasets_path) / file) for file in files],
