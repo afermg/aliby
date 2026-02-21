@@ -132,7 +132,7 @@ class DatasetMonoZarr(DatasetLocalABC):
         with os.scandir(self.path) as it:
             for entry in it:
                 # skip hidden folders and files (e.g., .zattrs)
-                if not entry.name.startswith("."):
+                if entry.is_dir():
                     name = entry.name
                     positions[name] = {"store_path": self.path, "key": name}
 
