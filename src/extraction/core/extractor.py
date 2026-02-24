@@ -4,7 +4,6 @@ import copy
 import typing as t
 from pathlib import Path
 
-from aliby.global_settings import global_settings
 import bottleneck as bn
 import dask.array as da
 import h5py
@@ -12,15 +11,16 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
-from agora.io.writers import read_meta_from_h5
+from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
+from extraction.core.functions.cell_functions import identify_vacuole
 from extraction.core.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
 
 # define types
-reduction_method = t.Union[t.Callable, str, None]
+reduction_method = t.Union[t.Callable, str]
 extraction_tree = t.Dict[
     str, t.Dict[reduction_method, t.Dict[str, t.Collection]]
 ]
@@ -59,7 +59,11 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
             default_reduction_and_fluorescence_metrics
         )
     # subtract background from all fluorescence channels
-    tree_dict["sub_bg"] = set(extant_fluorescence_ch)
+    tree_dict["subtract_background"] = set(extant_fluorescence_ch)
+    # extract intracellular masks for all channels except Cy5
+    tree_dict["intracellular_masks"] = {
+        ch for ch in extant_fluorescence_ch if ch.lower() != "cy5"
+    }
     return tree_dict
 
 
@@ -92,8 +96,9 @@ class ExtractorParameters(ParametersABC):
     def __init__(
         self,
         tree: extraction_tree,
-        sub_bg: set = set(),
+        subtract_background: set = set(),
         multichannel_funs: t.Dict = {},
+        intracellular_masks: set = set(),
     ):
         """
         Initialise.
@@ -101,18 +106,24 @@ class ExtractorParameters(ParametersABC):
         Parameters
         ----------
         tree: dict
-            Nested dictionary indicating channels, reduction functions and
-            metrics to be used.
-            str channel -> U(function, None) reduction -> str metric
-            If not of depth three, tree will be filled with None.
-        sub_bg: set
-            A set of strings of the channels to correct for background.
+            Nested dictionary indicating channels, reduction functions
+            and metrics to be used.
+            str channel -> str reduction -> str metric
+            The "null" reduction indicates no z-reduction is needed.
+            If not of depth three, tree will be filled with "null".
+        subtract_background: set
+            A set of strings of the channels to correct for
+            background.
         multichannel_funs: dict
             Dict of multichannel functions.
+        intracellular_masks: set
+            A set of strings of the channels for which to extract
+            vacuole and cytoplasm metrics.
         """
         self.tree = tree
-        self.sub_bg = sub_bg
+        self.subtract_background = subtract_background
         self.multichannel_funs = multichannel_funs
+        self.intracellular_masks = intracellular_masks
 
     @classmethod
     def default(cls):
@@ -178,14 +189,14 @@ class Extractor(StepABC):
                 for k, v in self.params.tree.items()
                 if k in available_channels
             }
-            self.params.sub_bg = available_channels.intersection(
-                self.params.sub_bg
+            self.params.subtract_background = available_channels.intersection(
+                self.params.subtract_background
             )
-        # used to create a Cells object in extract_tp
+            self.params.intracellular_masks = available_channels.intersection(
+                self.params.intracellular_masks
+            )
         self.store = store
         self.all_cell_funs, self.all_funs = load_all_functions()
-        # to correct tree for functions returning multiple values
-        self.replace_dict_for_tree = {}
 
     @classmethod
     def from_tiler(
@@ -219,7 +230,7 @@ class Extractor(StepABC):
         lazy: bool = True,
     ) -> t.Optional[t.Union[np.ndarray, da.Array]]:
         """
-        Find tiles for a given time point and given channels and z-stacks.
+        Find tiles for a given time point and given channels.
 
         Use memory-efficient lazy loading.
 
@@ -232,13 +243,15 @@ class Extractor(StepABC):
         z: list of integers (optional)
             Indices for the z-stacks of interest.
         lazy: bool, optional
-            If True, return dask array for memory efficiency. Default is True.
+            If True, return dask array for memory efficiency.
+            Default is True.
 
         Returns
         -------
         tiles: dask array or numpy array
-            Tiles with dimensions (tiles, channels, z, y, x)
-            Returns dask array if lazy=True, numpy array if lazy=False
+            Tiles with dimensions (tiles, channels, z, y, x).
+            Return dask array if lazy=True, numpy array if
+            lazy=False.
         """
         if channels is None:
             # find channels from tiler
@@ -280,31 +293,32 @@ class Extractor(StepABC):
         channels: t.List[str],
     ) -> t.Tuple[t.Union[t.Tuple[float], t.Tuple[t.Tuple[int]]]]:
         """
-        Apply a cell function to all cells at all traps for one time point.
+        Apply a cell function to all cells at all traps.
+
+        Process one time point.
 
         Parameters
         ----------
         traps: list of arrays
-            t.List of images.
+            List of images.
         masks: list of arrays
-            t.List of masks.
+            List of masks.
         cell_function: str
             Function to apply.
         cell_labels: dict
-            A dict with trap_ids as keys and a list of cell labels as
-            values.
+            A dict with trap_ids as keys and a list of cell labels
+            as values.
         channels: list of str
-            A list of the channels corresponding to the data in traps.
+            A list of the channels corresponding to the data in
+            traps.
 
         Returns
         -------
         res_idx: a tuple of tuples
-            A two-tuple comprising a tuple of results and a tuple of
-            the tile_id and cell labels
+            A two-tuple comprising a tuple of results and a tuple
+            of the tile_id and cell labels.
         """
-        if cell_labels is None:
-            self.log("No cell labels given. Sorting cells using index.")
-        cell_fun = True if cell_function in self.all_cell_funs else False
+        cell_fun = cell_function in self.all_cell_funs
         idx = []
         results = []
         for trap_id, (mask_set, trap, local_cell_labels) in enumerate(
@@ -323,8 +337,7 @@ class Extractor(StepABC):
                     # background (trap) function
                     results.append(result)
                     idx.append(trap_id)
-        res_idx = (tuple(results), tuple(idx))
-        return res_idx
+        return (tuple(results), tuple(idx))
 
     def apply_cell_functions(
         self,
@@ -333,11 +346,19 @@ class Extractor(StepABC):
         cell_funs: t.List[str],
         channels: t.List[str],
         cell_labels: t.List[int],
-    ) -> t.Dict[str, pd.Series]:
+    ) -> tuple[dict[str, pd.Series], dict[str, list[str]]]:
         """
-        Return dict with cell_funs as keys and their results as values.
+        Return dict with cell_funs as keys and their results.
 
         Use data from one time point.
+
+        Returns
+        -------
+        d: dict
+            Dict mapping function names to (results, indices) tuples.
+        replacements: dict
+            Dict mapping original function names to lists of expanded
+            sub-key names for functions that return dicts.
         """
         d = {
             cell_fun: self.apply_cell_function(
@@ -349,10 +370,11 @@ class Extractor(StepABC):
             )
             for cell_fun in cell_funs
         }
-        # check for any functions returning a dict rather than a single value
+        # check for functions returning a dict rather than a value
         dict_fns = [
             cell_fun for cell_fun in d if isinstance(d[cell_fun][0][0], dict)
         ]
+        replacements = {}
         for fn in dict_fns:
             # add to d for each key in returned dict
             mini_d = {}
@@ -366,10 +388,9 @@ class Extractor(StepABC):
             idx = d[fn][1]
             for subkey, value in mini_d.items():
                 d[subkey] = (tuple(value), idx)
-            # delete dict-returning entry in d
             del d[fn]
-            self.replace_dict_for_tree[fn] = [subkey for subkey in mini_d]
-        return d
+            replacements[fn] = list(mini_d)
+        return d, replacements
 
     def reduce_extract(
         self,
@@ -378,66 +399,82 @@ class Extractor(StepABC):
         reduction_cell_funs: t.Dict[reduction_method, t.Collection[str]],
         channels: t.List[str],
         cell_labels: t.List[int],
-    ) -> t.Dict[str, t.Dict[reduction_method, t.Dict[str, pd.Series]]]:
+    ) -> tuple[
+        dict[str, dict[reduction_method, dict[str, pd.Series]]],
+        dict[str, list[str]],
+    ]:
         """
         Reduce to a 2D image and then extract.
 
         Parameters
         ----------
         tiles: array
-            An array of image data arranged as (tiles, X, Y, Z)
+            An array of image data arranged as (tiles, X, Y, Z).
         masks: list of arrays
-            An array of masks for each trap: one per cell at the trap
+            An array of masks for each trap: one per cell at the
+            trap.
         reduction_cell_funs: dict
             An upper branch of the extraction tree: a dict for which
             keys are reduction functions and values are either a list
             or a set of strings giving the cell functions to apply.
             For example: {'np_max': {'max5px', 'mean', 'median'}}
         channels: list of str
-            A list comprising the channel corresponding to the data in tiles.
+            A list comprising the channel corresponding to the data
+            in tiles.
+        cell_labels: list of int
+            Cell labels per trap.
 
         Returns
         ------
-        Dict of dataframes with the corresponding reductions and metrics nested.
+        d: dict
+            Dict of results with reductions and metrics nested.
+        replacements: dict
+            Accumulated replacements for multi-value functions.
         """
-        # create dict with keys naming the reduction in the z-direction
-        # and the reduced data as values
+        # create dict with keys naming the reduction in the
+        # z-direction and the reduced data as values
         reduced_tiles = {}
         if tiles is not None:
-            for reduction in reduction_cell_funs.keys():
-                reduced_tiles[reduction] = [
-                    reduce_z(tile_data, REDUCTION_FUNS[reduction])
-                    for tile_data in tiles
-                ]
+            for reduction in reduction_cell_funs:
+                red_fun = REDUCTION_FUNS[reduction]
+                if red_fun is not None:
+                    reduced_tiles[reduction] = [
+                        reduce_z(tile_data, red_fun) for tile_data in tiles
+                    ]
         # calculate cell and tile properties
-        d = {
-            reduction: self.apply_cell_functions(
+        d = {}
+        all_replacements = {}
+        for reduction, cell_funs in reduction_cell_funs.items():
+            results, replacements = self.apply_cell_functions(
                 tiles=reduced_tiles.get(reduction, [None for _ in masks]),
                 masks=masks,
                 cell_funs=cell_funs,
                 channels=channels,
                 cell_labels=cell_labels,
             )
-            for reduction, cell_funs in reduction_cell_funs.items()
-        }
-        return d
+            d[reduction] = results
+            all_replacements.update(replacements)
+        return d, all_replacements
 
     def get_masks(self, tp, masks, cells):
-        """Get the masks as a list with an array of masks for each trap."""
-        # find the cell masks for a given trap as a dict with trap_ids as keys
+        """Get masks as a list with an array of masks per trap."""
+        # find cell masks for a given trap as a dict with trap_ids
+        # as keys
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}
-            for trap_id, cells in raw_masks.items():
-                if len(cells):
-                    masks[trap_id] = np.stack(np.array(cells)).astype(bool)
+            for trap_id, trap_cells in raw_masks.items():
+                if len(trap_cells):
+                    masks[trap_id] = np.stack(np.array(trap_cells)).astype(
+                        bool
+                    )
         # convert to a list of masks
         # one array of size (no cells, tile_size, tile_size) per trap
         masks = [np.array(v) for v in masks.values()]
         return masks
 
     def get_cell_labels(self, tp, cell_labels, cells):
-        """Get the cell labels per trap as a dict with trap_ids as keys."""
+        """Get cell labels per trap as a dict with trap_ids as keys."""
         if cell_labels is None:
             raw_cell_labels = cells.labels_at_time(tp)
             cell_labels = {
@@ -446,55 +483,179 @@ class Extractor(StepABC):
             }
         return cell_labels
 
+    def get_outlines(self, tp, cell_labels, cells):
+        """Get cell outlines with individual labels as a dict with trap_ids as keys."""
+        cell_mask_dict = {
+            trap_id: cells.at_time(tp, kind="edgemask").get(trap_id, [])
+            for trap_id in range(cells.ntraps)
+        }
+        cell_labels = self.get_cell_labels(tp, cell_labels, cells)
+        outlines_dict = {}
+        for trap_id in range(cells.ntraps):
+            edgemasks = cell_mask_dict[trap_id]
+            labels = cell_labels[trap_id]
+            if edgemasks and labels:
+                outlines_dict[trap_id] = np.stack(
+                    [
+                        cell_mask * label
+                        for cell_mask, label in zip(edgemasks, labels)
+                    ]
+                ).max(axis=0)
+            else:
+                outlines_dict[trap_id] = np.array([])
+        return outlines_dict
+
     def get_background_masks(self, masks, tile_size):
         """
-        Generate boolean background masks.
+        Generate boolean background masks for pre-reduction subtraction.
 
-        Combine masks per trap and then take the logical inverse.
+        Combine cell masks per trap and take the logical inverse to
+        identify background pixels. These masks are used in
+        ``get_imgs_background_subtract`` to compute and subtract the
+        median background independently for each z-slice, before the
+        z-reduction step.
+
+        Parameters
+        ----------
+        masks: list of arrays
+            Segmentation masks per trap, each (N_traps, Y, X).
+        tile_size: int
+            Size of each tile in pixels.
+
+        Returns
+        -------
+        bgs: array
+            Boolean background masks with shape (N_traps, Y, X), or
+            an empty array if background subtraction is disabled.
         """
-        if self.params.sub_bg:
-            bgs = ~np.array(
-                list(
-                    map(
-                        # sum over masks for each cell
-                        lambda x: (
-                            np.sum(x, axis=0)
-                            if np.any(x)
-                            else np.zeros((tile_size, tile_size))
-                        ),
-                        masks,
+        if self.params.subtract_background:
+            combined = np.array(
+                [
+                    (
+                        np.any(m, axis=0)
+                        if len(m)
+                        else np.zeros((tile_size, tile_size), dtype=bool)
                     )
-                )
-            ).astype(bool)
+                    for m in masks
+                ]
+            )
+            bgs = ~combined
         else:
             bgs = np.array([])
         return bgs
 
+    def compute_intracellular_masks(self, outlines, masks, img):
+        """
+        Compute vacuole and cytoplasm sub-masks from brightfield.
+
+        Parameters
+        ----------
+        outlines: list of arrays
+            Labelled-outline images per trap, each (Y, X) with
+            integer cell labels.
+        masks: list of arrays
+            Cell masks per trap, each (ncells, Y, X).
+        img: dict
+            Image dict containing "Brightfield" key with shape
+            (ntraps, Y, X).
+
+        Returns
+        -------
+        vac_masks: list of arrays
+            Vacuole masks per trap with same structure as masks.
+        cyt_masks: list of arrays
+            Cytoplasm masks per trap with same structure as masks.
+        """
+        bf = img["Brightfield"]
+        vac_masks = []
+        cyt_masks = []
+        for trap_outline, trap_masks, bf_trap in zip(outlines, masks, bf):
+            if len(trap_masks):
+                # single binary vacuole image for the whole trap
+                trap_vac = identify_vacuole(trap_outline, bf_trap)
+                # split into per-cell masks
+                vac_list, cyt_list = [], []
+                for cell_mask in trap_masks:
+                    cell_vac = cell_mask & trap_vac
+                    vac_list.append(cell_vac)
+                    cyt_list.append(cell_mask & ~trap_vac)
+                vac_masks.append(np.stack(vac_list))
+                cyt_masks.append(np.stack(cyt_list))
+            else:
+                vac_masks.append(np.array([]))
+                cyt_masks.append(np.array([]))
+        return vac_masks, cyt_masks
+
     def extract_one_channel(
-        self, tree_dict, cell_labels, img, img_bgsub, masks
+        self,
+        tree_dict,
+        cell_labels,
+        img,
+        img_bgsub,
+        masks,
+        vac_masks=None,
+        cyt_masks=None,
     ):
-        """Extract as dict all metrics requiring only a single channel."""
+        """Extract as dict all metrics requiring only one channel.
+
+        Returns
+        -------
+        d: dict
+            Nested extraction results.
+        replacements: dict
+            Accumulated replacements for multi-value functions.
+        """
         d = {}
+        all_replacements = {}
         for ch, reduction_cell_funs in tree_dict["tree"].items():
             # extract from all images including bright field
-            d[ch] = self.reduce_extract(
-                # use None for "general" - no fluorescence image
+            results, replacements = self.reduce_extract(
+                # use null for "general" - no fluorescence image
                 tiles=img.get(ch, None),
                 masks=masks,
                 reduction_cell_funs=reduction_cell_funs,
                 cell_labels=cell_labels,
                 channels=[ch],
             )
+            d[ch] = results
+            all_replacements.update(replacements)
             if ch != "general":
-                # extract from background-corrected fluorescence images
-                d[ch + "_bgsub"] = self.reduce_extract(
+                # extract from background-corrected images
+                results, replacements = self.reduce_extract(
                     tiles=img_bgsub[ch + "_bgsub"],
                     masks=masks,
                     reduction_cell_funs=reduction_cell_funs,
                     cell_labels=cell_labels,
                     channels=[ch],
                 )
-        return d
+                d[ch + "_bgsub"] = results
+                all_replacements.update(replacements)
+            # extract using intracellular sub-masks
+            if ch in self.params.intracellular_masks and vac_masks is not None:
+                for suffix, sub_masks in [
+                    ("_vacuole", vac_masks),
+                    ("_cytoplasm", cyt_masks),
+                ]:
+                    results, replacements = self.reduce_extract(
+                        tiles=img.get(ch, None),
+                        masks=sub_masks,
+                        reduction_cell_funs=reduction_cell_funs,
+                        cell_labels=cell_labels,
+                        channels=[ch],
+                    )
+                    d[ch + suffix] = results
+                    all_replacements.update(replacements)
+                    if ch in self.params.subtract_background:
+                        results, replacements = self.reduce_extract(
+                            tiles=img_bgsub[ch + "_bgsub"],
+                            masks=sub_masks,
+                            reduction_cell_funs=(reduction_cell_funs),
+                            cell_labels=cell_labels,
+                            channels=[ch],
+                        )
+                        d[ch + suffix + "_bgsub"] = results
+                        all_replacements.update(replacements)
+        return d, all_replacements
 
     def extract_multiple_channels(self, cell_labels, img, img_bgsub, masks):
         """
@@ -547,7 +708,6 @@ class Extractor(StepABC):
                     tiles = REDUCTION_FUNS[reduction](channels_stack, axis=1)
                     # set up dict
                     if multichannel_label not in d:
-                        # create "multichannel" key
                         d[multichannel_label] = {}
                     if reduction not in d[multichannel_label]:
                         d[multichannel_label][reduction] = {}
@@ -580,6 +740,64 @@ class Extractor(StepABC):
         tree_dict["channels"] = (*tree_dict["channels_tree"],)
         return tree_dict
 
+    def load_tp_data(
+        self,
+        tp: int,
+        tile_size: int,
+        tree_dict: dict,
+        masks: t.Optional[t.List[np.ndarray]] = None,
+        cell_labels: t.Optional[dict] = None,
+    ) -> tuple[dict, list, list, dict, np.ndarray]:
+        """
+        Load all data needed for extraction at one time point.
+
+        Parameters
+        ----------
+        tp: int
+            Time point being analysed.
+        tile_size: int
+            Size of each tile.
+        tree_dict: dict
+            Processed extraction tree from make_tree_dict.
+        masks: list of arrays (optional)
+            Pre-computed masks.
+        cell_labels: dict (optional)
+            Pre-computed cell labels.
+
+        Returns
+        -------
+        cell_labels: dict
+            Cell labels per trap.
+        masks: list
+            List of mask arrays, one per trap.
+        outlines: list
+            List of labelled-outline arrays, one (Y, X) image
+            per trap with integer cell labels.
+        img: dict
+            Fluorescence images keyed by channel name.
+        img_bgsub: dict
+            Background-subtracted images keyed by channel name.
+        """
+        # create a fresh Cells object each time because the h5 file
+        # grows between time points and Cells has cached_property
+        cells = Cells(self.store)
+        cell_labels = self.get_cell_labels(tp, cell_labels, cells)
+        masks = self.get_masks(tp, masks, cells)
+        outlines_dict = self.get_outlines(tp, cell_labels, cells)
+        outlines = [outlines_dict[tid] for tid in range(cells.ntraps)]
+        # fluorescence data for all traps at the time point
+        # stored as an array arranged as (traps, channels, 1, Z, X, Y)
+        tiles = self.get_tiles(tp, channels=tree_dict["channels"], lazy=False)
+        bgs = self.get_background_masks(masks, tile_size)
+        img, img_bgsub = self.get_imgs_background_subtract(
+            tree_dict, tiles, bgs
+        )
+        # add brightfield images
+        img["Brightfield"] = self.get_tiles(
+            tp, channels=["Brightfield"], lazy=False
+        )[:, 0, 0, ...]
+        return cell_labels, masks, outlines, img, img_bgsub
+
     def extract_tp(
         self,
         tp: int,
@@ -593,117 +811,133 @@ class Extractor(StepABC):
 
         Parameters
         ----------
-        tp : int
+        tp: int
             Time point being analysed.
-        tree : dict
-            Nested dictionary indicating channels, reduction functions
-            and metrics to be used.
-            For example: {'general': {'null': ['area', 'volume', 'eccentricity']}}
-        tile_size : int
+        tree: dict
+            Nested dictionary indicating channels, reduction
+            functions and metrics to be used.
+            For example:
+            {'general': {'null': ['area', 'volume', 'eccentricity']}}
+        tile_size: int
             Size of the tile to be extracted.
-        masks : list of arrays
+        masks: list of arrays
             A list of masks per trap with each mask having dimensions
             (ncells, tile_size, tile_size) and with one mask per cell.
-        cell_labels : dict
-            A dictionary with trap_ids as keys and cell_labels as values.
+        cell_labels: dict
+            A dictionary with trap_ids as keys and cell_labels as
+            values.
 
         Returns
         -------
         res: dict
-            Dictionary of the results with three levels of dictionaries.
+            Dictionary of the results with three levels of
+            dictionaries.
             The first level has channels as keys.
             The second level has reduction metrics as keys.
-            The third level has cell or background metrics as keys and a
-            two-tuple as values.
-            The first tuple is the result of applying the metrics to a
-            particular cell or trap; the second tuple is either
-            (trap_id, cell_label) for a metric applied to a cell or a
-            trap_id for a metric applied to a trap.
+            The third level has cell or background metrics as keys
+            and a two-tuple as values.
+            The first tuple is the result of applying the metrics
+            to a particular cell or trap; the second tuple is either
+            (trap_id, cell_label) for a metric applied to a cell or
+            a trap_id for a metric applied to a trap.
 
-            An example is d["GFP"]["np_max"]["mean"][0], which gives a tuple
-            of the calculated mean GFP fluorescence for all cells.
+            An example is d["GFP"]["np_max"]["mean"][0], which gives
+            a tuple of the calculated mean GFP fluorescence for all
+            cells.
         """
-        # dict of information from extraction tree
         tree_dict = self.make_tree_dict(tree)
-        # create a Cells object from the h5 file
-        cells = Cells(self.store)
-        # find the cell labels as dict with trap_ids as keys
-        cell_labels = self.get_cell_labels(tp, cell_labels, cells)
-        # get masks one per cell per trap
-        masks = self.get_masks(tp, masks, cells)
-        # find fluorescence data for all traps at the time point
-        # stored as an array arranged as (traps, channels, 1, Z, X, Y)
-        tiles = self.get_tiles(tp, channels=tree_dict["channels"], lazy=False)
-        # generate boolean masks for background for each trap
-        bgs = self.get_background_masks(masks, tile_size)
-        # get fluorescence images and background-corrected images as dicts
-        # with fluorescence channels as keys
-        img, img_bgsub = self.get_imgs_background_subtract(
-            tree_dict, tiles, bgs
+        # load all data for this time point
+        cell_labels, masks, outlines, img, img_bgsub = self.load_tp_data(
+            tp, tile_size, tree_dict, masks, cell_labels
         )
-        # add brightfield images
-        img["Brightfield"] = self.get_tiles(
-            tp, channels=["Brightfield"], lazy=False
-        )[:, 0, 0, ...]
-        # perform extraction for functions requiring one channel
-        res_one = self.extract_one_channel(
-            tree_dict, cell_labels, img, img_bgsub, masks
+        # compute intracellular sub-masks if requested
+        vac_masks, cyt_masks = None, None
+        if self.params.intracellular_masks:
+            vac_masks, cyt_masks = self.compute_intracellular_masks(
+                outlines, masks, img
+            )
+        # extract for functions requiring one channel
+        res_one, replacements = self.extract_one_channel(
+            tree_dict,
+            cell_labels,
+            img,
+            img_bgsub,
+            masks,
+            vac_masks=vac_masks,
+            cyt_masks=cyt_masks,
         )
-        # update tree dict for any functions that returned multiple values
-        for fn, replace_list in self.replace_dict_for_tree.items():
+        # update tree dict for functions that returned multiple values
+        for fn, replace_list in replacements.items():
             tree_dict = replace_in_nesteddict(tree_dict, fn, replace_list)
-        # perform extraction for functions requiring multiple channels
+        # extract for functions requiring multiple channels
         res_multiple = self.extract_multiple_channels(
             cell_labels, img, img_bgsub, masks
         )
-        # combine the results
-        res = {**res_one, **res_multiple}
-        return res
+        return {**res_one, **res_multiple}
 
     def get_imgs_background_subtract(self, tree_dict, tiles, bgs):
         """
-        Get two dicts of fluorescence images.
+        Get raw and background-subtracted fluorescence images.
 
-        Return images and background subtracted image for all traps
-        for one time point.
+        Subtract the median background per trap per z-slice before
+        z-reduction, so each slice has its own background level
+        removed. This differs from the ``imBackground`` trap function,
+        which reports the background of an already z-reduced image.
+
+        Parameters
+        ----------
+        tree_dict: dict
+            Extraction tree specifying channels and functions.
+        tiles: array
+            Tile images with shape (traps, channels, Z, X, Y).
+        bgs: array
+            Boolean background masks with shape (traps, Y, X) from
+            ``get_background_masks``.
+
+        Returns
+        -------
+        img: dict
+            Raw images keyed by channel name.
+        img_bgsub: dict
+            Background-subtracted images keyed by channel + '_bgsub',
+            or None for channels without background subtraction.
         """
         img = {}
         img_bgsub = {}
-        for ch, _ in tree_dict["channels_tree"].items():
-            # NB ch != is necessary for threading
+        for ch in tree_dict["channels_tree"]:
             if tiles is not None and len(tiles):
-                # image data for all traps for a particular channel and
-                # time point arranged as (traps, Z, X, Y)
-                # we use 0 here to access the single time point available
-                img[ch] = tiles[:, tree_dict["channels"].index(ch), 0, ...]
+                # image data for all traps for a particular channel
+                # and time point arranged as (traps, Z, X, Y)
+                ch_idx = tree_dict["channels"].index(ch)
+                img[ch] = tiles[:, ch_idx, 0, ...]
                 if (
                     bgs.any()
-                    and ch in self.params.sub_bg
+                    and ch in self.params.subtract_background
                     and img[ch] is not None
                 ):
-                    # subtract median background
-                    bgsub_mapping = map(
-                        # move Z to last column to allow subtraction
-                        lambda img, bgs: np.moveaxis(img, 0, -1)
-                        # median of background over all pixels for each Z section
-                        - bn.median(img[:, bgs], axis=1),
-                        img[ch],
-                        bgs,
+                    # subtract median background per trap per z
+                    # img[ch] has shape (traps, Z, X, Y)
+                    # bgs has shape (traps, X, Y)
+                    ch_img = img[ch]
+                    n_traps, n_z = ch_img.shape[:2]
+                    bg_medians = np.empty((n_traps, n_z))
+                    for i in range(n_traps):
+                        for j in range(n_z):
+                            bg_medians[i, j] = bn.median(ch_img[i, j][bgs[i]])
+                    # subtract: broadcast (traps, Z) over (X, Y)
+                    img_bgsub[ch + "_bgsub"] = (
+                        ch_img - bg_medians[:, :, np.newaxis, np.newaxis]
                     )
-                    # apply map and convert to array
-                    mapping_result = np.stack(list(bgsub_mapping))
-                    # move Z axis back to the second column
-                    img_bgsub[ch + "_bgsub"] = np.moveaxis(
-                        mapping_result, -1, 1
-                    )
+                else:
+                    img_bgsub[ch + "_bgsub"] = None
             else:
                 img[ch] = None
-                img_bgsub[ch] = None
+                img_bgsub[ch + "_bgsub"] = None
         return img, img_bgsub
 
     def _run_tp(self, tps: t.List[int] = None, tree=None) -> dict:
         """
-        Run extraction for one position and for the specified time points.
+        Run extraction for one position and specified time points.
 
         One time point is run at a time in pipeline.
         Save the results to a h5 file.
@@ -713,16 +947,18 @@ class Extractor(StepABC):
         tps: list of int (optional)
             Time points to include.
         tree: dict (optional)
-            Nested dictionary indicating channels, reduction functions and
-            metrics to be used.
-            For example: {'general': {'null': ['area', 'volume', 'eccentricity']}}
+            Nested dictionary indicating channels, reduction
+            functions and metrics to be used. For example:
+            {'general': {'null': ['area', 'volume',
+            'eccentricity']}}
 
         Returns
         -------
         d: dict
-            A dict of the extracted data for one position with a concatenated
-            string of channel, reduction metric, and cell metric as keys and
-            pd.DataFrame of the extracted data for all time points as values.
+            A dict of the extracted data for one position with a
+            concatenated string of channel, reduction metric, and
+            cell metric as keys and pd.DataFrame of the extracted
+            data for all time points as values.
         """
         if tree is None:
             tree = self.params.tree
@@ -731,19 +967,24 @@ class Extractor(StepABC):
         # store results in dict
         extract_dict = {}
         for tp in tps:
-            # extract for each time point and convert to dict of pd.Series
+            # extract for each time point and convert to pd.Series
             res = self.extract_tp(
                 tp=tp, tile_size=self.tiler.tile_size, tree=tree
             )
             new = flatten_nesteddict(res, to="series", tp=tp)
-            # concatenate with data extracted from earlier time points
+            # concatenate with earlier time points
             for key in new:
                 extract_dict[key] = pd.concat(
                     (extract_dict.get(key, None), new[key]), axis=1
                 )
         # add indices to pd.Series containing the extracted data
         for key in extract_dict:
-            indices = ["experiment", "position", "trap", "cell_label"]
+            indices = [
+                "experiment",
+                "position",
+                "trap",
+                "cell_label",
+            ]
             idx = (
                 indices[-extract_dict[key].index.nlevels :]
                 if extract_dict[key].index.nlevels > 1
@@ -755,7 +996,7 @@ class Extractor(StepABC):
         return extract_dict
 
     def add_spatial_locations_of_cells(self, extract_dict):
-        """Add spatial location within image of each cell to extract_dict."""
+        """Add spatial location within image of each cell."""
         x_df = extract_dict["general/null/centroid_x"]
         y_df = extract_dict["general/null/centroid_y"]
         extract_dict["general/null/image_x"] = x_df.copy()
@@ -799,17 +1040,17 @@ def flatten_nesteddict(
     nest: dict of dicts
         Contains the nested results of extraction.
     to: str (optional)
-        Specifies the format of the output, either pd.Series (default)
-        or a list
+        Specifies the format of the output, either pd.Series
+        (default) or a list.
     tp: int
-        Time point used to name the pd.Series
+        Time point used to name the pd.Series.
 
     Returns
     -------
     d: dict
-        A dict with a concatenated string of channel, reduction metric,
-        and cell metric as keys and either a pd.Series or a list of the
-        corresponding extracted data as values.
+        A dict with a concatenated string of channel, reduction
+        metric, and cell metric as keys and either a pd.Series or
+        a list of the corresponding extracted data as values.
     """
     d = {}
     for k0, v0 in nest.items():

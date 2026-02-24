@@ -100,7 +100,7 @@ def load_reduction_functions(
         "median": bn.nanmedian,
         "div0": div0,
         "add": bn.nansum,
-        "None": None,
+        "null": None,
     }
     if additional_reducers is not None:
         if isinstance(additional_reducers, FunctionType):

@@ -1,4 +1,4 @@
-## Trap-wise calculations
+"""Functions to apply to a whole tile."""
 
 import numpy as np
 
@@ -25,7 +25,7 @@ def imBackground(cell_masks, trap_image, channels=None):
 
 def background_max5(cell_masks, trap_image, channels=None):
     """
-    Finds the mean of the maximum five pixels of the background.
+    Find the mean of the maximum five pixels of the background.
 
     Parameters
     ----------

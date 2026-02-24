@@ -4,13 +4,8 @@ Functions to extract information from a single cell.
 These functions are automatically read by extractor.py. They
 must return only one value and assume that there are no NaNs
 in the image.
-
-We use the module bottleneck when it performs faster than numpy:
-- median
-- values containing NaNs (but we make sure this never happens).
 """
 
-import sys
 import typing as t
 
 import bottleneck as bn
@@ -20,15 +15,9 @@ from skimage.measure import regionprops_table
 from skimage.morphology import binary_erosion, closing, disk
 from sklearn.mixture import GaussianMixture
 
-try:
-    from nl_classifier import nl_classifier
-except ModuleNotFoundError:
-    pass
-
-try:
-    from maby import VacuoleIdentifier
-except ModuleNotFoundError:
-    pass
+###
+# Morphological functions
+###
 
 
 def area(cell_mask) -> int:
@@ -56,6 +45,120 @@ def eccentricity(cell_mask) -> float:
     return np.sqrt(maj_ax**2 - min_ax**2) / maj_ax
 
 
+def ellipsoidal_volume(cell_mask) -> float:
+    """
+    Estimate the volume of the cell.
+
+    Assume the cell is an ellipsoid with the mask providing
+
+    a cross-section through its median plane.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    """
+    min_ax, maj_ax = min_maj_approximation(cell_mask)
+    return (4 * np.pi * min_ax**2 * maj_ax) / 3
+
+
+def volume(cell_mask):
+    """
+    Estimate the volume of the cell.
+
+    Assume the cell has a shape where height at any point equals the distance
+    to the nearest edge.
+
+    For a circular cell, this produces a cone, and the analytical
+    integral of distance-to-edge gives volume = ⅓πR³, so we multiply by 4.
+
+    Parameters
+    ----------
+    cell_mask: 2D array
+        Segmentation mask for the cell
+    """
+    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    nearest_neighbor = (
+        ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    )
+    return 4 * np.sum(nearest_neighbor)
+
+
+def spherical_volume(cell_mask):
+    """
+    Estimate the volume of the cell.
+
+    Assume the cell is a sphere with the mask providing
+    a cross-section through its median plane.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell
+    """
+    total_area = area(cell_mask)
+    r = np.sqrt(total_area / np.pi)
+    return (4 * np.pi * r**3) / 3
+
+
+def centroid(cell_mask):
+    """Find the cell's centroid."""
+    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
+        1, cell_mask.shape[1]
+    )
+    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(
+        cell_mask.shape[0], 1
+    )
+    # moments
+    M00 = np.sum(cell_mask)
+    M10 = np.sum(np.multiply(cell_mask, weights_c))
+    M01 = np.sum(np.multiply(cell_mask, weights_v))
+    # centroid
+    Xm = M10 / M00
+    Ym = M01 / M00
+    return (Xm, Ym)
+
+
+def centroid_x(cell_mask):
+    """Return x coordinate of a cell's centroid."""
+    return centroid(cell_mask)[0]
+
+
+def centroid_y(cell_mask):
+    """Return y coordinate of a cell's centroid."""
+    return centroid(cell_mask)[1]
+
+
+def min_maj_approximation(cell_mask) -> t.Tuple[int]:
+    """
+    Find the lengths of the minor and major axes of an ellipse from a cell mask.
+
+    Parameters
+    ----------
+    cell_mask: 3d array
+        Segmentation masks for cells
+    """
+    # pad outside with zeros so that the distance transforms have no edge artifacts
+    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    # get the distance from the edge, masked
+    nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    # get the distance from the top of the cone, masked
+    dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded
+    # get the size of the top of the cone (points that are equally maximal)
+    cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
+    # minor axis = largest distance from the edge of the ellipse
+    min_ax = np.round(np.max(nn))
+    # major axis = largest distance from the cone top
+    # + distance from the center of cone top to edge of cone top
+    maj_ax = np.round(np.max(dn) + np.sum(cone_top) / 2)
+    return min_ax, maj_ax
+
+
+###
+# Functions applied to fluorescence
+###
+
+
 def mean(cell_mask, trap_image) -> float:
     """
     Find the mean of the pixels in the cell.
@@ -66,7 +169,10 @@ def mean(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    return np.mean(trap_image[cell_mask])
+    pixels = trap_image[cell_mask]
+    if pixels.size == 0:
+        return np.nan
+    return np.mean(pixels)
 
 
 def total(cell_mask, trap_image) -> float:
@@ -79,6 +185,9 @@ def total(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
+    pixels = trap_image[cell_mask]
+    if pixels.size == 0:
+        return np.nan
     return np.sum(trap_image[cell_mask])
 
 
@@ -96,6 +205,9 @@ def total_squared(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
+    pixels = trap_image[cell_mask]
+    if pixels.size == 0:
+        return np.nan
     return np.sum(trap_image[cell_mask] ** 2)
 
 
@@ -109,7 +221,10 @@ def median(cell_mask, trap_image) -> int:
          Segmentation mask for the cell.
     trap_image: 2d array
     """
-    return bn.median(trap_image[cell_mask])
+    pixels = trap_image[cell_mask]
+    if pixels.size == 0:
+        return np.nan
+    return np.median(trap_image[cell_mask])
 
 
 def max2p5pc(cell_mask, trap_image) -> float:
@@ -170,87 +285,10 @@ def std(cell_mask, trap_image):
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    return np.std(trap_image[cell_mask])
-
-
-def ellipsoidal_volume(cell_mask) -> float:
-    """
-    Estimate the volume of the cell.
-
-    Assume the cell is an ellipsoid with the mask providing
-    a cross-section through its median plane.
-
-    Parameters
-    ----------
-    cell_mask: 2d array
-        Segmentation mask for the cell.
-    """
-    min_ax, maj_ax = min_maj_approximation(cell_mask)
-    return (4 * np.pi * min_ax**2 * maj_ax) / 3
-
-
-def volume(cell_mask):
-    """
-    Estimate the volume of the cell.
-
-    Assume the cell has a shape where height at any point equals the distance
-    to the nearest edge.
-
-    For a circular cell, this produces a cone, and the analytical
-    integral of distance-to-edge gives volume = ⅓πR³, so we multiply by 4.
-
-    Parameters
-    ----------
-    cell_mask: 2D array
-        Segmentation mask for the cell
-    """
-    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
-    nearest_neighbor = (
-        ndimage.morphology.distance_transform_edt(padded == 1) * padded
-    )
-    return 4 * np.sum(nearest_neighbor)
-
-
-def spherical_volume(cell_mask):
-    """
-    Estimate the volume of the cell.
-
-    Assume the cell is a sphere with the mask providing
-    a cross-section through its median plane.
-
-    Parameters
-    ----------
-    cell_mask: 2d array
-        Segmentation mask for the cell
-    """
-    total_area = area(cell_mask)
-    r = np.sqrt(total_area / np.pi)
-    return (4 * np.pi * r**3) / 3
-
-
-def min_maj_approximation(cell_mask) -> t.Tuple[int]:
-    """
-    Find the lengths of the minor and major axes of an ellipse from a cell mask.
-
-    Parameters
-    ----------
-    cell_mask: 3d array
-        Segmentation masks for cells
-    """
-    # pad outside with zeros so that the distance transforms have no edge artifacts
-    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
-    # get the distance from the edge, masked
-    nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
-    # get the distance from the top of the cone, masked
-    dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded
-    # get the size of the top of the cone (points that are equally maximal)
-    cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
-    # minor axis = largest distance from the edge of the ellipse
-    min_ax = np.round(np.max(nn))
-    # major axis = largest distance from the cone top
-    # + distance from the center of cone top to edge of cone top
-    maj_ax = np.round(np.max(dn) + np.sum(cone_top) / 2)
-    return min_ax, maj_ax
+    pixels = trap_image[cell_mask]
+    if pixels.size == 0:
+        return np.nan
+    return np.std(pixels)
 
 
 def moment_of_inertia(cell_mask, trap_image):
@@ -287,34 +325,6 @@ def moment_of_inertia(cell_mask, trap_image):
         return moi
     else:
         return np.nan
-
-
-def centroid(cell_mask):
-    """Find the cell's centroid."""
-    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
-        1, cell_mask.shape[1]
-    )
-    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(
-        cell_mask.shape[0], 1
-    )
-    # moments
-    M00 = np.sum(cell_mask)
-    M10 = np.sum(np.multiply(cell_mask, weights_c))
-    M01 = np.sum(np.multiply(cell_mask, weights_v))
-    # centroid
-    Xm = M10 / M00
-    Ym = M01 / M00
-    return (Xm, Ym)
-
-
-def centroid_x(cell_mask):
-    """Return x coordinate of a cell's centroid."""
-    return centroid(cell_mask)[0]
-
-
-def centroid_y(cell_mask):
-    """Return y coordinate of a cell's centroid."""
-    return centroid(cell_mask)[1]
 
 
 def membrane_fluorescence(
@@ -410,26 +420,50 @@ def ratio_2_over_1(cell_mask, trap_image, channels):
     return div
 
 
-# check if imported
-if "nl_classifier" in sys.modules:
-    # define CNN for nuclear localisation
-    nl = nl_classifier()
+###
+# Functions using bespoke neural networks
+###
 
-    def nucloc(cell_mask, trap_image, channels):
-        """Pedict nuclear localisation from brightfield and fluorescence using CNN."""
-        nucloc = nl.predict(cell_mask, trap_image, channels)
-        return nucloc
+_model_cache: dict = {}
 
 
-if "maby" in sys.modules:
-    # define U-net for identifying vacuole
-    # TODO should probably be defined elsewhere to avoid repeated calls
-    vi = VacuoleIdentifier()
+def _get_model(name: str):
+    """Lazily instantiate and cache a CNN model."""
+    if name not in _model_cache:
+        if name == "nl_classifier":
+            from nl_classifier import nl_classifier
 
-    def identify_vacuole(cell_mask, trap_image):
-        """Identify vacuole from brightfield using U-net."""
-        vac_mask = vi.predict(trap_image, cell_mask, projection="mean")
-        cyt_mask = cell_mask & ~vac_mask
-        return vac_mask, cyt_mask
+            _model_cache[name] = nl_classifier()
+        elif name == "vacuole_identifier":
+            from maby.identify_vacuole import VacuoleIdentifier
 
-    # run for all cell functions, like mean, etc.
+            _model_cache[name] = VacuoleIdentifier()
+        else:
+            raise ValueError(f"Unknown model: {name}")
+    return _model_cache[name]
+
+
+def nucloc(cell_mask, trap_image, channels):
+    """Predict nuclear localisation using a CNN."""
+    nl = _get_model("nl_classifier")
+    return nl.predict(cell_mask, trap_image, channels)
+
+
+def identify_vacuole(cell_outlines, trap_image):
+    """Identify vacuoles from brightfield using a U-net.
+
+    Parameters
+    ----------
+    cell_outlines: array
+        Labelled-outline image (Y, X) with integer cell labels.
+    trap_image: array
+        Brightfield image for one trap.
+
+    Returns
+    -------
+    vac_mask: array
+        Binary vacuole mask (Y, X) for all cells in the trap.
+    """
+    vi = _get_model("vacuole_identifier")
+    vac_mask = vi.predict(trap_image, cell_outlines, projection="mean")
+    return vac_mask

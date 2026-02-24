@@ -347,13 +347,12 @@ class Signal(BridgeH5):
                     values="value",
                 )
         except (HDF5ExtError, KeyError, TypeError):
-            # old h5 file before writer changed
-            dataset = (
-                dataset.replace("null", "None")
-                if "null" in dataset
-                else dataset
-            )
+            # old h5 files stored "None" rather than "null" in paths
             with h5py.File(f, "r") as file:
+                if dataset not in file:
+                    dataset = dataset.replace("null", "None")
+                    if dataset not in file:
+                        raise KeyError(dataset)
                 dset = file[dataset]
                 values, index, columns = [], [], []
                 index_names = copy(self.index_names)
