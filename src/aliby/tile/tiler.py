@@ -78,7 +78,7 @@ def minmax_8bit_last2(pix: np.ndarray):
 def standard_scale_last2(pix: np.ndarray):
     """Remove the mean and scale to unit variance at a per-image and channel basis."""
     mean = np.mean(pix, axis=(-3, -2, -1))
-    variance = np.var(pix, axis=(-3, -2, -1))
+    variance = np.std(pix, axis=(-3, -2, -1))
 
     # We transpose for casting to work. We scale per-channel.
     standardised = ((pix.T - mean) / variance).T
