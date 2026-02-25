@@ -123,6 +123,21 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 **Defaults** (`extraction.core.functions.defaults`)
 - Standard fluorescence signals and metrics via `aliby.global_settings`
 
+### Vacuole Identification
+
+Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleIdentifier` from the optional `maby` package) applied to brightfield images. Detection splits cell masks into vacuole and cytoplasm sub-regions, enabling separate extraction of fluorescence metrics for each compartment (e.g. `GFP_vacuole`, `GFP_cytoplasm`).
+
+**Key files:**
+- `extraction/core/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_one_channel()` runs extraction on full-cell, vacuole, and cytoplasm masks
+- `extraction/core/functions/cell_functions.py`: `identify_vacuole()` calls the CNN; `_get_model()` lazy-loads and caches models; `is_model_available()` checks for optional dependencies
+- `extraction/core/functions/loaders.py`: filters out functions whose model package is not installed
+
+**Integration:**
+- Enabled by default for all fluorescence channels except Cy5
+- Requires the `maby` package; gracefully disabled (with a logged warning) if not installed or if `identify_vacuoles=False`
+- Brightfield ("mean" projection) is used as input to the vacuole CNN
+- Cells with no detected vacuole receive empty sub-masks so extraction still runs
+
 ### Post-processing Components
 
 **Picker** (`postprocessor.core.reshapers.picker`)
@@ -136,6 +151,12 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - `buddings`: Analyzes cell division events
 - `bud_metric`: Calculates bud-specific measurements
 - Applied to signals like volume to generate derived measurements
+
+### Logging
+
+- Use `logging.getLogger("aliby").warning(...)` throughout — never bare `print()` for warnings
+- The aliby logger (with timestamp formatter) is configured in `pipeline.py:_setup_logging`, which runs *after* `MetaData.__init__`; warnings emitted before that point appear without timestamps
+- `parse_microscopy_logs` is called from multiple places per pipeline run (`MetaData.__init__` and `BaseLocalImage.set_meta`); deduplication flags must be module-level state, not reset inside `parse_microscopy_logs`
 
 ### OMERO Integration
 
