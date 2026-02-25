@@ -6,6 +6,7 @@ must return only one value and assume that there are no NaNs
 in the image.
 """
 
+import logging
 import typing as t
 
 import bottleneck as bn
@@ -426,31 +427,56 @@ def ratio_2_over_1(cell_mask, trap_image, channels):
 
 _model_cache: dict = {}
 
+# maps model name -> ExtractorParameters attribute
+_MODEL_TO_PARAM: dict[str, str] = {
+    "vacuole_identifier": "intracellular_masks",
+}
+
+# maps cell-function name -> model name it requires
+_FUNCTION_TO_MODEL: dict[str, str] = {
+    "nucloc": "nl_classifier",
+}
+
 
 def _get_model(name: str):
     """Lazily instantiate and cache a CNN model."""
     if name not in _model_cache:
-        if name == "nl_classifier":
-            from nl_classifier import nl_classifier
+        try:
+            if name == "nl_classifier":
+                from nl_classifier import nl_classifier
 
-            _model_cache[name] = nl_classifier()
-        elif name == "vacuole_identifier":
-            from maby.identify_vacuole import VacuoleIdentifier
+                _model_cache[name] = nl_classifier()
+            elif name == "vacuole_identifier":
+                from maby.identify_vacuole import VacuoleIdentifier
 
-            _model_cache[name] = VacuoleIdentifier()
-        else:
-            raise ValueError(f"Unknown model: {name}")
+                _model_cache[name] = VacuoleIdentifier()
+            else:
+                raise ValueError(f"Unknown model: {name}")
+        except ImportError:
+            logging.getLogger("aliby").warning(
+                f"Optional model '{name}' is not installed; "
+                "related features will be skipped."
+            )
+            _model_cache[name] = None
     return _model_cache[name]
+
+
+def is_model_available(name: str) -> bool:
+    """Return True if the named model's package is importable."""
+    return _get_model(name) is not None
 
 
 def nucloc(cell_mask, trap_image, channels):
     """Predict nuclear localisation using a CNN."""
     nl = _get_model("nl_classifier")
+    if nl is None:
+        return np.nan
     return nl.predict(cell_mask, trap_image, channels)
 
 
 def identify_vacuole(cell_outlines, trap_image):
-    """Identify vacuoles from brightfield using a U-net.
+    """
+    Identify vacuoles from brightfield using a U-net.
 
     Parameters
     ----------
@@ -465,5 +491,7 @@ def identify_vacuole(cell_outlines, trap_image):
         Binary vacuole mask (Y, X) for all cells in the trap.
     """
     vi = _get_model("vacuole_identifier")
+    if vi is None:
+        return np.zeros(trap_image.shape[-2:], dtype=bool)
     vac_mask = vi.predict(trap_image, cell_outlines, projection="mean")
     return vac_mask

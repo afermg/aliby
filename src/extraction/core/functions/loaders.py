@@ -9,6 +9,10 @@ from types import FunctionType
 
 import bottleneck as bn
 from extraction.core.functions import cell_functions, trap_functions
+from extraction.core.functions.cell_functions import (
+    _FUNCTION_TO_MODEL,
+    is_model_available,
+)
 from extraction.core.functions.math_utils import div0
 
 
@@ -48,6 +52,12 @@ def load_cell_functions():
                     )
 
             cell_funs[f_name] = tmp(f)
+    cell_funs = {
+        name: fn
+        for name, fn in cell_funs.items()
+        if name not in _FUNCTION_TO_MODEL
+        or is_model_available(_FUNCTION_TO_MODEL[name])
+    }
     return cell_funs
 
 

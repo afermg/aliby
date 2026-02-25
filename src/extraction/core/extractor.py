@@ -13,7 +13,11 @@ from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
-from extraction.core.functions.cell_functions import identify_vacuole
+from extraction.core.functions.cell_functions import (
+    _MODEL_TO_PARAM,
+    identify_vacuole,
+    is_model_available,
+)
 from extraction.core.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
@@ -64,6 +68,7 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
     tree_dict["intracellular_masks"] = {
         ch for ch in extant_fluorescence_ch if ch.lower() != "cy5"
     }
+    tree_dict["identify_vacuoles"] = True
     return tree_dict
 
 
@@ -99,6 +104,7 @@ class ExtractorParameters(ParametersABC):
         subtract_background: set = set(),
         multichannel_funs: t.Dict = {},
         intracellular_masks: set = set(),
+        identify_vacuoles: bool = True,
     ):
         """
         Initialise.
@@ -119,11 +125,16 @@ class ExtractorParameters(ParametersABC):
         intracellular_masks: set
             A set of strings of the channels for which to extract
             vacuole and cytoplasm metrics.
+        identify_vacuoles: bool
+            If True (default), compute vacuole and cytoplasm sub-masks
+            when maby is installed. Set to False to skip vacuole
+            detection regardless of package availability.
         """
         self.tree = tree
         self.subtract_background = subtract_background
         self.multichannel_funs = multichannel_funs
         self.intracellular_masks = intracellular_masks
+        self.identify_vacuoles = identify_vacuoles
 
     @classmethod
     def default(cls):
@@ -195,6 +206,17 @@ class Extractor(StepABC):
             self.params.intracellular_masks = available_channels.intersection(
                 self.params.intracellular_masks
             )
+        # user-controlled flag
+        if not self.params.identify_vacuoles:
+            self.params.intracellular_masks = set()
+        else:
+            # dependency-controlled flags (generic, covers future models)
+            for model_name, param_attr in _MODEL_TO_PARAM.items():
+                if (
+                    getattr(self.params, param_attr, None)
+                    and not is_model_available(model_name)
+                ):
+                    setattr(self.params, param_attr, set())
         self.store = store
         self.all_cell_funs, self.all_funs = load_all_functions()
 
@@ -577,8 +599,13 @@ class Extractor(StepABC):
                 vac_list, cyt_list = [], []
                 for cell_mask in trap_masks:
                     cell_vac = cell_mask & trap_vac
-                    vac_list.append(cell_vac)
-                    cyt_list.append(cell_mask & ~trap_vac)
+                    if cell_vac.any():
+                        vac_list.append(cell_vac)
+                        cyt_list.append(cell_mask & ~trap_vac)
+                    else:
+                        # no vacuole found; cytoplasm is also undefined
+                        vac_list.append(np.zeros_like(cell_mask))
+                        cyt_list.append(np.zeros_like(cell_mask))
                 vac_masks.append(np.stack(vac_list))
                 cyt_masks.append(np.stack(cyt_list))
             else:
