@@ -1,6 +1,7 @@
 """Legacy code for acq and log files."""
 
 import glob
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ import typing as t
 import pandas as pd
 from logfile_parser import Parser
 from pytz import timezone
+
+_warned_multiple_files = False
 
 
 def parse_legacy_logs(
@@ -91,10 +94,12 @@ def find_file_legacy(root_dir, regex):
     if len(file) == 0:
         return None
     elif len(file) > 1:
-        print(
-            "Warning:Metadata: More than one log file found."
-            " Defaulting to first option."
-        )
+        global _warned_multiple_files
+        if not _warned_multiple_files:
+            logging.getLogger("aliby").warning(
+                "More than one log file found. Defaulting to first option."
+            )
+            _warned_multiple_files = True
         return sorted(file)[0]
     else:
         return file[0]

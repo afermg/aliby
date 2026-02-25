@@ -1,6 +1,7 @@
 """Parse metadata from microscopy logs."""
 
 import glob
+import logging
 import os
 import typing as t
 from pathlib import Path
@@ -77,10 +78,11 @@ def find_metafile(root_dir, regex):
     if len(file) == 0:
         return None
     elif len(file) > 1:
-        print(
-            "Warning: Metadata: More than one log file found."
-            " Defaulting to first option."
-        )
+        if not metadata_legacy._warned_multiple_files:
+            logging.getLogger("aliby").warning(
+                "More than one log file found. Defaulting to first option."
+            )
+            metadata_legacy._warned_multiple_files = True
         return sorted(file)[0]
     else:
         return file[0]
