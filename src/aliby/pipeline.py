@@ -237,6 +237,16 @@ class Pipeline(ProcessABC):
         stream_level: str = "INFO",
     ):
         """Initialise and format logger."""
+        # reset per-run warning deduplication flags so warnings are visible
+        # on every pipeline run, not just the first in a Python session
+        from agora.io import metadata_legacy
+        from extraction.core.functions import cell_functions
+        metadata_legacy._warned_multiple_files = False
+        cell_functions._model_cache = {
+            k: v
+            for k, v in cell_functions._model_cache.items()
+            if v is not None
+        }
         logger = logging.getLogger("aliby")
         logger.handlers.clear()
         logger.setLevel(getattr(logging, file_level))
