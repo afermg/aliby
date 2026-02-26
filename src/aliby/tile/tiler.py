@@ -66,16 +66,30 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
     return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
 
 
-def minmax_8bit_last2(pix: np.ndarray):
-    pix_max = np.max(pix, axis=(-3, -2, -1))
-    pix_min = np.min(pix, axis=(-3, -2, -1))
+def clip(pix: np.ndarray, clip: float = 0.0):
+    if clip > 0:
+        pix_max = np.percentile(pix, 100 - clip, axis=(-3, -2, -1))
+        pix_min = np.percentile(pix, clip, axis=(-3, -2, -1))
+    else:
+        pix_max = np.max(pix, axis=(-3, -2, -1))
+        pix_min = np.min(pix, axis=(-3, -2, -1))
 
-    minmax_8bit = (((pix.T - pix_min) / (pix_max - pix_min)) * 255).astype(np.uint8).T
+    # Normalize using transpose for broadcasting, then clip to 0-1 range
+    # Clipping is necessary because percentile-based min/max excludes outliers
+    norm = (pix.T - pix_min) / (pix_max - pix_min)
+    norm = np.clip(norm, 0, 1)
+
+    return norm
+
+
+def clip_8bit(pix: np.ndarray, clip: float = 0.5):
+    norm = clip(pix, clip=clip)
+    minmax_8bit = (norm * 255).astype(np.uint8).T
 
     return minmax_8bit
 
 
-def standard_scale_last2(pix: np.ndarray):
+def standard_scale(pix: np.ndarray):
     """Remove the mean and scale to unit variance at a per-image and channel basis."""
     mean = np.mean(pix, axis=(-3, -2, -1))
     variance = np.std(pix, axis=(-3, -2, -1))
@@ -85,7 +99,7 @@ def standard_scale_last2(pix: np.ndarray):
     return standardised
 
 
-def tile_last2(pix: np.ndarray, tile_size: int):
+def tile(pix: np.ndarray, tile_size: int):
     """
     Parameters
     ----------
@@ -126,13 +140,13 @@ class CropTiler(StepABC):
         pixels: da.core.Array,
         tile_size: int,
         standard_scale: bool = True,
-        minmax_8bit: bool = False,
+        clip_8bit: bool = False,
         **kwargs,
     ):
         self.pixels = pixels
         self.tile_size = tile_size
         self.standard_scale = standard_scale
-        self.minmax_8bit = minmax_8bit
+        self.clip_8bit = clip_8bit
 
     @classmethod
     def from_image(cls, image, parameters):
@@ -144,17 +158,18 @@ class CropTiler(StepABC):
         Note that this one does not apply image tracking.
         """
         pix = self.pixels[tp]
+
+        # if using dask fetch images
         if hasattr(pix, "compute"):
-            # if using dask fetch images
             pix = pix.compute(scheduler="synchronous")
 
+        if self.clip_8bit:
+            pix = clip_8bit(pix)
+
         if self.standard_scale:
-            pix = standard_scale_last2(pix)
+            pix = standard_scale(pix)
 
-        if self.minmax_8bit:
-            pix = minmax_8bit_last2(pix)
-
-        tiles = tile_last2(pix, tile_size)
+        tiles = tile(pix, tile_size)
 
         return tiles
 
