@@ -128,13 +128,13 @@ class DatasetMonoZarr(DatasetLocalABC):
         super().__init__(dpath)
 
     def get_position_ids(self):
-        positions = {}
+        positions = []
         with os.scandir(self.path) as it:
             for entry in it:
                 # skip hidden folders and files (e.g., .zattrs)
                 if entry.is_dir():
                     name = entry.name
-                    positions[name] = {"store_path": self.path, "key": name}
+                    positions.append({"path": self.path, "key": name})
 
         # result = {k:  for k in tqdm(position_ids)}
         return positions

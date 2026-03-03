@@ -57,7 +57,9 @@ def dispatch_image(source: str | int | dict[str, str] | Path):
         from aliby.io.omero import Image
 
         img_type = Image
-    elif isinstance(source, (list, tuple)):  # Local files
+    elif isinstance(source, (list, tuple)) or (
+        isinstance(source, dict) and isinstance(source.get("path"), (list, tuple))
+    ):  # Local files
         assert len(source), f"Empty source f{source}"
         img_type = ImageList
     elif isinstance(source, dict):
@@ -238,7 +240,7 @@ class ImageZarrArray(BaseLocalImage):
     ):
         # Only load the zarr store path and the group key.
         self.key = source["key"]
-        self.path = source["store_path"]
+        self.path = source["path"]
         self.capture_order = capture_order
         self.dimorder = dimorder
 
@@ -368,7 +370,7 @@ class ImageList(BaseLocalImage):
 
     def __init__(
         self,
-        source: str or tuple[str],
+        source: str | tuple[str] | dict[str, str | list[str]],
         regex: str,
         capture_order: str,
         dimorder: str or None = None,  # output dimorder
@@ -378,17 +380,19 @@ class ImageList(BaseLocalImage):
         """
         Initialise using a directory and parse the files inside of it using a regex."""
         # super().__init__(img_files)
+        if isinstance(source, dict):
+            source: list[str] = source["path"]
         self.path = source
         self.regex = regex
         self.capture_order = capture_order  #  or "CWTFZ"
         self.input_dimensions = input_dimensions
         self._dimorder = dimorder or "TCZYX"
+
+        self.image_filenames = source
         if isinstance(source, str):  # The source is a wildcard
-            self.image_filenames = sorted(
+            self.image_filenames: list[str] = sorted(
                 x for x in glob(source) if re.match(self.regex, x)
             )
-        else:  # The source is a list of images
-            self.image_filenames = source
 
         self.image_id = calculate_checksum(
             self.image_filenames
