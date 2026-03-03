@@ -167,7 +167,11 @@ class PipelineParameters(ParametersABC):
             else:
                 defaults["general"][k] = v
         # reset default z section using metadata
-        if "number_z_sections" in defaults["metadata"]["full"]:
+        if (
+            "number_z_sections" in defaults["metadata"]["full"]
+            and "Brightfield"
+            in defaults["metadata"]["full"]["number_z_sections"]
+        ):
             # current metadata
             ref_z = (
                 defaults["metadata"]["full"]["number_z_sections"][
@@ -241,6 +245,7 @@ class Pipeline(ProcessABC):
         # on every pipeline run, not just the first in a Python session
         from agora.io import metadata_legacy
         from extraction.core.functions import cell_functions
+
         metadata_legacy._warned_multiple_files = False
         cell_functions._model_cache = {
             k: v
