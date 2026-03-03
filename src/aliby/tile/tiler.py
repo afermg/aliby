@@ -66,7 +66,7 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
     return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
 
 
-def clip(pix: np.ndarray, clip: float = 0.0):
+def clip_outliers(pix: np.ndarray, clip: float = 0.5):
     if clip > 0:
         pix_max = np.percentile(pix, 100 - clip, axis=(-3, -2, -1))
         pix_min = np.percentile(pix, clip, axis=(-3, -2, -1))
@@ -79,14 +79,11 @@ def clip(pix: np.ndarray, clip: float = 0.0):
     norm = (pix.T - pix_min) / (pix_max - pix_min)
     norm = np.clip(norm, 0, 1)
 
-    return norm
+    return norm.T
 
 
-def clip_8bit(pix: np.ndarray, clip: float = 0.5):
-    norm = clip(pix, clip=clip)
-    minmax_8bit = (norm * 255).astype(np.uint8).T
-
-    return minmax_8bit
+def convert_8bit(pix: np.ndarray, clip: float = 0.5):
+    return (pix * 255).astype(np.uint8)
 
 
 def standard_scale(pix: np.ndarray):
@@ -140,13 +137,15 @@ class CropTiler(StepABC):
         pixels: da.core.Array,
         tile_size: int,
         standard_scale: bool = True,
-        clip_8bit: bool = False,
+        convert_8bit: bool = False,
+        clip_outliers: bool = False,
         **kwargs,
     ):
         self.pixels = pixels
         self.tile_size = tile_size
         self.standard_scale = standard_scale
-        self.clip_8bit = clip_8bit
+        self.clip_outliers = clip_outliers
+        self.convert_8bit = convert_8bit
 
     @classmethod
     def from_image(cls, image, parameters):
@@ -163,11 +162,14 @@ class CropTiler(StepABC):
         if hasattr(pix, "compute"):
             pix = pix.compute(scheduler="synchronous")
 
-        if self.clip_8bit:
-            pix = clip_8bit(pix)
+        if self.convert_8bit:
+            pix = convert_8bit(pix)
 
         if self.standard_scale:
             pix = standard_scale(pix)
+
+        if self.clip_outliers:
+            pix = clip_outliers(pix)
 
         tiles = tile(pix, tile_size)
 
