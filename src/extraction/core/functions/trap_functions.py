@@ -3,41 +3,60 @@
 import numpy as np
 
 
-def imBackground(cell_masks, trap_image, channels=None):
+def _background_pixels(cell_masks, trap_image):
+    """Return the background pixels of trap_image."""
+    if not len(cell_masks):
+        cell_masks = np.zeros_like(trap_image)
+    # any() over axis=0 collapses (N_cells, Y, X) → (Y, X)
+    background = ~cell_masks.any(axis=0)
+    return trap_image[background]
+
+
+def median_background(cell_masks, trap_image, channels=None):
     """
-    Find the median background (pixels not comprising cells) from trap_image.
+    Find the median of background pixels (outside all cells) in trap_image.
 
     Parameters
     ----------
-    cell_masks: 3d array
-       Segmentation masks for cells
-    trap_image:
-        The image (all channels) for the tile containing the cell.
+    cell_masks: array
+        Segmentation masks for cells, shape (N_cells, Y, X).
+    trap_image: array
+        The z-reduced image for the tile, shape (Y, X).
+    channels: list, optional
+        Not used; present for interface consistency.
     """
-    if not len(cell_masks):
-        # create cell_masks if none are given
-        cell_masks = np.zeros_like(trap_image)
-    # find background pixels
-    # sum over all cells identified at a trap - one mask for each cell
-    background = ~cell_masks.sum(axis=2).astype(bool)
-    return np.median(trap_image[np.where(background)])
+    return np.median(_background_pixels(cell_masks, trap_image))
 
 
-def background_max5(cell_masks, trap_image, channels=None):
+def mean_background(cell_masks, trap_image, channels=None):
     """
-    Find the mean of the maximum five pixels of the background.
+    Find the mean of background pixels (outside all cells) in trap_image.
 
     Parameters
     ----------
-    cell_masks: 3d array
-        Segmentation masks for cells.
-    trap_image:
-        The image (all channels) for the tile containing the cell.
+    cell_masks: array
+        Segmentation masks for cells, shape (N_cells, Y, X).
+    trap_image: array
+        The z-reduced image for the tile, shape (Y, X).
+    channels: list, optional
+        Not used; present for interface consistency.
     """
-    if not len(cell_masks):
-        # create cell_masks if none are given
-        cell_masks = np.zeros_like(trap_image)
-    # find background pixels
-    # sum over all cells identified at a trap - one mask for each cell
-    background = ~cell_masks.sum(axis=2).astype(bool)
-    return np.mean(np.sort(trap_image[np.where(background)])[-5:])
+    return np.mean(_background_pixels(cell_masks, trap_image))
+
+
+def std_background(cell_masks, trap_image, channels=None):
+    """
+    Find the standard deviation of background pixels in trap_image.
+
+    Use as a noise estimate for signal-to-noise calculations.
+
+    Parameters
+    ----------
+    cell_masks: array
+        Segmentation masks for cells, shape (N_cells, Y, X).
+    trap_image: array
+        The z-reduced image for the tile, shape (Y, X).
+    channels: list, optional
+        Not used; present for interface consistency.
+    """
+    return np.std(_background_pixels(cell_masks, trap_image))

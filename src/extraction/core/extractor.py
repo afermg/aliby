@@ -58,17 +58,31 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
         found_channel = find_channel_name(meta.get("channels", []), av_channel)
         if found_channel is not None:
             extant_fluorescence_ch.append(found_channel)
+    background_channels = {
+        ch for ch in extant_fluorescence_ch if ch.lower() == "cy5"
+    }
     for ch in extant_fluorescence_ch:
-        tree_dict["tree"][ch] = copy.deepcopy(
-            default_reduction_and_fluorescence_metrics
-        )
+        if ch in background_channels:
+            # background channels get only outside-cell metrics
+            tree_dict["tree"][ch] = {
+                "mean": [
+                    "median_background",
+                    "mean_background",
+                    "std_background",
+                ]
+            }
+        else:
+            tree_dict["tree"][ch] = copy.deepcopy(
+                default_reduction_and_fluorescence_metrics
+            )
     # subtract background from all fluorescence channels
     tree_dict["subtract_background"] = set(extant_fluorescence_ch)
-    # extract intracellular masks for all channels except Cy5
+    # extract intracellular masks for non-background channels only
     tree_dict["intracellular_masks"] = {
-        ch for ch in extant_fluorescence_ch if ch.lower() != "cy5"
+        ch for ch in extant_fluorescence_ch if ch not in background_channels
     }
     tree_dict["identify_vacuoles"] = True
+    tree_dict["background_channels"] = background_channels
     return tree_dict
 
 
@@ -105,6 +119,7 @@ class ExtractorParameters(ParametersABC):
         multichannel_funs: t.Dict = {},
         intracellular_masks: set = set(),
         identify_vacuoles: bool = True,
+        background_channels: set = set(),
     ):
         """
         Initialise.
@@ -129,12 +144,17 @@ class ExtractorParameters(ParametersABC):
             If True (default), compute vacuole and cytoplasm sub-masks
             when maby is installed. Set to False to skip vacuole
             detection regardless of package availability.
+        background_channels: set
+            A set of strings of the channels for which to extract
+            the median background signal (pixels outside all cells).
+            Defaults to Cy5 channels when built from metadata.
         """
         self.tree = tree
         self.subtract_background = subtract_background
         self.multichannel_funs = multichannel_funs
         self.intracellular_masks = intracellular_masks
         self.identify_vacuoles = identify_vacuoles
+        self.background_channels = background_channels
 
     @classmethod
     def default(cls):
@@ -206,16 +226,18 @@ class Extractor(StepABC):
             self.params.intracellular_masks = available_channels.intersection(
                 self.params.intracellular_masks
             )
+            self.params.background_channels = available_channels.intersection(
+                self.params.background_channels
+            )
         # user-controlled flag
         if not self.params.identify_vacuoles:
             self.params.intracellular_masks = set()
         else:
             # dependency-controlled flags (generic, covers future models)
             for model_name, param_attr in _MODEL_TO_PARAM.items():
-                if (
-                    getattr(self.params, param_attr, None)
-                    and not is_model_available(model_name)
-                ):
+                if getattr(
+                    self.params, param_attr, None
+                ) and not is_model_available(model_name):
                     setattr(self.params, param_attr, set())
         self.store = store
         self.all_cell_funs, self.all_funs = load_all_functions()
@@ -819,7 +841,7 @@ class Extractor(StepABC):
         img, img_bgsub = self.get_imgs_background_subtract(
             tree_dict, tiles, bgs
         )
-        # add brightfield images
+        # add brightfield images as (traps, channels, 1, Z, X, Y)
         img["Brightfield"] = self.get_tiles(
             tp, channels=["Brightfield"], lazy=False
         )[:, 0, 0, ...]

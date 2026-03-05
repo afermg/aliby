@@ -63,7 +63,6 @@ class GlobalSettings:
             "median",
             "std",
             "total",
-            "imBackground",  # a trap function
         ]
 
     def get(self, global_property: str):

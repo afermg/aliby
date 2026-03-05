@@ -343,21 +343,19 @@ def membrane_fluorescence(
     pixels being brightest on average. Take as membrane pixels, the outer
     shells of intracellular pixels assuming a given membrane thickness.
     """
-    membrane_mask = []
+    membrane_mask = np.array([])
     if channels not in ["cy5", "Brightfield"]:
-        masked_fl_image = np.zeros_like(trap_image)
-        # set masked pixels to fluorescence values
-        masked_fl_image[cell_mask] = trap_image[cell_mask]
-        masked_pixels = masked_fl_image[masked_fl_image > 0]
-        if masked_pixels.size > 10:
+        cell_pixels = trap_image[cell_mask].reshape(-1, 1)
+        if cell_pixels.size > 10:
             # use GMM to separate into two classes of dark and bright pixels
             gmm = GaussianMixture(n_components=2, random_state=42)
-            gmm.fit(masked_pixels.reshape(-1, 1))
-            labels = gmm.predict(masked_pixels.reshape(-1, 1))
+            gmm.fit(cell_pixels)
+            labels = gmm.predict(cell_pixels)
             bright_component = np.argmax(gmm.means_.flatten())
-            label_image = np.zeros_like(masked_fl_image, dtype=int)
+            # spatial label image for morphological operations only
+            label_image = np.zeros(trap_image.shape, dtype=int)
             # add one so that there are no zero labels from the GMM
-            label_image[masked_fl_image > 0] = labels + 1
+            label_image[cell_mask] = labels + 1
             bright_mask = (label_image == bright_component + 1).astype(
                 np.uint8
             )
@@ -377,10 +375,9 @@ def membrane_fluorescence(
             membrane_mask.astype(int), properties=["eccentricity"]
         )["eccentricity"][0]
         # estimate fluorescence values
-        res["fl"] = stat(masked_fl_image[membrane_mask])
-        remaining_mask = (masked_fl_image > 0).astype(bool)
-        remaining_mask[membrane_mask] = 0
-        res["remaining_fl"] = stat(masked_fl_image[remaining_mask])
+        res["fl"] = stat(trap_image[membrane_mask])
+        remaining_mask = cell_mask & ~membrane_mask
+        res["remaining_fl"] = stat(trap_image[remaining_mask])
         if get_mask:
             res["membrane_mask"] = membrane_mask
     return res
