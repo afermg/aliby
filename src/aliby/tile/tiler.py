@@ -162,14 +162,14 @@ class CropTiler(StepABC):
         if hasattr(pix, "compute"):
             pix = pix.compute(scheduler="synchronous")
 
+        if self.clip_outliers:
+            pix = clip_outliers(pix)
+
         if self.convert_8bit:
             pix = convert_8bit(pix)
 
         if self.standard_scale:
             pix = standard_scale(pix)
-
-        if self.clip_outliers:
-            pix = clip_outliers(pix)
 
         tiles = tile(pix, tile_size)
 
