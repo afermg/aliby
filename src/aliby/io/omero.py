@@ -1,5 +1,6 @@
 """Tools to manage I/O using a remote OMERO server."""
 
+import logging
 import re
 import typing as t
 from collections.abc import Iterable
@@ -228,10 +229,42 @@ class Dataset(BridgeOmero):
 
         Assume all positions have the same channels.
         """
+        channels = []
         for im in self.ome_class.listChildren():
             channels = [ch.getLabel() for ch in im.getChannels()]
             break
         return channels
+
+    def get_minimal_meta(self, channels=None):
+        """
+        Get minimal metadata from OMERO when no log files are attached.
+
+        Parameters
+        ----------
+        channels : list, optional
+            Channel labels; fetched from OMERO if not supplied.
+
+        Returns
+        -------
+        dict or None
+            Dict with keys ``channels``,
+            ``time_settings/ntimepoints``, and
+            ``time_settings/timeinterval``, or None if the dataset
+            has no images.
+        """
+        if channels is None:
+            channels = self.get_channels()
+        first_img = next(iter(self.ome_class.listChildren()), None)
+        if first_img is None:
+            return None
+        ntps = first_img.getSizeT()
+        time_inc = first_img.getPixels(0).getTimeIncrement()
+        interval = float(time_inc.getValue()) if time_inc else None
+        return {
+            "channels": channels,
+            "time_settings/ntimepoints": ntps,
+            "time_settings/timeinterval": interval,
+        }
 
     @property
     def files(self):
@@ -266,7 +299,15 @@ class Dataset(BridgeOmero):
     def cache_logs(self, root_dir):
         """Save the log files for an experiment."""
         valid_suffixes = ("txt", "log")
-        for _, annotation in self.files.items():
+        try:
+            files = self.files
+        except FileNotFoundError:
+            logging.getLogger("aliby").warning(
+                "No annotation files found on OMERO dataset "
+                f"{self.ome_id}; skipping log caching."
+            )
+            return False
+        for _, annotation in files.items():
             filepath = root_dir / annotation.getFileName().replace("/", "_")
             if (
                 any([str(filepath).endswith(suff) for suff in valid_suffixes])

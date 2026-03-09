@@ -135,13 +135,21 @@ class PipelineParameters(ParametersABC):
                 OMERO_channels = conn.get_channels()
             else:
                 OMERO_channels = None
+            # synthesise metadata for OMERO datasets lacking log files
+            OMERO_meta = None
+            if hasattr(conn, "get_minimal_meta"):
+                OMERO_meta = conn.get_minimal_meta(OMERO_channels)
+            if OMERO_meta is None and isinstance(expt_id, int):
+                raise ValueError(
+                    f"OMERO dataset {expt_id} contains no images."
+                )
         if metadata is not None:
             if isinstance(metadata, dict):
                 meta = SimpleNamespace(minimal=metadata, full={})
             else:
                 raise ValueError("metadata must be a dict.")
         else:
-            meta = MetaData(directory, OMERO_channels)
+            meta = MetaData(directory, omero_meta=OMERO_meta)
         # define default values for general parameters
         tps = meta.minimal["time_settings/ntimepoints"]
         defaults = {
@@ -254,6 +262,7 @@ class Pipeline(ProcessABC):
         }
         logger = logging.getLogger("aliby")
         logger.handlers.clear()
+        logger.propagate = False
         logger.setLevel(getattr(logging, file_level))
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s: %(message)s",
@@ -287,16 +296,41 @@ class Pipeline(ProcessABC):
             f"Fetching data using {dispatcher.__class__.__name__}.", "info"
         )
         # get positions_ids and save microscopy log files
-        with dispatcher as conn:
-            position_ids = conn.get_position_ids()
-            directory = self.store or root_dir / conn.unique_name
-            if not directory.exists():
-                directory.mkdir(parents=True)
-            # copy microscopy logs to h5 directory
-            conn.cache_logs(directory)
-        print("Positions available:")
+        if isinstance(self.expt_id, int):
+            self.log(
+                f"Connecting to OMERO at {self.server_info['host']} "
+                f"(dataset {self.expt_id})...",
+                "info",
+            )
+        try:
+            with dispatcher as conn:
+                position_ids = conn.get_position_ids()
+                directory = self.store or root_dir / conn.unique_name
+                if not directory.exists():
+                    directory.mkdir(parents=True)
+                conn.cache_logs(directory)
+                if isinstance(self.expt_id, int):
+                    channels = conn.get_channels()
+                    first_img = next(iter(conn.ome_class.listChildren()))
+                    ntps = first_img.getSizeT()
+                    self.log(
+                        f"OMERO connection OK. Dataset {self.expt_id} "
+                        f"contains {len(position_ids)} position(s), "
+                        f"{ntps} timepoint(s), "
+                        f"channels: {channels}.",
+                        "info",
+                    )
+        except ConnectionError as e:
+            self.log(f"Cannot connect to OMERO: {e}", "error")
+            raise
+        except AssertionError as e:
+            self.log(
+                f"OMERO dataset {self.expt_id} not found: {e}", "error"
+            )
+            raise
+        self.log("Positions available:", "info")
         for i, pos in enumerate(position_ids.keys()):
-            print("\t" + f"{i}: " + pos.split(".")[0])
+            self.log(f"\t{i}: {pos.split('.')[0]}", "info")
         # add directory to configuration
         self.parameters.general["directory"] = str(directory)
         return position_ids

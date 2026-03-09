@@ -110,12 +110,14 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 ### Extraction Functions
 
-**Cell Functions** (`extraction.core.functions.cell`)
+**Cell Functions** (`extraction.core.functions.cell_functions`)
 - Standard cell measurements: area, median fluorescence, eccentricity
 - Multi-channel fluorescence functions
 
-**Trap Functions** (`extraction.core.functions.trap`)
-- Background properties for each tile
+**Background Functions** (`extraction.core.functions.background_functions`)
+- Per-tile background statistics (median, mean, std of pixels outside all cells)
+- Used for background channels such as Cy5; results are stored with `cell_label = -1`
+- Loaded by `load_background_functions()` in `loaders.py`
 
 **Distributors** (`extraction.core.functions.distributors`)
 - Collapse multiple z-sections to 2D images
@@ -123,12 +125,27 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 **Defaults** (`extraction.core.functions.defaults`)
 - Standard fluorescence signals and metrics via `aliby.global_settings`
 
+### Extractor internals
+
+`Extractor.extract_single_channel_functions` drives per-channel extraction and delegates to two private helpers:
+- `_extract_channel`: raw image + optional `_bgsub` variant for one channel
+- `_extract_intracellular`: vacuole/cytoplasm sub-mask extraction for one channel
+
+`Extractor.extract_multichannel_functions` handles metrics that combine multiple channels.
+
+Both call `reduce_extract` → `apply_extraction_functions` → `apply_extraction_function`.
+`apply_extraction_function` checks `self.cell_fun_names` to decide whether to index results
+per cell `(trap_id, cell_label)` or per trap `trap_id` (for background functions).
+
+Background channels (Cy5) skip `_bgsub` extraction entirely — subtracting the background
+from itself would produce near-zero signals.
+
 ### Vacuole Identification
 
 Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleIdentifier` from the optional `maby` package) applied to brightfield images. Detection splits cell masks into vacuole and cytoplasm sub-regions, enabling separate extraction of fluorescence metrics for each compartment (e.g. `GFP_vacuole`, `GFP_cytoplasm`).
 
 **Key files:**
-- `extraction/core/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_one_channel()` runs extraction on full-cell, vacuole, and cytoplasm masks
+- `extraction/core/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_single_channel_functions()` runs extraction on full-cell, vacuole, and cytoplasm masks
 - `extraction/core/functions/cell_functions.py`: `identify_vacuole()` calls the CNN; `_get_model()` lazy-loads and caches models; `is_model_available()` checks for optional dependencies
 - `extraction/core/functions/loaders.py`: filters out functions whose model package is not installed
 
@@ -157,9 +174,19 @@ Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleId
 - Use `logging.getLogger("aliby").warning(...)` throughout — never bare `print()` for warnings
 - The aliby logger (with timestamp formatter) is configured in `pipeline.py:_setup_logging`, which runs *after* `MetaData.__init__`; warnings emitted before that point appear without timestamps
 - `parse_microscopy_logs` is called from multiple places per pipeline run (`MetaData.__init__` and `BaseLocalImage.set_meta`); deduplication flags must be module-level state, not reset inside `parse_microscopy_logs`
+- `logger.propagate = False` is set in `_setup_logging` to prevent duplicate output when running inside IPython/Jupyter (where the root logger already has a handler)
 
 ### OMERO Integration
 
 **Image Handling** (`aliby.io.omero`)
 - Extracts Image objects from OMERO image IDs
 - Extracts Dataset objects from OMERO experiment IDs
+
+**Preflight and metadata synthesis** (`aliby.io.omero.Dataset`, `aliby.pipeline`)
+- `Pipeline.setup()` connects to OMERO inside the `with dispatcher as conn:` block and logs a summary (positions, timepoints, channels) — all OMERO calls must stay inside that block as the connection closes on exit
+- `Dataset.get_minimal_meta()` synthesises the three required metadata fields (`channels`, `time_settings/ntimepoints`, `time_settings/timeinterval`) from the first image when no log files are attached to the dataset; returns `None` if the dataset has no images
+- `Dataset.cache_logs()` catches `FileNotFoundError` (no annotations) and logs a warning rather than raising, so the pipeline continues even for datasets with no attached files
+- `Dataset.get_channels()` returns `[]` for empty datasets (never raises `UnboundLocalError`)
+- `listChildren()` on a Dataset returns raw `ImageI` model objects, not gateway wrappers — use `getPixels(0)` not `getPixels()` when accessing pixels on those objects
+- `MetaData.__init__` takes `omero_meta` (dict) instead of `OMERO_channels` (list); OMERO channel order is always authoritative and overrides log-file channel order; raises `FileNotFoundError` for local sources with no log files and no supplied metadata
+- `PipelineParameters.default()` raises `ValueError` early if `get_minimal_meta()` returns `None` (dataset has no images), before attempting to build pipeline parameters

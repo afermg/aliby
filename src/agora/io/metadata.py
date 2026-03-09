@@ -13,13 +13,25 @@ from logfile_parser.swainlab_parser import parse_swainlab_logs
 class MetaData:
     """Metadata process to load and parse log files."""
 
-    def __init__(self, log_dir, OMERO_channels: t.List[str] = None):
+    def __init__(self, log_dir, omero_meta: t.Dict = None):
         """Initialise by loading and parsing microscopy logs."""
         self.log_dir = log_dir
         self.full = parse_microscopy_logs(log_dir)
-        if OMERO_channels is not None:
-            # OMERO overrules metadata from logs
-            self.full["channels"] = OMERO_channels
+        if self.full is None:
+            if omero_meta is not None:
+                logging.getLogger("aliby").warning(
+                    "No microscopy log files found; "
+                    "using OMERO metadata instead."
+                )
+                self.full = omero_meta
+            else:
+                raise FileNotFoundError(
+                    "No microscopy metadata found. Provide a metadata "
+                    "dict via PipelineParameters or attach log files."
+                )
+        # OMERO channel order is always authoritative
+        if omero_meta is not None and "channels" in omero_meta:
+            self.full["channels"] = omero_meta["channels"]
         # add channels per position
         if "legacy" in self.full:
             self.full["channels_by_position"] = (
@@ -63,7 +75,9 @@ def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:
                 # legacy log files ending in .txt
                 full_meta = metadata_legacy.parse_legacy_logs(filedir)
     if full_meta is None:
-        print("Warning: No microscopy metadata found.")
+        logging.getLogger("aliby").warning(
+            "No microscopy metadata found."
+        )
     return full_meta
 
 
