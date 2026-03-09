@@ -8,7 +8,7 @@ from inspect import getfullargspec, getmembers, isfunction
 from types import FunctionType
 
 import bottleneck as bn
-from extraction.core.functions import cell_functions, trap_functions
+from extraction.core.functions import background_functions, cell_functions
 from extraction.core.functions.cell_functions import (
     _FUNCTION_TO_MODEL,
     is_model_available,
@@ -19,7 +19,7 @@ from extraction.core.functions.math_utils import div0
 def load_all_functions():
     """Load cell and trap functions."""
     cell_funs = load_cell_functions()
-    trap_funs = load_trap_functions()
+    trap_funs = load_background_functions()
     # return dict of cell funs and dict of trap and cell funs
     return cell_funs, {**trap_funs, **cell_funs}
 
@@ -80,11 +80,11 @@ def call_cell_fun(cell_fun, cell_masks, *args, **kwargs):
     return [cell_fun(mask, *args, **kwargs) for mask in cell_masks]
 
 
-def load_trap_functions():
-    """Load functions that are applied to an entire tile."""
+def load_background_functions():
+    """Load functions that compute background signals from a tile."""
     trap_funs = {
         f[0]: f[1]
-        for f in getmembers(trap_functions)
+        for f in getmembers(background_functions)
         if isfunction(f[1])
         and f[1].__module__.startswith("extraction.core.functions")
     }

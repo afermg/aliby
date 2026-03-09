@@ -1,4 +1,4 @@
-"""Functions to apply to a whole tile."""
+"""Functions to compute background signals from a tile."""
 
 import numpy as np
 
@@ -25,7 +25,7 @@ def median_background(cell_masks, trap_image, channels=None):
     channels: list, optional
         Not used; present for interface consistency.
     """
-    return np.median(_background_pixels(cell_masks, trap_image))
+    return np.nanmedian(_background_pixels(cell_masks, trap_image))
 
 
 def mean_background(cell_masks, trap_image, channels=None):
@@ -41,7 +41,7 @@ def mean_background(cell_masks, trap_image, channels=None):
     channels: list, optional
         Not used; present for interface consistency.
     """
-    return np.mean(_background_pixels(cell_masks, trap_image))
+    return np.nanmean(_background_pixels(cell_masks, trap_image))
 
 
 def std_background(cell_masks, trap_image, channels=None):
@@ -59,4 +59,4 @@ def std_background(cell_masks, trap_image, channels=None):
     channels: list, optional
         Not used; present for interface consistency.
     """
-    return np.std(_background_pixels(cell_masks, trap_image))
+    return np.nanstd(_background_pixels(cell_masks, trap_image))

@@ -113,6 +113,8 @@ class Signal(BridgeH5):
         Cells must be present for at least cutoff fraction of the total number
         of time points.
         """
+        if cutoff == 0:
+            return df
         return df.loc[df.notna().sum(axis=1) > df.shape[1] * cutoff]
 
     @property
@@ -180,6 +182,10 @@ class Signal(BridgeH5):
             (optional) An array of (trap, cell) indices.
             If True, fetch picks from file.
         """
+        if "cell_label" in data.index.names:
+            # no picks or merges for per-trap background signals (cell_label=-1)
+            if (data.index.get_level_values("cell_label") == -1).all():
+                return data
         if isinstance(merges, bool):
             merges = self.read_merges() if merges else np.array([])
         if merges.any():

@@ -240,7 +240,7 @@ class Extractor(StepABC):
                 ) and not is_model_available(model_name):
                     setattr(self.params, param_attr, set())
         self.store = store
-        self.all_cell_funs, self.all_funs = load_all_functions()
+        self.cell_fun_names, self.all_funs = load_all_functions()
 
     @classmethod
     def from_tiler(
@@ -328,16 +328,16 @@ class Extractor(StepABC):
             )
         return tiles
 
-    def apply_cell_function(
+    def apply_extraction_function(
         self,
         traps: t.List[np.ndarray],
         masks: t.List[np.ndarray],
-        cell_function: str,
+        fun_name: str,
         cell_labels: t.Dict[int, t.List[int]],
         channels: t.List[str],
     ) -> t.Tuple[t.Union[t.Tuple[float], t.Tuple[t.Tuple[int]]]]:
         """
-        Apply a cell function to all cells at all traps.
+        Apply an extraction function to all cells or traps.
 
         Process one time point.
 
@@ -347,8 +347,8 @@ class Extractor(StepABC):
             List of images.
         masks: list of arrays
             List of masks.
-        cell_function: str
-            Function to apply.
+        fun_name: str
+            Name of the function to apply.
         cell_labels: dict
             A dict with trap_ids as keys and a list of cell labels
             as values.
@@ -362,7 +362,7 @@ class Extractor(StepABC):
             A two-tuple comprising a tuple of results and a tuple
             of the tile_id and cell labels.
         """
-        cell_fun = cell_function in self.all_cell_funs
+        is_cell_fun = fun_name in self.cell_fun_names
         idx = []
         results = []
         for trap_id, (mask_set, trap, local_cell_labels) in enumerate(
@@ -371,28 +371,28 @@ class Extractor(StepABC):
             # ignore empty traps
             if len(mask_set):
                 # find property from the tile
-                result = self.all_funs[cell_function](mask_set, trap, channels)
-                if cell_fun:
+                result = self.all_funs[fun_name](mask_set, trap, channels)
+                if is_cell_fun:
                     # store results for each cell separately
                     for cell_label, val in zip(local_cell_labels, result):
                         results.append(val)
                         idx.append((trap_id, cell_label))
                 else:
-                    # background (trap) function
+                    # background function for cy5-like signals
                     results.append(result)
                     idx.append(trap_id)
         return (tuple(results), tuple(idx))
 
-    def apply_cell_functions(
+    def apply_extraction_functions(
         self,
         tiles: t.List[np.array],
         masks: t.List[np.array],
-        cell_funs: t.List[str],
+        funs: t.List[str],
         channels: t.List[str],
         cell_labels: t.List[int],
     ) -> tuple[dict[str, pd.Series], dict[str, list[str]]]:
         """
-        Return dict with cell_funs as keys and their results.
+        Return dict with extraction function names as keys and their results.
 
         Use data from one time point.
 
@@ -405,19 +405,17 @@ class Extractor(StepABC):
             sub-key names for functions that return dicts.
         """
         d = {
-            cell_fun: self.apply_cell_function(
+            fun: self.apply_extraction_function(
                 traps=tiles,
                 masks=masks,
-                cell_function=cell_fun,
+                fun_name=fun,
                 channels=channels,
                 cell_labels=cell_labels,
             )
-            for cell_fun in cell_funs
+            for fun in funs
         }
         # check for functions returning a dict rather than a value
-        dict_fns = [
-            cell_fun for cell_fun in d if isinstance(d[cell_fun][0][0], dict)
-        ]
+        dict_fns = [fun for fun in d if isinstance(d[fun][0][0], dict)]
         replacements = {}
         for fn in dict_fns:
             # add to d for each key in returned dict
@@ -440,7 +438,7 @@ class Extractor(StepABC):
         self,
         tiles: np.ndarray,
         masks: t.List[np.ndarray],
-        reduction_cell_funs: t.Dict[reduction_method, t.Collection[str]],
+        reduction_funs: t.Dict[reduction_method, t.Collection[str]],
         channels: t.List[str],
         cell_labels: t.List[int],
     ) -> tuple[
@@ -457,10 +455,10 @@ class Extractor(StepABC):
         masks: list of arrays
             An array of masks for each trap: one per cell at the
             trap.
-        reduction_cell_funs: dict
+        reduction_funs: dict
             An upper branch of the extraction tree: a dict for which
             keys are reduction functions and values are either a list
-            or a set of strings giving the cell functions to apply.
+            or a set of strings giving the extraction functions to apply.
             For example: {'np_max': {'max5px', 'mean', 'median'}}
         channels: list of str
             A list comprising the channel corresponding to the data
@@ -479,7 +477,7 @@ class Extractor(StepABC):
         # z-direction and the reduced data as values
         reduced_tiles = {}
         if tiles is not None:
-            for reduction in reduction_cell_funs:
+            for reduction in reduction_funs:
                 red_fun = REDUCTION_FUNS[reduction]
                 if red_fun is not None:
                     reduced_tiles[reduction] = [
@@ -488,11 +486,11 @@ class Extractor(StepABC):
         # calculate cell and tile properties
         d = {}
         all_replacements = {}
-        for reduction, cell_funs in reduction_cell_funs.items():
-            results, replacements = self.apply_cell_functions(
+        for reduction, funs in reduction_funs.items():
+            results, replacements = self.apply_extraction_functions(
                 tiles=reduced_tiles.get(reduction, [None for _ in masks]),
                 masks=masks,
-                cell_funs=cell_funs,
+                funs=funs,
                 channels=channels,
                 cell_labels=cell_labels,
             )
@@ -502,8 +500,6 @@ class Extractor(StepABC):
 
     def get_masks(self, tp, masks, cells):
         """Get masks as a list with an array of masks per trap."""
-        # find cell masks for a given trap as a dict with trap_ids
-        # as keys
         if masks is None:
             raw_masks = cells.at_time(tp, kind="mask")
             masks = {trap_id: [] for trap_id in range(cells.ntraps)}
@@ -512,8 +508,7 @@ class Extractor(StepABC):
                     masks[trap_id] = np.stack(np.array(trap_cells)).astype(
                         bool
                     )
-        # convert to a list of masks
-        # one array of size (no cells, tile_size, tile_size) per trap
+        # one array of shape (n_cells, tile_size, tile_size) per trap
         masks = [np.array(v) for v in masks.values()]
         return masks
 
@@ -635,7 +630,96 @@ class Extractor(StepABC):
                 cyt_masks.append(np.array([]))
         return vac_masks, cyt_masks
 
-    def extract_one_channel(
+    def _extract_channel(
+        self,
+        ch,
+        reduction_funs,
+        img,
+        img_bgsub,
+        masks,
+        cell_labels,
+        background_chs,
+    ):
+        """
+        Extract raw and background-subtracted metrics for one channel.
+
+        Returns
+        -------
+        d: dict
+            Results keyed by channel name and channel + '_bgsub'.
+        replacements: dict
+            Accumulated replacements for multi-value functions.
+        """
+        d, replacements = self.reduce_extract(
+            # use null for "general" - no fluorescence image
+            tiles=img.get(ch, None),
+            masks=masks,
+            reduction_funs=reduction_funs,
+            cell_labels=cell_labels,
+            channels=[ch],
+        )
+        d = {ch: d}
+        if ch != "general" and ch not in background_chs:
+            bgsub_results, bgsub_replacements = self.reduce_extract(
+                tiles=img_bgsub[ch + "_bgsub"],
+                masks=masks,
+                reduction_funs=reduction_funs,
+                cell_labels=cell_labels,
+                channels=[ch],
+            )
+            d[ch + "_bgsub"] = bgsub_results
+            replacements.update(bgsub_replacements)
+        return d, replacements
+
+    def _extract_intracellular(
+        self,
+        ch,
+        reduction_funs,
+        img,
+        img_bgsub,
+        masks,
+        cell_labels,
+        vac_masks,
+        cyt_masks,
+    ):
+        """
+        Extract vacuole and cytoplasm metrics for one channel.
+
+        Returns
+        -------
+        d: dict
+            Results keyed by channel + '_vacuole' / '_cytoplasm' suffixes.
+        replacements: dict
+            Accumulated replacements for multi-value functions.
+        """
+        d = {}
+        replacements = {}
+        for suffix, sub_masks in [
+            ("_vacuole", vac_masks),
+            ("_cytoplasm", cyt_masks),
+        ]:
+            results, rep = self.reduce_extract(
+                tiles=img.get(ch, None),
+                masks=sub_masks,
+                reduction_funs=reduction_funs,
+                cell_labels=cell_labels,
+                channels=[ch],
+            )
+            d[ch + suffix] = results
+            replacements.update(rep)
+            if ch in self.params.subtract_background:
+                bgsub_results, bgsub_rep = self.reduce_extract(
+                    tiles=img_bgsub[ch + "_bgsub"],
+                    masks=sub_masks,
+                    reduction_funs=reduction_funs,
+                    cell_labels=cell_labels,
+                    channels=[ch],
+                )
+                d[ch + suffix + "_bgsub"] = bgsub_results
+                replacements.update(bgsub_rep)
+        return d, replacements
+
+    def extract_single_channel_functions(
         self,
         tree_dict,
         cell_labels,
@@ -645,7 +729,8 @@ class Extractor(StepABC):
         vac_masks=None,
         cyt_masks=None,
     ):
-        """Extract as dict all metrics requiring only one channel.
+        """
+        Extract all metrics requiring a single fluorescence channel.
 
         Returns
         -------
@@ -656,59 +741,28 @@ class Extractor(StepABC):
         """
         d = {}
         all_replacements = {}
-        for ch, reduction_cell_funs in tree_dict["tree"].items():
-            # extract from all images including bright field
-            results, replacements = self.reduce_extract(
-                # use null for "general" - no fluorescence image
-                tiles=img.get(ch, None),
-                masks=masks,
-                reduction_cell_funs=reduction_cell_funs,
-                cell_labels=cell_labels,
-                channels=[ch],
+        background_chs = tree_dict.get("background_channels", set())
+        for ch, reduction_funs in tree_dict["tree"].items():
+            ch_d, ch_rep = self._extract_channel(
+                ch, reduction_funs, img, img_bgsub,
+                masks, cell_labels, background_chs,
             )
-            d[ch] = results
-            all_replacements.update(replacements)
-            if ch != "general":
-                # extract from background-corrected images
-                results, replacements = self.reduce_extract(
-                    tiles=img_bgsub[ch + "_bgsub"],
-                    masks=masks,
-                    reduction_cell_funs=reduction_cell_funs,
-                    cell_labels=cell_labels,
-                    channels=[ch],
-                )
-                d[ch + "_bgsub"] = results
-                all_replacements.update(replacements)
-            # extract using intracellular sub-masks
+            d.update(ch_d)
+            all_replacements.update(ch_rep)
             if ch in self.params.intracellular_masks and vac_masks is not None:
-                for suffix, sub_masks in [
-                    ("_vacuole", vac_masks),
-                    ("_cytoplasm", cyt_masks),
-                ]:
-                    results, replacements = self.reduce_extract(
-                        tiles=img.get(ch, None),
-                        masks=sub_masks,
-                        reduction_cell_funs=reduction_cell_funs,
-                        cell_labels=cell_labels,
-                        channels=[ch],
-                    )
-                    d[ch + suffix] = results
-                    all_replacements.update(replacements)
-                    if ch in self.params.subtract_background:
-                        results, replacements = self.reduce_extract(
-                            tiles=img_bgsub[ch + "_bgsub"],
-                            masks=sub_masks,
-                            reduction_cell_funs=(reduction_cell_funs),
-                            cell_labels=cell_labels,
-                            channels=[ch],
-                        )
-                        d[ch + suffix + "_bgsub"] = results
-                        all_replacements.update(replacements)
+                intra_d, intra_rep = self._extract_intracellular(
+                    ch, reduction_funs, img, img_bgsub,
+                    masks, cell_labels, vac_masks, cyt_masks,
+                )
+                d.update(intra_d)
+                all_replacements.update(intra_rep)
         return d, all_replacements
 
-    def extract_multiple_channels(self, cell_labels, img, img_bgsub, masks):
+    def extract_multichannel_functions(
+        self, cell_labels, img, img_bgsub, masks
+    ):
         """
-        Extract as a dict all metrics requiring multiple channels.
+        Extract all metrics requiring multiple fluorescence channels.
 
         Include 'Brightfield'.
 
@@ -763,7 +817,7 @@ class Extractor(StepABC):
                     # apply multichannel function
                     d[multichannel_label][reduction][
                         multichannel_function + suffix
-                    ] = self.apply_cell_function(
+                    ] = self.apply_extraction_function(
                         tiles,
                         masks,
                         multichannel_function,
@@ -906,7 +960,7 @@ class Extractor(StepABC):
                 outlines, masks, img
             )
         # extract for functions requiring one channel
-        res_one, replacements = self.extract_one_channel(
+        res_one, replacements = self.extract_single_channel_functions(
             tree_dict,
             cell_labels,
             img,
@@ -919,7 +973,7 @@ class Extractor(StepABC):
         for fn, replace_list in replacements.items():
             tree_dict = replace_in_nesteddict(tree_dict, fn, replace_list)
         # extract for functions requiring multiple channels
-        res_multiple = self.extract_multiple_channels(
+        res_multiple = self.extract_multichannel_functions(
             cell_labels, img, img_bgsub, masks
         )
         return {**res_one, **res_multiple}
@@ -972,7 +1026,9 @@ class Extractor(StepABC):
                     bg_medians = np.empty((n_traps, n_z))
                     for i in range(n_traps):
                         for j in range(n_z):
-                            bg_medians[i, j] = bn.median(ch_img[i, j][bgs[i]])
+                            bg_medians[i, j] = bn.nanmedian(
+                                ch_img[i, j][bgs[i]]
+                            )
                     # subtract: broadcast (traps, Z) over (X, Y)
                     img_bgsub[ch + "_bgsub"] = (
                         ch_img - bg_medians[:, :, np.newaxis, np.newaxis]
