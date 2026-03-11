@@ -21,7 +21,11 @@ class Grouper(ABC):
         """Find h5 files and load each one."""
         path = Path(dir)
         self.name = path.name
-        self.files = list(path.glob("*.h5"))
+        # exclude macOS resource fork files (._*) created on mounted volumes
+        self.files = [
+            f for f in path.glob("*.h5")
+            if not f.name.startswith("._")
+        ]
         if len(self.files) == 0:
             raise FileNotFoundError(f"No valid h5 files in {dir}.")
         self.load_positions()
