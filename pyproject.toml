@@ -1,6 +1,6 @@
 [project]
 name = "aliby"
-version = "0.2.0"
+version = "0.2.1"
 description = "Process and analyse live-cell imaging data"
 authors = [
     { name = "Alan Munoz", email = "alan@quasimorphic.com" },
