@@ -15,7 +15,7 @@ resolution-markers = [
 
 [[package]]
 name = "aliby"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "cellpose" },
@@ -48,10 +48,8 @@ dev = [
     { name = "ruff" },
     { name = "ruff-lsp" },
 ]
-examples = [
-    { name = "pooch" },
-]
 test = [
+    { name = "pooch" },
     { name = "pytest" },
 ]
 
@@ -63,7 +61,7 @@ requires-dist = [
     { name = "cp-measure", specifier = ">=0.1.7,<0.2" },
     { name = "dask", specifier = ">=2021.12.0" },
     { name = "loguru", specifier = ">=0.7.3" },
-    { name = "nahual", editable = "../nahual" },
+    { name = "nahual", specifier = ">=0.0.6" },
     { name = "numpy", specifier = ">=1.18" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "pooch", specifier = ">=1.8.2,<2" },
@@ -82,8 +80,10 @@ dev = [
     { name = "ruff", specifier = ">=0.3.2" },
     { name = "ruff-lsp", specifier = ">=0.0.52" },
 ]
-examples = [{ name = "pooch", specifier = ">=1.8.2" }]
-test = [{ name = "pytest", specifier = ">=8.4.2" }]
+test = [
+    { name = "pooch", specifier = ">=1.8.2" },
+    { name = "pytest", specifier = ">=8.4.2" },
+]
 
 [[package]]
 name = "anyio"
@@ -802,14 +802,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/b2/ad5c38b500a6bc12762c0a16529a8123abfa12b23fb937e74357ffad9bca/imagecodecs-2025.8.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:d588e51fe0ff35d759c310e209c12c76f5db35893de3e95c8e7fa69d78244ca5", size = 10168537 },
     { url = "https://files.pythonhosted.org/packages/3c/8e/58a58f851043325f955bfc30eef14a23bc15dd02c343f7bf4028c27fd005/imagecodecs-2025.8.2-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e13144b6af43bf75024a92f1522af6d8fd0ef61c6e0fcd01ae028961df93963a", size = 25522552 },
     { url = "https://files.pythonhosted.org/packages/d6/7e/4eb0dc145b7abfbff4139251326946b44d375ae0ab29c775a58adee63a0f/imagecodecs-2025.8.2-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8e993b0b1601d19ee1aadb10fceb93524d88b874ee728f82d3f9b40bddccd223", size = 26369822 },
-    { url = "https://files.pythonhosted.org/packages/ee/1b/05baebc43671f7f6d1d169841438cd689a12e257a021eab6fa5ebc00b5e1/imagecodecs-2025.8.2-cp311-cp311-win32.whl", hash = "sha256:a1ec2006cbc25bf273616c90478338d44f37aafa50935dcbc18767775b416722", size = 18567263 },
     { url = "https://files.pythonhosted.org/packages/10/27/0254f64a1d759f22f2c3add691ef915bba016aa7b3630192bbaa9ce1d65d/imagecodecs-2025.8.2-cp311-cp311-win_amd64.whl", hash = "sha256:369a2e0784787ec2ea56676de5fdb0bdaff3202679f45b27e51261f0960923e1", size = 22686127 },
     { url = "https://files.pythonhosted.org/packages/72/89/3a43d23e27da6e145148b96886b9f1b32b864cc4dc5f5356e585e2eef863/imagecodecs-2025.8.2-cp311-cp311-win_arm64.whl", hash = "sha256:5fa688d3521edeb192179c9808182f00064fb123af11c989a5d509e36a178ebe", size = 18003465 },
     { url = "https://files.pythonhosted.org/packages/3b/2e/b129b2bf95a4332b86452dd93829cb6ab1e203d86a488fc8639e9f08db7d/imagecodecs-2025.8.2-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:32ce9707c85cf90e5fb4d9e076ec78288f0f1c084954376f798397743bc4d4e5", size = 12480416 },
     { url = "https://files.pythonhosted.org/packages/dc/36/b1d3117c34f5eebfd7a92314042338dce608654173c71b1fb707e416aef5/imagecodecs-2025.8.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7b7cd0c41ea83f249db2f4ee04c7c3f23bd6fbef89a58bdaa7d2bf11421ffc15", size = 10127356 },
     { url = "https://files.pythonhosted.org/packages/e6/41/9ee8f13c4e3425c1aed0b9c5bca5547b968da20cb60af094fafcb52be05f/imagecodecs-2025.8.2-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:10f421048206ffb6763b1eb28f2205535801794e9f2c612bbcc219d14b9e44bc", size = 25765528 },
     { url = "https://files.pythonhosted.org/packages/d6/1a/f12736807a179a4bd5a26387f2edf00cc3f972139b61f2833f6fbe9b9685/imagecodecs-2025.8.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f14a5eb8151e32316028c09212eed1d14334460e8adbbef819c1d8ec6ab7e633", size = 26718026 },
-    { url = "https://files.pythonhosted.org/packages/9c/cd/b0367017443af901279952817900e7f496998fb11de24d91cccdb4fa3dc3/imagecodecs-2025.8.2-cp312-cp312-win32.whl", hash = "sha256:e5cb491fa698d055643d3519bab36a3da8d4144ac759430464e2f75f945f3325", size = 18546766 },
     { url = "https://files.pythonhosted.org/packages/c4/97/5eb48564f5fdbe3ef83a07ba45d301d45bf85af382a051de34e0a3d6af85/imagecodecs-2025.8.2-cp312-cp312-win_amd64.whl", hash = "sha256:7371169cff1b98f07a983b28fffd2d334cf40a61fce3c876dda930149081bdeb", size = 22674367 },
     { url = "https://files.pythonhosted.org/packages/2b/b9/a1a70b5d2250937cd747ceff94ddb9cb70d6f1b9fef9f4164d88c63dd3cb/imagecodecs-2025.8.2-cp312-cp312-win_arm64.whl", hash = "sha256:bf0a97cd58810d5d7ecd983332f1f85a0df991080a774f7caadb1add172165d0", size = 17981844 },
 ]
@@ -1469,35 +1467,17 @@ wheels = [
 
 [[package]]
 name = "nahual"
-version = "0.0.5"
-source = { editable = "../nahual" }
+version = "0.0.8"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "loguru" },
     { name = "numpy" },
     { name = "pynng" },
     { name = "requests" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "numpy", specifier = ">=1.18.0" },
-    { name = "pynng", specifier = ">=0.8.1" },
-    { name = "requests" },
-]
-
-[package.metadata.requires-dev]
-data = [{ name = "pooch", specifier = ">=1.7.0,<2" }]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupytext", specifier = ">=1.17.2" },
-    { name = "ruff", specifier = ">=0.1.15" },
-    { name = "ruff-lsp", specifier = ">=0.0.62" },
-]
-test = [
-    { name = "imageio", specifier = ">=2.37.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "pytest", specifier = ">=8.4.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/97/29/57d56ec465965bdae2af0c5bfd79601daf3aa281307c2f2fe0506a2b7b91/nahual-0.0.8.tar.gz", hash = "sha256:230c13f9c5c28d4614af77d2117f3519f6d6037a71125e019ae4515e8b6af500", size = 13580 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/e6/653b321115da1a239f333eb7be93b81762f2062fffaf8e2df80c3e0e706c/nahual-0.0.8-py3-none-any.whl", hash = "sha256:6522ca546036b68801e72c448bade94bcaa597362ee30e9da3edca95de6decf7", size = 16205 },
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 [project]
 name = "aliby"
 version = "0.2.1"
-description = "Process and analyse live-cell imaging data"
+description = "Process and analyse live-cell and/or fluorescence imaging data"
 authors = [
     { name = "Alan Munoz", email = "alan@quasimorphic.com" },
     { name = "Peter Swain", email = "peter.swain@ed.ac.uk" },
@@ -35,10 +35,8 @@ dev = [
     "ruff>=0.3.2",
     "ruff-lsp>=0.0.52",
 ]
-examples = [
-    "pooch>=1.8.2",
-]
 test = [
+    "pooch>=1.8.2",
     "pytest>=8.4.2",
 ]
 
@@ -80,6 +78,3 @@ ignore = ["E501"]
 
 # 3. Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
-
-[tool.uv.sources]
-nahual = { path = "../nahual", editable = true }
