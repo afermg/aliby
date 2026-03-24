@@ -4,7 +4,6 @@ from inspect import getfullargspec, getmembers, isfunction
 
 import numpy as np
 from cp_measure.bulk import get_core_measurements, get_correlation_measurements
-from skimage.measure import regionprops_table
 
 from extraction.core.functions import cell, trap
 
@@ -49,56 +48,7 @@ def load_cellfuns():
 
             CELL_FUNS[f_name] = new_fun
 
-    # Add automatically sklearn functions
-    # TODO use heuristics to make execution more efficient
-    SK_FUNS = [
-        # "area",
-        "area_bbox",
-        "area_convex",
-        "area_filled",
-        "axis_major_length",
-        "axis_minor_length",
-        "bbox",
-        # "centroid",
-        "centroid_local",
-        "centroid_weighted",
-        "centroid_weighted_local",
-        "coords_scaled",
-        "coords",
-        # "eccentricity",
-        "equivalent_diameter_area",
-        "euler_number",
-        "extent",
-        "feret_diameter_max",
-        # "image",
-        # "image_convex",
-        # "image_filled",
-        # "image_intensity",
-        "inertia_tensor",
-        "inertia_tensor_eigvals",
-        "intensity_max",
-        "intensity_mean",
-        "intensity_min",
-        "moments",
-        "moments_central",
-        "moments_hu",
-        "moments_normalized",
-        "moments_weighted",
-        "moments_weighted_central",
-        "moments_weighted_hu",
-        "moments_weighted_normalized",
-        "num_pixels",
-        "orientation",
-        "perimeter",
-        "perimeter_crofton",
-        "slice",
-        "solidity",
-    ]
-
-    for fun_name in SK_FUNS:
-        CELL_FUNS[fun_name] = partial(get_sk_features, feature=fun_name)
-
-    # Add CellProfiler measurements
+    # Add cp_measure measurements
     for fun_name, f in get_core_measurements().items():
         CELL_FUNS[fun_name] = partial(wrap_cp_measure_features, fun=f)
 
@@ -147,29 +97,8 @@ def load_redfuns() -> t.Dict[str, t.Callable]:
 
 
 # Functional solutions to complex problems
-# currenlty all this wrappers assume that the input mask is a binary array
+# currently all these wrappers assume that the input mask is a binary array
 # In the future we may want to replace this with an array of integer labels instead.
-
-
-def get_sk_features(mask: np.ndarray, pixels: np.ndarray, feature: str):
-    """
-    Freeze the sklearn function to use feature.
-    """
-    # return [
-    #     regionprops_table(
-    #         mask,
-    #         intensity_image=pixels,
-    #         properties=(feature,),
-    #         cache=False,
-    #     )[feature][0]
-    #     for mask in masks.astype(np.uint16)
-    # ]
-    return regionprops_table(
-        mask.astype(np.uint16),
-        intensity_image=pixels,
-        properties=(feature,),
-        cache=False,
-    )[feature][0]
 
 
 def wrap_cp_measure_features(

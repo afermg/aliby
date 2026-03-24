@@ -15,7 +15,7 @@ dependencies = [
     "dask>=2021.12.0",
     "zarr>=2.14.0",
     "pyarrow>=19.0.1",
-    "cp-measure>=0.1.7,<0.2",
+    "cp-measure>=0.1.17",
     "pooch>=1.8.2,<2",
     "scikit-learn>=1.2.2",
     "loguru>=0.7.3",
@@ -81,5 +81,3 @@ ignore = ["E501"]
 # 3. Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
 
-[tool.uv.sources]
-nahual = { path = "../nahual", editable = true }

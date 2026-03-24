@@ -104,7 +104,7 @@ def dispatch_segmenter(
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
 
-                return labels[np.newaxis]  # Add "tile" dimension
+                return labels
 
         case _:
             raise Exception(f"Invalid segmentation method {kind}")
