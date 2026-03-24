@@ -295,8 +295,10 @@ def _validate_pipeline(pipeline: dict):
     """
     Sanity checks before computationally expensive operations.
     """
-    steps_to_write = pipeline.get("save")
-    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
+    steps_to_write: list[str] = pipeline.get("save")
+    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"]), (
+        "At least one step should be written"
+    )
     # Deprecated: ntps should be autodetected
     # assert "ntps" in pipeline.get("io", {}), (
     #     "You must pass the number of time points to analyse."
@@ -331,8 +333,8 @@ def run_pipeline_return_state(
 
 def run_pipeline_and_post(
     pipeline: dict,
-    img_source: str or list[str],
-    output_path: Path = None,
+    img_source: str | Path | list[str],
+    output_path: str | Path = None,
     fov: str = None,
     overwrite: bool = True,
     logger=None,
@@ -354,8 +356,9 @@ def run_pipeline_and_post(
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
     if output_path is None:
-        output_path = Path(pipeline["io"]["output_path"])
+        output_path = pipeline["io"]["output_path"]
 
+    output_path = Path(output_path)
     steps_dir = output_path / "steps" / fov
     profiles_file = output_path / "profiles" / f"{fov}.parquet"
 
@@ -423,15 +426,17 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     # We assume that extraction steps start with "ext"
     profiles = pyarrow.Table.from_pylist(
         [],
-        schema=pa.schema([
-            pa.field("tile", pa.int64()),
-            pa.field("label", pa.int64()),
-            pa.field("branch", pa.string()),
-            pa.field("metric", pa.string()),
-            pa.field("value", pa.float64()),
-            pa.field("object", pa.string()),
-            pa.field("tp", pa.int64()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("tile", pa.int64()),
+                pa.field("label", pa.int64()),
+                pa.field("branch", pa.string()),
+                pa.field("metric", pa.string()),
+                pa.field("value", pa.float64()),
+                pa.field("object", pa.string()),
+                pa.field("tp", pa.int64()),
+            ]
+        ),
     )
     feature_steps = [
         step_name

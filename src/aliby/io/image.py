@@ -290,9 +290,9 @@ class ImageZarr(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self.meta.update({
-            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
-        })
+        self.meta.update(
+            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
+        )
 
     @property
     def name(self):
@@ -339,9 +339,9 @@ class ImageMultiTiff(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
-        self._meta.update({
-            f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)
-        })
+        self._meta.update(
+            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
+        )
 
     @property
     def name(self):
@@ -503,6 +503,10 @@ def get_dims_from_names(
     regex_ = re.compile(regex)
     # sorted_files = sorted(image_filenames)
     matches = [regex_.match(x).groups() for x in image_filenames]
+
+    assert len(capture_order) == len(matches[0]), (
+        f"capture_order ({capture_order}) should match the number of groups in the regex: {regex}"
+    )
     dim_size = {
         dim: len(set([y[i] for y in matches])) for i, dim in enumerate(capture_order)
     }

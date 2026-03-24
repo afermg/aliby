@@ -79,6 +79,7 @@
                 export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:"/run/opengl-driver/lib":$LD_LIBRARY_PATH
                 export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
                 export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+                uv sync --all-groups
                 runHook venvShellHook
                 export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
               '';
