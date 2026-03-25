@@ -430,13 +430,10 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
         [],
         schema=pa.schema(
             [
-                pa.field("tile", pa.int64()),
-                pa.field("label", pa.int64()),
-                pa.field("branch", pa.string()),
-                pa.field("metric", pa.string()),
-                pa.field("value", pa.float64()),
-                pa.field("object", pa.string()),
-                pa.field("tp", pa.int64()),
+                pa.field("metadata_tile", pa.int64()),
+                pa.field("metadata_label", pa.int64()),
+                pa.field("metadata_object", pa.string()),
+                pa.field("metadata_tp", pa.int64()),
             ]
         ),
     )
@@ -454,15 +451,24 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                 ext_output = (cycle((("__", "__"),)), (ext_output,))
 
             table: pyarrow.PyTable = format_extraction(ext_output)
+            # Renamae map
+            rename_map = {
+                "tile": "metadata_tile",
+                "label": "metadata_label",
+            }
+            new_names = [rename_map.get(c, c) for c in table.column_names]
+            table = table.rename_columns(new_names)
+
             if len(table):  # Cover case whence measurements are empty
+                # object name (cp_measure) or model name (nahual embedders)
                 table = table.append_column(
-                    "object",
+                    "metadata_object",
                     pyarrow.array(
                         [ext_step.split("_")[-1]] * len(table), pyarrow.string()
                     ),
                 )
                 table = table.append_column(
-                    "tp",
+                    "metadata_tp",
                     pyarrow.array([tp] * len(table), pyarrow.uint8()),
                 )
                 data.append(table)

@@ -632,4 +632,9 @@ def format_extraction_overlap(
             pivoted_dict[m].append(row.get(m, None))
 
     arrow_table = pa.Table.from_pydict(pivoted_dict)
-    return arrow_table
+    rename_map = {
+        "tile": "metadata_tile",
+        "label": "metadata_label",
+    }
+    new_names = [rename_map.get(c, c) for c in arrow_table.column_names]
+    return arrow_table.rename_columns(new_names)
