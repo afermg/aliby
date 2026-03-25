@@ -57,7 +57,7 @@ def init_step(
                 "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**{**parameters["segmenter_kwargs"]})
+            step = dispatch_segmenter(**parameters["segmenter_kwargs"])
         case "track":
             if parameters["kind"].endswith(
                 "baby"
@@ -258,8 +258,10 @@ def pipeline_step(
             step_name.startswith("segment")
             and parameters["segmenter_kwargs"]["kind"] != "baby"
         ):  # Pass correct images from tiler
-            source_step, method, param_name = passed_methods.get(step_name)
-            args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+            source_step, method = passed_methods.get(step_name)
+            args = (
+                getattr(state["fn"][source_step], method)(tp),
+            )  # This assumes that the source step is an object that contains the data
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
@@ -382,11 +384,11 @@ def run_pipeline_and_post(
         # Run global processing steps (post-processing)
         post_results = {}
 
-        ntps = pipeline["io"]["ntps"]
-        if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
-            return profiles, post_results
+        # ntps = pipeline["io"]["ntps"]
+        # if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
+        #     return profiles, post_results
 
-        for step_name, parameters in pipeline["global_steps"].items():
+        for step_name, parameters in pipeline.get("global_steps", {}).items():
             associated_data = [
                 x for x in pipeline["global_passed_data"] if x.startswith(step_name)
             ]
@@ -403,17 +405,17 @@ def run_pipeline_and_post(
                 )
                 post_results[output_name] = state["fn"](input_data=input_data)
 
-        # Save global steps into files (per-tp steps are saved as they go, not at the end)
-        if step_name in pipeline["save"]:
-            write_fn = dispatch_write_fn(step_name)
-            for output_pathname in post_results:
-                if output_pathname.startswith(step_name):
-                    write_fn(
-                        post_results[output_pathname],
-                        output_path,
-                        subpath=output_pathname,
-                        filename=fov,
-                    )
+            # Save global steps into files (per-tp steps are saved as they go, not at the end)
+            if step_name in pipeline["save"]:
+                write_fn = dispatch_write_fn(step_name)
+                for output_pathname in post_results:
+                    if output_pathname.startswith(step_name):
+                        write_fn(
+                            post_results[output_pathname],
+                            output_path,
+                            subpath=output_pathname,
+                            filename=fov,
+                        )
     else:
         if logger is not None:
             logger.log(f"Skipping {fov}, as it exists")
