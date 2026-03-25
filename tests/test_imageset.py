@@ -39,18 +39,18 @@ pipeline = {
         },
         "capture_order": "CYX",
         "ntps": 1,
-        "segmentation_channel": {"nuclei": 1, "cell": 2},
+        "segmentation_channel": {"nuclei": 1},
     },
     "nchannels": 5,
     "fl_channels": range(0, 5),
-    "extract_multich_tree": {
-        "tree": {
-            (0, 1): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
-            (0, 4): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
-            (2, 3): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
-            (3, 4): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
-        },
-    },
+    # "extract_multich_tree": {
+    #     "tree": {
+    #         (0, 1): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
+    #         (0, 4): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
+    #         (2, 3): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
+    #         (3, 4): {"None": {"max": ["pearson", "costes", "manders_fold", "rwc"]}},
+    #     },
+    # },
     "steps": {
         "tile": {
             "image_kwargs": {
@@ -62,9 +62,9 @@ pipeline = {
                 "capture_order": capture_order,
             },
             "tile_size": None,
-            "ref_channel": 0,
-            "ref_z": 0,
-            "calculate_drift": False,
+            # "ref_channel": 0,
+            # "ref_z": 0,
+            # "calculate_drift": False,
         },
         "segment_nuclei": {
             "segmenter_kwargs": {
@@ -76,61 +76,61 @@ pipeline = {
         "extract_nuclei": {
             "channels": range(0, 5),
             "tree": {
-                0: {
-                    "max": [
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
-                    ]
-                },
                 1: {
                     "max": [
-                        "radial_zernikes",
                         "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
+                        # "sizeshape",
+                        # "radial_zernikes",
+                        # "feret",
+                        # "texture",
+                        # "radial_distribution",
+                        # "zernike",
                     ]
                 },
-                2: {
-                    "max": [
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
-                    ]
-                },
-                3: {
-                    "max": [
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
-                    ]
-                },
-                4: {
-                    "max": [
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
-                    ]
-                },
+                # 1: {
+                #     "max": [
+                #         "radial_zernikes",
+                #         "intensity",
+                #         "sizeshape",
+                #         "feret",
+                #         "texture",
+                #         "radial_distribution",
+                #         "zernike",
+                #     ]
+                # },
+                # 2: {
+                #     "max": [
+                #         "radial_zernikes",
+                #         "intensity",
+                #         "sizeshape",
+                #         "feret",
+                #         "texture",
+                #         "radial_distribution",
+                #         "zernike",
+                #     ]
+                # },
+                # 3: {
+                #     "max": [
+                #         "radial_zernikes",
+                #         "intensity",
+                #         "sizeshape",
+                #         "feret",
+                #         "texture",
+                #         "radial_distribution",
+                #         "zernike",
+                #     ]
+                # },
+                # 4: {
+                #     "max": [
+                #         "radial_zernikes",
+                #         "intensity",
+                #         "sizeshape",
+                #         "feret",
+                #         "texture",
+                #         "radial_distribution",
+                #         "zernike",
+                #     ]
+                # },
             },
         },
     },
@@ -143,7 +143,7 @@ pipeline = {
     "save": ("segment_nuclei",),
     "save_interval": 1,
 }
-run_pipeline_and_post(
+result = run_pipeline_and_post(
     img_source=path,
     pipeline=pipeline,
     output_path="./",

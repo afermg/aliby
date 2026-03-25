@@ -197,7 +197,7 @@ class Tiler(StepABC):
         pixels: da.core.Array,
         meta: dict,
         parameters: TilerParameters,
-        tile_locations=None,
+        tile_locs=None,
         **kwargs,
     ):
         """
@@ -229,13 +229,15 @@ class Tiler(StepABC):
         # else:  # Data with little metadata
         # self.channels = meta.get("channels", list(range(pixels.shape[-4])))
         self.channels = list(range(pixels.shape[-4]))
+        if self.tile_size is not None:  # Only when we are using tiles
+            # get reference channel - used for tile registration and drift calculations
+            ref_channel_index = parameters.ref_channel
+            if isinstance(ref_channel_index, str):
+                ref_channel_index = self.channels.index(parameters.ref_channel)
+            self.ref_channel_index = ref_channel_index
+
+        self.tile_locs = tile_locs
         self.tile_size = self.tile_size or self.pixels.shape[-2:]
-        # get reference channel - used for segmentation
-        ref_channel_index = parameters.ref_channel
-        if isinstance(ref_channel_index, str):
-            ref_channel_index = self.channels.index(parameters.ref_channel)
-        self.ref_channel_index = ref_channel_index
-        self.tile_locs = tile_locations
 
     @classmethod
     def from_image(
@@ -393,11 +395,14 @@ class Tiler(StepABC):
         """
         ref_z = getattr(self, "ref_z", 0)
         if self.no_processed == 0:
-            initial_image = self.pixels[0, self.ref_channel_index, ref_z]
-            self.tile_locs = set_areas_of_interest(
-                initial_image,
-                self.tile_size,
-            )
+            if hasattr(self, "ref_Channel_index"):
+                initial_image = self.pixels[0, self.ref_channel_index, ref_z]
+                self.tile_locs = set_areas_of_interest(
+                    initial_image,
+                    self.tile_size,
+                )
+            else:
+                self.tile_locs = get_center(self.pixels.shape)
 
         if hasattr(self.tile_locs, "drifts"):
             drift_len = len(self.tile_locs.drifts)
@@ -613,10 +618,12 @@ def if_out_of_bounds_pad(
         for s, upper_bound in zip(slices, max_yx)
     ]
     # find extent of padding needed in x and y
-    padding = np.array([
-        (-min(0, s.start), -min(0, upper_bound - s.stop))
-        for s, upper_bound in zip(slices, max_yx)
-    ])
+    padding = np.array(
+        [
+            (-min(0, s.start), -min(0, upper_bound - s.stop))
+            for s, upper_bound in zip(slices, max_yx)
+        ]
+    )
 
     # get the tile including all z stacks
     tile = pixels[:, y, x]
@@ -666,8 +673,28 @@ def set_areas_of_interest(
         # store tiles in an instance of TileLocations
         tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size)
     else:
+        tile_locs = get_center(shape)
         # one tile with its centre at the image's centre
-        yx_shape = shape[-2:]
-        tile_locs = (tuple(x // 2 for x in yx_shape),)
-        tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=yx_shape)
+    return tile_locs
+
+
+def get_center(pixels_shape: tuple[int]) -> tuple[tuple[int]]:
+    """
+    Calculate the center of the image and initialize a single tile location.
+
+    Parameters
+    ----------
+    pixels_shape : tuple of int
+        The shape of the pixel data array. The last two dimensions are assumed
+        to represent the Y and X axes.
+
+    Returns
+    -------
+    tile_locs : TileLocations
+        An instance of TileLocations containing a single tile with its center
+        located at the midpoint of the image.
+    """
+    yx_shape = pixels_shape[-2:]
+    tile_locs = (tuple(x // 2 for x in yx_shape),)
+    tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=yx_shape)
     return tile_locs
