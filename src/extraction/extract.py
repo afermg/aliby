@@ -47,9 +47,11 @@ def flatten(d: dict, pref: str = "") -> dict:
         The flattened dictionary.
     """
     return reduce(
-        lambda new_d, kv: isinstance(kv[1], dict)
-        and {**new_d, **flatten(kv[1], (*pref, kv[0]))}
-        or {**new_d, (*pref, kv[0]): kv[1]},
+        lambda new_d, kv: (
+            isinstance(kv[1], dict)
+            and {**new_d, **flatten(kv[1], (*pref, kv[0]))}
+            or {**new_d, (*pref, kv[0]): kv[1]}
+        ),
         d.items(),
         {},
     )
@@ -489,47 +491,69 @@ def format_extraction(
     pyarrow Table
         The formatted table.
     """
-    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
-    for inst, metrics in zip(*instructions_result):
+    names = ("tile", "label", "metric", "value")
+    formatted = {k: [] for k in names}
+    for inst, metrics in zip(*instructions_result, strict=True):
         tileid = inst[0][0]
         label = inst[0][
             -1
         ]  # To support both (tile_i, label) & (tile_i, stack_i, label)
         branch = "/".join(str(x) for x in inst[1])
         if isinstance(
-            metrics, int
+            metrics, (int, float)
         ):  # When an instruction results in a scalar (e.g., max2p5pc)
+            metric_fullname = f"{branch}/{inst[1][-1]}"
+
             formatted["tile"].append(tileid)
             formatted["label"].append(label)
-            formatted["branch"].append(branch)
-            formatted["metric"].append(inst[1][-1])
+            formatted["metric"].append(metric_fullname)
             formatted["value"].append(metrics)
         elif isinstance(
             metrics, dict
         ):  # When it results in a dictionary (e.g., cp_measure measurements)
             for k, values in metrics.items():
                 for value in values:
-                    formatted["branch"].append(branch)
-                    formatted["metric"].append(k)
+                    metric_fullname = f"{branch}/{k}"
                     formatted["value"].append(value)
                     formatted["tile"].append(tileid)
                     formatted["label"].append(label)
-        elif isinstance(metrics, list):  # When it results in a list of values (e.g., ?)
-            for value in metrics:
-                formatted["tile"].append(tileid)
-                formatted["label"].append(label)
-                formatted["branch"].append(branch)
-                formatted["metric"].append(inst[1][-1])
-                formatted["value"].append(value)
+                    formatted["metric"].append(metric_fullname)
         elif isinstance(metrics, np.ndarray):  # Embedders
             for (r, c), value in np.ndenumerate(metrics):
                 formatted["tile"].append(r)
                 formatted["label"].append(0)
                 formatted["metric"].append(f"X_{c}")
-                formatted["branch"].append("nahual")
                 formatted["value"].append(value)
+        else:
+            raise Exception(
+                f"the metrics are in an invalid value: {type(metrics)}. Valid values are int/float, dict or numpy array."
+            )
 
-    arrow_table = pa.Table.from_pydict(formatted)
+    pivoted_data = {}
+    for t, lbl, m, v in zip(
+        formatted["tile"],
+        formatted["label"],
+        formatted["metric"],
+        formatted["value"],
+        strict=True,
+    ):
+        key = (t, lbl)
+        if key not in pivoted_data:
+            pivoted_data[key] = {"tile": t, "label": lbl}
+        pivoted_data[key][m] = v
+
+    metrics_list = sorted(list(set(formatted["metric"])))
+    pivoted_dict = {"tile": [], "label": []}
+    for m in metrics_list:
+        pivoted_dict[m] = []
+
+    for row in pivoted_data.values():
+        pivoted_dict["tile"].append(row["tile"])
+        pivoted_dict["label"].append(row["label"])
+        for m in metrics_list:
+            pivoted_dict[m].append(row.get(m, None))
+
+    arrow_table = pa.Table.from_pydict(pivoted_dict)
     return arrow_table
 
 
@@ -549,38 +573,63 @@ def format_extraction_overlap(
     pyarrow Table
         The formatted table.
     """
-    formatted = {k: [] for k in ("tile", "label", "branch", "metric", "value")}
+    names = ("tile", "label", "metric", "value")
+    formatted = {k: [] for k in names}
     inverse_mappings = instructions_result[-1]
     instructions_result = instructions_result[:2]
-    for inst, metrics in zip(*instructions_result):
+    for inst, metrics in zip(*instructions_result, strict=True):
         tileid, stack_id, label = inst[0]
         branch = "/".join(str(x) for x in inst[1])
         inverse_mapping = inverse_mappings[tileid, stack_id]
         if isinstance(
-            metrics, int
-        ):  # When an instruction results in a scalaer (e.g., max2p5pc)
+            metrics, (int, float)
+        ):  # When an instruction results in a scalar (e.g., max2p5pc)
+            metric_fullname = f"{branch}/{inst[1][-1]}"
             formatted["tile"].append(tileid)
             formatted["label"].append(inverse_mapping[label])
-            formatted["branch"].append(branch)
-            formatted["metric"].append(inst[1][-1])
+            formatted["metric"].append(metric_fullname)
             formatted["value"].append(metrics)
         elif isinstance(
             metrics, dict
         ):  # When it results in a dictionary (e.g., cp_measure measurements)
             for k, values in metrics.items():
                 for value in values:
-                    formatted["branch"].append(branch)
-                    formatted["metric"].append(k)
+                    metric_fullname = f"{branch}/{k}"
                     formatted["value"].append(value)
                     formatted["tile"].append(tileid)
-                    formatted["label"].append(label)
+                    formatted["label"].append(inverse_mapping[label])
+                    formatted["metric"].append(metric_fullname)
         elif isinstance(metrics, list):  # When it results in a list of values (e.g., ?)
             for value in metrics:
+                metric_fullname = f"{branch}/{inst[1][-1]}"
                 formatted["tile"].append(tileid)
-                formatted["label"].append(label)
-                formatted["branch"].append(branch)
-                formatted["metric"].append(inst[1][-1])
+                formatted["label"].append(inverse_mapping[label])
+                formatted["metric"].append(metric_fullname)
                 formatted["value"].append(value)
 
-    arrow_table = pa.Table.from_pydict(formatted)
+    pivoted_data = {}
+    for t, lbl, m, v in zip(
+        formatted["tile"],
+        formatted["label"],
+        formatted["metric"],
+        formatted["value"],
+        strict=True,
+    ):
+        key = (t, lbl)
+        if key not in pivoted_data:
+            pivoted_data[key] = {"tile": t, "label": lbl}
+        pivoted_data[key][m] = v
+
+    metrics_list = sorted(list(set(formatted["metric"])))
+    pivoted_dict = {"tile": [], "label": []}
+    for m in metrics_list:
+        pivoted_dict[m] = []
+
+    for row in pivoted_data.values():
+        pivoted_dict["tile"].append(row["tile"])
+        pivoted_dict["label"].append(row["label"])
+        for m in metrics_list:
+            pivoted_dict[m].append(row.get(m, None))
+
+    arrow_table = pa.Table.from_pydict(pivoted_dict)
     return arrow_table
