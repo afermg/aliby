@@ -413,6 +413,7 @@ class Tiler(StepABC):
                 )
                 self.no_processed = drift_len
 
+        # Only calculate drift and correct it when explicitly indicated
         if not hasattr(self, "calculate_drift"):
             self.calculate_drift = False
 
