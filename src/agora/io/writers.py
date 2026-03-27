@@ -67,7 +67,7 @@ class CoreWriter:
         """Initialise by reading metadata."""
         self.file = file
         # load metadata from the h5 file
-        if Path(file).exists():
+        if Path(file).exists() and h5py.is_hdf5(file):
             self.metadata = read_meta_from_h5(file)
 
     def log(self, message: str, level: str = "warn"):
