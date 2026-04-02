@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+"""
+Use a list the depositions with the logfiles
+https://raw.githubusercontent.com/afermg/lots_of_images/refs/heads/master/metadata/manifest.csv
+
+"""
 
 from pathlib import Path
 
