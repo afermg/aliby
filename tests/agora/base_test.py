@@ -21,7 +21,7 @@ def test_file_exists(yaml_file):
 
 def test_from_yaml(yaml_file):
     # From yaml
-    params = DummyParameters.from_yaml(yaml_file)
+    DummyParameters.from_yaml(yaml_file)
 
 
 def test_from_stdin(yaml_file):

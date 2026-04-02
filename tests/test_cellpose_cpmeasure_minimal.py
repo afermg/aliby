@@ -82,7 +82,7 @@ def test_cellpose_minimal():
         },
         "save": ("segment_nuclei",),  # Which steps to write to disk
     }
-    result = run_pipeline_and_post(
+    run_pipeline_and_post(
         img_source=path,
         pipeline=pipeline,
         output_path="test_delme/",

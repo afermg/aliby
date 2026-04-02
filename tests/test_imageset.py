@@ -75,7 +75,7 @@ def test_imageset():
         "save": ("segment_nuclei",),
         "save_interval": 1,
     }
-    result = run_pipeline_and_post(
+    run_pipeline_and_post(
         img_source=path,
         pipeline=pipeline,
         output_path="./",

@@ -33,7 +33,6 @@ import re
 import typing as t
 import warnings
 from functools import lru_cache, partial
-from itertools import product
 from typing import Callable
 
 import dask.array as da
@@ -214,7 +213,7 @@ class Tiler(StepABC):
         super().__init__(parameters)
         self.pixels = pixels
 
-        params_d = parameters.to_dict()
+        parameters.to_dict()
 
         # if "position_name" in params_d:  # SwainLab Experiment
         # from aliby.tile.meta import find_channel_swainlab

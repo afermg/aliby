@@ -1,10 +1,7 @@
 #!/usr/bin/env jupyter
 """Run a deep learning embedding via Nahual."""
 
-import os
-import shutil
 from functools import partial
-from itertools import combinations
 from pathlib import Path
 from time import strftime
 
@@ -17,7 +14,7 @@ from aliby.pipe import run_pipeline_and_post
 
 dataset = "araceli"
 datasets_path = Path(
-    f"/datastore/shared/araceli_phenix/BR00141077_split_paired/model_148/"
+    "/datastore/shared/araceli_phenix/BR00141077_split_paired/model_148/"
 )
 base_output_path = Path("/datastore/shared/aliby_output/")
 dataset_paths = [x for x in datasets_path.glob("*/") if x.name.endswith("wholecrop")]

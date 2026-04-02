@@ -11,7 +11,7 @@ from extraction.extract import extract_tree_multi, process_tree_masks
 @pytest.mark.skip(reason="broken")
 def test_correlation():
     masks = [np.zeros((6, 100, 100), dtype=int)]
-    ones = np.ones((15, 15))
+    np.ones((15, 15))
     for i in range(6):
         masks[0][i, 15 * i : 15 * (i + 1), 15 * i : 15 * (i + 1)] = i + 1
     rng = np.random.default_rng(1)

@@ -4,7 +4,6 @@
 from concurrent.futures import ProcessPoolExecutor
 from itertools import combinations, product
 from pathlib import Path
-from time import perf_counter
 
 from aliby.io.dataset import dispatch_dataset
 from aliby.pipe import run_pipeline_and_post

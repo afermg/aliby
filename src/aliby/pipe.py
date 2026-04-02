@@ -366,7 +366,7 @@ def run_pipeline_and_post(
 
     profiles = None
     post_results = None
-    ntps = pipeline["io"].get("ntps", 2)
+    pipeline["io"].get("ntps", 2)
 
     # Main processing loop
     if overwrite or not profiles_file.exists():
