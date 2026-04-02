@@ -82,6 +82,7 @@
 
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
+          package = pkgs.prek;
           hooks = {
             treefmt = {
               enable = true;
