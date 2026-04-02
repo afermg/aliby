@@ -46,18 +46,18 @@ defined using:
 
 ```json
 {
-    "description": {
-        "trigger_startswith": "Experiment details:"
-    },
-    "stop": {
-        "trigger_startswith": "Tags:",
-        "type": "stop"
-    }
+  "description": {
+    "trigger_startswith": "Experiment details:"
+  },
+  "stop": {
+    "trigger_startswith": "Tags:",
+    "type": "stop"
+  }
 }
 ```
 
 This tells the parser to fill the "description" field of the parsed result with
-text on lines *after* that starting with the text "Experiment details:", and
+text on lines _after_ that starting with the text "Experiment details:", and
 then tells the parser to terminate parsing whenever it encounters a line that
 starts with the text "Tags:". If you wanted it to include the trigger line, you
 would specify `"skip": "false"` as an additional property for `"description"`.
@@ -67,13 +67,13 @@ just need to change the type to "list":
 
 ```json
 {
-    "description": {
-        "trigger_startswith": "Experiment details:"
-    },
-    "tags": {
-        "trigger_startswith": "Tags:",
-        "type": "list"
-    }
+  "description": {
+    "trigger_startswith": "Experiment details:"
+  },
+  "tags": {
+    "trigger_startswith": "Tags:",
+    "type": "list"
+  }
 }
 ```
 
@@ -81,11 +81,11 @@ To extract the microscope name, we can make use of the "regex" type:
 
 ```json
 {
-    "microscope": {
-        "trigger_startswith": "Microscope:",
-        "type": "regex",
-        "regex": "^Microscope:\\s*(.*)$"
-    }
+  "microscope": {
+    "trigger_startswith": "Microscope:",
+    "type": "regex",
+    "regex": "^Microscope:\\s*(.*)$"
+  }
 }
 ```
 
@@ -97,12 +97,12 @@ to a Python `datetime` object:
 
 ```json
 {
-    "date": {
-        "trigger_startswith": "Date:",
-        "type": "regex",
-        "regex": "^.*(\\d{2} [A-Z][a-z]{2} \\d{4})$",
-        "map": "datetime:%d %b %Y"
-    }
+  "date": {
+    "trigger_startswith": "Date:",
+    "type": "regex",
+    "regex": "^.*(\\d{2} [A-Z][a-z]{2} \\d{4})$",
+    "map": "datetime:%d %b %Y"
+  }
 }
 ```
 
@@ -110,24 +110,24 @@ Putting this all together gives us the following grammar:
 
 ```json
 {
-    "date": {
-        "trigger_startswith": "Date:",
-        "type": "regex",
-        "regex": "^.*(\\d{2} [A-Z][a-z]{2} \\d{4})$",
-        "map": "datetime:%d %b %Y"
-    },
-    "microscope": {
-        "trigger_startswith": "Microscope:",
-        "type": "regex",
-        "regex": "^Microscope:\\s*(.*)$"
-    },
-    "description": {
-        "trigger_startswith": "Experiment details:"
-    },
-    "tags": {
-        "trigger_startswith": "Tags:",
-        "type": "list"
-    }
+  "date": {
+    "trigger_startswith": "Date:",
+    "type": "regex",
+    "regex": "^.*(\\d{2} [A-Z][a-z]{2} \\d{4})$",
+    "map": "datetime:%d %b %Y"
+  },
+  "microscope": {
+    "trigger_startswith": "Microscope:",
+    "type": "regex",
+    "regex": "^Microscope:\\s*(.*)$"
+  },
+  "description": {
+    "trigger_startswith": "Experiment details:"
+  },
+  "tags": {
+    "trigger_startswith": "Tags:",
+    "type": "list"
+  }
 }
 ```
 
