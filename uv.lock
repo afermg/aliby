@@ -49,8 +49,10 @@ dev = [
     { name = "ruff" },
     { name = "ruff-lsp" },
 ]
-test = [
+examples = [
     { name = "pooch" },
+]
+test = [
     { name = "pytest" },
 ]
 
@@ -81,10 +83,8 @@ dev = [
     { name = "ruff", specifier = ">=0.3.2" },
     { name = "ruff-lsp", specifier = ">=0.0.52" },
 ]
-test = [
-    { name = "pooch", specifier = ">=1.8.2" },
-    { name = "pytest", specifier = ">=8.4.2" },
-]
+examples = [{ name = "pooch", specifier = ">=1.8.2" }]
+test = [{ name = "pytest", specifier = ">=8.4.2" }]
 
 [[package]]
 name = "anyio"
