@@ -14,7 +14,7 @@ from aliby.io.dataset import DatasetDir, DatasetZarr, dispatch_dataset
 
 
 DATA_DIR = Path("/datastore/alan/aliby/test_dataset/data/")
-if not DATA_DIR.exists()
+if not DATA_DIR.exists():
     marker = "aliby_tests/"
     FILES = pooch.retrieve(
         url="https://zenodo.org/api/records/19411429/files/aliby_test_dataset.tar.gz/content",
