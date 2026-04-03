@@ -25,6 +25,7 @@ except Exception as _:
         processor=pooch.Untar(extract_dir="aliby_tests"),
     )
     DATA_DIR = Path(TEST_FILES[0].split(marker)[0] + marker)
+    print(f"DATA_DIR is {DATA_DIR} and exists? {DATA_DIR.exists()}")
 regex = ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"  # Our format
 capture_order = "WFC"  # Plate, Well, Channel Foci
 
