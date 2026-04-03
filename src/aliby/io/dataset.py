@@ -42,10 +42,7 @@ def dispatch_dataset(
         expt_path = Path(expt_id)
         assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
         if is_zarr is True:  # data in multiple folders, such as zarr
-            if is_monozarr:
-                return DatasetMonoZarr(expt_path, **kwargs)
-            else:
-                return DatasetZarr(expt_path, **kwargs)
+            return DatasetZarr(expt_path, **kwargs)
         else:  # It is a directory containing all images inside (possibly nested)
             return DatasetDir(expt_path, **kwargs)
 
@@ -111,8 +108,8 @@ class DatasetLocalABC(ABC):
         pass
 
 
-class DatasetMonoZarr(DatasetLocalABC):
-    """The images are arrays at the root level of a zarr file."""
+class DatasetZarr(DatasetLocalABC):
+    """The images are groups at the root level of a zarr directory."""
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
@@ -126,37 +123,7 @@ class DatasetMonoZarr(DatasetLocalABC):
                     name = entry.name
                     positions.append({"path": self.path, "key": name})
 
-        # result = {k:  for k in tqdm(position_ids)}
         return positions
-
-
-class DatasetZarr(DatasetLocalABC):
-    """Find paths to a data set, comprising multiple images in different folders.
-
-    Each position (or site) is one zarr file.
-    """
-
-    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
-        super().__init__(dpath)
-
-    def get_position_ids(self):
-        """
-        Return a dict of file paths for each position.
-
-        FUTURE 3.12 use pathlib is_junction to pick Dir or File
-        """
-        position_ids_dict = {
-            item.name: item
-            for item in self.path.glob("*/")
-            if item.is_dir()
-            and any(
-                path
-                for suffix in self._valid_suffixes
-                for path in item.glob(f"*.{suffix}")
-            )
-            or item.suffix[1:] in self._valid_suffixes
-        }
-        return position_ids_dict
 
 
 class DatasetDir(DatasetLocalABC):
@@ -251,7 +218,6 @@ def scan_directory(path: str) -> list[str]:
         for fname in files:
             entry = f"{root}/{fname}"
             if not entry.startswith("."):
-                # path_or_name = getattr(entry, id_type)
                 paths.append(entry)
 
     return paths

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 import pooch
-from aliby.io.dataset import DatasetDir, DatasetMonoZarr, dispatch_dataset, DatasetZarr
+from aliby.io.dataset import DatasetDir, DatasetZarr, dispatch_dataset
 
 
 try:
@@ -18,31 +18,27 @@ try:
 except Exception as _:
     print("Missing local files, pulling from Zenodo")
     marker = "aliby_tests/"
-    TEST_DATASET_DIRS = set(
-        [
-            Path(x.split(marker)[0] + marker)
-            for x in pooch.retrieve(
-                url="https://zenodo.org/api/records/19410594/files/aliby_test_dataset.tar.gz/content",
-                known_hash="466689fe36cc781bc684278dea61b00b690c41ecad65f978dde4ca565d12a3b2",
-                fname="aliby_test_dataset.tar.gz",
-                processor=pooch.Untar(extract_dir="aliby_tests"),
-            )
-        ]
+    FILES = pooch.retrieve(
+        url="https://zenodo.org/api/records/19411429/files/aliby_test_dataset.tar.gz/content",
+        known_hash="3a8b1b7b362f002098ba44e65622862057cfe46f0b459514bf270349c8bce4a7",
+        fname="aliby_test_dataset.tar.gz",
+        processor=pooch.Untar(extract_dir="aliby_tests"),
     )
+    DATA_DIR = Path(FILES[0].split(marker)[0] + marker)
 REGEX_PARAMETERS = (
     (
         "crop_cellpainting_256",
-        r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+)\.tif",
+        ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif",
         "WFC",
     ),
     (
         "crop_timeseries_alcatras_round_diff_dims_293",
-        r".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+)\.tif",
+        ".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+).tif",
         "FTCZ",
     ),
     (
         "crop_timeseries_alcatras_square_same_channels_293",
-        r".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+)\.tif",
+        ".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+).tif",
         "FTCZ",
     ),
 )
@@ -60,16 +56,10 @@ def test_dispatch_dataset_types(dataset, regex, capture_order):
     assert isinstance(dset_dir, DatasetDir)
 
 
-@pytest.mark.parametrize("dataset", [f"{x[0]}_zarr" for x in REGEX_PARAMETERS])
+@pytest.mark.parametrize("dataset", [f"{x[0]}.zarr" for x in REGEX_PARAMETERS])
 def test_dispatch_dataset_zarr(dataset):
-    dset_zarr = dispatch_dataset(DATA_DIR / dataset, is_zarr=True)
-    assert isinstance(dset_zarr, DatasetZarr)
-
-
-@pytest.mark.parametrize("dataset", [f"{x[0]}.zarrs" for x in REGEX_PARAMETERS])
-def test_dispatch_dataset_monozarr(dataset):
     dset_monozarr = dispatch_dataset(DATA_DIR / dataset, is_zarr=True, is_monozarr=True)
-    assert isinstance(dset_monozarr, DatasetMonoZarr)
+    assert isinstance(dset_monozarr, DatasetZarr)
 
 
 # --- DatasetDir Tests ---
@@ -86,20 +76,10 @@ def test_dataset_multifile(dataset, regex, capture_order):
     dataset.get_position_ids()  # This has an internal assert
 
 
-# --- DatasetMonoZarr Tests ---
+# --- DatasetoZarr Tests ---
 
 
 @pytest.mark.parametrize("dataset", [f"{x[0]}.zarr" for x in REGEX_PARAMETERS])
-def test_dataset_monozarr(dataset):
-    dataset = DatasetMonoZarr(DATA_DIR / dataset)
-
-    dataset.get_position_ids()
-
-
-# --- DatasetZarr Tests ---
-
-
-@pytest.mark.parametrize("dataset", [f"{x[0]}_zarrs" for x in REGEX_PARAMETERS])
 def test_dataset_zarr(dataset):
     dataset = DatasetZarr(DATA_DIR / dataset)
 
