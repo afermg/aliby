@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Dataset is a group of classes to manage multiple types of experiments:
- - Remote experiments on an OMERO server (located in src/aliby/io/omero.py)
  - Local experiments in a multidimensional OME-TIFF image containing the metadata
  - Local experiments in a directory containing multiple positions in independent
 images with or without metadata
@@ -20,47 +19,33 @@ from pathlib import Path
 from tqdm import tqdm
 
 
-def dispatch_dataset(
-    expt_id: int or str, is_zarr: bool = False, is_monozarr: bool = False, **kwargs
-):
+def dispatch_dataset(expt_id: int or str, is_zarr: bool = False, **kwargs):
     """
     Find paths to the data.
-
-    Connect to OMERO if data is remotely available.
 
     Parameters
     ----------
     expt_id: int or str
-        To identify the data, either an OMERO ID or an OME-TIFF file
+        To identify the data, either an OME-TIFF file
         or a local directory.
     zarr: str or None
         Determines whether to use a zarr
 
     Returns
     -------
-    A callable Dataset instance, either network-dependent or local.
+    A callable Dataset instance.
     """
-    if isinstance(expt_id, int):
-        from aliby.io.omero import Dataset
-
-        # data available on an Omero server
-        return Dataset(expt_id, **kwargs)
-    elif isinstance(expt_id, (str, Path)):
+    if isinstance(expt_id, (str, Path)):
         # data available locally
         expt_path = Path(expt_id)
         assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
         if is_zarr is True:  # data in multiple folders, such as zarr
-            if is_monozarr:
-                return DatasetMonoZarr(expt_path, **kwargs)
-            else:
-                return DatasetZarr(expt_path, **kwargs)
+            return DatasetZarr(expt_path, **kwargs)
         else:  # It is a directory containing all images inside (possibly nested)
             return DatasetDir(expt_path, **kwargs)
 
         raise Exception(f"Cannot dispatch dataset.. Invalid input path {expt_path}.")
-    raise Exception(
-        "Invalid experiment id, it must be the id of an omero server or a Path"
-    )
+    raise Exception("Invalid experiment id, it must be a Path")
 
 
 class DatasetLocalABC(ABC):
@@ -121,8 +106,8 @@ class DatasetLocalABC(ABC):
         pass
 
 
-class DatasetMonoZarr(DatasetLocalABC):
-    """The images are arrays at the root level of a zarr file."""
+class DatasetZarr(DatasetLocalABC):
+    """The images are groups at the root level of a zarr directory."""
 
     def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
         super().__init__(dpath)
@@ -136,37 +121,7 @@ class DatasetMonoZarr(DatasetLocalABC):
                     name = entry.name
                     positions.append({"path": self.path, "key": name})
 
-        # result = {k:  for k in tqdm(position_ids)}
         return positions
-
-
-class DatasetZarr(DatasetLocalABC):
-    """Find paths to a data set, comprising multiple images in different folders.
-
-    Each position (or site) is one zarr file.
-    """
-
-    def __init__(self, dpath: t.Union[str, Path], *args, **kwargs):
-        super().__init__(dpath)
-
-    def get_position_ids(self):
-        """
-        Return a dict of file paths for each position.
-
-        FUTURE 3.12 use pathlib is_junction to pick Dir or File
-        """
-        position_ids_dict = {
-            item.name: item
-            for item in self.path.glob("*/")
-            if item.is_dir()
-            and any(
-                path
-                for suffix in self._valid_suffixes
-                for path in item.glob(f"*.{suffix}")
-            )
-            or item.suffix[1:] in self._valid_suffixes
-        }
-        return position_ids_dict
 
 
 class DatasetDir(DatasetLocalABC):
@@ -208,8 +163,7 @@ def sort_groups_by_regex(
 ) -> dict[str, str | tuple | list]:
     regex_ = re.compile(regex)
 
-    # Currently scan_directory only checks one level.
-    # TODO make recursive? specify local vs global paths?
+    # TODO Improve efficiency by capturing recursively if data is nested in dicts
     str_paths = scan_directory(datasets_path)
 
     print("Capturing regex")
@@ -255,14 +209,14 @@ def sort_groups_by_regex(
     return position_ids
 
 
-def scan_directory(path: str, id_type: str = "name") -> list[str]:
+def scan_directory(path: str) -> list[str]:
     """Fast directory scanning."""
     paths = []
-    with os.scandir(path) as it:
-        for entry in tqdm(it, desc="Reading files"):
-            if not entry.name.startswith("."):
-                path_or_name = getattr(entry, id_type)
-                paths.append(path_or_name)
+    for root, dirs, files in tqdm(os.walk(path), desc="Reading files"):
+        for fname in files:
+            entry = f"{root}/{fname}"
+            if not entry.startswith("."):
+                paths.append(entry)
 
     return paths
 

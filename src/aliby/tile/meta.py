@@ -30,9 +30,4 @@ def find_channel_swainlab(meta: dict[str], position_name: str, **kwargs):
         # image meta data contains channels for that image
         channels = meta.get("channels", list(range(meta.get("size_c", 0))))
 
-    # sort channels based on OMERO's channel order
-    if "OMERO_channels" in kwargs:
-        channels = [
-            ch for och in kwargs["OMERO_channels"] for ch in channels if ch == och
-        ]
     return channels

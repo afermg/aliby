@@ -28,23 +28,6 @@
   "setup": {
     "trigger_startswith": "Microscope setup for used channels:"
   },
-  "omero_project": {
-    "trigger_startswith": "Omero project:",
-    "type": "regex",
-    "regex": "^(.*)$",
-    "skip": true
-  },
-  "omero_tags": {
-    "trigger_startswith": "Omero tags:",
-    "type": "list"
-  },
-  "omero_tags_stop": {
-    "trigger_startswith": "PFS is locked"
-  },
-  "omero_tag_descriptions": {
-    "trigger_startswith": "Omero tag descriptions:",
-    "type": "list"
-  },
   "expt_start": {
     "trigger_startswith": "Experiment started at:",
     "type": "regex",

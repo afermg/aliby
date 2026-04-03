@@ -185,7 +185,6 @@ class Tiler(StepABC):
     Divide images into smaller tiles for faster processing.
 
     Find tiles and re-register images if they drift.
-    Fetch images from an OMERO server if necessary.
 
     Uses an Image instance, which lazily provides the pixel data,
     and, as an independent argument, meta.
