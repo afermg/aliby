@@ -19,9 +19,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 
-def dispatch_dataset(
-    expt_id: int or str, is_zarr: bool = False, is_monozarr: bool = False, **kwargs
-):
+def dispatch_dataset(expt_id: int or str, is_zarr: bool = False, **kwargs):
     """
     Find paths to the data.
 
