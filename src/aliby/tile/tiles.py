@@ -121,7 +121,7 @@ class Tile:
 
     def as_tile(self, tp: int):
         """
-        Return tile in the OMERO tile format of x, y, w, h.
+        Return tile in the format of x, y, w, h.
 
         Here x, y are at the bottom left corner of the tile
         and w and h are the tile width and height.

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Dataset is a group of classes to manage multiple types of experiments:
- - Remote experiments on an OMERO server (located in src/aliby/io/omero.py)
  - Local experiments in a multidimensional OME-TIFF image containing the metadata
  - Local experiments in a directory containing multiple positions in independent
 images with or without metadata
@@ -26,26 +25,19 @@ def dispatch_dataset(
     """
     Find paths to the data.
 
-    Connect to OMERO if data is remotely available.
-
     Parameters
     ----------
     expt_id: int or str
-        To identify the data, either an OMERO ID or an OME-TIFF file
+        To identify the data, either an OME-TIFF file
         or a local directory.
     zarr: str or None
         Determines whether to use a zarr
 
     Returns
     -------
-    A callable Dataset instance, either network-dependent or local.
+    A callable Dataset instance.
     """
-    if isinstance(expt_id, int):
-        from aliby.io.omero import Dataset
-
-        # data available on an Omero server
-        return Dataset(expt_id, **kwargs)
-    elif isinstance(expt_id, (str, Path)):
+    if isinstance(expt_id, (str, Path)):
         # data available locally
         expt_path = Path(expt_id)
         assert expt_path.exists(), f"Experiment path does not exist: {expt_path}"
@@ -58,9 +50,7 @@ def dispatch_dataset(
             return DatasetDir(expt_path, **kwargs)
 
         raise Exception(f"Cannot dispatch dataset.. Invalid input path {expt_path}.")
-    raise Exception(
-        "Invalid experiment id, it must be the id of an omero server or a Path"
-    )
+    raise Exception("Invalid experiment id, it must be a Path")
 
 
 class DatasetLocalABC(ABC):

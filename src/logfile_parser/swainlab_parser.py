@@ -107,10 +107,7 @@ def parse_general(line: str, meta: t.Dict) -> None:
     bits = [bit.strip() for bit in line.split(":")]
     if re.search("[a-zA-Z+]", bits[0]):
         meta_key = bits[0].lower().replace(" ", "_")
-        if meta_key == "omero_tags":
-            meta[meta_key] = bits[1].split(",")
-        else:
-            meta[meta_key] = [":".join(bits[1:])]
+        meta[meta_key] = [":".join(bits[1:])]
 
 
 def parse_acquisition(bits: t.List[str], meta: t.Dict) -> None:

@@ -12,13 +12,10 @@ from logfile_parser.swainlab_parser import parse_swainlab_logs
 class MetaData:
     """Metadata process to load and parse log files."""
 
-    def __init__(self, log_dir, OMERO_channels: t.List[str] = None):
+    def __init__(self, log_dir):
         """Initialise by loading and parsing microscopy logs."""
         self.log_dir = log_dir
         self.full = parse_microscopy_logs(log_dir)
-        if OMERO_channels is not None:
-            # OMERO overrules metadata from logs
-            self.full["channels"] = OMERO_channels
         # add channels per position
         if "legacy" in self.full:
             self.full["channels_by_position"] = (
