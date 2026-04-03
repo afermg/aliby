@@ -1,0 +1,27 @@
+#+TITLE: Testing aliby
+#+OPTIONS: ^:nil num:nil toc:nil author:nil date:nil
+
+* Modalities covered
+We aim to support a specific set of imaging modalities and deployment modes:
+** By input structure
+- All local =tif= files, where names indicate different channels and/or z-stacks.
+- Multidimensional Zarr images
+*** Under revision
+- 
+** By data modality
+- Time-series
+- Fluorescence (e.g., Cell Painting, GFP)
+** By model
+- CellPose + cp_measure
+- Cellpose (via nahual) + cp_measure
+** By data structure
+- Process one large image at once
+- Multiple tiles/crops
+** Cell type
+aliby is agnostic to the cells, but since it was originally developed for yeast time lapse microscopy it has a specific model for those.
+- Mammalian/bacterial
+  - Cellpose + cp_measure
+  - Deep Learning models (via Nahual)
+- Yeast
+  - BABY for segmentation & tracking
+** 

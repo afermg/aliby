@@ -3,26 +3,26 @@
     "trigger_startswith": "Channels:",
     "type": "table",
     "column_map": {
-      "Channel name": ["channel","str"],
-      "Exposure time": ["exposure","int"],
-      "Skip": ["skip","int"],
-      "Z sect.": ["zsect","int"],
-      "Start time": ["start_time","int"],
-      "Camera mode": ["camera_mode","int"],
-      "EM gain": ["em_gain","int"],
-      "Voltage": ["voltage","float"]
+      "Channel name": ["channel", "str"],
+      "Exposure time": ["exposure", "int"],
+      "Skip": ["skip", "int"],
+      "Z sect.": ["zsect", "int"],
+      "Start time": ["start_time", "int"],
+      "Camera mode": ["camera_mode", "int"],
+      "EM gain": ["em_gain", "int"],
+      "Voltage": ["voltage", "float"]
     }
   },
   "zsectioning": {
     "trigger_startswith": "Z_sectioning:",
     "type": "table",
     "column_map": {
-      "Sections": ["nsections","int"],
-      "Spacing": ["spacing","float"],
-      "PFSon?": ["pfson","bool"],
-      "AnyZ?": ["anyz","bool"],
-      "Drift": ["drift","int"],
-      "Method": ["zmethod","int"]
+      "Sections": ["nsections", "int"],
+      "Spacing": ["spacing", "float"],
+      "PFSon?": ["pfson", "bool"],
+      "AnyZ?": ["anyz", "bool"],
+      "Drift": ["drift", "int"],
+      "Method": ["zmethod", "int"]
     }
   },
   "time_settings": {
@@ -30,22 +30,22 @@
     "type": "table",
     "has_header": false,
     "column_map": [
-      ["istimelapse","bool"],
-      ["timeinterval","int"],
-      ["ntimepoints","int"],
-      ["totaltime","int"]
+      ["istimelapse", "bool"],
+      ["timeinterval", "int"],
+      ["ntimepoints", "int"],
+      ["totaltime", "int"]
     ]
   },
   "positions": {
     "trigger_startswith": "Points:",
     "type": "table",
     "column_map": {
-      "Position name": ["posname","str"],
-      "X position": ["xpos","float"],
-      "Y position": ["ypos","float"],
-      "Z position": ["zpos","float"],
-      "PFS offset": ["pfsoffset","float"],
-      "Group": ["group","int"]
+      "Position name": ["posname", "str"],
+      "X position": ["xpos", "float"],
+      "Y position": ["ypos", "float"],
+      "Z position": ["zpos", "float"],
+      "PFS offset": ["pfsoffset", "float"],
+      "Group": ["group", "int"]
     },
     "default_map": "int"
   },
@@ -59,10 +59,10 @@
     "trigger_startswith": "Pump states at beginning of experiment:",
     "type": "table",
     "column_map": {
-      "Pump port": ["pump_port","str"],
-      "Diameter": ["syringe_diameter","float"],
-      "Current rate": ["flowrate","float"],
-      "Direction": ["flowdirection","str"],
+      "Pump port": ["pump_port", "str"],
+      "Diameter": ["syringe_diameter", "float"],
+      "Current rate": ["flowrate", "float"],
+      "Direction": ["flowdirection", "str"],
       "Running": ["isrunning", "bool"],
       "Contents": ["contents", "str"]
     }

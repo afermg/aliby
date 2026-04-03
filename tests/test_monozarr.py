@@ -14,6 +14,7 @@ store_path = "/work/datasets/jump_toy/zstd.zarr/"
         "/work/datasets/jump_toy/std.zarr",
     ],
 )
+@pytest.mark.skip(reason="Needs local dataset")
 def test_monozarr_position(store_path: str):
     dataset = DatasetMonoZarr(store_path, is_monozarr=True)
 

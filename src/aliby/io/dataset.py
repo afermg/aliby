@@ -242,10 +242,12 @@ def sort_groups_by_regex(
         if not isinstance(key, str):
             key = "__".join(key)
 
-        position_ids.append({
-            "key": key,
-            "path": [str(Path(datasets_path) / file) for file in files],
-        })
+        position_ids.append(
+            {
+                "key": key,
+                "path": [str(Path(datasets_path) / file) for file in files],
+            }
+        )
 
     assert len(position_ids), "No files were found."
 

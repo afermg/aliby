@@ -64,15 +64,12 @@ def dispatch_segmenter(
             from cellpose.models import CellposeModel
 
             # Meta parameters
-            model_type = kind
             setup_params = kwargs.get("setup_params", {})
             gpu = setup_params.pop("gpu", True)
             device = setup_params.pop("device", None)
 
             # use custom models if fullpath is provided
             pretrained = {}
-            if model_type.startswith("/"):
-                pretrained["pretrained_model"] = model_type
 
             model = CellposeModel(
                 **pretrained,
@@ -82,12 +79,23 @@ def dispatch_segmenter(
 
             # ensure it returns only masks
             # TODO generalise so it does not assume a 1-tile file
-            def segment(*args) -> list[np.ndarray]:
+            def segment(pixels: np.ndarray) -> list[np.ndarray]:
+                """Preprocess the input numpy array to feed into Cellpose.
+                Assumes FCZYX pixels shape."""
+                z_size = pixels.shape[2]
+                do_3D = z_size > 1
+                pixels = pixels[:, channel_to_segment]  # FZYX
+                stitch_threshold = 0.01
+                if (
+                    not do_3D
+                ):  # Cellpose gets annoying if we keep the z-dimension with one stack
+                    pixels = pixels[:, 0]  # FYX
+                    stitch_threshold = 0.0
                 result = model.eval(
-                    *args,
-                    z_axis=0,
+                    pixels,
+                    do_3D=do_3D,
+                    stitch_threshold=stitch_threshold,
                     normalize=dict(norm3D=False),
-                    stitch_threshold=0.1,
                     **kwargs,
                 )
                 labels = result[0]
@@ -104,7 +112,7 @@ def dispatch_segmenter(
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
 
-                return labels[np.newaxis]  # Add "tile" dimension
+                return labels
 
         case _:
             raise Exception(f"Invalid segmentation method {kind}")

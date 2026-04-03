@@ -55,4 +55,4 @@ def write_parquet(
     this_outdir.mkdir(exist_ok=True, parents=True)
     out_filepath = this_outdir / f"{filename}.parquet"
 
-    write_table(result, out_filepath)
+    write_table(result, out_filepath, compression="zstd")

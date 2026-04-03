@@ -57,7 +57,7 @@ def init_step(
                 "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**{**parameters["segmenter_kwargs"]})
+            step = dispatch_segmenter(**parameters["segmenter_kwargs"])
         case "track":
             if parameters["kind"].endswith(
                 "baby"
@@ -258,8 +258,10 @@ def pipeline_step(
             step_name.startswith("segment")
             and parameters["segmenter_kwargs"]["kind"] != "baby"
         ):  # Pass correct images from tiler
-            source_step, method, param_name = passed_methods.get(step_name)
-            args = getattr(state["fn"][source_step], method)(tp, parameters[param_name])
+            source_step, method = passed_methods.get(step_name)
+            args = (
+                getattr(state["fn"][source_step], method)(tp),
+            )  # This assumes that the source step is an object that contains the data
 
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
@@ -295,8 +297,10 @@ def _validate_pipeline(pipeline: dict):
     """
     Sanity checks before computationally expensive operations.
     """
-    steps_to_write = pipeline.get("save")
-    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"])
+    steps_to_write: list[str] = pipeline.get("save")
+    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"]), (
+        "At least one step should be written"
+    )
     # Deprecated: ntps should be autodetected
     # assert "ntps" in pipeline.get("io", {}), (
     #     "You must pass the number of time points to analyse."
@@ -331,8 +335,8 @@ def run_pipeline_return_state(
 
 def run_pipeline_and_post(
     pipeline: dict,
-    img_source: str or list[str],
-    output_path: Path = None,
+    img_source: str | Path | list[str],
+    output_path: str | Path = None,
     fov: str = None,
     overwrite: bool = True,
     logger=None,
@@ -354,14 +358,15 @@ def run_pipeline_and_post(
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
     if output_path is None:
-        output_path = Path(pipeline["io"]["output_path"])
+        output_path = pipeline["io"]["output_path"]
 
+    output_path = Path(output_path)
     steps_dir = output_path / "steps" / fov
     profiles_file = output_path / "profiles" / f"{fov}.parquet"
 
     profiles = None
     post_results = None
-    ntps = pipeline["io"].get("ntps", 2)
+    pipeline["io"].get("ntps", 2)
 
     # Main processing loop
     if overwrite or not profiles_file.exists():
@@ -374,16 +379,16 @@ def run_pipeline_and_post(
         # Save files
         if len(profiles):
             profiles_file.parent.mkdir(parents=True, exist_ok=True)
-            pyarrow.parquet.write_table(profiles, profiles_file)
+            pyarrow.parquet.write_table(profiles, profiles_file, compression="zstd")
 
         # Run global processing steps (post-processing)
         post_results = {}
 
-        ntps = pipeline["io"]["ntps"]
-        if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
-            return profiles, post_results
+        # ntps = pipeline["io"]["ntps"]
+        # if ntps == 1:  # Temporarily do not perform global operations on non-timeseries
+        #     return profiles, post_results
 
-        for step_name, parameters in pipeline["global_steps"].items():
+        for step_name, parameters in pipeline.get("global_steps", {}).items():
             associated_data = [
                 x for x in pipeline["global_passed_data"] if x.startswith(step_name)
             ]
@@ -400,17 +405,17 @@ def run_pipeline_and_post(
                 )
                 post_results[output_name] = state["fn"](input_data=input_data)
 
-        # Save global steps into files (per-tp steps are saved as they go, not at the end)
-        if step_name in pipeline["save"]:
-            write_fn = dispatch_write_fn(step_name)
-            for output_pathname in post_results:
-                if output_pathname.startswith(step_name):
-                    write_fn(
-                        post_results[output_pathname],
-                        output_path,
-                        subpath=output_pathname,
-                        filename=fov,
-                    )
+            # Save global steps into files (per-tp steps are saved as they go, not at the end)
+            if step_name in pipeline["save"]:
+                write_fn = dispatch_write_fn(step_name)
+                for output_pathname in post_results:
+                    if output_pathname.startswith(step_name):
+                        write_fn(
+                            post_results[output_pathname],
+                            output_path,
+                            subpath=output_pathname,
+                            filename=fov,
+                        )
     else:
         if logger is not None:
             logger.log(f"Skipping {fov}, as it exists")
@@ -423,15 +428,14 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     # We assume that extraction steps start with "ext"
     profiles = pyarrow.Table.from_pylist(
         [],
-        schema=pa.schema([
-            pa.field("tile", pa.int64()),
-            pa.field("label", pa.int64()),
-            pa.field("branch", pa.string()),
-            pa.field("metric", pa.string()),
-            pa.field("value", pa.float64()),
-            pa.field("object", pa.string()),
-            pa.field("tp", pa.int64()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("metadata_tile", pa.int64()),
+                pa.field("metadata_label", pa.int64()),
+                pa.field("metadata_object", pa.string()),
+                pa.field("metadata_tp", pa.int64()),
+            ]
+        ),
     )
     feature_steps = [
         step_name
@@ -447,15 +451,24 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                 ext_output = (cycle((("__", "__"),)), (ext_output,))
 
             table: pyarrow.PyTable = format_extraction(ext_output)
+            # Renamae map
+            rename_map = {
+                "tile": "metadata_tile",
+                "label": "metadata_label",
+            }
+            new_names = [rename_map.get(c, c) for c in table.column_names]
+            table = table.rename_columns(new_names)
+
             if len(table):  # Cover case whence measurements are empty
+                # object name (cp_measure) or model name (nahual embedders)
                 table = table.append_column(
-                    "object",
+                    "metadata_object",
                     pyarrow.array(
                         [ext_step.split("_")[-1]] * len(table), pyarrow.string()
                     ),
                 )
                 table = table.append_column(
-                    "tp",
+                    "metadata_tp",
                     pyarrow.array([tp] * len(table), pyarrow.uint8()),
                 )
                 data.append(table)

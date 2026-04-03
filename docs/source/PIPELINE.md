@@ -4,32 +4,34 @@ You can run the analysis pipeline either via the command line interface (CLI) or
 
 ## CLI
 
-On a CLI, you can use the `aliby-run` command.  This command takes options as follows:
+On a CLI, you can use the `aliby-run` command. This command takes options as follows:
+
 - `--host`: Address of image-hosting server.
 - `--username`: Username to access image-hosting server.
 - `--password`: Password to access image-hosting server.
 - `--expt_id`: Number ID of experiment stored on host server.
-- `--distributed`: Number of distributed cores to use for segmentation and signal processing.  If 0, there is no parallelisation.
-- `--tps`: Optional.  Number of time points from the beginning of the experiment to use.  If not specified, the pipeline processes all time points.
-- `--directory`: Optional.  Parent directory to save the data files (HDF5) generated, `./data` by default; the files will be stored in a child directory whose name is the name of the experiment.
-- `--filter`: Optional.  List of positions to use for analysis.  Alternatively, a regex (regular expression) or list of regexes to search for positions.  **Note: for the CLI, currently it is not able to take a list of strings as input.**
-- `--overwrite`: Optional.  Whether to overwrite an existing data directory.  True by default.
-- `--override_meta`: Optional.  Whether to overwrite an existing data directory.  True by default.
+- `--distributed`: Number of distributed cores to use for segmentation and signal processing. If 0, there is no parallelisation.
+- `--tps`: Optional. Number of time points from the beginning of the experiment to use. If not specified, the pipeline processes all time points.
+- `--directory`: Optional. Parent directory to save the data files (HDF5) generated, `./data` by default; the files will be stored in a child directory whose name is the name of the experiment.
+- `--filter`: Optional. List of positions to use for analysis. Alternatively, a regex (regular expression) or list of regexes to search for positions. **Note: for the CLI, currently it is not able to take a list of strings as input.**
+- `--overwrite`: Optional. Whether to overwrite an existing data directory. True by default.
+- `--override_meta`: Optional. Whether to overwrite an existing data directory. True by default.
 
 Example usage:
- ```bash
+
+```bash
 aliby-run --expt_id EXPT_PATH --distributed 4 --tps None
- ```
+```
 
 And to run Omero servers, the basic arguments are shown:
- ```bash
- aliby-run --expt_id XXX --host SERVER.ADDRESS --user USER --password PASSWORD 
- ```
 
+```bash
+aliby-run --expt_id XXX --host SERVER.ADDRESS --user USER --password PASSWORD
+```
 
 ## Script
 
-Use the `aliby.pipeline.Pipeline` object and supply a dictionary, following the example below.  The meaning of the parameters are the same as described in the CLI section above.
+Use the `aliby.pipeline.Pipeline` object and supply a dictionary, following the example below. The meaning of the parameters are the same as described in the CLI section above.
 
 ```python
 #!/usr/bin/env python3

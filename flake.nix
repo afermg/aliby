@@ -5,6 +5,14 @@
     systems.url = "github:nix-systems/default";
     flake-utils.url = "github:numtide/flake-utils";
     flake-utils.inputs.systems.follows = "systems";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -12,6 +20,8 @@
       self,
       nixpkgs,
       flake-utils,
+      git-hooks,
+      treefmt-nix,
       ...
     }@inputs:
     flake-utils.lib.eachDefaultSystem (
@@ -46,9 +56,48 @@
             # linuxPackages.nvidia_x11
           ]
         );
+
+        treefmtEval = treefmt-nix.lib.evalModule pkgs {
+          projectRootFile = "flake.nix";
+          programs.nixfmt.enable = true;
+          programs.ruff-format.enable = true;
+          programs.ruff-check.enable = true;
+          programs.dprint.enable = true;
+          programs.dprint.includes = [
+            "*.json"
+            "*.md"
+            "*.yaml"
+            "*.yml"
+          ];
+          programs.dprint.settings = {
+            plugins = pkgs.dprint-plugins.getPluginList (
+              plugins: with plugins; [
+                dprint-plugin-json
+                dprint-plugin-markdown
+                g-plane-pretty_yaml
+              ]
+            );
+          };
+        };
+
+        pre-commit-check = git-hooks.lib.${system}.run {
+          src = ./.;
+          package = pkgs.prek;
+          hooks = {
+            treefmt = {
+              enable = true;
+              package = treefmtEval.config.build.wrapper;
+            };
+          };
+        };
       in
       with pkgs;
       {
+        checks = {
+          inherit pre-commit-check;
+          formatting = treefmtEval.config.build.check self;
+        };
+        formatter = treefmtEval.config.build.wrapper;
         devShells = {
           default =
             let
@@ -76,9 +125,11 @@
                 unset SOURCE_DATE_EPOCH
               '';
               shellHook = ''
+                ${pre-commit-check.shellHook}
                 export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:"/run/opengl-driver/lib":$LD_LIBRARY_PATH
                 export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
                 export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+                uv sync --all-groups
                 runHook venvShellHook
                 export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
               '';

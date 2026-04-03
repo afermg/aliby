@@ -116,3 +116,4 @@ notebooks/
 *.hdf5
 **.png
 ./extraction/
+/.agent-shell/

@@ -3,6 +3,7 @@
 {Summarize the bug encountered concisely}
 
 I confirm that I have (if relevant):
+
 - [ ] Read the troubleshooting guide: https://gitlab.com/aliby/aliby/-/wikis/Troubleshooting-(basic)
 - [ ] Updated aliby and aliby-baby.
 - [ ] Tried the unit test.
@@ -15,12 +16,12 @@ I confirm that I have (if relevant):
 
 - aliby version: 0.1.{...}, or if development/unreleased version, commit SHA: {...}
 - platform(s):
-    - [ ] Jura
-    - [ ] Other Linux, please specify distribution and version: {...}
-    - [ ] MacOS, please specify version: {...}
-    - [ ] Windows, please specify version: {...}
+  - [ ] Jura
+  - [ ] Other Linux, please specify distribution and version: {...}
+  - [ ] MacOS, please specify version: {...}
+  - [ ] Windows, please specify version: {...}
 - experiment ID: {...}
-   - Any special things you need to know about this experiment: {...}
+  - Any special things you need to know about this experiment: {...}
 
 ## What is the current bug behavior?
 
@@ -37,8 +38,6 @@ it's very hard to read otherwise.)
 
 ```
 {PASTE YOUR ERROR MESSAGE HERE!!}
-
-
 ```
 
 ## Possible fixes
