@@ -17,39 +17,56 @@ try:
     DATA_DIR = Path("/datastore/alan/aliby/test_dataset/data/")
 except Exception as _:
     print("Missing local files, pulling from Zenodo")
-    marker = "aliby_tests/data/"
-    TEST_FILES = pooch.retrieve(
-        url="https://zenodo.org/api/records/19228474/files/aliby_test_dataset.tar.gz/content",
-        known_hash="f8c59009ad5addfe7fa9175a23496884121119c84372b6e07225d0a4924b5daa",
-        fname="aliby_test_dataset.tar.gz",
-        processor=pooch.Untar(extract_dir="aliby_tests"),
+    marker = "aliby_tests/"
+    TEST_DATASET_DIRS = set(
+        [
+            Path(x.split(marker)[0] + marker)
+            for x in pooch.retrieve(
+                url="https://zenodo.org/api/records/19410594/files/aliby_test_dataset.tar.gz/content",
+                known_hash="466689fe36cc781bc684278dea61b00b690c41ecad65f978dde4ca565d12a3b2",
+                fname="aliby_test_dataset.tar.gz",
+                processor=pooch.Untar(extract_dir="aliby_tests"),
+            )
+        ]
     )
-    DATA_DIR = Path(TEST_FILES[0].split(marker)[0] + marker)
-    print(f"DATA_DIR is {DATA_DIR} and exists? {DATA_DIR.exists()}")
-regex = ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"  # Our format
-capture_order = "WFC"  # Plate, Well, Channel Foci
+REGEX_PARAMETERS = (
+    (
+        "crop_cellpainting_256",
+        r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+)\.tif",
+        "WFC",
+    ),
+    (
+        "crop_timeseries_alcatras_round_diff_dims_293",
+        r".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+)\.tif",
+        "FTCZ",
+    ),
+    (
+        "crop_timeseries_alcatras_square_same_channels_293",
+        r".*/([^/]+)/.+_([0-9]{6})_([A-Za-z0-9]+)_(?:.*_)?([0-9]+)\.tif",
+        "FTCZ",
+    ),
+)
 
 
 # --- Dispatcher test ---
 
 
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="Test dataset not found")
-@pytest.mark.parametrize("dataset", ["tif_256"])
-def test_dispatch_dataset_types(dataset):
+@pytest.mark.parametrize("dataset, regex, capture_order", REGEX_PARAMETERS)
+def test_dispatch_dataset_types(dataset, regex, capture_order):
     """Test that dispatch_dataset returns the expected types."""
-    dset_dir = dispatch_dataset(DATA_DIR / dataset, regex=regex, capture_order="WFC")
+    dset_dir = dispatch_dataset(
+        DATA_DIR / dataset, regex=regex, capture_order=capture_order
+    )
     assert isinstance(dset_dir, DatasetDir)
 
 
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="Test dataset not found")
-@pytest.mark.parametrize("dataset", ["256.zarr"])
+@pytest.mark.parametrize("dataset", [f"{x[0]}_zarr" for x in REGEX_PARAMETERS])
 def test_dispatch_dataset_zarr(dataset):
     dset_zarr = dispatch_dataset(DATA_DIR / dataset, is_zarr=True)
     assert isinstance(dset_zarr, DatasetZarr)
 
 
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="Test dataset not found")
-@pytest.mark.parametrize("dataset", ["256.zarr"])
+@pytest.mark.parametrize("dataset", [f"{x[0]}.zarrs" for x in REGEX_PARAMETERS])
 def test_dispatch_dataset_monozarr(dataset):
     dset_monozarr = dispatch_dataset(DATA_DIR / dataset, is_zarr=True, is_monozarr=True)
     assert isinstance(dset_monozarr, DatasetMonoZarr)
@@ -58,39 +75,32 @@ def test_dispatch_dataset_monozarr(dataset):
 # --- DatasetDir Tests ---
 
 
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="Test dataset not found")
-@pytest.mark.parametrize("dataset", ["tif_256"])
-def test_dataset_multifile(dataset):
-    dif = DatasetDir(
+@pytest.mark.parametrize("dataset, regex, capture_order", REGEX_PARAMETERS)
+def test_dataset_multifile(dataset, regex, capture_order):
+    dataset = DatasetDir(
         DATA_DIR / dataset,
         regex=regex,
         capture_order=capture_order,
     )
 
-    imagesets = dif.get_position_ids()
-
-    assert len(imagesets), "Image set not found."
-    print(imagesets)
+    dataset.get_position_ids()  # This has an internal assert
 
 
 # --- DatasetMonoZarr Tests ---
 
 
-@pytest.mark.skipif(not DATA_DIR.exists(), reason="Test dataset not found")
-@pytest.mark.parametrize("dataset", ["256.zarr"])
+@pytest.mark.parametrize("dataset", [f"{x[0]}.zarr" for x in REGEX_PARAMETERS])
 def test_dataset_monozarr(dataset):
-    dif = DatasetMonoZarr(DATA_DIR / dataset)
+    dataset = DatasetMonoZarr(DATA_DIR / dataset)
 
-    imagesets = dif.get_position_ids()
-
-    assert len(imagesets), "Image set not found."
-    print(imagesets)
+    dataset.get_position_ids()
 
 
 # --- DatasetZarr Tests ---
 
 
-@pytest.mark.skip(reason="DatasetZarr test data not yet available")
-def test_dataset_zarr():
-    """Stub for DatasetZarr tests."""
-    pass
+@pytest.mark.parametrize("dataset", [f"{x[0]}_zarrs" for x in REGEX_PARAMETERS])
+def test_dataset_zarr(dataset):
+    dataset = DatasetZarr(DATA_DIR / dataset)
+
+    dataset.get_position_ids()

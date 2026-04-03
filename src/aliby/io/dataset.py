@@ -198,8 +198,7 @@ def sort_groups_by_regex(
 ) -> dict[str, str | tuple | list]:
     regex_ = re.compile(regex)
 
-    # Currently scan_directory only checks one level.
-    # TODO make recursive? specify local vs global paths?
+    # TODO Improve efficiency by capturing recursively if data is nested in dicts
     str_paths = scan_directory(datasets_path)
 
     print("Capturing regex")
@@ -245,14 +244,15 @@ def sort_groups_by_regex(
     return position_ids
 
 
-def scan_directory(path: str, id_type: str = "name") -> list[str]:
+def scan_directory(path: str) -> list[str]:
     """Fast directory scanning."""
     paths = []
-    with os.scandir(path) as it:
-        for entry in tqdm(it, desc="Reading files"):
-            if not entry.name.startswith("."):
-                path_or_name = getattr(entry, id_type)
-                paths.append(path_or_name)
+    for root, dirs, files in tqdm(os.walk(path), desc="Reading files"):
+        for fname in files:
+            entry = f"{root}/{fname}"
+            if not entry.startswith("."):
+                # path_or_name = getattr(entry, id_type)
+                paths.append(entry)
 
     return paths
 
