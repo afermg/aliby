@@ -119,7 +119,6 @@ def test_imageset_pipeline(data_dir):
                 "path": path,
             },
             "capture_order": "CYX",
-            "ntps": 1,
             "segmentation_channel": {"nuclei": 1},
         },
         "nchannels": 5,
