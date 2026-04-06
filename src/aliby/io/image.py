@@ -244,9 +244,9 @@ class ImageZarrArray(BaseLocalImage):
         if not hasattr(self, "_img"):
             store = zarr.storage.LocalStore(self.path)
             root_group = zarr.group(store)
-            zarr_arr = root_group[self.key]
+            self.zarr_arr = root_group[self.key]
 
-            da_pixels = da.array(zarr_arr)
+            da_pixels = da.array(self.zarr_arr)
             self._img = adjust_dimensions(
                 da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
             )
@@ -255,7 +255,10 @@ class ImageZarrArray(BaseLocalImage):
     # def add_size_to_meta(self):
     #     pass
 
+    @property
     def name(self) -> str:
+        if not hasattr(self, "zarr_arr"):
+            self.get_data_lazy()
         return self.zarr_arr.name
 
     def dimorder(self) -> str:
@@ -473,7 +476,11 @@ class ImageList(BaseLocalImage):
     @property
     def name(self):
         """Return name of image directory."""
-        return self.path.stem
+        if isinstance(self.path, list) and len(self.path) > 0:
+            return Path(self.path[0]).parent.stem
+        elif isinstance(self.path, str) and "*" in self.path:
+            return Path(self.path).parent.stem
+        return Path(self.path).stem
 
     @property
     def dimorder(self):
