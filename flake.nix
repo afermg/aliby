@@ -101,7 +101,7 @@
         devShells = {
           default =
             let
-              python_with_pkgs = pkgs.python3.withPackages (pp: [
+              python_with_pkgs = pkgs.python312.withPackages (pp: [
                 # Add python pkgs here that you need from nix repos
               ]);
             in
@@ -112,7 +112,7 @@
               NIX_LD_LIBRARY_PATH = lib.makeLibraryPath libList;
               packages = [
                 python_with_pkgs
-                python3Packages.venvShellHook
+                python312Packages.venvShellHook
                 # We now recommend to use uv for package management inside nix env
                 pkgs.uv
               ]
@@ -130,8 +130,7 @@
                 export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
                 export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
                 uv sync --all-groups
-                runHook venvShellHook
-                export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
+                source .venv/bin/activate
               '';
             };
         };
@@ -143,3 +142,5 @@
 # export LD_LIBRARY_PATH=${pkgs.cudaPackages.cuda_nvrtc}/lib
 # export EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib"
 # export EXTRA_CCFLAGS="-I/usr/include"
+# runHook venvShellHook
+# export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
