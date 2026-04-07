@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from itertools import combinations, product
 
 
@@ -20,101 +22,103 @@ def _create_extract_multich_tree(
     }
 
 
-def build_pipeline(
-    input_path: str,
-    n_devices: int,
-    addresses: list[str],
-    extract_ncores: int | None,
-):
-    """Convenience function to build a pipeline definition."""
-    fluo_base_config = {
-        "input_path": input_path,
-        "capture_order": "CYX",
-        "ntps": 1,
-        "channels_to_segment": {"nuclei": 1, "cell": 2},
-    }
+def build_pipeline_steps(
+    channels_to_segment: dict[str, int] = {"nuclei": 1, "cell": 0},
+    channels_to_extract: list[int] | None = None,
+    extract_ncores: int | None = None,
+    nahual_addresses: str | list[str] | None = None,
+    devices: list[int] | None = None,
+    steps_to_write: list[str] = [],
+) -> dict:
+    """Convenience function to build a pipeline definition, does not fill in IO."""
 
-    hashed_input = hash(str(input_path))
-    device_id = hashed_input % n_devices
+    use_nahual = nahual_addresses is not None
+    distribute_across_devices = devices is not None
 
-    channels_to_segment: dict[str, int] = fluo_base_config["channels_to_segment"]
-    random_hash = hash(str(input_path))
-    for i, ch in enumerate(channels_to_segment):
-        # segment_kwargs = pipeline["steps"][f"segment_{ch}"]["segmenter_kwargs"]
-        address = addresses[random_hash % len(addresses)]
-        device_id = random_hash % n_devices
-    # logger.debug(f"{device_id=} {address=}")
+    segmenter_kind = "cellpose"
+    if use_nahual:
+        segmenter_kind = "nahual_cellpose"
 
-    seg_params = {
-        f"segment_{obj}": dict(
+    if distribute_across_devices:  # Randomly assign Nahual_Cellpose instances
+        assert isinstance(nahual_addresses, list), (
+            "`nahual_addresses must` be specified distributing across devices"
+        )
+        n_devices = len(devices)
+        n_addresses = len(addresses)
+
+        hashed_input = hash(str(input_path))
+        device_id = hashed_input % n_devices
+
+    if channels_to_extract is None:
+        channels_to_extract = list(channels_to_segment.values())
+
+    # Build parameter names
+    seg_params = {}
+    for i, (obj, ch_id) in enumerate(channels_to_segment.items()):
+        step_name = f"segment_{obj}"
+        seg_params[step_name] = dict(
             segmenter_kwargs=dict(
                 kind="nahual_cellpose",
-                address=address,
-                setup_params=dict(device=device_id),
-                channel_to_segment=ch_id,
+                setup_params={},
             ),
-            img_channel=ch_id,
+            channel_to_segment=ch_id,
         )
-        for i, (obj, ch_id) in enumerate(
-            fluo_base_config["channels_to_segment"].items()
-        )
-    }
+        if distribute_across_devices:
+            seg_params[step_name]["segmenter_kwargs"]["address"] = addresses[
+                hashed_input % n_addresses
+            ]
+            seg_params[step_name]["segmenter_kwargs"]["setup_params"] = (
+                hashed_input % n_devices
+            )
 
     extract_base = dict(
-        tree={
-            **{
-                i: {
-                    "max": [
-                        "radial_zernikes",
-                        "intensity",
-                        "sizeshape",
-                        "feret",
-                        "texture",
-                        "radial_distribution",
-                        "zernike",
-                        # "granularity", # Too time-consuming, deactivated for now
-                    ]
-                }
-                for i in fl_channels
-            },
-        },
-        kwargs=dict(
-            # ncores=None,  # os.cpu_count(),
-            ncores=extract_ncores,
-        ),
+        tree={None: {None: "sizeshape"}},
+        kwargs=dict(ncores=extract_ncores),
+    )
+    for i in channels_to_extract:
+        extract_base["tree"][i] = {
+            "max": [
+                "radial_zernikes",
+                "intensity",
+                "feret",
+                "texture",
+                "radial_distribution",
+                "zernike",
+                # "granularity", # Too time-consuming, deactivated for now
+            ]
+        }
+
+    # Add sizeshape with no channels TODO adjust extraction code
+    extract_base["tree"][None] = {None: "sizeshape"}
+
+    extract_multich_base = _create_extract_multich_tree(
+        channels_to_extract, extract_ncores
     )
 
+    # Build extraction parameters using segmentation
     ext_params = {
         f"extract{name}_{obj}": var
         for (name, var), obj in product(
-            (
-                ("", extract_base),
-                # ("multi", extract_multich_tree),
-            ),
-            channels_to_segment,
+            (("", extract_base), ("multich", extract_multich_base)),
+            channels_to_extract,
         )
         if len(var)
     }
 
     base_pipeline = {
-        "io": {**fluo_base_config},
-        "nchannels": 5,
-        "fl_channels": fl_channels,
-        "extract_multich_tree": _create_extract_multich_tree(
-            fl_channels, extract_ncores
-        ),
         "steps": dict(
             tile=dict(
-                image_kwargs=dict(
-                    source=input_path,
-                    # regex=regex,
-                    capture_order=fluo_base_config["capture_order"],
-                    # dimorder=fluo_base_config["dimorder"],
-                ),
-                tile_size=None,
-                ref_channel=0,
-                ref_z=0,
-                calculate_drift=False,
+                # These should be provided outside
+                # image_kwargs=dict(
+                #     source=input_path,
+                #     # regex=regex,
+                #     # capture_order=fluo_base_config["capture_order"],
+                #     # dimorder=fluo_base_config["dimorder"],
+                # ),
+                tile_size=None,  # default value
+                # ref_channel=0,
+                # ref_z=0,
+                # calculate_drift=False,
             ),
             **seg_params,
             **ext_params,
@@ -125,23 +129,25 @@ def build_pipeline(
                     ("masks", f"segment_{obj}"),
                     ("pixels", "tile"),
                 ]
-                for obj in fluo_base_config["channels_to_segment"]
+                for obj in channels_to_segment
             },
         ),
         "passed_methods": {
             f"segment_{obj}": ("tile", "get_tp_data", "img_channel")
             for obj in channels_to_segment
         },
-        "save": (
-            # "tile",
-            *seg_params.keys(),
-        ),
-        "save_interval": 1,
+        "write": [],
+        "write_interval": 1,
     }
 
+    if steps_to_write is not None:
+        base_pipeline["write"] = steps_to_write
+
+    return base_pipeline
+
     # try:
-    fov = input_path["key"]  # TODO Homogeneize how to name experiments
-    return fov, base_pipeline
+    # fov = input_path["key"]  # TODO Homogeneize how to name experiments
+    # return fov, base_pipeline
 
     # result, _ = run_pipeline_and_post(
     #     pipeline=base_pipeline,
