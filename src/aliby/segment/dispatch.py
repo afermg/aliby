@@ -79,23 +79,41 @@ def dispatch_segmenter(
 
             # ensure it returns only masks
             # TODO generalise so it does not assume a 1-tile file
-            def segment(pixels: np.ndarray) -> list[np.ndarray]:
+            def segment(
+                pixels: np.ndarray,
+                do_3D: bool = False,
+                stitch_threshold: int | None = None,
+                **kwargs,
+            ) -> list[np.ndarray]:
                 """Preprocess the input numpy array to feed into Cellpose.
                 Assumes FCZYX pixels shape."""
                 z_size = pixels.shape[2]
-                do_3D = z_size > 1
+
+                if pixels.ndim > 5:  # If time dim was passed remove it
+                    pixels = pixels[0]  # FCZYX
+
                 pixels = pixels[:, channel_to_segment]  # FZYX
-                stitch_threshold = 0.01
-                if (
-                    not do_3D
-                ):  # Cellpose gets annoying if we keep the z-dimension with one stack
-                    pixels = pixels[:, 0]  # FYX
+                z_axis = None
+                # Cellpose gets annoying if we keep the z-dimension with one stack
+                if do_3D and z_size > 1:
+                    z_axis = 1
+                    stitch_threshold = 0.01
+                    normalize = dict(norm3D=False)
+                else:
+                    z_axis = None
                     stitch_threshold = 0.0
+                    normalize = True
+                    if z_size > 1:  # FYX
+                        pixels = pixels.max(axis=1)
+                    else:
+                        pixels = pixels[:, 0]
+
                 result = model.eval(
                     pixels,
                     do_3D=do_3D,
                     stitch_threshold=stitch_threshold,
-                    normalize=dict(norm3D=False),
+                    normalize=normalize,
+                    z_axis=z_axis,
                     **kwargs,
                 )
                 labels = result[0]
