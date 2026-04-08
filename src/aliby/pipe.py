@@ -57,7 +57,10 @@ def init_step(
                 "baby"
             ):  # Baby needs a tiler inside
                 parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**parameters["segmenter_kwargs"])
+            step = dispatch_segmenter(
+                channel_to_segment=parameters["channel_to_segment"],
+                **parameters["segmenter_kwargs"],
+            )
         case "track":
             if parameters["kind"].endswith(
                 "baby"
@@ -312,19 +315,19 @@ def _validate_pipeline(pipeline: dict):
             )
 
 
-def run_pipeline_return_state(
-    pipeline: dict, img_source: str or list[str], steps_dir: str = None
-) -> dict:
+def run_pipeline_return_state(pipeline: dict, steps_dir: str = None) -> dict:
     _validate_pipeline(pipeline)
 
-    pipeline = deepcopy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
+    # pipeline = deepcopy(pipeline)
+    # pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
     # ntps = pipeline.get("io", {"ntps": 20})["ntps"]
     # By default do only the first time point
     # We don't have information on dimensionality yet
-    ntps = pipeline["io"].get("ntps", 1)  # {"ntps": 1})["ntps"]
+    # TODO Add dimensionality to autodefine max_ntps
+    # TODO add assertion of ntps <= max_ntps
+    ntps = pipeline.get("ntps", 1)  # {"ntps": 1})["ntps"]
     for _ in range(ntps):
         # print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
@@ -335,11 +338,11 @@ def run_pipeline_return_state(
 
 def run_pipeline_and_post(
     pipeline: dict,
-    img_source: str | Path | list[str],
-    output_path: str | Path = None,
-    fov: str = None,
+    pipeline_name: str,
+    output_path: str | Path,
     overwrite: bool = True,
-    logger=None,
+    # img_source: str | Path | list[str],
+    # logger=None,
 ) -> tuple[pyarrow.Table, pyarrow.Table]:
     """
     Run a step-based pipeline and at the end run a series of post-processiong steps,
@@ -357,21 +360,17 @@ def run_pipeline_and_post(
     - extraction fields start with 'ext', and then are followed by the object name (e.g., cyto, nuclei)
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
-    if output_path is None:
-        output_path = pipeline["io"]["output_path"]
-
     output_path = Path(output_path)
-    steps_dir = output_path / "steps" / fov
-    profiles_file = output_path / "profiles" / f"{fov}.parquet"
+    steps_dir = output_path / "steps" / pipeline_name
+    profiles_file = output_path / "profiles" / f"{pipeline_name}.parquet"
 
     profiles = None
     post_results = None
-    pipeline["io"].get("ntps", 2)
+    # pipeline["io"].get("ntps", 2) #
 
     # Main processing loop
     if overwrite or not profiles_file.exists():
-        # print(f"Processing {fov}")
-        state = run_pipeline_return_state(pipeline, img_source, steps_dir=steps_dir)
+        state = run_pipeline_return_state(pipeline, steps_dir=steps_dir)
 
         # Aggregate profiles from the state output
         profiles = get_profiles_from_state(state, pipeline)
@@ -403,22 +402,23 @@ def run_pipeline_and_post(
                 input_data = get_step_output(
                     state["data"], pipeline["global_passed_data"][output_name]
                 )
-                post_results[output_name] = state["fn"](input_data=input_data)
+                post_result = state["fn"](input_data=input_data)
+                post_results[output_name] = post_result
 
             # Save global steps into files (per-tp steps are saved as they go, not at the end)
             if step_name in pipeline["save"]:
                 write_fn = dispatch_write_fn(step_name)
-                for output_pathname in post_results:
-                    if output_pathname.startswith(step_name):
+                for output_subdir in post_results:
+                    if output_subdir.startswith(step_name):
                         write_fn(
-                            post_results[output_pathname],
+                            post_result,
                             output_path,
-                            subpath=output_pathname,
-                            filename=fov,
+                            subpath=output_subdir,
+                            filename=pipeline_name,
                         )
     else:
         if logger is not None:
-            logger.log(f"Skipping {fov}, as it exists")
+            logger.log(f"Skipping {pipeline_name}, as it exists")
 
     return profiles, post_results
 

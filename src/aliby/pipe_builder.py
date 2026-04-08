@@ -58,7 +58,7 @@ def build_pipeline_steps(
         step_name = f"segment_{obj}"
         seg_params[step_name] = dict(
             segmenter_kwargs=dict(
-                kind="nahual_cellpose",
+                kind=segmenter_kind,
                 setup_params={},
             ),
             channel_to_segment=ch_id,
