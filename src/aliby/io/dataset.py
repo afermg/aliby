@@ -175,17 +175,20 @@ def sort_groups_by_regex(
     # sort groups to have all equal values together
     # Keys that define a "site"
     grouper_keys = [
-        capture_order.index(x) + 1 for x in capture_order if x not in out_dimorder
+        capture_order.index(x) for x in capture_order if x not in out_dimorder
     ]
     # Keys that define dimensions in an individual image. Sorted based on dimnames
     dim_keys = tuple(
-        capture_order.index(x) + 1
-        for x in [y for y in out_dimorder if y in capture_order]
+        capture_order.index(x) for x in [y for y in out_dimorder if y in capture_order]
     )
-    sorted_keys = multisort(valid, [*grouper_keys, *dim_keys])
 
-    # %%
-    iterator = groupby(sorted_keys, key=lambda x: [x[i - 1] for i in grouper_keys])
+    # Sort in this order: ZCT, and then groups (e.g., WF)
+    # W = Well, F = Field-of-view
+    sorting_order = [*dim_keys[::-1], *grouper_keys]
+    sorted_keys = multisort(valid, sorting_order)
+
+    # Group using only the non-TCZYX keys
+    iterator = list(groupby(sorted_keys, key=lambda x: [x[i] for i in grouper_keys]))
 
     position_ids = []
     for key, group in tqdm(iterator, desc="Grouping items"):
