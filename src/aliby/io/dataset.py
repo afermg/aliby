@@ -188,7 +188,7 @@ def sort_groups_by_regex(
     sorted_keys = multisort(valid, sorting_order)
 
     # Group using only the non-TCZYX keys
-    iterator = list(groupby(sorted_keys, key=lambda x: [x[i] for i in grouper_keys]))
+    iterator = groupby(sorted_keys, key=lambda x: [x[i] for i in grouper_keys])
 
     position_ids = []
     for key, group in tqdm(iterator, desc="Grouping items"):

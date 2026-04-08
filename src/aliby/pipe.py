@@ -3,7 +3,6 @@
 New and simpler pipeline that uses dictionaries as parameters and to define variable and between-step method execution.
 """
 
-from copy import deepcopy
 from functools import partial
 from itertools import cycle
 from pathlib import Path

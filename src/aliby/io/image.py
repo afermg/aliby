@@ -501,7 +501,6 @@ def get_dims_from_names(
     Capture order in this context means only the order in which matches occur in a regex.
     """
     regex_ = re.compile(regex)
-    # sorted_files = sorted(image_filenames)
     matches = [regex_.match(x).groups() for x in image_filenames]
 
     assert len(capture_order) == len(matches[0]), (

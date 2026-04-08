@@ -59,7 +59,6 @@ def build_pipeline_steps(
         seg_params[step_name] = dict(
             segmenter_kwargs=dict(
                 kind=segmenter_kind,
-                setup_params={},
             ),
             channel_to_segment=ch_id,
         )
@@ -133,8 +132,7 @@ def build_pipeline_steps(
             },
         ),
         "passed_methods": {
-            f"segment_{obj}": ("tile", "get_tp_data", "img_channel")
-            for obj in channels_to_segment
+            f"segment_{obj}": ("tile", "get_fczyx") for obj in channels_to_segment
         },
         "write": [],
         "write_interval": 1,
