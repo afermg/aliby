@@ -95,7 +95,10 @@ def build_pipeline_steps(
     ext_params = {
         f"extract{name}_{obj}": var
         for (name, var), obj in product(
-            (("", extract_base), ("multich", extract_multich_base)),
+            (
+                ("", extract_base),
+                ("multi", extract_multich_base),
+            ),
             channels_to_segment,
         )
         if len(var)
@@ -132,7 +135,7 @@ def build_pipeline_steps(
         "passed_methods": {
             f"segment_{obj}": ("tile", "get_fczyx") for obj in channels_to_segment
         },
-        "write": [],
+        "write": list(channels_to_segment.keys()),
         "write_interval": 1,
     }
 

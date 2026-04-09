@@ -293,7 +293,7 @@ def extract_tree(
     tileid_instructions: tuple[np.ndarray, tuple[int or str, str, str, str]],
     masks: list[np.ndarray],
     pixels: np.ndarray,
-    ncores: bool = False,
+    ncores: int | bool = False,
     progress_bar: bool = False,
     overlap: bool = False,
 ) -> dict[str, np.ndarray]:

@@ -317,13 +317,8 @@ def _validate_pipeline(pipeline: dict):
 def run_pipeline_return_state(pipeline: dict, steps_dir: str = None) -> dict:
     _validate_pipeline(pipeline)
 
-    # pipeline = deepcopy(pipeline)
-    # pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
     state = {}
 
-    # ntps = pipeline.get("io", {"ntps": 20})["ntps"]
-    # By default do only the first time point
-    # We don't have information on dimensionality yet
     # TODO Add dimensionality to autodefine max_ntps
     # TODO add assertion of ntps <= max_ntps
     ntps = pipeline.get("ntps", 1)  # {"ntps": 1})["ntps"]
@@ -441,8 +436,12 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
         for step_name in pipeline["steps"]
         if step_name.startswith("extract") or step_name.startswith("nahual_embed")
     ]
-    data = []
+    # We will concatenate tables with the same number of colums horizontally
+    # and then join them on time point, tile and object columns
+    data = {k.split("_")[0]: [] for k in feature_steps}
     for ext_step in feature_steps:
+        step_prefix = ext_step.split("_")[0]
+
         # Data is stored in the following order: step -> time points -> tiles
         for tp, ext_output in enumerate(state["data"][ext_step]):
             if isinstance(ext_output, numpy.ndarray):  # Format arbitrary embedders
@@ -470,10 +469,21 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                     "metadata_tp",
                     pyarrow.array([tp] * len(table), pyarrow.uint8()),
                 )
-                data.append(table)
+                data[step_prefix].append(table)
 
-    if len(data):
-        profiles = pyarrow.concat_tables(data)
+    all_wide_tables = []
+    for k, wide_tables in data.items():
+        if len(wide_tables):
+            all_objects = pyarrow.concat_tables(wide_tables)
+
+        all_wide_tables.append(all_objects)
+
+    # Create one wide table to rule them all, the final profiles
+    if len(all_objects):
+        profiles = all_wide_tables[0].join(
+            all_wide_tables[1],
+            keys=[f"metadata_{k}" for k in ("tp", "tile", "object", "label")],
+        )
 
     return profiles
 
