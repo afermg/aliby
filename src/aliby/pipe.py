@@ -13,6 +13,8 @@ import numpy
 import pyarrow
 import pyarrow as pa
 from imagecodecs.numcodecs import Jpegxl
+from loguru import logger
+
 
 from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
@@ -31,6 +33,22 @@ from extraction.extract import (
 numcodecs.register_codec(Jpegxl)
 
 # from aliby.tile.tiler import Tiler, TilerParameters,
+
+
+def configure_logging(file):
+    # Remove default standard library logging handler
+    logger.remove()
+
+    # Configure file logging with rotation and compression
+    logger.add(
+        file,
+        rotation="10 MB",
+        retention="1 week",
+        compression="zip",
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    configure_logging()
 
 
 def init_step(
@@ -520,8 +538,8 @@ def run_pipeline_and_post(
                             filename=pipeline_name,
                         )
     else:
-        if logger is not None:
-            logger.log(f"Skipping {pipeline_name}, as it exists")
+        logger.info(f"Skipping {pipeline_name}")
+        profiles, post_results = None, None
 
     return profiles, post_results
 
