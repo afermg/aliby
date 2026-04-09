@@ -241,7 +241,9 @@ def pipeline_step(
         # Get or initialise step
         if step_name not in state["data"]:
             state["data"][step_name] = []
-        step = state["fn"].get(step_name, init_step(step_name, parameters, state["fn"]))
+        if step_name not in state["fn"]:
+            state["fn"][step_name] = init_step(step_name, parameters, state["fn"])
+        step = state["fn"][step_name]
 
         # Pass input data if available
         this_step_receives = pipeline["passed_data"].get(step_name, {})

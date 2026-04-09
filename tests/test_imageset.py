@@ -15,7 +15,7 @@ from aliby.io.image import (
 )
 from aliby.pipe import run_pipeline_and_post
 
-from conftest import REGEX_PARAMETERS
+from common import REGEX_PARAMETERS
 
 # --- Dispatcher test ---
 

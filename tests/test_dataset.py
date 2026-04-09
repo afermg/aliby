@@ -10,7 +10,7 @@ import pytest
 
 from aliby.io.dataset import DatasetDir, DatasetZarr, dispatch_dataset
 
-from conftest import REGEX_PARAMETERS
+from common import REGEX_PARAMETERS
 
 # --- Dispatcher test ---
 

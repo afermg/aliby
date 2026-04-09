@@ -190,7 +190,7 @@ def build_pipeline_steps(
         "passed_methods": {
             f"segment_{obj}": ("tile", "get_fczyx") for obj in channels_to_segment
         },
-        "save": list(channels_to_segment.keys()),
+        "save": [f"segment_{obj}" for obj in channels_to_segment.keys()],
         "save_interval": 1,
     }
 
