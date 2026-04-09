@@ -101,6 +101,6 @@ Microscopy terminology can vary. Here’s how ALIBY defines these concepts:
 
 ### About the project
 
-- Under Construction:Detailed documentation is currently being
+- Under Construction: Detailed documentation is currently being
 - We aim to keep the dependency tree minimal. Further downstream processing is often relegated to specialized libraries.
 - ALIBY (_Analyser of Live-Cell Imaging for Budding Yeast_) originated in [2021](https://gitlab.com/aliby/aliby) at the [Swain Lab](https://swainlab.bio.ed.ac.uk/) to quantify yeast signalling. It has since evolved into a general-purpose tool for high-throughput imaging, including mammalian Cell Painting assays.
