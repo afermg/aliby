@@ -27,30 +27,31 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
+        isLinux = nixpkgs.lib.hasSuffix "-linux" system;
         pkgs = import nixpkgs {
           inherit system;
           config.allowUnfree = true;
-          config.cudaSupport = true;
+          config.cudaSupport = isLinux;
         };
 
         mpkgs = import inputs.nixpkgs_master {
           inherit system;
           config.allowUnfree = true;
-          config.cudaSupport = true;
+          config.cudaSupport = isLinux;
         };
 
         libList = [
           # Add needed packages here
           pkgs.gcc # Numpy
           pkgs.stdenv.cc.cc
-          pkgs.libGL
           pkgs.glib
           pkgs.zlib
         ]
-        ++ pkgs.lib.optionals pkgs.stdenv.isLinux (
+        ++ pkgs.lib.optionals isLinux (
           with pkgs;
           [
             # cudatoolkit
+            libGL
 
             # This is required for most app that uses graphics api
             # linuxPackages.nvidia_x11
@@ -105,11 +106,7 @@
                 # Add python pkgs here that you need from nix repos
               ]);
             in
-            mkShell {
-              NIX_LD = runCommand "ld.so" { } ''
-                ln -s "$(cat '${pkgs.stdenv.cc}/nix-support/dynamic-linker')" $out
-              '';
-              NIX_LD_LIBRARY_PATH = lib.makeLibraryPath libList;
+            mkShell ({
               packages = [
                 python_with_pkgs
                 python312Packages.venvShellHook
@@ -126,13 +123,18 @@
               '';
               shellHook = ''
                 ${pre-commit-check.shellHook}
-                export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:"/run/opengl-driver/lib":$LD_LIBRARY_PATH
+                ${if isLinux then "export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:\"/run/opengl-driver/lib\":$LD_LIBRARY_PATH" else ""}
                 export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
-                export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}
+                ${if isLinux then "export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}" else ""}
                 uv sync --all-groups
                 source .venv/bin/activate
               '';
-            };
+            } // (pkgs.lib.optionalAttrs isLinux {
+              NIX_LD = runCommand "ld.so" { } ''
+                ln -s "$(cat '${pkgs.stdenv.cc}/nix-support/dynamic-linker')" $out
+              '';
+              NIX_LD_LIBRARY_PATH = lib.makeLibraryPath libList;
+            }));
         };
       }
     );
