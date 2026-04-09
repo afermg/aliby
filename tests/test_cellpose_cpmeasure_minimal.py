@@ -17,12 +17,12 @@ from pathlib import Path
 from aliby.io.dataset import DatasetDir
 from aliby.pipe import run_pipeline_and_post
 
-input_path = Path("/datastore/alan/aliby/test_dataset/256")
+input_path = Path("/datastore/alan/aliby/test_dataset/data/crop_cellpainting_256")
 regex = ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"  # Our format
 capture_order = "WFC"  # Plate, Well, Channel Foci
 
 
-@pytest.mark.skipif(True, reason="Test dataset not found")
+@pytest.mark.skipif(not input_path.exists(), reason="Test dataset not found")
 def test_cellpose_minimal():
     dif = DatasetDir(
         input_path,
@@ -61,11 +61,16 @@ def test_cellpose_minimal():
             "segment_nuclei": {
                 "segmenter_kwargs": {
                     "kind": "cellpose",
-                    "channel_to_segment": 1,
                 },
+                "channel_to_segment": 1,
             },
             "extract_nuclei": {
                 "tree": {
+                    "None": {
+                        "None": [
+                            "sizeshape",
+                        ]
+                    },
                     0: {
                         "max": [
                             "intensity",
@@ -83,8 +88,7 @@ def test_cellpose_minimal():
         "save": ("segment_nuclei",),  # Which steps to write to disk
     }
     run_pipeline_and_post(
-        img_source=path,
         pipeline=pipeline,
+        pipeline_name=key,
         output_path="test_delme/",
-        fov=key,
     )

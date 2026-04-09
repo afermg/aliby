@@ -581,16 +581,16 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     all_wide_tables = []
     for k, wide_tables in data.items():
         if len(wide_tables):
-            all_objects = pyarrow.concat_tables(wide_tables)
-
-        all_wide_tables.append(all_objects)
+            all_wide_tables.append(pyarrow.concat_tables(wide_tables))
 
     # Create one wide table to rule them all, the final profiles
-    if len(all_objects):
-        profiles = all_wide_tables[0].join(
-            all_wide_tables[1],
-            keys=[f"metadata_{k}" for k in ("tp", "tile", "object", "label")],
-        )
+    if all_wide_tables:
+        profiles = all_wide_tables[0]
+        for table in all_wide_tables[1:]:
+            profiles = profiles.join(
+                table,
+                keys=[f"metadata_{k}" for k in ("tp", "tile", "object", "label")],
+            )
 
     return profiles
 
