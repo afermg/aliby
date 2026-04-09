@@ -71,7 +71,7 @@ def build_pipeline_steps(
             )
 
     extract_base = dict(
-        tree={None: {None: "sizeshape"}},
+        tree={"None": {"None": ("sizeshape",)}},
         kwargs=dict(ncores=extract_ncores),
     )
     for i in channels_to_extract:
@@ -87,9 +87,6 @@ def build_pipeline_steps(
             ]
         }
 
-    # Add sizeshape with no channels TODO adjust extraction code
-    extract_base["tree"][None] = {None: "sizeshape"}
-
     extract_multich_base = _create_extract_multich_tree(
         channels_to_extract, extract_ncores
     )
@@ -99,7 +96,7 @@ def build_pipeline_steps(
         f"extract{name}_{obj}": var
         for (name, var), obj in product(
             (("", extract_base), ("multich", extract_multich_base)),
-            channels_to_extract,
+            channels_to_segment,
         )
         if len(var)
     }
