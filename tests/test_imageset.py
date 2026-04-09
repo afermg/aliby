@@ -12,7 +12,6 @@ from aliby.io.image import (
     ImageDir,
     ImageMultiTiff,
 )
-# from aliby.pipe import run_pipeline_and_post
 
 from common import REGEX_PARAMETERS
 
@@ -68,81 +67,3 @@ def test_image_zarr(data_dir, dataset):
     assert len(data.shape) == 5
     assert img.dimorder is not None
     assert img.name is not None
-
-
-# # --- Original test kept skipped ---
-# @pytest.mark.skipif(True, reason="Test dataset not found")
-# def test_imageset_pipeline(data_dir):
-#     dataset = REGEX_PARAMETERS[0][0]
-#     regex = REGEX_PARAMETERS[0][1]
-#     capture_order = REGEX_PARAMETERS[0][2]
-
-#     dif = DatasetDir(
-#         data_dir / dataset,
-#         regex=regex,
-#         capture_order=capture_order,
-#     )
-
-#     positions = (
-#         dif.get_position_ids()
-#     )  # This asserts that at least one set of images is found.
-
-#     key = positions[0]["key"]
-#     path = positions[0]["path"]
-
-#     pipeline = {
-#         "io": {
-#             "input_path": {
-#                 "key": key,
-#                 "path": path,
-#             },
-#             "capture_order": "CYX",
-#             "segmentation_channel": {"nuclei": 1},
-#         },
-#         "nchannels": 5,
-#         "fl_channels": range(0, 5),
-#         "steps": {
-#             "tile": {
-#                 "image_kwargs": {
-#                     "source": {
-#                         "key": key,
-#                         "path": path,
-#                     },
-#                     "regex": regex,
-#                     "capture_order": capture_order,
-#                 },
-#                 "tile_size": None,
-#             },
-#             "segment_nuclei": {
-#                 "img_channel": 1,
-#                 "segmenter_kwargs": {
-#                     "kind": "cellpose",
-#                     "channel_to_segment": 1,
-#                 },
-#             },
-#             "extract_nuclei": {
-#                 "channels": range(0, 5),
-#                 "tree": {
-#                     1: {
-#                         "max": [
-#                             "intensity",
-#                         ]
-#                     },
-#                 },
-#             },
-#         },
-#         "passed_data": {
-#             "extract_nuclei": [("masks", "segment_nuclei"), ("pixels", "tile")],
-#         },
-#         "passed_methods": {
-#             "segment_nuclei": ("tile", "get_tp_data", "img_channel"),
-#         },
-#         "save": ("segment_nuclei",),
-#         "save_interval": 1,
-#     }
-#     run_pipeline_and_post(
-#         img_source=path,
-#         pipeline=pipeline,
-#         output_path="./",
-#         fov=key,
-#     )
