@@ -86,7 +86,7 @@ result = run_pipeline_and_post(
 )
 ```
 
-_See the [examples/](examples/) directory for more advanced use cases.
+See the [examples/](examples/) directory for more advanced use cases.
 
 ## Core Concepts & Glossary
 
