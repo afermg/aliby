@@ -28,7 +28,7 @@ Once uv is installed, we suggest running
 ```bash
 git clone git@github.com:afermg/aliby.git
 cd aliby
-uv sync --all-extras
+uv sync --all-groups
 ```
 
 ## Nix installation

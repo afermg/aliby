@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 import pooch
 
+
 @pytest.fixture(scope="session")
 def data_dir():
     data_path = Path("/datastore/alan/aliby/test_dataset/data/")
