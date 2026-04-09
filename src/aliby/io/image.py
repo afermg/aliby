@@ -59,8 +59,8 @@ def dispatch_image(source: str | int | dict[str, str] | Path):
         assert len(source), f"Empty source f{source}"
         img_type = ImageList
     elif isinstance(source, dict):
-        # Zarr dataset + key to array
-        img_type = ImageZarrArray
+        # Zarr directory + key to dataset
+        img_type = ImageZarr
     else:
         match Path(source):
             case s if "*" in str(s):  # Wildcard
@@ -199,20 +199,28 @@ class ImageDir(BaseLocalImage):
         # If extra channels, pick the first stack of the last dimensions
         while len(img.shape) > 3:
             img = img[..., 0]
+
         if self.meta:
             self.meta["size_x"], self.meta["size_y"] = img.shape[-2:]
-            # Reshape using metadata
-            img = da.reshape(img, self.meta.values())
-            original_order = [i[-1] for i in self.meta.keys() if i.startswith("size")]
-            # Swap axis to conform with normal order
-            target_order = [self.default_dimorder.index(x) for x in original_order]
-            img = da.moveaxis(
-                img,
-                list(range(len(original_order))),
-                target_order,
+            original_order = "".join(
+                [k[-1] for k in self.meta.keys() if k.startswith("size")]
             )
-            pixels = self.rechunk_data(img)
-        return pixels
+            # Use adjust_dimensions to handle reordering and padding
+            pixels = adjust_dimensions(
+                img, capture_order=original_order, dimorder=self.default_dimorder
+            )
+            self._rechunked_img = da.rechunk(
+                pixels,
+                chunks=(
+                    1,
+                    pixels.shape[1],
+                    pixels.shape[2],
+                    self.meta["size_y"],
+                    self.meta["size_x"],
+                ),
+            )
+            return self._rechunked_img
+        return img
 
     @property
     def name(self):
@@ -225,7 +233,7 @@ class ImageDir(BaseLocalImage):
         return [k.split("_")[-1] for k in self.meta.keys() if k.startswith("size")]
 
 
-class ImageZarrArray(BaseLocalImage):
+class ImageZarr(BaseLocalImage):
     """An image is a group inside a Zarr"""
 
     def __init__(
@@ -242,11 +250,14 @@ class ImageZarrArray(BaseLocalImage):
 
     def get_data_lazy(self) -> np.ndarray:
         if not hasattr(self, "_img"):
-            store = zarr.storage.LocalStore(self.path)
+            if hasattr(zarr.storage, "LocalStore"):
+                store = zarr.storage.LocalStore(self.path)
+            else:
+                store = zarr.storage.DirectoryStore(self.path)
             root_group = zarr.group(store)
-            zarr_arr = root_group[self.key]
+            self.zarr_arr = root_group[self.key]
 
-            da_pixels = da.array(zarr_arr)
+            da_pixels = da.array(self.zarr_arr)
             self._img = adjust_dimensions(
                 da_pixels, capture_order=self.capture_order, dimorder=self.dimorder
             )
@@ -255,47 +266,14 @@ class ImageZarrArray(BaseLocalImage):
     # def add_size_to_meta(self):
     #     pass
 
+    @property
     def name(self) -> str:
+        if not hasattr(self, "zarr_arr"):
+            self.get_data_lazy()
         return self.zarr_arr.name
 
     def dimorder(self) -> str:
         return self.dimorder
-
-
-class ImageZarr(BaseLocalImage):
-    """
-    Read zarr compressed files.
-    """
-
-    def __init__(self, source: t.Union[str, Path], **kwargs):
-        """Initialise using file name."""
-        super().__init__(source)
-        # self.set_meta()
-        try:
-            self._img = zarr.open(self.path)
-            self.add_size_to_meta()
-        except Exception as e:
-            print(f"ImageZarr: Could not add size info to metadata: {e}.")
-
-    def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array for lazy-loading local multidimensional zarr files."""
-        return self._img
-
-    def add_size_to_meta(self):
-        """Add shape of image array to metadata."""
-        self.meta.update(
-            {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
-        )
-
-    @property
-    def name(self):
-        """Return name of zarr directory."""
-        return self.path.stem
-
-    @property
-    def dimorder(self):
-        """Impose a hard-coded order of dimensions based on the zarr compression script."""
-        return "TCZYX"
 
 
 class ImageMultiTiff(BaseLocalImage):
@@ -311,20 +289,11 @@ class ImageMultiTiff(BaseLocalImage):
         self.capture_order = capture_order
         self._dimorder = dimorder or self.default_dimorder
 
-        shape = imread(source).shape
-
-        self._meta = {
-            f"size_{dim}": v for dim, v in zip(self.capture_order, shape) if dim
-        }
-
-        self.missing_dims = set(self._dimorder).difference(capture_order)
-        for dim in self.missing_dims:
-            self._meta[f"size_{dim}"] = 1
-
         lazy = imread(str(self.path))
         self._img = adjust_dimensions(
             lazy, capture_order=capture_order, dimorder=self._dimorder
         )
+        self.add_size_to_meta()
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array for lazy-loading local multidimensional zarr files."""
@@ -332,6 +301,8 @@ class ImageMultiTiff(BaseLocalImage):
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
+        if not hasattr(self, "_meta"):
+            self._meta = {}
         self._meta.update(
             {f"size_{dim}": shape for dim, shape in zip(self.dimorder, self._img.shape)}
         )
@@ -352,7 +323,7 @@ class ImageMultiTiff(BaseLocalImage):
     @property
     def meta(self):
         if not hasattr(self, "_meta"):
-            self._meta = {}
+            self.add_size_to_meta()
         return self._meta
 
 
@@ -393,7 +364,15 @@ class ImageList(BaseLocalImage):
 
     @cached_property
     def meta(self):
-        return {}
+        meta = {f"size_{dim}": v for dim, v in self.dimorder_d.items()}
+        if hasattr(self, "_img"):
+            meta.update(
+                {
+                    f"size_{dim}": shape
+                    for dim, shape in zip(self.dimorder, self._img.shape)
+                }
+            )
+        return meta
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array from a list of images with a variable set of dimensions.
@@ -434,20 +413,19 @@ class ImageList(BaseLocalImage):
         ]
 
         # TCZ can be present across files, whereas YX are always in one.
-        infile_dims = set(self.input_dimensions).intersection("TCZ")
+        infile_dims = [d for d in self.input_dimensions if d in "TCZ"]
         n_infile_dims = len(infile_dims) + 2
         # Pad the missing dimensions
-        expected_dims = [
-            self.dimorder_d.get(k, 1) for k in "TCZ" if k not in infile_dims
-        ]
+        expected_dims_names = [k for k in "TCZ" if k not in infile_dims]
+        expected_dims = [self.dimorder_d.get(k, 1) for k in expected_dims_names]
         arr = np.zeros(expected_dims + ([1] * n_infile_dims), dtype=object)
 
         # Get the shape of the dimensions to be iterated over
         # filling_order = [0, 1, 2]  # TODO Generalize this based on capture_order
-        filling_order = range(5 - n_infile_dims)
+        filling_order = range(len(expected_dims))
         # d0, d1, d2 = expected_dims
 
-        # Generate all possible 3-D indices (i, j, k)
+        # Generate all possible indices for the object array
         all_indices = itertools.product(*[range(x) for x in expected_dims])
 
         # Sort these indices based on the custom order
@@ -468,12 +446,23 @@ class ImageList(BaseLocalImage):
         all_dims = (*file_dims, *sample.shape)
 
         pixels = da.rechunk(a, all_dims)
-        return pixels
+
+        # Ensure the output matches self.dimorder (default TCZYX)
+        actual_order = "".join(expected_dims_names) + self.input_dimensions
+        self._img = adjust_dimensions(
+            pixels, capture_order=actual_order, dimorder=self.dimorder
+        )
+
+        return self._img
 
     @property
     def name(self):
         """Return name of image directory."""
-        return self.path.stem
+        if isinstance(self.path, list) and len(self.path) > 0:
+            return Path(self.path[0]).parent.stem
+        elif isinstance(self.path, str) and "*" in self.path:
+            return Path(self.path).parent.stem
+        return Path(self.path).stem
 
     @property
     def dimorder(self):
@@ -494,7 +483,6 @@ def get_dims_from_names(
     Capture order in this context means only the order in which matches occur in a regex.
     """
     regex_ = re.compile(regex)
-    # sorted_files = sorted(image_filenames)
     matches = [regex_.match(x).groups() for x in image_filenames]
 
     assert len(capture_order) == len(matches[0]), (
@@ -559,24 +547,53 @@ def adjust_dimensions(lazy: da.array, capture_order: str, dimorder: str) -> da.a
     This function first removes any unused dimensions from the array, then adds
     any missing dimensions. Finally, it rearranges the dimensions to match `dimorder`.
     """
-    missing_dims = set(dimorder).difference(capture_order)
+    # 1. Align capture_order to lazy.ndim
+    if lazy.ndim > len(capture_order):
+        # We have unnamed leading dimensions.
+        # Try to use missing dimensions from dimorder to name them.
+        # We fill from the end of missing_dims because dimensions like Z, C are
+        # usually closer to YX than T in common bio-image formats.
+        missing_dims = [d for d in dimorder if d not in capture_order]
+        n_extra = lazy.ndim - len(capture_order)
+        added = (
+            missing_dims[-n_extra:] if n_extra <= len(missing_dims) else missing_dims
+        )
+        # If still more dimensions, pad with '?'
+        if len(added) < n_extra:
+            added = ["?"] * (n_extra - len(added)) + added
 
-    # drop unused dimensions
-    for i, dim in enumerate(reversed(capture_order), 1):
+        capture_order = "".join(added) + capture_order
+    elif lazy.ndim < len(capture_order):
+        # Align to the end
+        capture_order = capture_order[-lazy.ndim :]
+
+    # 2. Drop unused dimensions (those in capture_order but not in dimorder)
+    current_dimorder = list(capture_order)
+    new_lazy = lazy
+
+    # Iterate backwards to safely squeeze
+    for i in range(len(current_dimorder) - 1, -1, -1):
+        dim = current_dimorder[i]
         if dim not in dimorder:
-            assert lazy.shape[-i] == 1, f"Missing dimension {dim} not in dimorder"
-            lazy = da.squeeze(lazy, -i)
-            capture_order = capture_order.replace(dim, "")
+            assert new_lazy.shape[i] == 1, (
+                f"Dimension {dim} at index {i} has size {new_lazy.shape[i]}, "
+                f"but it is not in dimorder {dimorder} and thus must be 1 to be squeezed."
+            )
+            new_lazy = da.squeeze(new_lazy, i)
+            current_dimorder.pop(i)
 
-    # Add missing dimensions
-    for dim in sorted(missing_dims):
-        lazy = lazy[..., np.newaxis]
-        capture_order += dim
+    # 3. Add missing dimensions
+    current_dimorder_str = "".join(current_dimorder)
+    missing_dims_to_add = sorted([d for d in dimorder if d not in current_dimorder_str])
+    for dim in missing_dims_to_add:
+        new_lazy = new_lazy[..., np.newaxis]
+        current_dimorder_str += dim
 
-    assert len(capture_order) == len(dimorder), (
-        "Post-adjustment captureorder and dimorder do not match."
+    # 4. Reorder to match dimorder
+    assert len(current_dimorder_str) == len(dimorder), (
+        f"Post-adjustment captureorder ({current_dimorder_str}) and dimorder ({dimorder}) do not match."
     )
-    # sort capture_order to match dimorder
-    new_order = [capture_order.index(i) for i in dimorder]
-    lazy = da.moveaxis(lazy, new_order, range(len(new_order)))
-    return lazy
+    new_order = [current_dimorder_str.index(d) for d in dimorder]
+    new_lazy = da.moveaxis(new_lazy, new_order, range(len(new_order)))
+
+    return new_lazy

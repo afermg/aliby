@@ -315,13 +315,13 @@ class Tiler(StepABC):
         channels = []
         nch = range(self.pixels.shape[-4])
         for ch in nch:
-            tiles = self.get_tp_data(tp, ch)
+            tiles = self.get_tp_channel(tp, ch)
             channels.append(tiles)
 
         cfzyx = np.array(channels)
         return np.swapaxes(cfzyx, 0, 1)
 
-    def get_tp_data(
+    def get_tp_channel(
         self,
         tp: int,
         c: int,
@@ -440,7 +440,7 @@ class Tiler(StepABC):
         Note that this one does not apply image tracking.
         """
         # full = self.pixels[tp]
-        tiles = self.get_tp_data(tp)
+        tiles = self.get_tp_channel(tp)
         if hasattr(tiles, "compute"):
             # if using dask fetch images
             tiles = tiles.compute(scheduler="synchronous")
@@ -521,7 +521,7 @@ class Tiler(StepABC):
         res = []
         for c in channels:
             # only return requested z
-            tiles = self.get_tp_data(tp, c)[:, z]
+            tiles = self.get_tp_channel(tp, c)[:, z]
             # insert new axis at index 1 for missing time point
             tiles = np.expand_dims(tiles, axis=1)
             res.append(tiles)

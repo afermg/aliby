@@ -1,6 +1,6 @@
 # Contributing
 
-We focus our work on python 3.8 due to the current neural network being developed on tensorflow 1. In the near future we will migrate the network to pytorch to support more recent versions of all packages.
+We focus our work on Python 3.11 and above. This version is required to support modern dependencies such as Zarr 3.
 
 ## Issues
 

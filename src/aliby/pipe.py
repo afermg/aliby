@@ -3,7 +3,6 @@
 New and simpler pipeline that uses dictionaries as parameters and to define variable and between-step method execution.
 """
 
-from copy import deepcopy
 from functools import partial
 from itertools import cycle
 from pathlib import Path
@@ -14,6 +13,8 @@ import numpy
 import pyarrow
 import pyarrow as pa
 from imagecodecs.numcodecs import Jpegxl
+from loguru import logger
+
 
 from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
@@ -34,10 +35,26 @@ numcodecs.register_codec(Jpegxl)
 # from aliby.tile.tiler import Tiler, TilerParameters,
 
 
+def configure_logging(file):
+    # Remove default standard library logging handler
+    logger.remove()
+
+    # Configure file logging with rotation and compression
+    logger.add(
+        file,
+        rotation="10 MB",
+        retention="1 week",
+        compression="zip",
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    configure_logging()
+
+
 def init_step(
     step_name: str,
     parameters: dict[str, str or callable or int or dict],
-    other_steps: callable = None,
+    other_steps: dict = None,
 ) -> callable:
     """
     Set up the parameters for any step. This mostly includes dispatching a specific step subtype.
@@ -45,26 +62,59 @@ def init_step(
     If we need to perform some validation before commiting to a pipeline (e.g., checking the
     servers for a nahual process), this is the place to do it.
     """
+    if other_steps is None:
+        other_steps = {}
+
     match step_name:
-        case "tile":
-            image_kwargs = parameters.pop("image_kwargs")
+        case s if s.startswith("tile"):
+            image_kwargs = parameters.pop("image_kwargs", None)
+            if image_kwargs is None:
+                raise ValueError(
+                    f"Step '{step_name}' is missing required 'image_kwargs'."
+                )
+            if "source" not in image_kwargs:
+                raise ValueError(
+                    f"Step '{step_name}' 'image_kwargs' is missing required 'source'."
+                )
             tiler_constructor = dispatch_tiler(parameters.pop("kind", None), parameters)
             image_type = dispatch_image(source=image_kwargs["source"])
             image = image_type(**image_kwargs)
             step = tiler_constructor(image)
         case s if s.startswith("segment"):
-            if parameters["segmenter_kwargs"]["kind"].endswith(
-                "baby"
-            ):  # Baby needs a tiler inside
-                parameters["segmenter_kwargs"]["tiler"] = other_steps["tile"]
-            step = dispatch_segmenter(**parameters["segmenter_kwargs"])
-        case "track":
-            if parameters["kind"].endswith(
+            seg_kwargs = parameters.get("segmenter_kwargs", {})
+            if seg_kwargs.get("kind", "").endswith("baby"):  # Baby needs a tiler inside
+                tiler_step = next(
+                    (v for k, v in other_steps.items() if k.startswith("tile")), None
+                )
+                if tiler_step is None:
+                    raise ValueError(
+                        f"Step '{step_name}' using 'baby' requires a preceding 'tile' step."
+                    )
+                seg_kwargs["tiler"] = tiler_step
+            if "channel_to_segment" not in parameters:
+                raise ValueError(
+                    f"Step '{step_name}' is missing required 'channel_to_segment'."
+                )
+            step = dispatch_segmenter(
+                channel_to_segment=parameters["channel_to_segment"],
+                **seg_kwargs,
+            )
+        case s if s.startswith("track"):
+            if parameters.get("kind", "").endswith(
                 "baby"
             ):  # tracker needs to pull info from baby crawler
-                parameters["crawler"] = other_steps["segment"].crawler
+                segment_step = next(
+                    (v for k, v in other_steps.items() if k.startswith("segment")), None
+                )
+                if segment_step is None:
+                    raise ValueError(
+                        f"Step '{step_name}' using 'baby' tracking requires a preceding 'segment' step."
+                    )
+                parameters["crawler"] = segment_step.crawler
             step = dispatch_tracker(**parameters)
         case s if s.startswith("extract_"):
+            if "tree" not in parameters:
+                raise ValueError(f"Step '{step_name}' is missing required 'tree'.")
             # Whether to use overlapping masks or not
             process = process_tree_masks
             measure_fn = extract_tree
@@ -78,6 +128,8 @@ def init_step(
                 **parameters.get("kwargs", {}),
             )
         case s if s.startswith("extractmulti_"):
+            if "tree" not in parameters:
+                raise ValueError(f"Step '{step_name}' is missing required 'tree'.")
             step = partial(
                 process_tree_masks,
                 measure_fn=extract_tree_multi,
@@ -88,19 +140,28 @@ def init_step(
         case s if s.startswith("nahual"):
             # Validate that we can contact the server-side
             # Setup also helps check that the remote server exists
+            address = parameters.get("address")
+            if address is None:
+                raise ValueError(
+                    f"If using Nahual you must have an address, currently it is None in step '{step_name}'"
+                )
 
-            address = parameters["address"]  # Must have!
-            assert address is not None, (
-                f"If using Nahual you must have an address, currently it is {address}"
-            )
             if step_name.startswith("nahual_embed"):
+                if "setup_params" not in parameters:
+                    raise ValueError(
+                        f"Nahual embed step '{step_name}' is missing 'setup_params'."
+                    )
+                if "model_group" not in parameters:
+                    raise ValueError(
+                        f"Nahual embed step '{step_name}' is missing 'model_group'."
+                    )
+
                 from nahual.process import dispatch_setup_process
 
                 setup_params = parameters["setup_params"]
                 model_group = parameters["model_group"]
 
                 setup, process = dispatch_setup_process(model_group)
-                # eval_params = kwargs.get("eval_params", {})
 
                 # If channel_ids exist subindex the input array
                 selected_channels = parameters.get("selected_channels")
@@ -119,6 +180,10 @@ def init_step(
 
                 return partial(process, address=address)
             if step_name.startswith("nahual_track"):
+                if "parameters" not in parameters:
+                    raise ValueError(
+                        f"Nahual track step '{step_name}' is missing 'parameters'."
+                    )
                 setup, process = dispatch_global_step(step_name)
                 # print(f"NAHUAL: Setting up remote process on {parameters['address']}.")
                 setup_output = setup(parameters["parameters"], address=address)
@@ -127,7 +192,7 @@ def init_step(
                 # For the final step we provide the address used for setting the remote up
                 step = partial(process, address=address)
         case _:
-            raise Exception(f"Invalid step name {step_name=}")
+            raise ValueError(f"Invalid step name {step_name=}")
 
     return step
 
@@ -194,7 +259,9 @@ def pipeline_step(
         # Get or initialise step
         if step_name not in state["data"]:
             state["data"][step_name] = []
-        step = state["fn"].get(step_name, init_step(step_name, parameters, state["fn"]))
+        if step_name not in state["fn"]:
+            state["fn"][step_name] = init_step(step_name, parameters, state["fn"])
+        step = state["fn"][step_name]
 
         # Pass input data if available
         this_step_receives = pipeline["passed_data"].get(step_name, {})
@@ -293,38 +360,95 @@ def pipeline_step(
     return state
 
 
-def _validate_pipeline(pipeline: dict):
+def validate_pipeline(pipeline: dict) -> None:
     """
     Sanity checks before computationally expensive operations.
+    Validates pipeline structure, dependencies, and parameters.
     """
-    steps_to_write: list[str] = pipeline.get("save")
-    assert not steps_to_write or set(steps_to_write).intersection(pipeline["steps"]), (
-        "At least one step should be written"
-    )
-    # Deprecated: ntps should be autodetected
-    # assert "ntps" in pipeline.get("io", {}), (
-    #     "You must pass the number of time points to analyse."
-    # )
-    for k in pipeline["steps"]:
-        if k.startswith("nahual"):
-            assert "address" in pipeline["steps"][k], (
-                "If using a nahual-deployed model you must provide an address."
+    if not isinstance(pipeline, dict):
+        raise TypeError("Pipeline configuration must be a dictionary.")
+
+    if "steps" not in pipeline or not isinstance(pipeline["steps"], dict):
+        raise ValueError(
+            "Pipeline must contain a 'steps' dictionary mapping step names to parameters."
+        )
+
+    steps = pipeline["steps"]
+
+    # Validate passed_data existence since pipeline_step accesses it directly
+    if "passed_data" not in pipeline or not isinstance(pipeline["passed_data"], dict):
+        raise ValueError("Pipeline must contain a 'passed_data' dictionary.")
+
+    passed_data = pipeline["passed_data"]
+    for target_step, dependencies in passed_data.items():
+        if not isinstance(dependencies, (list, tuple)):
+            raise TypeError(
+                f"'passed_data' dependencies for step '{target_step}' must be a sequence."
+            )
+        for dep in dependencies:
+            if not isinstance(dep, (list, tuple)) or len(dep) < 2:
+                raise ValueError(
+                    f"Invalid dependency format in 'passed_data' for '{target_step}': {dep}"
+                )
+            from_step = dep[1]
+            if from_step not in steps:
+                raise ValueError(
+                    f"Step '{target_step}' expects data from '{from_step}', but '{from_step}' is not defined in 'steps'."
+                )
+
+    # Validate passed_methods
+    passed_methods = pipeline.get("passed_methods", {})
+    if not isinstance(passed_methods, dict):
+        raise TypeError("'passed_methods' must be a dictionary.")
+    for target_step, method_dep in passed_methods.items():
+        if not isinstance(method_dep, (list, tuple)) or len(method_dep) < 2:
+            raise ValueError(
+                f"Invalid method dependency format for '{target_step}': {method_dep}"
+            )
+        from_step = method_dep[0]
+        if from_step not in steps:
+            raise ValueError(
+                f"Step '{target_step}' expects a method from '{from_step}', but '{from_step}' is not defined in 'steps'."
             )
 
+    steps_to_write = pipeline.get("save")
+    if steps_to_write is not None:
+        if not isinstance(steps_to_write, (list, tuple, set)):
+            raise TypeError("'save' must be a sequence of step names.")
+        for step in steps_to_write:
+            if step not in steps and step not in pipeline.get("global_steps", {}):
+                raise ValueError(
+                    f"Step '{step}' listed in 'save' is not defined in the pipeline 'steps' or 'global_steps'."
+                )
 
-def run_pipeline_return_state(
-    pipeline: dict, img_source: str or list[str], steps_dir: str = None
-) -> dict:
-    _validate_pipeline(pipeline)
+    for k, params in steps.items():
+        if not isinstance(params, dict):
+            raise TypeError(f"Parameters for step '{k}' must be a dictionary.")
+        if k.startswith("nahual"):
+            if "address" not in params:
+                raise ValueError(
+                    f"Nahual-deployed step '{k}' must provide an 'address' parameter."
+                )
 
-    pipeline = deepcopy(pipeline)
-    pipeline["steps"]["tile"]["image_kwargs"]["source"] = img_source
+    # Validate global_steps structure if present
+    global_steps = pipeline.get("global_steps", {})
+    if global_steps:
+        if "global_passed_data" not in pipeline:
+            raise ValueError(
+                "Pipeline defines 'global_steps' but is missing 'global_passed_data'."
+            )
+        if not isinstance(pipeline["global_passed_data"], dict):
+            raise TypeError("'global_passed_data' must be a dictionary.")
+
+
+def run_pipeline_return_state(pipeline: dict, steps_dir: str = None) -> dict:
+    validate_pipeline(pipeline)
+
     state = {}
 
-    # ntps = pipeline.get("io", {"ntps": 20})["ntps"]
-    # By default do only the first time point
-    # We don't have information on dimensionality yet
-    ntps = pipeline["io"].get("ntps", 1)  # {"ntps": 1})["ntps"]
+    # TODO Add dimensionality to autodefine max_ntps
+    # TODO add assertion of ntps <= max_ntps
+    ntps = pipeline.get("ntps", 1)  # {"ntps": 1})["ntps"]
     for _ in range(ntps):
         # print(f"Processing frame {frame}")
         state = pipeline_step(pipeline, state, steps_dir=steps_dir)
@@ -335,11 +459,11 @@ def run_pipeline_return_state(
 
 def run_pipeline_and_post(
     pipeline: dict,
-    img_source: str | Path | list[str],
-    output_path: str | Path = None,
-    fov: str = None,
+    pipeline_name: str,
+    output_path: str | Path,
     overwrite: bool = True,
-    logger=None,
+    # img_source: str | Path | list[str],
+    # logger=None,
 ) -> tuple[pyarrow.Table, pyarrow.Table]:
     """
     Run a step-based pipeline and at the end run a series of post-processiong steps,
@@ -357,21 +481,17 @@ def run_pipeline_and_post(
     - extraction fields start with 'ext', and then are followed by the object name (e.g., cyto, nuclei)
     - The pipeline's output is nested in the following order: step -> time point -> tile.
     """
-    if output_path is None:
-        output_path = pipeline["io"]["output_path"]
-
     output_path = Path(output_path)
-    steps_dir = output_path / "steps" / fov
-    profiles_file = output_path / "profiles" / f"{fov}.parquet"
+    steps_dir = output_path / "steps" / pipeline_name
+    profiles_file = output_path / "profiles" / f"{pipeline_name}.parquet"
 
     profiles = None
     post_results = None
-    pipeline["io"].get("ntps", 2)
+    # pipeline["io"].get("ntps", 2) #
 
     # Main processing loop
     if overwrite or not profiles_file.exists():
-        # print(f"Processing {fov}")
-        state = run_pipeline_return_state(pipeline, img_source, steps_dir=steps_dir)
+        state = run_pipeline_return_state(pipeline, steps_dir=steps_dir)
 
         # Aggregate profiles from the state output
         profiles = get_profiles_from_state(state, pipeline)
@@ -403,22 +523,23 @@ def run_pipeline_and_post(
                 input_data = get_step_output(
                     state["data"], pipeline["global_passed_data"][output_name]
                 )
-                post_results[output_name] = state["fn"](input_data=input_data)
+                post_result = state["fn"](input_data=input_data)
+                post_results[output_name] = post_result
 
             # Save global steps into files (per-tp steps are saved as they go, not at the end)
             if step_name in pipeline["save"]:
                 write_fn = dispatch_write_fn(step_name)
-                for output_pathname in post_results:
-                    if output_pathname.startswith(step_name):
+                for output_subdir in post_results:
+                    if output_subdir.startswith(step_name):
                         write_fn(
-                            post_results[output_pathname],
+                            post_result,
                             output_path,
-                            subpath=output_pathname,
-                            filename=fov,
+                            subpath=output_subdir,
+                            filename=pipeline_name,
                         )
     else:
-        if logger is not None:
-            logger.log(f"Skipping {fov}, as it exists")
+        logger.info(f"Skipping {pipeline_name}")
+        profiles, post_results = None, None
 
     return profiles, post_results
 
@@ -442,8 +563,12 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
         for step_name in pipeline["steps"]
         if step_name.startswith("extract") or step_name.startswith("nahual_embed")
     ]
-    data = []
+    # We will concatenate tables with the same number of colums horizontally
+    # and then join them on time point, tile and object columns
+    data = {k.split("_")[0]: [] for k in feature_steps}
     for ext_step in feature_steps:
+        step_prefix = ext_step.split("_")[0]
+
         # Data is stored in the following order: step -> time points -> tiles
         for tp, ext_output in enumerate(state["data"][ext_step]):
             if isinstance(ext_output, numpy.ndarray):  # Format arbitrary embedders
@@ -471,10 +596,21 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                     "metadata_tp",
                     pyarrow.array([tp] * len(table), pyarrow.uint8()),
                 )
-                data.append(table)
+                data[step_prefix].append(table)
 
-    if len(data):
-        profiles = pyarrow.concat_tables(data)
+    all_wide_tables = []
+    for k, wide_tables in data.items():
+        if len(wide_tables):
+            all_wide_tables.append(pyarrow.concat_tables(wide_tables))
+
+    # Create one wide table to rule them all, the final profiles
+    if all_wide_tables:
+        profiles = all_wide_tables[0]
+        for table in all_wide_tables[1:]:
+            profiles = profiles.join(
+                table,
+                keys=[f"metadata_{k}" for k in ("tp", "tile", "object", "label")],
+            )
 
     return profiles
 
