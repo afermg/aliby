@@ -1,12 +1,27 @@
 #!/usr/bin/env python
 
 from itertools import combinations, product
+from typing import Sequence
 
 
 def _create_extract_multich_tree(
-    channels: list[int], extract_ncores: int | None
+    channels: Sequence[int], extract_ncores: int | None
 ) -> dict:
-    """Generate the extract_multich_tree dictionary for colocalization."""
+    """
+    Generate the extract_multich_tree dictionary for colocalization.
+
+    Parameters
+    ----------
+    channels : Sequence of int
+        Sequence of channel indices to consider for colocalization.
+    extract_ncores : int or None
+        Number of cores to use for extraction.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the multich tree.
+    """
     return {
         "tree": {
             pair: {
@@ -23,14 +38,63 @@ def _create_extract_multich_tree(
 
 
 def build_pipeline_steps(
-    channels_to_segment: dict[str, int] = {"nuclei": 1, "cell": 0},
-    channels_to_extract: list[int] | None = None,
+    channels_to_segment: dict[str, int] | None = None,
+    channels_to_extract: Sequence[int] | None = None,
+    features_to_extract: Sequence[str] = (
+        "radial_zernikes",
+        "intensity",
+        "feret",
+        "texture",
+        "radial_distribution",
+        "zernike",
+        # "granularity", # Too time-consuming, deactivated for now
+    ),
     extract_ncores: int | None = None,
-    nahual_addresses: str | list[str] | None = None,
-    devices: list[int] | None = None,
-    steps_to_write: list[str] = [],
+    nahual_addresses: str | Sequence[str] | None = None,
+    devices: Sequence[int] | None = None,
+    steps_to_write: Sequence[str] | None = None,
 ) -> dict:
-    """Convenience function to build a pipeline definition, does not fill in IO."""
+    """
+    Convenience function to build a pipeline definition, does not fill in IO.
+
+    Parameters
+    ----------
+    channels_to_segment : dict of {str: int} or None, default=None
+        Dictionary mapping object names to their respective channel indices.
+        If None, defaults to `{"nuclei": 1, "cell": 0}`.
+    channels_to_extract : Sequence of int or None, default=None
+        Sequence of channel indices from which to extract features. If None, it
+        uses all values from `channels_to_segment`.
+    features_to_extract : Sequence of str, default=("radial_zernikes", ...)
+        Sequence of feature types to extract for each extracted channel.
+    extract_ncores : int or None, default=None
+        Number of CPU cores to use for feature extraction.
+    nahual_addresses : str or Sequence of str or None, default=None
+        Address(es) of the Nahual servers for remote segmentation.
+    devices : Sequence of int or None, default=None
+        Sequence of device IDs to distribute Nahual segmentation across.
+    steps_to_write : Sequence of str or None, default=None
+        Sequence of steps whose outputs should be saved (e.g., written to disk).
+        If None, defaults to all keys in `channels_to_segment`.
+
+    Returns
+    -------
+    dict
+        A dictionary defining the pipeline configuration. Expected keys include:
+
+        - ``steps`` (dict): Dictionary mapping step names to their parameter dictionaries.
+          Used to instantiate pipeline steps via `init_step`.
+        - ``passed_data`` (dict): Specifies which outputs from previous steps should be
+          passed as arguments to a given step. Format is
+          `{step_name: [(parameter_key, from_step, *optional_varname), ...]}`.
+        - ``passed_methods`` (dict): Specifies methods to call on previous step objects to
+          retrieve data. Format is `{step_name: (source_step, method_name)}`.
+        - ``save`` (list of str): List of step names whose outputs should be saved to disk.
+        - ``save_interval`` (int): Interval (in time points) at which to save outputs.
+    """
+
+    if channels_to_segment is None:
+        channels_to_segment = {"nuclei": 1, "cell": 0}
 
     use_nahual = nahual_addresses is not None
     distribute_across_devices = devices is not None
@@ -76,17 +140,8 @@ def build_pipeline_steps(
     )
     for i in channels_to_extract:
         extract_base["tree"][i] = {
-            "max": [
-                "radial_zernikes",
-                "intensity",
-                "feret",
-                "texture",
-                "radial_distribution",
-                "zernike",
-                # "granularity", # Too time-consuming, deactivated for now
-            ]
+            "max": features_to_extract,
         }
-
     extract_multich_base = _create_extract_multich_tree(
         channels_to_extract, extract_ncores
     )
@@ -135,12 +190,12 @@ def build_pipeline_steps(
         "passed_methods": {
             f"segment_{obj}": ("tile", "get_fczyx") for obj in channels_to_segment
         },
-        "write": list(channels_to_segment.keys()),
-        "write_interval": 1,
+        "save": list(channels_to_segment.keys()),
+        "save_interval": 1,
     }
 
     if steps_to_write is not None:
-        base_pipeline["write"] = steps_to_write
+        base_pipeline["save"] = list(steps_to_write)
 
     return base_pipeline
 
