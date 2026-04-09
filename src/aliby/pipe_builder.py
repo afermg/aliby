@@ -121,11 +121,12 @@ def build_pipeline_steps(
         ),
         "passed_data": dict(
             **{
-                f"extract_{obj}": [
+                f"extract{multi}_{obj}": [
                     ("masks", f"segment_{obj}"),
                     ("pixels", "tile"),
                 ]
                 for obj in channels_to_segment
+                for multi in ("", "multi")
             },
         ),
         "passed_methods": {

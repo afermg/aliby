@@ -221,11 +221,14 @@ def measure_multi(
     """
     (tile_i, mask_i), ((ch0, ch1), red_ch, red_z, metric) = tileid_x
     if red_ch == "None":  # This is a multi-image measurement
-        pixels_redz = reduce_z(pixels[[ch0, ch1]], REDUCTION_FUNS[red_z], axis=1)
+        pixels_tile = pixels[tile_i, [ch0, ch1]]
+        pixels_redz = reduce_z(pixels_tile, REDUCTION_FUNS[red_z], axis=1)
         result = CELL_FUNS[metric](masks[tile_i][mask_i - 1], *pixels_redz)
     else:  # This is a monoimage measurement, but with a combination of channels
         new_pixels = reduce_z(
-            np.stack((pixels[ch0], pixels[ch1])), REDUCTION_FUNS[red_ch], axis=0
+            np.stack((pixels[tile_i, ch0], pixels[tile_i, ch1])),
+            REDUCTION_FUNS[red_ch],
+            axis=0,
         )[np.newaxis, ...]
         tileid_x_new = ((tile_i, mask_i), (0, red_z, metric))
         # Treat as a normal metric from here on
