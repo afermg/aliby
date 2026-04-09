@@ -106,35 +106,43 @@
                 # Add python pkgs here that you need from nix repos
               ]);
             in
-            mkShell ({
-              packages = [
-                python_with_pkgs
-                python312Packages.venvShellHook
-                # We now recommend to use uv for package management inside nix env
-                pkgs.uv
-              ]
-              ++ libList;
-              venvDir = "./.venv";
-              postVenvCreation = ''
-                unset SOURCE_DATE_EPOCH
-              '';
-              postShellHook = ''
-                unset SOURCE_DATE_EPOCH
-              '';
-              shellHook = ''
-                ${pre-commit-check.shellHook}
-                ${if isLinux then "export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:\"/run/opengl-driver/lib\":$LD_LIBRARY_PATH" else ""}
-                export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
-                ${if isLinux then "export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}" else ""}
-                uv sync --all-groups
-                source .venv/bin/activate
-              '';
-            } // (pkgs.lib.optionalAttrs isLinux {
-              NIX_LD = runCommand "ld.so" { } ''
-                ln -s "$(cat '${pkgs.stdenv.cc}/nix-support/dynamic-linker')" $out
-              '';
-              NIX_LD_LIBRARY_PATH = lib.makeLibraryPath libList;
-            }));
+            mkShell (
+              {
+                packages = [
+                  python_with_pkgs
+                  python312Packages.venvShellHook
+                  # We now recommend to use uv for package management inside nix env
+                  pkgs.uv
+                ]
+                ++ libList;
+                venvDir = "./.venv";
+                postVenvCreation = ''
+                  unset SOURCE_DATE_EPOCH
+                '';
+                postShellHook = ''
+                  unset SOURCE_DATE_EPOCH
+                '';
+                shellHook = ''
+                  ${pre-commit-check.shellHook}
+                  ${
+                    if isLinux then
+                      "export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:\"/run/opengl-driver/lib\":$LD_LIBRARY_PATH"
+                    else
+                      ""
+                  }
+                  export PYTHON_KEYRING_BACKEND=keyring.backends.fail.Keyring
+                  ${if isLinux then "export CUDA_PATH=${pkgs.cudaPackages.cudatoolkit}" else ""}
+                  uv sync --all-groups
+                  source .venv/bin/activate
+                '';
+              }
+              // (pkgs.lib.optionalAttrs isLinux {
+                NIX_LD = runCommand "ld.so" { } ''
+                  ln -s "$(cat '${pkgs.stdenv.cc}/nix-support/dynamic-linker')" $out
+                '';
+                NIX_LD_LIBRARY_PATH = lib.makeLibraryPath libList;
+              })
+            );
         };
       }
     );
