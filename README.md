@@ -1,19 +1,47 @@
-# ALIBY: End-to-end processing for high throughput microscopy
+# ALIBY
 
-ALIBY (pronounced alib-bee) orchestrates various tools for processing large-scale imaging data. It supports tasks like segmentation (e.g., Cellpose), feature extraction, and deep learning model deployment.
+**End-to-end processing for high-throughput microscopy.**
 
-## Main features
+ALIBY (pronounced _alib-bee_) orchestrates various tools for processing large-scale imaging data. It quantifies microscopy experiments, fluorescence and/or time series, through segmentation (e.g., Cellpose) and feature extraction or via deep learning models.
 
-- End-to-end: From a folder of images into morphological profiles
-- Multiple modalities: Time-series, Fluorescence (Cell Painting, Fluorophores), 2D and 3D.
-- Interpretable or Deep Learning: Leverages [cp_measure](https://github.com/afermg/cp_measure?tab=readme-ov-file#bulk-api) for features or [nahual](https://github.com/afermg/nahual) for deep learning embeddings
-- Local-first, but supports distributed: GPU-intensive models can run in a different server from the one loading the data
-- Zarr support: Data loader for Zarr datasets, supporting compressed datasets
-- Standard output: Single-object (i.e., cell, nuclei) profiles are stored as parquet files with
+## Main Features
+
+- **End-to-End:** Extract morphological profiles from a set of images.
+- **Multimodal:** Handles Time-series, Fluorescence (Cell Painting, Fluorophores), and both 2D and 3D data.
+- **Interpretable & Deep Learning:** Leverages [cp_measure](https://github.com/afermg/cp_measure) for classical features or [nahual](https://github.com/afermg/nahual) for deep learning embeddings.
+- **Local-First, but also Distributed:** Can be run on a single machine, but also supports GPU-based processing across machines.
+- **Standardized Output:** Object-level profiles (e.g., cells, nuclei) stored as efficient Parquet files.
+- **Zarr support:** Zarr support for compressed, scalable datasets.
+
+## Installation
+
+### Using `pip`
+
+```bash
+pip install aliby
+```
+
+### Using `uv`
+
+For development installations, we recommend [uv](https://github.com/astral-sh/uv).
+
+```bash
+git clone git@github.com:afermg/aliby.git
+cd aliby
+uv sync --all-groups
+```
+
+### Nix
+
+For a fully reproducible, self-contained shell:
+
+```bash
+nix develop .
+```
 
 ## Quick Start: Basic Pipeline for Local TIFFs
 
-This example demonstrates how to run a segmentation (via [Cellpose](https://github.com/MouseLand/cellpose)) and feature extraction (via [cp_measure](https://github.com/afermg/cp_measure?tab=readme-ov-file#bulk-api)) pipeline on a local dataset of TIF files.
+Process a local dataset of TIFF files using [Cellpose](https://github.com/MouseLand/cellpose) for segmentation and [cp_measure](https://github.com/afermg/cp_measure) for feature extraction.
 
 ```python
 from pathlib import Path
@@ -21,29 +49,29 @@ from aliby.io.dataset import DatasetDir
 from aliby.pipe import run_pipeline_and_post
 from aliby.pipe_builder import build_pipeline_steps
 
-# 1. Setup paths and data identification
+# 1. Setup paths and metadata identification
 input_path = Path("data/my_experiment")
-# Regex to capture experimental metadata from filenames
-# example filename: `testdir/testimage__A01__1__DNA.tif` -> A01, 1, DNA
-regex = ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"
-capture_order = "WFC"  # e.g., Well, Field-of-view, Channel
+
+# Regex to capture Well, Field-of-view, and Channel from filenames
+# example: `testdir/testimage__A01__1__DNA.tif` -> A01, 1, DNA
+regex = r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"
+capture_order = "WFC" 
 
 # 2. Identify positions in the dataset
 dataset = DatasetDir(input_path, regex=regex, capture_order=capture_order)
-positions = datas.get_position_ids() # This will fail if the regex doesn't capture any image groups
+positions = dataset.get_position_ids()
 
 # Take the first position for this example
 key, path = positions[0]["key"], positions[0]["path"]
 
 # 3. Build pipeline steps
-# Define which channels to segment and which to extract features from
 pipeline = build_pipeline_steps(
     channels_to_segment={"nuclei": 1},
-    channels_to_extract=[0, 1], # If the channels DNA, RNA, etc. they will be alphabetically sorted 
-    features_to_extract=["intensity", "sizeshape"], # cp_measure features
+    channels_to_extract=[0, 1], 
+    features_to_extract=["intensity", "sizeshape"], 
 )
 
-# 4. Tell the "tile" step which set of images to read
+# 4. Configure the tiling step
 pipeline["steps"]["tile"]["image_kwargs"] = {
     "source": {"key": key, "path": path},
     "regex": regex,
@@ -58,38 +86,21 @@ result = run_pipeline_and_post(
 )
 ```
 
-## Installation
+_See the [examples/](examples/) directory for more advanced use cases.
 
-We recommend using [uv](https://github.com/astral-sh/uv):
+## Core Concepts & Glossary
 
-```bash
-git clone git@github.com:afermg/aliby.git
-cd aliby
-uv sync --all-groups
-```
+Microscopy terminology can vary. Here’s how ALIBY defines these concepts:
 
-### Nix setup
+- **Position / Field of View (FOV) / Site**: A set of images (all time points, z-stacks, channels) captured at a single physical location.
+- **Time point / Frame**: A single moment in a time-series experiment.
+- **Regex & Capture Groups**: ALIBY uses Regular Expressions to map filenames into internal arrays. Capture groups `()` in your regex define metadata like Well (W), Channel (C), or Time (T).
+- **Capture Order**: The order of metadata groups in your regex (e.g., `"WFC"`).
+- **TCZYX Dimensions**: Internally, all data is handled as a 5-D array: **T**ime, **C**hannel, **Z**-stack, **Y**, and **X**.
+- **Cell Painting**: A high-content screening assay using five dyes to highlight various organelles, typically used to generate phenotypic vectors.
 
-To run in a self-contained shell:
+### About the project
 
-```bash
-nix develop .
-```
-
-## Notes
-
-### Terms and assumptions
-Different subfields renamed existing concepts. Here is a list of names and details to make things less confusing.
-
-- **Position/Field of View/Site**: A set of images obtained in the same location, comprised of all available time points, z-stacks, and channels taken in that exact place.
-- **Time point/Frame**: In this context, "frame" is short for time-frame. 
-- **regex**: Regular expression; the pattern-matching logic ALIBY uses to map a list of filenames into an array representing the images using capture groups (patterns inside `()` brackets).
-- **capture_order**: The order in which the capture groups appear in the filename, represented as a string composed of a subset of `TCZ` and other non-`YX` letters.
-- **Dimensions**: Any list of images (or zarr array) will be converted to a 5-D array internally: `TCZYX`. T (Time), C (Channel), Z (z-stack), Y (Y-dimension), and X (X-dimension).
-- **Other capture groups**: These are not encoded but are often used to group images when stored in a single folder, such as W (Well), F (Field-of-View/Site), and P (Plate).
-- **Cell Painting**: An experimental assay in which cells are fixed and dyed with five different compounds to highlight different sets of organelles. This is usually converted into vectors that characterize the cell state to evaluate the effect of drugs at scale.
-
-### Details about the project itself
-- Due to a recent overhaul of ALIBY, detailed documentation is under construction.
-- To keep the dependency tree as small as possible is mostly considered feature-complete, any further processing will be done in a separate library.
-- ALIBY stands for (Analyser of Live-Cell Imaging for Budding Yeast), since it started in 2021 as a tool to quantify cell signalling in high throughput time series experiments. Over the years its scope increased to support Cell Painting assays on mammalian cells, growing into a generalist method for end-to-end processing of microscopy imaging.
+- Under Construction:Detailed documentation is currently being
+- We aim to keep the dependency tree minimal. Further downstream processing is often relegated to specialized libraries.
+- ALIBY (_Analyser of Live-Cell Imaging for Budding Yeast_) originated in [2021](https://gitlab.com/aliby/aliby) at the [Swain Lab](https://swainlab.bio.ed.ac.uk/) to quantify yeast signalling. It has since evolved into a general-purpose tool for high-throughput imaging, including mammalian Cell Painting assays.
