@@ -78,6 +78,18 @@ nix develop .
 
 ## Notes
 
-- Documentation is under construction
+### Terms and assumptions
+Different subfields renamed existing concepts. Here is a list of names and details to make things less confusing.
+
+- Position/Field of View/Site: A set of images obtained in the same location. It is comprised of all the available time points, z-stacks and channels taken in that exact place.
+- Time point/Frame: In this context, frame is short for time-frame. 
+- regex: Regular expression, pattern-matching ALIBY uses to map a list of filenames into an array representing the images using capture groups -- patterns inside `()` brackets.
+- capture_order: Order in which the capture groups appear in the filename, this is a strings composed of a subset of `TCZ` and other non-`YX` letters).
+- Dimensions: Any list of images (or zarr array) will be converted to a 5-D array internally,`TCZYX`. T (Time), C (Channel), Z (z-stack), Y (Y dimension) and X (X-dimension)
+- Other capture groups: These are not encoded but they are often used to group images when everything is in a single folder. W (Well), F (Field-of-View/Site), P (Plate).
+- Cell Painting: Experimental assay in which cells are fixed in place and dyed with 5 different compounds that show a different sets of organelles. This is usually converted into vectors that characterise the cell state and can be used to evaluate the effect of drugs at scale.
+
+### Details about the project itself
+- Due to a recent overhaul of ALIBY, detailed documentation is under construction.
 - To keep the dependency tree as small as possible is mostly considered feature-complete, any further processing will be done in a separate library.
-- ALIBY stands for (Analyser of Live-Cell Imaging for Budding Yeast), since it started in 2021 as a tool to quantify cell signalling in high throughput time series experiments. Over the yeats it grew in scope to support Cell Painting assays on mammalian cells, becoming a generalist method for end-to-end processing of microscopy imaging.
+- ALIBY stands for (Analyser of Live-Cell Imaging for Budding Yeast), since it started in 2021 as a tool to quantify cell signalling in high throughput time series experiments. Over the years its scope increased to support Cell Painting assays on mammalian cells, growing into a generalist method for end-to-end processing of microscopy imaging.
