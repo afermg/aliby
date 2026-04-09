@@ -242,7 +242,10 @@ class ImageZarrArray(BaseLocalImage):
 
     def get_data_lazy(self) -> np.ndarray:
         if not hasattr(self, "_img"):
-            store = zarr.storage.LocalStore(self.path)
+            if hasattr(zarr.storage, "LocalStore"):
+                store = zarr.storage.LocalStore(self.path)
+            else:
+                store = zarr.storage.DirectoryStore(self.path)
             root_group = zarr.group(store)
             self.zarr_arr = root_group[self.key]
 
