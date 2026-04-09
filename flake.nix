@@ -102,7 +102,7 @@
         devShells = {
           default =
             let
-              python_with_pkgs = pkgs.python312.withPackages (pp: [
+              python_with_pkgs = pkgs.python313.withPackages (pp: [
                 # Add python pkgs here that you need from nix repos
               ]);
             in
@@ -110,7 +110,7 @@
               {
                 packages = [
                   python_with_pkgs
-                  python312Packages.venvShellHook
+                  python313Packages.venvShellHook
                   # We now recommend to use uv for package management inside nix env
                   pkgs.uv
                 ]
