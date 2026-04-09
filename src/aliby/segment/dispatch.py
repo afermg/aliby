@@ -136,16 +136,3 @@ def dispatch_segmenter(
             raise Exception(f"Invalid segmentation method {kind}")
 
     return segment
-
-
-def initialise_tensorflow(version=2):
-    """Initialise tensorflow."""
-    import tensorflow as tf
-
-    if version == 2:
-        gpus = tf.config.experimental.list_physical_devices("GPU")
-        if gpus:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices("GPU")
-            print(len(gpus), "physical GPUs,", len(logical_gpus), "logical GPUs")
