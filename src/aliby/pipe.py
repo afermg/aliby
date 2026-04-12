@@ -48,7 +48,6 @@ def configure_logging(file):
         level="DEBUG",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
     )
-    configure_logging()
 
 
 def init_step(
