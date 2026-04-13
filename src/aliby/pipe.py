@@ -495,10 +495,9 @@ def run_pipeline_and_post(
         # Aggregate profiles from the state output
         profiles = get_profiles_from_state(state, pipeline)
 
-        # Save files
-        if len(profiles):
-            profiles_file.parent.mkdir(parents=True, exist_ok=True)
-            pyarrow.parquet.write_table(profiles, profiles_file, compression="zstd")
+        # Save files (always write, even if empty, so re-runs skip and duckdb reads succeed)
+        profiles_file.parent.mkdir(parents=True, exist_ok=True)
+        pyarrow.parquet.write_table(profiles, profiles_file, compression="zstd")
 
         # Run global processing steps (post-processing)
         post_results = {}
