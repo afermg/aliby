@@ -53,6 +53,9 @@ def build_pipeline_steps(
     nahual_addresses: str | Sequence[str] | None = None,
     devices: Sequence[int] | None = None,
     steps_to_write: Sequence[str] | None = None,
+    segmenter_kind: str | None = None,
+    baby_address: str | None = None,
+    baby_modelset: str | None = None,
 ) -> dict:
     """
     Convenience function to build a pipeline definition, does not fill in IO.
@@ -99,9 +102,10 @@ def build_pipeline_steps(
     use_nahual = nahual_addresses is not None
     distribute_across_devices = devices is not None
 
-    segmenter_kind = "cellpose"
-    if use_nahual:
-        segmenter_kind = "nahual_cellpose"
+    if segmenter_kind is None:
+        segmenter_kind = "cellpose"
+        if use_nahual:
+            segmenter_kind = "nahual_cellpose"
 
     if distribute_across_devices:  # Randomly assign Nahual_Cellpose instances
         assert isinstance(nahual_addresses, list), (
@@ -120,10 +124,12 @@ def build_pipeline_steps(
     seg_params = {}
     for i, (obj, ch_id) in enumerate(channels_to_segment.items()):
         step_name = f"segment_{obj}"
+        skwargs = dict(kind=segmenter_kind)
+        if segmenter_kind == "nahual_baby":
+            skwargs["address"] = baby_address
+            skwargs["modelset"] = baby_modelset
         seg_params[step_name] = dict(
-            segmenter_kwargs=dict(
-                kind=segmenter_kind,
-            ),
+            segmenter_kwargs=skwargs,
             channel_to_segment=ch_id,
         )
         if distribute_across_devices:

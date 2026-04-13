@@ -23,6 +23,7 @@ def dispatch_segmenter(
             extra_args = {
                 "refine_outlines": ("", "true"),
                 "with_edgemasks": ("", "true"),
+                "with_masks": ("", "true"),
             }
 
             modelset = kwargs.pop("modelset")
@@ -33,13 +34,29 @@ def dispatch_segmenter(
                 for k, v in kwargs["extra_args"]:
                     extra_args[k] = v
 
-            return partial(
+            _process = partial(
                 process_data,
                 address=address,
                 session_id=session_id,
                 channel_to_segment=channel_to_segment,
                 extra_args=tuple(extra_args.items()),
             )
+
+            def segment(pixels):
+                # Baby returns list of (n_layers, Y, X) per tile.
+                # Collapse layers into a single 2D label mask (Y, X) per tile
+                # using max-projection (safe: DSatur ensures no pixel overlap
+                # across layers, so max gives the unique cell label at each pixel).
+                # Return as list so process_tree_masks sees a per-tile structure.
+                tile_shape = pixels.shape[-2:]  # (Y, X) from input
+                per_tile = _process(pixels)
+                return [
+                    nyx.max(axis=0) if nyx.shape[0] > 0
+                    else np.zeros(tile_shape, dtype=int)
+                    for nyx in per_tile
+                ]
+
+            return segment
         case "nahual_cellpose":
             # Examples over at https://github.com/afermg/nahual/blob/master/examples/
             # Cellpose via a nahual running server

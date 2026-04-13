@@ -150,11 +150,13 @@ class CropTiler(StepABC):
     def from_image(cls, image, parameters):
         return cls(image.data, **parameters.to_dict())
 
-    def get_fczyx(self, tp: int, tile_size: int) -> np.ndarray:
+    def get_fczyx(self, tp: int, tile_size: int = None) -> np.ndarray:
         """
         Load multidimensional image for a given time point.
         Note that this one does not apply image tracking.
         """
+        if tile_size is None:
+            tile_size = self.tile_size
         pix = self.pixels[tp]
 
         # if using dask fetch images
