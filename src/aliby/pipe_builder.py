@@ -53,6 +53,9 @@ def build_pipeline_steps(
     nahual_addresses: str | Sequence[str] | None = None,
     devices: Sequence[int] | None = None,
     steps_to_write: Sequence[str] | None = None,
+    segmenter_kind: str | None = None,
+    baby_modelset: str | None = None,
+    baby_address: str | None = None,
 ) -> dict:
     """
     Convenience function to build a pipeline definition, does not fill in IO.
@@ -99,9 +102,12 @@ def build_pipeline_steps(
     use_nahual = nahual_addresses is not None
     distribute_across_devices = devices is not None
 
-    segmenter_kind = "cellpose"
-    if use_nahual:
-        segmenter_kind = "nahual_cellpose"
+    if segmenter_kind is None:
+        segmenter_kind = "cellpose"
+        if use_nahual:
+            segmenter_kind = "nahual_cellpose"
+
+    use_baby = segmenter_kind == "nahual_baby"
 
     if distribute_across_devices:  # Randomly assign Nahual_Cellpose instances
         assert isinstance(nahual_addresses, list), (
@@ -126,6 +132,11 @@ def build_pipeline_steps(
             ),
             channel_to_segment=ch_id,
         )
+        if use_baby:
+            assert baby_address is not None, "baby_address required for nahual_baby"
+            assert baby_modelset is not None, "baby_modelset required for nahual_baby"
+            seg_params[step_name]["segmenter_kwargs"]["address"] = baby_address
+            seg_params[step_name]["segmenter_kwargs"]["modelset"] = baby_modelset
         if distribute_across_devices:
             seg_params[step_name]["segmenter_kwargs"]["address"] = addresses[
                 hashed_input % n_addresses
@@ -138,6 +149,8 @@ def build_pipeline_steps(
         tree={"None": {"None": ("sizeshape",)}},
         kwargs=dict(ncores=extract_ncores),
     )
+    if use_baby:
+        extract_base["overlap"] = True
     for i in channels_to_extract:
         extract_base["tree"][i] = {
             "max": features_to_extract,
@@ -147,13 +160,14 @@ def build_pipeline_steps(
     )
 
     # Build extraction parameters using segmentation
+    # Multi-channel extraction doesn't support baby's overlapping masks
+    extract_variants = [("", extract_base)]
+    if not use_baby:
+        extract_variants.append(("multi", extract_multich_base))
     ext_params = {
         f"extract{name}_{obj}": var
         for (name, var), obj in product(
-            (
-                ("", extract_base),
-                ("multi", extract_multich_base),
-            ),
+            extract_variants,
             channels_to_segment,
         )
         if len(var)
@@ -184,7 +198,7 @@ def build_pipeline_steps(
                     ("pixels", "tile"),
                 ]
                 for obj in channels_to_segment
-                for multi in ("", "multi")
+                for multi in ([n for n, _ in extract_variants])
             },
         ),
         "passed_methods": {

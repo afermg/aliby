@@ -57,12 +57,19 @@ class TilerParameters(ParametersABC):
 
 def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
     """Returns a Tiler class constructor that requires an Image (class)."""
+    # Separate TilerParameters fields from extra kwargs
+    tiler_param_keys = set(TilerParameters._defaults.keys())
+    tiler_kwargs = {k: v for k, v in kwargs.items() if k in tiler_param_keys}
+    extra_kwargs = {k: v for k, v in kwargs.items() if k not in tiler_param_keys}
+
     match kind:
         case "crop":
             tiler = CropTiler
         case _:
             tiler = Tiler
-    return partial(tiler.from_image, parameters=TilerParameters(**kwargs))
+    return partial(
+        tiler.from_image, parameters=TilerParameters(**tiler_kwargs), **extra_kwargs
+    )
 
 
 def clip_outliers(pix: np.ndarray, clip: float = 0.5):
@@ -147,10 +154,10 @@ class CropTiler(StepABC):
         self.convert_8bit = convert_8bit
 
     @classmethod
-    def from_image(cls, image, parameters):
-        return cls(image.data, **parameters.to_dict())
+    def from_image(cls, image, parameters, **kwargs):
+        return cls(image.data, **parameters.to_dict(), **kwargs)
 
-    def get_fczyx(self, tp: int, tile_size: int) -> np.ndarray:
+    def get_fczyx(self, tp: int, **kwargs) -> np.ndarray:
         """
         Load multidimensional image for a given time point.
         Note that this one does not apply image tracking.
@@ -170,13 +177,13 @@ class CropTiler(StepABC):
         if self.standard_scale:
             pix = standard_scale(pix)
 
-        tiles = tile(pix, tile_size)
+        tiles = tile(pix, self.tile_size)
 
         return tiles
 
     def _run_tp(self, tp: int):
         return {
-            "pixels": self.get_fczyx(tp, tile_size=self.tile_size),
+            "pixels": self.get_fczyx(tp),
         }
 
 
@@ -664,7 +671,12 @@ def set_areas_of_interest(
         # max_size is the minimum of the numbers of x and y pixels
         max_size = min(shape[-2:])
         # find the tiles
-        tile_locs = segment_traps(pixels, tile_size_min)
+        try:
+            tile_locs = segment_traps(pixels, tile_size_min)
+        except Exception as e:
+            warnings.warn(f"Trap detection failed ({e}), falling back to center tile.")
+            tile_locs = get_center(shape)
+            return tile_locs
         # keep only tiles that are not near an edge
         tile_locs = [
             [x, y]

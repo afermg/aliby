@@ -25,14 +25,30 @@ def dispatch_write_fn(
 def write_ndarray(result, steps_dir: Path, subpath: str or int, tp: int) -> None:
     """Write a numpy array into an npy file.
 
-    Creates parent directories if needed."""
+    Creates parent directories if needed.
+    When result is a dict (e.g., baby output with masks + metadata),
+    saves the masks and metadata separately."""
     this_step_path = Path(steps_dir) / subpath
     this_step_path.mkdir(exist_ok=True, parents=True)
     if subpath == "tile":
         subpath = "pixels"
 
     out_file = this_step_path / f"{tp:04d}.npz"
-    np.savez_compressed(out_file, np.array(result))
+    if isinstance(result, dict) and "masks" in result:
+        # Baby output: save masks as arrays and metadata as json
+        save_dict = {}
+        for i, mask in enumerate(result["masks"]):
+            save_dict[f"tile_{i}"] = np.array(mask)
+        np.savez_compressed(out_file, **save_dict)
+
+        # Save metadata (tracking/lineage) as json sidecar
+        if "metadata" in result:
+            import json
+
+            meta_file = this_step_path / f"{tp:04d}_meta.json"
+            meta_file.write_text(json.dumps(result["metadata"]))
+    else:
+        np.savez_compressed(out_file, np.array(result))
 
 
 def write_parquet(

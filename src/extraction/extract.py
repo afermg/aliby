@@ -468,14 +468,7 @@ def process_tree_masks_overlap(  # overlap
         tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
     )
 
-    # Revert reduced map to expanded one (with global identifiers)
-    updated_result = {}
-    for keys, v in result.items():
-        tile_i, mask_i = keys
-        orig_labels = inverse_mappings[keys]
-        updated_result[(tile_i, orig_labels)]
-
-    return tileid_instructions, updated_result
+    return tileid_instructions, result
 
 
 def format_extraction(

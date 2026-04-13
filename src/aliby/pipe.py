@@ -456,6 +456,49 @@ def run_pipeline_return_state(pipeline: dict, steps_dir: str = None) -> dict:
     return state
 
 
+def _save_baby_tracking_lineage(
+    state: dict, pipeline: dict, output_path: Path, pipeline_name: str
+) -> None:
+    """Extract and save tracking/lineage from baby segment results.
+
+    Only does something when a segment step used nahual_baby and returned
+    dict results with 'metadata' keys.
+    """
+    for step_name in pipeline["steps"]:
+        if not step_name.startswith("segment"):
+            continue
+        seg_kwargs = pipeline["steps"][step_name].get("segmenter_kwargs", {})
+        if not seg_kwargs.get("kind", "").endswith("baby"):
+            continue
+
+        # Collect baby metadata across timepoints
+        step_data = state["data"].get(step_name, [])
+        baby_meta_history = []
+        for tp_result in step_data:
+            if isinstance(tp_result, dict) and "metadata" in tp_result:
+                baby_meta_history.append(tp_result["metadata"])
+
+        if not baby_meta_history:
+            continue
+
+        from aliby.segment.baby_parser import (
+            accumulate_lineage,
+            accumulate_tracking,
+            baby_tracking_to_table,
+        )
+
+        tracking = accumulate_tracking(baby_meta_history)
+        lineage = accumulate_lineage(baby_meta_history)
+        table = baby_tracking_to_table(tracking, lineage)
+
+        if len(table):
+            tracking_dir = output_path / "tracking"
+            tracking_dir.mkdir(parents=True, exist_ok=True)
+            out_file = tracking_dir / f"{pipeline_name}_{step_name}.parquet"
+            pyarrow.parquet.write_table(table, out_file, compression="zstd")
+            logger.info(f"Saved baby tracking/lineage to {out_file}")
+
+
 def run_pipeline_and_post(
     pipeline: dict,
     pipeline_name: str,
@@ -498,6 +541,9 @@ def run_pipeline_and_post(
         # Save files (always write, even if empty, so re-runs skip and duckdb reads succeed)
         profiles_file.parent.mkdir(parents=True, exist_ok=True)
         pyarrow.parquet.write_table(profiles, profiles_file, compression="zstd")
+
+        # Save baby tracking/lineage if any segment step used baby
+        _save_baby_tracking_lineage(state, pipeline, output_path, pipeline_name)
 
         # Run global processing steps (post-processing)
         post_results = {}

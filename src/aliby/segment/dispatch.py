@@ -23,6 +23,7 @@ def dispatch_segmenter(
             extra_args = {
                 "refine_outlines": ("", "true"),
                 "with_edgemasks": ("", "true"),
+                "with_masks": ("", "true"),
             }
 
             modelset = kwargs.pop("modelset")
@@ -39,6 +40,7 @@ def dispatch_segmenter(
                 session_id=session_id,
                 channel_to_segment=channel_to_segment,
                 extra_args=tuple(extra_args.items()),
+                return_metadata=True,
             )
         case "nahual_cellpose":
             # Examples over at https://github.com/afermg/nahual/blob/master/examples/
