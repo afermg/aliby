@@ -32,7 +32,7 @@ class TileLocations:
         if drifts is None:
             drifts = []
         if isinstance(tile_size, int):
-            max_size = (tile_size, max_size)
+            tile_size = (tile_size, tile_size)
         self.tile_size = tile_size
         if isinstance(max_size, int):
             max_size = (max_size, max_size)

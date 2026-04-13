@@ -393,8 +393,10 @@ class Tiler(StepABC):
         """
         ref_z = getattr(self, "ref_z", 0)
         if self.no_processed == 0:
-            if hasattr(self, "ref_Channel_index"):
+            if hasattr(self, "ref_channel_index"):
                 initial_image = self.pixels[0, self.ref_channel_index, ref_z]
+                if hasattr(initial_image, "compute"):
+                    initial_image = initial_image.compute(scheduler="synchronous")
                 self.tile_locs = set_areas_of_interest(
                     initial_image,
                     self.tile_size,
@@ -639,7 +641,7 @@ def if_out_of_bounds_pad(
 
 def set_areas_of_interest(
     pixels: np.ndarray,
-    tile_size: list[int] = None,
+    tile_size: int | list[int] = None,
 ) -> tuple[tuple[int]]:
     """
     Find initial positions of tiles, or determine that the entire image is
@@ -650,18 +652,19 @@ def set_areas_of_interest(
 
     Parameters
     ----------
-    tile_size: list[integer]
-        The size of a tile
+    tile_size: int or list[integer]
+        The size of a tile (scalar or [height, width])
     """
     shape = pixels.shape
+    # normalise tile_size to a scalar for comparisons
+    tile_size_min = tile_size if isinstance(tile_size, int) else min(tile_size)
     # only tile if the image fits more than one non-overlaping tile
-    if tile_size is not None and min(shape) // 2 > min(tile_size) // 2:
-        half_tile = min(tile_size) // 2
+    if tile_size is not None and min(shape) // 2 > tile_size_min // 2:
+        half_tile = tile_size_min // 2
         # max_size is the minimum of the numbers of x and y pixels
         max_size = min(shape[-2:])
         # find the tiles
-        min_tile_size = min(tile_size)  # Use smaller end for trap segmentation
-        tile_locs = segment_traps(pixels, min_tile_size)
+        tile_locs = segment_traps(pixels, tile_size_min)
         # keep only tiles that are not near an edge
         tile_locs = [
             [x, y]
@@ -670,7 +673,7 @@ def set_areas_of_interest(
             and half_tile < y < max_size - half_tile
         ]
         # store tiles in an instance of TileLocations
-        tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size)
+        tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size, max_size)
     else:
         tile_locs = get_center(shape)
         # one tile with its centre at the image's centre
