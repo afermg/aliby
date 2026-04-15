@@ -45,52 +45,106 @@ def _():
 
 @app.cell
 def _():
-    import sys
     from pathlib import Path
 
     import numpy as np
 
-    _src = Path(__file__).resolve().parents[1] / "src"
-    if str(_src) not in sys.path:
-        sys.path.insert(0, str(_src))
-
-    _notebooks = Path(__file__).resolve().parent
-    if str(_notebooks) not in sys.path:
-        sys.path.insert(0, str(_notebooks))
-    return Path, np, sys
+    return (Path,)
 
 
 @app.cell
 def _(mo):
-    mo.md("## 1. Data Setup (via nb01)")
+    mo.md("""
+    ## 1. Data Source
+
+    Point to **any folder** of images with a matching regex, or use the
+    built-in test dataset from nb01.
+    """)
     return
 
 
 @app.cell
-def _(Path):
+def _(Path, mo):
     import nb01_data_loading as nb01
 
-    data_path = nb01.get_data_path(Path)
+    # Zenodo test datasets (downloaded on first use)
+    test_data_path = nb01.get_data_path(Path)
     catalog = nb01.dataset_catalog()
-    return catalog, data_path, nb01
+
+    dataset_dropdown = mo.ui.dropdown(
+        options={"(custom path)": None, **{d["name"]: d for d in catalog}},
+        value=catalog[0]["name"],
+        label="Test dataset (from Zenodo)",
+    )
+    dataset_dropdown
+    return dataset_dropdown, test_data_path
+
+
+@app.cell(hide_code=True)
+def _(dataset_dropdown, mo, test_data_path):
+    # Pre-fill from test dataset or enter custom values
+    _selected = dataset_dropdown.value
+    if _selected is not None:
+        _default_folder = str(test_data_path / _selected["name"])
+        _default_regex = _selected["regex"]
+        _default_capture = _selected["capture_order"]
+    else:
+        _default_folder = ""
+        _default_regex = ".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"
+        _default_capture = "WFC"
+
+    folder_input = mo.ui.text(
+        value=_default_folder,
+        label="Image folder",
+        full_width=True,
+    )
+    regex_input = mo.ui.text(
+        value=_default_regex,
+        label="Filename regex (capture groups define position grouping)",
+        full_width=True,
+    )
+    capture_order_input = mo.ui.text(
+        value=_default_capture,
+        label="Capture order (e.g. WFC, FTCZ, WTFZC)",
+    )
+
+    mo.vstack([folder_input, regex_input, capture_order_input])
+    return capture_order_input, folder_input, regex_input
 
 
 @app.cell
-def _(catalog, data_path, mo, nb01):
-    # Use the cell painting dataset (single timepoint, multi-channel)
-    ds_info = catalog[0]  # crop_cellpainting_256
-    _dset, positions = nb01.load_dataset_dir(data_path, ds_info)
+def _(Path, capture_order_input, folder_input, mo, regex_input):
+    from aliby.io.dataset import DatasetDir
+
+    _folder = Path(folder_input.value)
+    ds_info = {
+        "name": _folder.name,
+        "regex": regex_input.value,
+        "capture_order": capture_order_input.value,
+    }
+
+    dset = DatasetDir(
+        _folder,
+        regex=ds_info["regex"],
+        capture_order=ds_info["capture_order"],
+    )
+    positions = dset.get_position_ids()
 
     mo.md(
-        f"**Dataset:** `{ds_info['name']}` — {len(positions)} position(s)\n\n"
-        f"Using the Cell Painting dataset as input for embedding."
+        f"**Dataset:** `{ds_info['name']}` — **{len(positions)}** position(s)\n\n"
+        + "\n".join(
+            f"- `{p['key']}`: {len(p['path']) if isinstance(p['path'], list) else 1} file(s)"
+            for p in positions[:5]
+        )
     )
     return ds_info, positions
 
 
 @app.cell
 def _(mo):
-    mo.md("## 2. Model Selection")
+    mo.md("""
+    ## 2. Model Selection
+    """)
     return
 
 
@@ -186,7 +240,9 @@ def _(MODEL_REGISTRY, mo, model_selector):
 
 @app.cell
 def _(mo):
-    mo.md("## 3. Pipeline Configuration")
+    mo.md("""
+    ## 3. Pipeline Configuration
+    """)
     return
 
 
@@ -253,7 +309,6 @@ def build_embed_pipeline(input_path, address, tile_size, ds_info, model_config):
 def _(
     MODEL_REGISTRY,
     address_input,
-    build_embed_pipeline,
     ds_info,
     mo,
     model_selector,
@@ -282,17 +337,19 @@ def _(
         f"- **selected_channels:** {model_config['selected_channels']}\n"
         f"- **Steps:** {list(dl_pipeline['steps'].keys())}"
     )
-    return address, dl_pipeline, embed_step, input_path, model_config, model_key, pos, tile_size
+    return (model_config,)
 
 
 @app.cell
 def _(mo):
-    mo.md("## 4. Starting a Nahual Server")
+    mo.md("""
+    ## 4. Starting a Nahual Server
+    """)
     return
 
 
 @app.cell
-def _(MODEL_REGISTRY, mo, model_config):
+def _(mo, model_config):
     _lines = [
         "**A Nahual model server must be running before executing the "
         "pipeline.** Each model lives in its own repository with its own "
@@ -320,12 +377,14 @@ def _(MODEL_REGISTRY, mo, model_config):
 
 @app.cell
 def _(mo):
-    mo.md("## 5. Run Embedding Pipeline")
+    mo.md("""
+    ## 5. Run Embedding Pipeline
+    """)
     return
 
 
 @app.cell
-def _(Path, dl_pipeline, mo, pos):
+def _(mo):
     # Uncomment to run (requires a Nahual server):
     #
     # import tempfile
@@ -342,10 +401,9 @@ def _(Path, dl_pipeline, mo, pos):
     #     _df = profiles.to_pandas()
     #     mo.output.replace(mo.ui.table(_df.head(20)))
 
-    mo.md(
-        "_Pipeline execution is commented out — uncomment after starting "
-        "a Nahual server._"
-    )
+    mo.md("""
+    _Pipeline execution is commented out — uncomment after starting a Nahual server._
+    """)
     return
 
 

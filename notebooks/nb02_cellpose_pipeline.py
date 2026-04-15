@@ -40,64 +40,106 @@ def _():
 
 @app.cell
 def _():
-    import sys
     from pathlib import Path
 
     import numpy as np
 
-    _src = Path(__file__).resolve().parents[1] / "src"
-    if str(_src) not in sys.path:
-        sys.path.insert(0, str(_src))
-
-    # Import nb01 as a module so we can reuse its @app.function helpers
-    _notebooks = Path(__file__).resolve().parent
-    if str(_notebooks) not in sys.path:
-        sys.path.insert(0, str(_notebooks))
-    return Path, np, sys
+    return (Path,)
 
 
 @app.cell
 def _(mo):
-    mo.md("## 1. Load Test Data (via nb01)")
+    mo.md("""
+    ## 1. Data Source
+
+    Point to **any folder** of images with a matching regex, or use the
+    built-in test dataset.
+    """)
     return
 
 
 @app.cell
-def _(Path):
+def _(Path, mo):
     import nb01_data_loading as nb01
 
-    data_path = nb01.get_data_path(Path)
+    # Zenodo test datasets (downloaded on first use)
+    test_data_path = nb01.get_data_path(Path)
     catalog = nb01.dataset_catalog()
-    return catalog, data_path, nb01
 
-
-@app.cell
-def _(catalog, mo):
-    ds_dropdown = mo.ui.dropdown(
-        options={d["name"]: d for d in catalog},
+    dataset_dropdown = mo.ui.dropdown(
+        options={"(custom path)": None, **{d["name"]: d for d in catalog}},
         value=catalog[0]["name"],
-        label="Select dataset",
+        label="Test dataset (from Zenodo)",
     )
-    ds_dropdown
-    return (ds_dropdown,)
+    dataset_dropdown
+    return dataset_dropdown, test_data_path
 
 
 @app.cell
-def _(data_path, ds_dropdown, mo, nb01):
-    ds_info = ds_dropdown.value
-    _dset, positions = nb01.load_dataset_dir(data_path, ds_info)
+def _(dataset_dropdown, mo, test_data_path):
+    # Pre-fill from test dataset or enter custom values
+    _selected = dataset_dropdown.value
+    if _selected is not None:
+        _default_folder = str(test_data_path / _selected["name"])
+        _default_regex = _selected["regex"]
+        _default_capture = _selected["capture_order"]
+    else:
+        _default_folder = ""
+        _default_regex = r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif"
+        _default_capture = "WFC"
+
+    folder_input = mo.ui.text(
+        value=_default_folder,
+        label="Image folder",
+        full_width=True,
+    )
+    regex_input = mo.ui.text(
+        value=_default_regex,
+        label="Filename regex",
+        full_width=True,
+    )
+    capture_order_input = mo.ui.text(
+        value=_default_capture,
+        label="Capture order (e.g. WFC, FTCZ, WTFZC)",
+    )
+
+    mo.vstack([folder_input, regex_input, capture_order_input])
+    return capture_order_input, folder_input, regex_input
+
+
+@app.cell
+def _(Path, capture_order_input, folder_input, mo, regex_input):
+    from aliby.io.dataset import DatasetDir
+
+    _folder = Path(folder_input.value)
+    ds_info = {
+        "name": _folder.name,
+        "regex": regex_input.value,
+        "capture_order": capture_order_input.value,
+    }
+
+    dset = DatasetDir(
+        _folder,
+        regex=ds_info["regex"],
+        capture_order=ds_info["capture_order"],
+    )
+    positions = dset.get_position_ids()
 
     mo.md(
-        f"**Dataset:** `{ds_info['name']}` — "
-        f"**{len(positions)}** position(s), "
-        f"capture order `{ds_info['capture_order']}`"
+        f"**Dataset:** `{ds_info['name']}` — **{len(positions)}** position(s)\n\n"
+        + "\n".join(
+            f"- `{p['key']}`: {len(p['path']) if isinstance(p['path'], list) else 1} file(s)"
+            for p in positions[:5]
+        )
     )
     return ds_info, positions
 
 
 @app.cell
 def _(mo):
-    mo.md("## 2. Configure Pipeline")
+    mo.md("""
+    ## 2. Configure Pipeline
+    """)
     return
 
 
@@ -163,8 +205,6 @@ def _(
     ext_channels_input,
     features_input,
     mo,
-    parse_ext_channels,
-    parse_seg_channels,
     positions,
     seg_channels_input,
 ):
@@ -215,17 +255,28 @@ def _(
         f"- **Position**: `{key}`\n"
         f"- **Steps**: {list(pipeline['steps'].keys())}"
     )
-    return channels_to_segment, key, path, pipeline, pos
+    return key, pipeline
 
 
 @app.cell
 def _(mo):
-    mo.md("## 3. Run Pipeline")
+    mo.md("""
+    ## 3. Run Pipeline
+    """)
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    run_button = mo.ui.run_button(label="Run Pipeline")
+    run_button
+    return (run_button,)
+
+
 @app.cell
-def _(Path, key, mo, pipeline):
+def _(Path, key, mo, pipeline, run_button):
+    mo.stop(not run_button.value)
+
     import tempfile
 
     from aliby.pipe import run_pipeline_and_post
@@ -249,12 +300,14 @@ def _(Path, key, mo, pipeline):
         )
     else:
         mo.md("Pipeline returned no profiles.")
-    return post_results, profiles
+    return (profiles,)
 
 
 @app.cell
 def _(mo):
-    mo.md("## 4. Inspect Profiles")
+    mo.md("""
+    ## 4. Inspect Profiles
+    """)
     return
 
 
@@ -304,25 +357,23 @@ def _(mo, profiles):
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        ## 5. Pipeline Dictionary Reference
+    mo.md("""
+    ## 5. Pipeline Dictionary Reference
 
-        The pipeline is a plain dictionary with these keys:
+    The pipeline is a plain dictionary with these keys:
 
-        | Key | Purpose |
-        |---|---|
-        | `steps` | Step name -> parameters (tile, segment_X, extract_X) |
-        | `passed_data` | Step name -> list of (param, source_step) tuples |
-        | `passed_methods` | Step name -> (source_step, method_name) |
-        | `save` | Which steps write intermediate results to disk |
-        | `save_interval` | How often to flush saves (in time points) |
+    | Key | Purpose |
+    |---|---|
+    | `steps` | Step name -> parameters (tile, segment_X, extract_X) |
+    | `passed_data` | Step name -> list of (param, source_step) tuples |
+    | `passed_methods` | Step name -> (source_step, method_name) |
+    | `save` | Which steps write intermediate results to disk |
+    | `save_interval` | How often to flush saves (in time points) |
 
-        Use `build_pipeline_steps()` for common configurations, or construct
-        the dict manually for full control (as shown in
-        `basic_cellpose_cpmeasure_monozarr.py`).
-        """
-    )
+    Use `build_pipeline_steps()` for common configurations, or construct
+    the dict manually for full control (as shown in
+    `basic_cellpose_cpmeasure_monozarr.py`).
+    """)
     return
 
 
