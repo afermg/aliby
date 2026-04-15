@@ -42,8 +42,6 @@ def _():
 def _():
     from pathlib import Path
 
-    import numpy as np
-
     return (Path,)
 
 
@@ -71,7 +69,7 @@ def _(Path, mo):
         value=catalog[0]["name"],
         label="Test dataset (from Zenodo)",
     )
-    dataset_dropdown
+    dataset_dropdown  # noqa: B018
     return dataset_dropdown, test_data_path
 
 
@@ -269,7 +267,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     run_button = mo.ui.run_button(label="Run Pipeline")
-    run_button
+    run_button  # noqa: B018
     return (run_button,)
 
 
@@ -315,7 +313,9 @@ def _(mo):
 def _(mo, profiles):
     if profiles is not None and profiles.num_rows > 0:
         _df = profiles.to_pandas()
-        mo.output.replace(mo.ui.table(_df.head(50), label="Extracted profiles (first 50 rows)"))
+        mo.output.replace(
+            mo.ui.table(_df.head(50), label="Extracted profiles (first 50 rows)")
+        )
     else:
         mo.output.replace(mo.md("_No profile data to display._"))
     return

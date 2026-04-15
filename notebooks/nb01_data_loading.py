@@ -85,7 +85,7 @@ def _(Path, mo):
         value=catalog_list[0]["name"],
         label="Test dataset (from Zenodo)",
     )
-    dataset_dropdown
+    dataset_dropdown  # noqa: B018
     return dataset_dropdown, test_data_path
 
 
@@ -206,7 +206,7 @@ def _(mo):
 
 @app.cell
 def _(Path, ds_info, folder_input, mo):
-    from aliby.io.dataset import DatasetZarr, dispatch_dataset
+    from aliby.io.dataset import DatasetZarr
 
     zarr_name = f"{ds_info['name']}.zarr"
     _folder = Path(folder_input.value)
@@ -281,7 +281,9 @@ def _(data, dims, mo, np):
     ncols = min(nch, 4)
     nrows = (nch + ncols - 1) // ncols
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False
+    )
     for c in range(nch):
         ax = axes[c // ncols][c % ncols]
         # Max-project over Z for display
