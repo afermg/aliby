@@ -126,10 +126,12 @@ def build_pipeline_steps(
     seg_params = {}
     for i, (obj, ch_id) in enumerate(channels_to_segment.items()):
         step_name = f"segment_{obj}"
+        skwargs = dict(kind=segmenter_kind)
+        if segmenter_kind == "nahual_baby":
+            skwargs["address"] = baby_address
+            skwargs["modelset"] = baby_modelset
         seg_params[step_name] = dict(
-            segmenter_kwargs=dict(
-                kind=segmenter_kind,
-            ),
+            segmenter_kwargs=skwargs,
             channel_to_segment=ch_id,
         )
         if use_baby:
