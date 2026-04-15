@@ -47,8 +47,6 @@ def _():
 def _():
     from pathlib import Path
 
-    import numpy as np
-
     return (Path,)
 
 
@@ -76,7 +74,7 @@ def _(Path, mo):
         value=catalog[0]["name"],
         label="Test dataset (from Zenodo)",
     )
-    dataset_dropdown
+    dataset_dropdown  # noqa: B018
     return dataset_dropdown, test_data_path
 
 
@@ -216,7 +214,7 @@ def _(MODEL_REGISTRY, mo):
         value=MODEL_REGISTRY["openphenom"]["label"],
         label="Embedding model",
     )
-    model_selector
+    model_selector  # noqa: B018
     return (model_selector,)
 
 
@@ -229,7 +227,9 @@ def _(MODEL_REGISTRY, mo, model_selector):
         label="Nahual server address",
     )
     tile_size_input = mo.ui.slider(
-        start=128, stop=512, step=64,
+        start=128,
+        stop=512,
+        step=64,
         value=_model["default_tile_size"],
         label="Tile size",
     )
@@ -324,7 +324,11 @@ def _(
     tile_size = tile_size_input.value
 
     dl_pipeline = build_embed_pipeline(
-        input_path, address, tile_size, ds_info, model_config,
+        input_path,
+        address,
+        tile_size,
+        ds_info,
+        model_config,
     )
     embed_step = [s for s in dl_pipeline["steps"] if s.startswith("nahual_")][0]
 
@@ -415,7 +419,7 @@ def _(MODEL_REGISTRY, mo):
         _rows.append(
             f"| **{_m['label'].split(' (')[0]}** "
             f"| [{_m['server_repo']}](https://github.com/{_m['server_repo']}) "
-            f"| `\"{_m['model_group']}\"` "
+            f'| `"{_m["model_group"]}"` '
             f"| {_ch} "
             f"| {_m['default_tile_size']} "
             f"| `{_m['default_address']}` |"
@@ -424,9 +428,7 @@ def _(MODEL_REGISTRY, mo):
     mo.md(
         "## 6. All Embedding Models\n\n"
         "| Model | Server repo | model_group | Input channels | Tile size | Default IPC |\n"
-        "|---|---|---|---|---|---|\n"
-        + "\n".join(_rows)
-        + "\n\n"
+        "|---|---|---|---|---|---|\n" + "\n".join(_rows) + "\n\n"
         "All pipelines follow the same pattern:\n"
         "1. **Tile** the input image into crops of the configured size\n"
         "2. **Send pixel data** to the Nahual server via IPC\n"
