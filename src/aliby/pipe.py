@@ -562,12 +562,12 @@ def run_pipeline_and_post(
             # TODO if nahual data is present, validate that the maximum target_label is below
             # the maximum label in the profiles
             for output_name in associated_data:
-                state["fn"] = init_step(step_name, parameters)
+                step_fn = init_step(step_name, parameters)
 
                 input_data = get_step_output(
                     state["data"], pipeline["global_passed_data"][output_name]
                 )
-                post_result = state["fn"](input_data=input_data)
+                post_result = step_fn(input_data=input_data)
                 post_results[output_name] = post_result
 
             # Save global steps into files (per-tp steps are saved as they go, not at the end)
