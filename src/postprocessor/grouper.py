@@ -23,8 +23,7 @@ class Grouper(ABC):
         self.name = path.name
         # exclude macOS resource fork files (._*) created on mounted volumes
         self.files = [
-            f for f in path.glob("*.h5")
-            if not f.name.startswith("._")
+            f for f in path.glob("*.h5") if not f.name.startswith("._")
         ]
         if len(self.files) == 0:
             raise FileNotFoundError(f"No valid h5 files in {dir}.")
@@ -66,7 +65,9 @@ class Grouper(ABC):
     def all_available(self) -> t.Collection[str]:
         """Generate list of available signals from all positions."""
         all_available = [
-            x for s in tqdm(self.positions.values()) for x in s.available
+            x
+            for s in tqdm(self.positions.values(), desc="scanning positions")
+            for x in s.available
         ]
         return sorted(set(all_available))
 
