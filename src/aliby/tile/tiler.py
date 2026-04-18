@@ -68,7 +68,9 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
         case _:
             tiler = Tiler
     return partial(
-        tiler.from_image, parameters=TilerParameters(**tiler_kwargs), **extra_kwargs
+        tiler.from_image,
+        parameters=TilerParameters.default(**tiler_kwargs),
+        **extra_kwargs,
     )
 
 
