@@ -324,9 +324,7 @@ class Pipeline(ProcessABC):
             self.log(f"Cannot connect to OMERO: {e}", "error")
             raise
         except AssertionError as e:
-            self.log(
-                f"OMERO dataset {self.expt_id} not found: {e}", "error"
-            )
+            self.log(f"OMERO dataset {self.expt_id} not found: {e}", "error")
             raise
         self.log("Positions available:", "info")
         for i, pos in enumerate(position_ids.keys()):
@@ -547,7 +545,7 @@ class Pipeline(ProcessABC):
             postprocessor_writer.write(data=result)
             self.log(
                 f"{config['tiler']['position_name']}: Analysis finished"
-                f" at time {i} out of {len(all_tps)} time points.",
+                f" at time point {i} - {i/(len(all_tps)-1)*100:.0f}% complete.",
                 "info",
             )
 

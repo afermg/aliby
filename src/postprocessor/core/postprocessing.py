@@ -136,7 +136,7 @@ class PostProcessor(ProcessABC):
         merges = self.merger.run(record)
         # get lineages from cells object attached to picker
         lineage = assoc_indices_to_3d(self.picker.cells.mothers_daughters)
-        if merges.any():
+        if lineage.any() and merges.any():
             # update lineages and merges after merging
             new_lineage, new_merges = merge_lineage(lineage, merges)
         else:
