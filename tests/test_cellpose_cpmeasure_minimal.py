@@ -87,6 +87,7 @@ def test_cellpose_minimal(tmp_path):
             "segment_nuclei": ("tile", "get_fczyx"),
         },
         "save": ("segment_nuclei",),  # Which steps to write to disk
+        "save_interval": 1,
     }
     run_pipeline_and_post(
         pipeline=pipeline,

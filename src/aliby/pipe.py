@@ -250,9 +250,9 @@ def pipeline_step(
     passed_data = pipeline["passed_data"]
     passed_methods = pipeline.get("passed_methods", {})
 
-    tp = list(state.get("tps", {None: 0}).values())[0]
-    if not tp:  # Initialise steps
+    if not state:  # Fresh state: initialise per-step counters and stores
         state = {"tps": dict(zip(steps, cycle([0]))), "data": {}, "fn": {}}
+    tp = next(iter(state["tps"].values()))
 
     for step_name, parameters in steps.items():
         # Get or initialise step
@@ -332,18 +332,20 @@ def pipeline_step(
         step_result = run_step(step, *args, tp=tp, **passed_data)
 
         # Save state
-        steps_to_write = pipeline.get("save", [])
-        save_interval = pipeline.get("save_interval", 0)
-        if len(steps_to_write) and (tp == 0 or (tp % save_interval) == 0):
-            if step_name in steps_to_write:
-                print(f"Saving {step_name} to {steps_dir}")
-                write_fn = dispatch_write_fn(step_name)
-                write_fn(
-                    step_result,
-                    steps_dir=steps_dir,
-                    subpath=step_name,
-                    tp=tp,
-                )
+        steps_to_write = pipeline.get("save") or []
+        save_interval = pipeline.get("save_interval", 1)
+        should_save = (
+            bool(steps_to_write) and save_interval > 0 and (tp % save_interval) == 0
+        )
+        if should_save and step_name in steps_to_write:
+            print(f"Saving {step_name} to {steps_dir}")
+            write_fn = dispatch_write_fn(step_name)
+            write_fn(
+                step_result,
+                steps_dir=steps_dir,
+                subpath=step_name,
+                tp=tp,
+            )
 
         # Update state
         # TODO replace this with a variable to adjust ntps in memory
@@ -419,6 +421,17 @@ def validate_pipeline(pipeline: dict) -> None:
                 raise ValueError(
                     f"Step '{step}' listed in 'save' is not defined in the pipeline 'steps' or 'global_steps'."
                 )
+
+    if "save_interval" in pipeline:
+        save_interval = pipeline["save_interval"]
+        if (
+            not isinstance(save_interval, int)
+            or isinstance(save_interval, bool)
+            or save_interval < 1
+        ):
+            raise ValueError(
+                f"'save_interval' must be a positive int, got {save_interval!r}."
+            )
 
     for k, params in steps.items():
         if not isinstance(params, dict):
