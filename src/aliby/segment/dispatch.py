@@ -76,7 +76,19 @@ def dispatch_segmenter(
             info = setup(setup_params, address=address)
             print(f"Cellpose via nahual set up. Remote returned {info}")
 
-            return partial(process, address=address)
+            def nahual_segment(pixels: np.ndarray) -> np.ndarray:
+                """Preprocess FCZYX pixels before sending to nahual cellpose."""
+                if pixels.ndim > 5:
+                    pixels = pixels[0]
+                pixels = pixels[:, channel_to_segment]  # FCZYX -> FZYX
+                z_size = pixels.shape[1]
+                if z_size > 1:
+                    pixels = pixels.max(axis=1)  # FZYX -> FYX
+                else:
+                    pixels = pixels[:, 0]  # squeeze Z
+                return process(pixels, address=address)
+
+            return nahual_segment
         case "cellpose":  # One of the cellpose models
             # cellpose does without all the ABC stuff
             # It returns a function to segment
