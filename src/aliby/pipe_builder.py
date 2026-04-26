@@ -56,6 +56,8 @@ def build_pipeline_steps(
     segmenter_kind: str | None = None,
     baby_modelset: str | None = None,
     baby_address: str | None = None,
+    trackastra_address: str | None = None,
+    trackastra_parameters: dict | None = None,
 ) -> dict:
     """
     Convenience function to build a pipeline definition, does not fill in IO.
@@ -212,6 +214,34 @@ def build_pipeline_steps(
 
     if steps_to_write is not None:
         base_pipeline["save"] = list(steps_to_write)
+
+    if trackastra_address is not None:
+        # Disk-backed trackastra: per-tp segment masks are saved by the main
+        # loop, then nahual_trackastra reads them back via the "from_disk:"
+        # fetcher. This keeps state["data"]["segment_*"] bounded by retain=2
+        # (per-tp tracker still needs the last 2 timepoints in RAM) instead
+        # of growing with T.
+        seg_step_names = [f"segment_{obj}" for obj in channels_to_segment]
+        for seg in seg_step_names:
+            if seg not in base_pipeline["save"]:
+                base_pipeline["save"].append(seg)
+        base_pipeline["save"].append("nahual_trackastra")
+
+        base_pipeline["global_steps"] = {
+            "nahual_trackastra": dict(
+                address=trackastra_address,
+                parameters=trackastra_parameters or {},
+            ),
+        }
+        base_pipeline["global_passed_data"] = {
+            f"nahual_trackastra_{obj}": (f"from_disk:segment_{obj}",)
+            for obj in channels_to_segment
+        }
+
+        retain = base_pipeline.setdefault("retain", {})
+        for seg in seg_step_names:
+            retain.setdefault(seg, 2)
+        retain.setdefault("tile", 1)
 
     return base_pipeline
 

@@ -348,15 +348,30 @@ def pipeline_step(
             )
 
         # Update state
-        # TODO replace this with a variable to adjust ntps in memory
         state["data"][step_name].append(step_result)
-        # We carry on all the states, as they are necessary for processing later
-        # state["data"][step_name] = state["data"][step_name][-5:]
 
         # Update or initialise objects
         if step_name not in state["fn"]:
             state["fn"][step_name] = step
         state["tps"][step_name] = tp + 1
+
+    # End-of-tp memory hygiene.
+    # 1. Drop the raw pixel block from the tile step's last entry. Tile pixels
+    #    are only consumed within this same tp by segment/extract via
+    #    passed_data; they are never re-read after the tp finishes.
+    for step_name in state["data"]:
+        if step_name.startswith("tile"):
+            entry = state["data"][step_name][-1] if state["data"][step_name] else None
+            if isinstance(entry, dict) and "pixels" in entry:
+                del entry["pixels"]
+
+    # 2. Trim per-step history per the pipeline's "retain" config.
+    #    retain[step_name] = int (keep last N) or "all" (default).
+    retain_cfg = pipeline.get("retain", {})
+    for step_name, history in state["data"].items():
+        keep = retain_cfg.get(step_name, "all")
+        if isinstance(keep, int) and keep >= 0 and len(history) > keep:
+            del history[: len(history) - keep]
 
     return state
 
@@ -431,6 +446,36 @@ def validate_pipeline(pipeline: dict) -> None:
         ):
             raise ValueError(
                 f"'save_interval' must be a positive int, got {save_interval!r}."
+            )
+
+    retain = pipeline.get("retain", {})
+    if not isinstance(retain, dict):
+        raise TypeError(
+            "'retain' must be a dictionary mapping step name to int or 'all'."
+        )
+    for step_name, keep in retain.items():
+        if step_name not in steps:
+            raise ValueError(
+                f"'retain' references step '{step_name}' not defined in 'steps'."
+            )
+        if keep != "all" and not (
+            isinstance(keep, int) and not isinstance(keep, bool) and keep >= 0
+        ):
+            raise ValueError(
+                f"'retain[{step_name}]' must be a non-negative int or 'all', got {keep!r}."
+            )
+        # Per-tp tracker reads last 2 segment outputs.
+        track_reads_segment = any(
+            from_step == step_name
+            for target, deps in passed_data.items()
+            if target.startswith("track")
+            for dep in deps
+            if (from_step := dep[1])
+        )
+        if track_reads_segment and isinstance(keep, int) and keep < 2:
+            raise ValueError(
+                f"'retain[{step_name}]' = {keep} is too small; per-tp 'track' step "
+                f"reads the last 2 timepoints of '{step_name}'."
             )
 
     for k, params in steps.items():
@@ -578,7 +623,9 @@ def run_pipeline_and_post(
                 step_fn = init_step(step_name, parameters)
 
                 input_data = get_step_output(
-                    state["data"], pipeline["global_passed_data"][output_name]
+                    state["data"],
+                    pipeline["global_passed_data"][output_name],
+                    steps_dir=steps_dir,
                 )
                 post_result = step_fn(input_data=input_data)
                 post_results[output_name] = post_result
@@ -672,18 +719,32 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     return profiles
 
 
-def get_step_output(state_data: dict, fetchers: tuple[Callable | str]) -> numpy.ndarray:
+def get_step_output(
+    state_data: dict,
+    fetchers: tuple[Callable | str],
+    steps_dir: Path | None = None,
+) -> numpy.ndarray:
     """Dynamic fetcher for other outputs. It aggregates data over time points.
 
-    fetchers: if a string, just fetch the entire output, if a function (callable) apply this to the output of every time point
-
-    Returns a
+    fetchers: each item may be
+        - a step-name string (read from in-memory state_data)
+        - "from_disk:<step_name>" (read per-tp .npz files from steps_dir/<step_name>)
+        - a callable applied to state_data
     """
     combined_outputs = []
     for fetcher in fetchers:
         if isinstance(fetcher, str):
-            # HACK: This is assuming a monotile, we should instead output always assuming tiles
-            aggregated_output = [x[0] for x in state_data[fetcher]]
+            if fetcher.startswith("from_disk:"):
+                if steps_dir is None:
+                    raise ValueError(
+                        "from_disk fetcher requires steps_dir; pass it through "
+                        "get_step_output(..., steps_dir=...)"
+                    )
+                step_name = fetcher.removeprefix("from_disk:")
+                aggregated_output = _load_per_tp_masks(Path(steps_dir) / step_name)
+            else:
+                # HACK: This is assuming a monotile, we should instead output always assuming tiles
+                aggregated_output = [x[0] for x in state_data[fetcher]]
         elif isinstance(fetcher, Callable):
             aggregated_output = fetcher(state_data)
         else:
@@ -693,3 +754,35 @@ def get_step_output(state_data: dict, fetchers: tuple[Callable | str]) -> numpy.
         combined_outputs.append(aggregated_output)
 
     return numpy.asarray(combined_outputs)
+
+
+def _load_per_tp_masks(step_dir: Path) -> list[numpy.ndarray]:
+    """Read per-tp .npz mask files written by io.write.write_ndarray.
+
+    Mirrors the in-memory monotile slice ``[x[0] for x in state_data[step]]``
+    so trackastra (and any other consumer of get_step_output) sees identical
+    shapes whether masks come from RAM or disk.
+
+    Two on-disk formats are supported (see io/write.py:write_ndarray):
+      - baby segmenters: keys ``tile_0``, ``tile_1``, ... (one per tile)
+      - other segmenters: a single key ``arr_0`` holding a stacked
+        (tiles, Y, X) array
+    """
+    files = sorted(step_dir.glob("*.npz"))
+    if not files:
+        raise FileNotFoundError(
+            f"No per-tp .npz files found under {step_dir}; ensure this step "
+            f"is listed in pipeline['save']."
+        )
+    masks = []
+    for f in files:
+        with numpy.load(f) as npz:
+            keys = list(npz.keys())
+            if "tile_0" in keys:
+                masks.append(npz["tile_0"])
+            elif keys == ["arr_0"]:
+                stacked = npz["arr_0"]
+                masks.append(stacked[0])
+            else:
+                raise ValueError(f"Unrecognised .npz layout in {f}: keys={keys}")
+    return masks

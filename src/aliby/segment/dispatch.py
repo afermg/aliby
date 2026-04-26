@@ -11,6 +11,14 @@ import numpy as np
 from skimage.segmentation import relabel_sequential
 
 
+def _to_uint16_labels(labels: np.ndarray) -> np.ndarray:
+    if labels.size and labels.max() >= np.iinfo(np.uint16).max:
+        raise OverflowError(
+            f"Segmentation produced {labels.max()} labels; uint16 cast unsafe."
+        )
+    return labels.astype(np.uint16, copy=False)
+
+
 def dispatch_segmenter(
     kind: str, channel_to_segment: int, address: str = None, **kwargs
 ) -> callable:
@@ -51,12 +59,21 @@ def dispatch_segmenter(
                 # Return as list so process_tree_masks sees a per-tile structure.
                 tile_shape = pixels.shape[-2:]  # (Y, X) from input
                 per_tile = _process(pixels)
-                return [
+                projected = [
                     nyx.max(axis=0)
                     if nyx.shape[0] > 0
-                    else np.zeros(tile_shape, dtype=int)
+                    else np.zeros(tile_shape, dtype=np.uint16)
                     for nyx in per_tile
                 ]
+                for tile_labels in projected:
+                    if (
+                        tile_labels.size
+                        and tile_labels.max() >= np.iinfo(np.uint16).max
+                    ):
+                        raise OverflowError(
+                            f"Baby produced {tile_labels.max()} labels; uint16 cast unsafe."
+                        )
+                return [t.astype(np.uint16, copy=False) for t in projected]
 
             return segment
         case "nahual_cellpose":
@@ -76,7 +93,15 @@ def dispatch_segmenter(
             info = setup(setup_params, address=address)
             print(f"Cellpose via nahual set up. Remote returned {info}")
 
-            return partial(process, address=address)
+            remote = partial(process, address=address)
+
+            def segment(*args, **kwargs):
+                result = remote(*args, **kwargs)
+                if isinstance(result, list):
+                    return [_to_uint16_labels(r) for r in result]
+                return _to_uint16_labels(result)
+
+            return segment
         case "cellpose":  # One of the cellpose models
             # cellpose does without all the ABC stuff
             # It returns a function to segment
@@ -149,7 +174,11 @@ def dispatch_segmenter(
                         f"Segmentation yielded {result.ndim} dimensions instead of 3"
                     )
 
-                return labels
+                if labels.max() >= np.iinfo(np.uint16).max:
+                    raise OverflowError(
+                        f"Segmentation produced {labels.max()} labels; uint16 cast unsafe."
+                    )
+                return labels.astype(np.uint16, copy=False)
 
         case _:
             raise Exception(f"Invalid segmentation method {kind}")
