@@ -96,6 +96,21 @@ def dispatch_segmenter(
             remote = partial(process, address=address)
 
             def segment(*args, **kwargs):
+                if args and hasattr(args[0], "shape"):
+                    pixels = args[0]
+                    orig_shape = pixels.shape
+                    assert pixels.ndim == 5, (
+                        f"expected 5D FCZYX, got ndim={pixels.ndim} shape={orig_shape}"
+                    )
+                    assert pixels.shape[0] == 1, (
+                        f"monotile assumed, got F={pixels.shape[0]} shape={orig_shape}"
+                    )
+                    # FCZYX -> mean-project Z, keep 3 dims with leading 1:
+                    # (1, Y, X). 3D z-stacks are too slow on cellpose-SAM.
+                    pixels = pixels[0, channel_to_segment].mean(axis=0, keepdims=False)[
+                        None, :, :
+                    ]
+                    args = (pixels, *args[1:])
                 result = remote(*args, **kwargs)
                 if isinstance(result, list):
                     return [_to_uint16_labels(r) for r in result]
