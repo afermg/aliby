@@ -120,7 +120,9 @@ class BridgeOmero:
                 ][0]
                 # load data
                 self._ome_class = self.conn.getObject(ome_type, self.ome_id)
-                assert self._ome_class, f"{ome_type} {self.ome_id} not found."
+                if not self._ome_class:
+                    print("Connected to OMERO.")
+                    raise LookupError(f"{ome_type} {self.ome_id} not found.")
             else:
                 raise ConnectionError("No Blitz connection or valid OMERO ID.")
         return self._ome_class
@@ -309,9 +311,8 @@ class Dataset(BridgeOmero):
             return False
         for _, annotation in files.items():
             filepath = root_dir / annotation.getFileName().replace("/", "_")
-            if (
-                any([str(filepath).endswith(suff) for suff in valid_suffixes])
-                and not filepath.exists()
+            if any(
+                str(filepath).endswith(suff) for suff in valid_suffixes
             ):
                 # save only the text files
                 with open(str(filepath), "wb") as fd:

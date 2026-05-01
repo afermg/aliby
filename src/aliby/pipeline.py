@@ -50,6 +50,17 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
+class TqdmHandler(logging.StreamHandler):
+    """Route log output through tqdm.write to not disrupt progress bars."""
+
+    def emit(self, record):
+        """Write logging message."""
+        try:
+            tqdm.write(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+
 class PipelineParameters(ParametersABC):
     """Define parameters for the steps of the pipeline."""
 
@@ -106,18 +117,71 @@ class PipelineParameters(ParametersABC):
                     "time_settings/timeinterval": 300,
                     }
         """
-        if (
-            isinstance(general["expt_id"], Path)
-            and general["expt_id"].exists()
-        ):
-            # for zarr files
-            expt_id = str(general["expt_id"])
-        else:
-            expt_id = general["expt_id"]
-        if "directory" not in general:
-            general["directory"] = "."
-        directory = Path(general["directory"])
-        # get metadata from log files either locally or via OMERO
+        expt_id, directory = cls.resolve_expt_id(general)
+        directory, _, omero_meta = cls.fetch_omero_meta(
+            expt_id, general, directory
+        )
+        meta = cls.build_meta(metadata, directory, omero_meta)
+        defaults = cls.build_general_defaults(
+            expt_id, directory, meta, general
+        )
+        cls.apply_ref_z(defaults)
+        defaults["tiler"] = cls.build_tiler_defaults(meta, tiler)
+        defaults["extraction"] = cls.build_extraction_defaults(
+            meta, extraction
+        )
+        defaults["baby"] = BabyParameters.default(**baby).to_dict()
+        defaults["postprocessing"] = PostProcessorParameters.default(
+            **postprocessing
+        ).to_dict()
+        return cls(**{k: v for k, v in defaults.items()})
+
+    @staticmethod
+    def resolve_expt_id(general):
+        """
+        Normalise expt_id and directory from general parameters.
+
+        Parameters
+        ----------
+        general : dict
+            Pipeline general parameters.
+
+        Returns
+        -------
+        expt_id : str or int
+            Normalised experiment identifier.
+        directory : Path
+            Resolved output directory.
+        """
+        expt_id = general["expt_id"]
+        if isinstance(expt_id, Path) and expt_id.exists():
+            expt_id = str(expt_id)
+        directory = Path(general.get("directory", "."))
+        return expt_id, directory
+
+    @staticmethod
+    def fetch_omero_meta(expt_id, general, directory):
+        """
+        Connect to dataset, cache logs, and retrieve channel and meta info.
+
+        Parameters
+        ----------
+        expt_id : str or int
+            Experiment identifier.
+        general : dict
+            Pipeline general parameters.
+        directory : Path
+            Base output directory.
+
+        Returns
+        -------
+        directory : Path
+            Updated directory, namespaced by the dataset's unique name.
+        omero_channels : list or None
+            Channel order from OMERO or user specification.
+        omero_meta : dict or None
+            Synthesised minimal metadata for datasets lacking log files.
+        """
         with dispatch_dataset(
             expt_id,
             **{k: general.get(k) for k in ("host", "username", "password")},
@@ -125,32 +189,68 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            # download microscopy logs for posterity
             conn.cache_logs(directory)
-            # get channels to ensure metadata has the correct order
             if "channels" in general:
-                # use the order specified by the user
-                OMERO_channels = general["channels"]
+                omero_channels = general["channels"]
             elif hasattr(conn, "get_channels"):
-                OMERO_channels = conn.get_channels()
+                omero_channels = conn.get_channels()
             else:
-                OMERO_channels = None
-            # synthesise metadata for OMERO datasets lacking log files
-            OMERO_meta = None
+                omero_channels = None
+            omero_meta = None
             if hasattr(conn, "get_minimal_meta"):
-                OMERO_meta = conn.get_minimal_meta(OMERO_channels)
-            if OMERO_meta is None and isinstance(expt_id, int):
+                omero_meta = conn.get_minimal_meta(omero_channels)
+            if omero_meta is None and isinstance(expt_id, int):
                 raise ValueError(
                     f"OMERO dataset {expt_id} contains no images."
                 )
+        return directory, omero_channels, omero_meta
+
+    @staticmethod
+    def build_meta(metadata, directory, omero_meta):
+        """
+        Construct a metadata namespace from supplied or OMERO-derived data.
+
+        Parameters
+        ----------
+        metadata : dict or None
+            Caller-supplied minimal metadata dict, or None.
+        directory : Path
+            Experiment directory, used when reading log files.
+        omero_meta : dict or None
+            Synthesised metadata from OMERO, used as fallback.
+
+        Returns
+        -------
+        meta : SimpleNamespace
+            Object with ``minimal`` and ``full`` attributes.
+        """
         if metadata is not None:
             if isinstance(metadata, dict):
-                meta = SimpleNamespace(minimal=metadata, full={})
-            else:
-                raise ValueError("metadata must be a dict.")
-        else:
-            meta = MetaData(directory, omero_meta=OMERO_meta)
-        # define default values for general parameters
+                return SimpleNamespace(minimal=metadata, full={})
+            raise ValueError("metadata must be a dict.")
+        return MetaData(directory, omero_meta=omero_meta)
+
+    @staticmethod
+    def build_general_defaults(expt_id, directory, meta, general):
+        """
+        Construct the general and metadata sub-dicts with user overrides applied.
+
+        Parameters
+        ----------
+        expt_id : str or int
+            Normalised experiment identifier.
+        directory : Path
+            Namespaced experiment directory.
+        meta : SimpleNamespace
+            Metadata object with ``minimal`` and ``full`` attributes.
+        general : dict
+            User-supplied general parameters to merge in.
+
+        Returns
+        -------
+        defaults : dict
+            Dict with ``"general"`` and ``"metadata"`` keys populated.
+        """
         tps = meta.minimal["time_settings/ntimepoints"]
         defaults = {
             "general": dict(
@@ -165,7 +265,6 @@ class PipelineParameters(ParametersABC):
             ),
             "metadata": {"minimal": meta.minimal, "full": meta.full},
         }
-        # update default values for general using inputs
         for k, v in general.items():
             if k not in defaults["general"]:
                 defaults["general"][k] = v
@@ -174,51 +273,80 @@ class PipelineParameters(ParametersABC):
                     defaults["general"][k][k2] = v2
             else:
                 defaults["general"][k] = v
-        # reset default z section using metadata
+        return defaults
+
+    @staticmethod
+    def apply_ref_z(defaults):
+        """
+        Update global_settings ref_z from metadata z-section counts.
+
+        Parameters
+        ----------
+        defaults : dict
+            Defaults dict whose ``"metadata"`` key carries the full metadata.
+        """
+        full = defaults["metadata"]["full"]
         if (
-            "number_z_sections" in defaults["metadata"]["full"]
-            and "Brightfield"
-            in defaults["metadata"]["full"]["number_z_sections"]
+            "number_z_sections" in full
+            and "Brightfield" in full["number_z_sections"]
         ):
-            # current metadata
-            ref_z = (
-                defaults["metadata"]["full"]["number_z_sections"][
-                    "Brightfield"
-                ]
-                // 2
-            )
+            ref_z = full["number_z_sections"]["Brightfield"] // 2
             global_settings.imaging_specifications["ref_z"] = ref_z
-        elif "zsectioning/nsections" in defaults["metadata"]["full"]:
-            # old metadata
-            ref_z = (
-                defaults["metadata"]["full"]["zsectioning/nsections"][0] // 2
-            )
+        elif "zsectioning/nsections" in full:
+            ref_z = full["zsectioning/nsections"][0] // 2
             global_settings.imaging_specifications["ref_z"] = ref_z
-        # default Tiler parameters and update with any input tiler
-        defaults["tiler"] = TilerParameters.default(**tiler).to_dict()
-        # generate a backup channel for when logfile meta is available
-        # but not image metadata
+
+    @staticmethod
+    def build_tiler_defaults(meta, tiler):
+        """
+        Build tiler parameter dict, including a backup ref channel index.
+
+        Parameters
+        ----------
+        meta : SimpleNamespace
+            Metadata object with ``full`` attribute.
+        tiler : dict
+            User-supplied tiler overrides.
+
+        Returns
+        -------
+        tiler_defaults : dict
+            Tiler parameters with ``backup_ref_channel`` set.
+        """
+        tiler_defaults = TilerParameters.default(**tiler).to_dict()
         backup_ref_channel = None
         if "channels" in meta.full and isinstance(
-            defaults["tiler"]["ref_channel"], str
+            tiler_defaults["ref_channel"], str
         ):
             backup_ref_channel = meta.full["channels"].index(
-                defaults["tiler"]["ref_channel"]
+                tiler_defaults["ref_channel"]
             )
-        defaults["tiler"]["backup_ref_channel"] = backup_ref_channel
-        # defaults for extraction
-        defaults["extraction"] = build_extraction_tree_from_meta(meta.minimal)
-        # merge any input, a nested dict
+        tiler_defaults["backup_ref_channel"] = backup_ref_channel
+        return tiler_defaults
+
+    @staticmethod
+    def build_extraction_defaults(meta, extraction):
+        """
+        Build extraction parameter dict, merging any user-supplied overrides.
+
+        Parameters
+        ----------
+        meta : SimpleNamespace
+            Metadata object with ``minimal`` attribute.
+        extraction : dict
+            User-supplied extraction overrides.
+
+        Returns
+        -------
+        extraction_defaults : dict
+            Extraction parameters after merging overrides.
+        """
+        extraction_defaults = build_extraction_tree_from_meta(meta.minimal)
         if extraction:
-            defaults["extraction"] = recursive_merge_extractor(
-                defaults["extraction"], extraction
+            extraction_defaults = recursive_merge_extractor(
+                extraction_defaults, extraction
             )
-        # default parameters updated with any inputs
-        defaults["baby"] = BabyParameters.default(**baby).to_dict()
-        defaults["postprocessing"] = PostProcessorParameters.default(
-            **postprocessing
-        ).to_dict()
-        return cls(**{k: v for k, v in defaults.items()})
+        return extraction_defaults
 
 
 class Pipeline(ProcessABC):
@@ -268,8 +396,8 @@ class Pipeline(ProcessABC):
             "%(asctime)s - %(levelname)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         )
-        # to print to screen
-        ch = logging.StreamHandler()
+        # to print to screen without disrupting tqdm progress bars
+        ch = TqdmHandler()
         ch.setLevel(getattr(logging, stream_level))
         ch.setFormatter(formatter)
         logger.addHandler(ch)
@@ -485,6 +613,8 @@ class Pipeline(ProcessABC):
                             f"Found {tiler.no_tiles} traps in {image.name}.",
                             "info",
                         )
+                        if tiler.no_tiles == 0:
+                            break
                     # run Baby
                     try:
                         result = babyrunner.run_tp(i)
@@ -538,16 +668,21 @@ class Pipeline(ProcessABC):
                     )
                     break
             # run post-processing
-            result = PostProcessor(
-                out_file,
-                PostProcessorParameters.from_dict(config["postprocessing"]),
-            ).run()
-            postprocessor_writer.write(data=result)
-            self.log(
-                f"{config['tiler']['position_name']}: Analysis finished"
-                f" at time point {i} - {i/(len(all_tps)-1)*100:.0f}% complete.",
-                "info",
-            )
+            if i == 0:
+                self.log(f"Position {image.name} failed.", "info")
+            else:
+                result = PostProcessor(
+                    out_file,
+                    PostProcessorParameters.from_dict(
+                        config["postprocessing"]
+                    ),
+                ).run()
+                postprocessor_writer.write(data=result)
+                self.log(
+                    f"{config['tiler']['position_name']}: Analysis finished"
+                    f" at time point {i} - {i/(len(all_tps)-1)*100:.0f}% complete.",
+                    "info",
+                )
 
     @property
     def display_config(self):

@@ -103,7 +103,7 @@ def segment_traps(
     # retry with no downscaling if too few traps found
     traps_retry = []
     if len(traps) < 30 and downscale != 1:
-        print(f"Tiler - TrapIdentification: Found {len(traps)}; trying again.")
+        print(f"Tiler: Found {len(traps)} traps; trying again.")
         traps_retry = segment_traps(image, tile_size, downscale=1)
     # find result with most traps
     if len(traps_retry) < len(traps):
