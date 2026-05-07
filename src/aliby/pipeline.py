@@ -615,18 +615,30 @@ class Pipeline(ProcessABC):
                         )
                         if tiler.no_tiles == 0:
                             break
-                    # run Baby
+                    # segment with Baby
                     try:
-                        result = babyrunner.run_tp(i)
+                        seg_list, rescaling, inshape = babyrunner.segment_tp(i)
                     except baby.errors.Clogging:
                         self.log(
                             "WARNING: Clogging threshold exceeded in BABY."
+                        )
+                    # track with Baby
+                    try:
+                        result = babyrunner.track_tp(
+                            seg_list=seg_list,
+                            rescaling=rescaling,
+                            inshape=inshape,
+                            tp=i,
                         )
                     except baby.errors.BadOutput:
                         self.log(
                             "WARNING: Bud has been assigned as its own mother."
                         )
                         raise ValueError("Catastrophic Baby error!")
+                    # release the materialised seg list before extraction
+                    # runs; otherwise it stays bound until the next
+                    # timepoint's segment_tp rebinds it
+                    del seg_list, rescaling, inshape
                     # check Baby's result
                     if np.any(
                         [
@@ -644,8 +656,8 @@ class Pipeline(ProcessABC):
                         baby_writer.write(
                             data=result,
                             overwrite=["mother_assign"],
-                            tp=i,
                             tile_size=tiler.tile_size,
+                            tp=i,
                         )
                     # run extraction
                     result = extractor.run_tp(i)

@@ -102,6 +102,79 @@ class BabyRunner(StepABC):
         img = np.moveaxis(img_from_tiler, 1, destination=-1)
         return img
 
+    def segment_tp(self, tp, refine_outlines=True):
+        """
+        Segment one time point without tracking.
+
+        Returns the seg list plus the rescaling metadata that
+        :meth:`track_tp` needs. Swap this method out to use a different
+        segmentation algorithm.
+
+        Parameters
+        ----------
+        tp : int
+            Time point.
+        refine_outlines : bool
+            If True, apply radial active-contour refinement to outlines.
+
+        Returns
+        -------
+        seg_list : list of dict
+            Per-tile segmentation dicts at bb pixel size, with masks,
+            preds, and edgemasks retained.
+        rescaling : float
+            Scaling factor for mapping outlines back to input pixel size.
+        inshape : tuple of int
+            Input shape.
+        """
+        img = self.get_data(tp)
+        return self.crawler.step_segment(
+            img, refine_outlines=refine_outlines
+        )
+
+    def track_tp(
+        self,
+        seg_list,
+        rescaling,
+        inshape,
+        tp,
+        assign_mothers=True,
+        with_edgemasks=True,
+    ):
+        """
+        Track one time point's pre-segmented frames and format for h5.
+
+        Swap this method out to use a different tracking algorithm.
+
+        Parameters
+        ----------
+        seg_list : list of dict
+            Per-tile seg dicts from :meth:`segment_tp`.
+        rescaling : float
+            Scaling factor from :meth:`segment_tp`.
+        inshape : tuple of int
+            Input shape from :meth:`segment_tp`.
+        tp : int
+            Time point.
+        assign_mothers : bool
+            If True, include mother–daughter assignments.
+        with_edgemasks : bool
+            If True, include rasterised cell edge masks.
+
+        Returns
+        -------
+        dict
+            Formatted segmentation/tracking output for h5 writing.
+        """
+        segmentation = self.crawler.step_track(
+            seg_list,
+            rescaling,
+            inshape,
+            assign_mothers=assign_mothers,
+            with_edgemasks=with_edgemasks,
+        )
+        return format_segmentation(segmentation, tp)
+
     def _run_tp(
         self,
         tp,
@@ -110,17 +183,18 @@ class BabyRunner(StepABC):
         with_edgemasks=True,
         **kwargs,
     ):
-        """Segment data from one time point."""
-        img = self.get_data(tp)
-        segmentation = self.crawler.step(
-            img,
-            refine_outlines=refine_outlines,
+        """Segment and track data from one time point."""
+        seg_list, rescaling, inshape = self.segment_tp(
+            tp, refine_outlines=refine_outlines
+        )
+        return self.track_tp(
+            seg_list,
+            rescaling,
+            inshape,
+            tp,
             assign_mothers=assign_mothers,
             with_edgemasks=with_edgemasks,
-            **kwargs,
         )
-        res = format_segmentation(segmentation, tp)
-        return res
 
 
 def get_modelset_name_from_params(
