@@ -18,7 +18,7 @@ OMID = "test26643"
 H5DIR = "/Users/pswain/wip/aliby_output/"
 OMERO_DIR = "/Users/pswain/wip/aliby_input/"
 
-# columns from kymograph calls in run_local_test.py
+# columns to compare with golden dataframe
 KEY_COLS = [
     "buddings",
     "bud_volume",
@@ -30,6 +30,7 @@ KEY_COLS = [
 
 def _pipeline_params():
     from aliby.pipeline import PipelineParameters
+
     return PipelineParameters.default(
         general={
             "expt_id": OMERO_DIR + OMID,
@@ -45,6 +46,7 @@ def _pipeline_params():
 def _load_df() -> pd.DataFrame:
     """Load dl.df from existing H5 output, sorted for stable row order."""
     from wela.dataloader import DataLoader
+
     dl = DataLoader(H5DIR, ".")
     dl.load(OMID, key_index="buddings", cutoff=0)
     return dl.df.sort_values(["id", "time"]).reset_index(drop=True)
@@ -62,6 +64,7 @@ def test_df_regression(update_golden):
         pytest tests/test_regression.py --run-slow --update-golden
     """
     from aliby.pipeline import Pipeline
+
     Pipeline(_pipeline_params()).run()
     actual = _load_df()
     if update_golden:
@@ -82,9 +85,9 @@ def test_df_regression(update_golden):
         on=join_keys,
         suffixes=("", "_expected"),
     )
-    assert len(merged) > 0, (
-        "no common (id, time) pairs between actual and golden df"
-    )
+    assert (
+        len(merged) > 0
+    ), "no common (id, time) pairs between actual and golden df"
     for col in KEY_COLS:
         pd.testing.assert_series_equal(
             merged[col].rename(col),
