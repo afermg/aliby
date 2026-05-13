@@ -128,7 +128,7 @@ class BabyRunner(StepABC):
             Input shape.
         """
         img = self.get_data(tp)
-        return self.crawler.step_segment(
+        return self.crawler.segment(
             img, refine_outlines=refine_outlines
         )
 
@@ -166,7 +166,7 @@ class BabyRunner(StepABC):
         dict
             Formatted segmentation/tracking output for h5 writing.
         """
-        segmentation = self.crawler.step_track(
+        segmentation = self.crawler.track(
             seg_list,
             rescaling,
             inshape,

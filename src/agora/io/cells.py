@@ -168,7 +168,7 @@ class Cells:
         """Return the times and the filled edge masks for a cell and trap."""
         times, outlines = self.outline(cell_id, trap_id)
         return times, np.array(
-            [ndimage.morphology.binary_fill_holes(o) for o in outlines]
+            [ndimage.binary_fill_holes(o) for o in outlines]
         )
 
     def at_time(

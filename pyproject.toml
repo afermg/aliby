@@ -48,5 +48,16 @@ tensorflow = ">2.0,<=2.14"
 baby-seg = ">=0.30.8"
 
 
+[tool.poetry.group.dev]
+optional = true
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: full pipeline integration test (run with --run-slow)",
+]
+
 [tool.black]
 line-length = 79

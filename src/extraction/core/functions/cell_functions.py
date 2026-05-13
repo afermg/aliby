@@ -80,7 +80,7 @@ def volume(cell_mask):
     """
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     nearest_neighbor = (
-        ndimage.morphology.distance_transform_edt(padded == 1) * padded
+        ndimage.distance_transform_edt(padded == 1) * padded
     )
     return 4 * np.sum(nearest_neighbor)
 
@@ -142,11 +142,11 @@ def min_maj_approximation(cell_mask) -> t.Tuple[int]:
     # pad outside with zeros so that the distance transforms have no edge artifacts
     padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
     # get the distance from the edge, masked
-    nn = ndimage.morphology.distance_transform_edt(padded == 1) * padded
+    nn = ndimage.distance_transform_edt(padded == 1) * padded
     # get the distance from the top of the cone, masked
-    dn = ndimage.morphology.distance_transform_edt(nn - nn.max()) * padded
+    dn = ndimage.distance_transform_edt(nn - nn.max()) * padded
     # get the size of the top of the cone (points that are equally maximal)
-    cone_top = ndimage.morphology.distance_transform_edt(dn == 0) * padded
+    cone_top = ndimage.distance_transform_edt(dn == 0) * padded
     # minor axis = largest distance from the edge of the ellipse
     min_ax = np.round(np.max(nn))
     # major axis = largest distance from the cone top
