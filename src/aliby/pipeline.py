@@ -15,7 +15,6 @@ from types import SimpleNamespace
 import baby
 import baby.errors
 import numpy as np
-import tensorflow as tf
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData
 from agora.io.signal import Signal
@@ -44,10 +43,6 @@ from aliby.baby_sitter import BabyParameters, BabyRunner
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
-
-# stop warnings from TensorFlow
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -559,7 +554,6 @@ class Pipeline(ProcessABC):
         extractor_writer = ExtractorWriter(out_file)
         postprocessor_writer = PostProcessorWriter(out_file)
         # start pipeline
-        initialise_tensorflow()
         frac_clogged_traps = 0.0
         # image here is the connection to OMERO
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
@@ -746,16 +740,3 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
         > es_parameters["thresh_trap_area"]
     )
     return (traps_above_nthresh & traps_above_athresh).mean()
-
-
-def initialise_tensorflow(version=2):
-    """Initialise tensorflow."""
-    if version == 2:
-        gpus = tf.config.experimental.list_physical_devices("GPU")
-        if gpus:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices("GPU")
-            print(
-                len(gpus), "physical GPUs,", len(logical_gpus), "logical GPUs"
-            )
