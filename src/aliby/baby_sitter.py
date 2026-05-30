@@ -207,14 +207,16 @@ def get_modelset_name_from_params(
     """Get the appropriate model set from BABY's trained models."""
     # list of models - microscopy setups - for which BABY has been trained
     # cameras prime95 and evolve have become sCMOS and EMCCD
-    possible_models = list(modelsets.remote_modelsets()["models"].keys())
+    possible_models = modelsets.ids()
 
     # filter possible_models
     params = [
         str(x) if x is not None else ".+"
         for x in [imaging_device, channel.lower(), camera, zoom, n_stacks]
     ]
-    params_regex = re.compile("-".join(params) + "$")
+    # require a single species prefix (e.g. "yeast-") before the imaging
+    # device so that "example-" model sets are not matched
+    params_regex = re.compile("^[^-]+-" + "-".join(params) + "$")
     valid_models = [
         res for res in filter(params_regex.search, possible_models)
     ]
