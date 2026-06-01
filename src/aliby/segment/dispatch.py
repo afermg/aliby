@@ -102,6 +102,56 @@ def dispatch_segmenter(
                 return _to_uint16_labels(result)
 
             return segment
+        case "nahual_spotiflow":
+            # Spotiflow (https://github.com/afermg/spotiflow/tree/nahual-wrap)
+            # is a fluorescence-puncta detector. The wrap rasterises each
+            # detected spot as a small disk so the server already returns a
+            # ``(N, H, W)`` int32 instance-style label mask — drop-in
+            # equivalent to cellpose for downstream feature extraction.
+            #
+            # Spotiflow isn't in nahual's OUTPUT_SIGNATURES registry yet, so
+            # we pass the (dict, numpy) signature explicitly. The setup +
+            # process roundtrip is otherwise identical to the cellpose path.
+            from nahual.process import dispatch_setup_process
+
+            assert address is not None, "You must provide an address if using Nahual."
+
+            tool = kind.removeprefix("nahual_")
+
+            # ``signature=("dict", "numpy")`` — first call (a dict) re-runs
+            # setup on the server; subsequent numpy arrays go to process().
+            setup, process = dispatch_setup_process(tool, signature=("dict", "numpy"))
+
+            setup_params = kwargs.get("setup_params", {})
+            info = setup(setup_params, address=address)
+            print(f"Spotiflow via nahual set up. Remote returned {info}")
+
+            remote = partial(process, address=address)
+
+            def segment(pixels: np.ndarray, **kw):
+                # Spotiflow is a 2D, single-channel detector. Aliby feeds
+                # an FCZYX/FZYX array; pick the first channel of the first
+                # Z-plane per batch entry — same selection cellpose does
+                # for its 2D mode. The server itself iterates over N (the
+                # batch dim) and returns ``(N, Y, X)`` int32.
+                arr = np.asarray(pixels)
+                if arr.ndim == 6:  # TFCZYX → drop T
+                    arr = arr[0]
+                if arr.ndim == 5:  # FCZYX
+                    arr = arr[:, channel_to_segment : channel_to_segment + 1]
+                elif arr.ndim == 4:  # FZYX (channel already selected upstream)
+                    arr = arr[:, None]
+                else:
+                    raise ValueError(
+                        f"nahual_spotiflow: unexpected pixel ndim={arr.ndim} "
+                        f"(shape={arr.shape}); want FCZYX or TFCZYX."
+                    )
+                result = remote(arr)
+                if isinstance(result, list):
+                    return [_to_uint16_labels(r) for r in result]
+                return _to_uint16_labels(result)
+
+            return segment
         case "cellpose":  # One of the cellpose models
             # cellpose does without all the ABC stuff
             # It returns a function to segment
