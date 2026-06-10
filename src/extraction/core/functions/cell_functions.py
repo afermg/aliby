@@ -173,7 +173,7 @@ def mean(cell_mask, trap_image) -> float:
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.mean(pixels)
+    return np.nanmean(pixels)
 
 
 def total(cell_mask, trap_image) -> float:
@@ -189,7 +189,7 @@ def total(cell_mask, trap_image) -> float:
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.sum(trap_image[cell_mask])
+    return np.nansum(trap_image[cell_mask])
 
 
 def total_squared(cell_mask, trap_image) -> float:
@@ -209,7 +209,7 @@ def total_squared(cell_mask, trap_image) -> float:
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.sum(trap_image[cell_mask] ** 2)
+    return np.nansum(trap_image[cell_mask] ** 2)
 
 
 def median(cell_mask, trap_image) -> int:
@@ -225,7 +225,7 @@ def median(cell_mask, trap_image) -> int:
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.median(trap_image[cell_mask])
+    return np.nanmedian(trap_image[cell_mask])
 
 
 def max2p5pc(cell_mask, trap_image) -> float:
@@ -238,11 +238,14 @@ def max2p5pc(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    # number of pixels in mask
-    npixels = np.sum(cell_mask)
-    n_top = int(np.ceil(npixels * 0.025))
-    # sort pixels in cell and find highest 2.5%
+    # drop any NaN pixels so partition orders correctly
     pixels = trap_image[cell_mask]
+    pixels = pixels[~np.isnan(pixels)]
+    if pixels.size == 0:
+        return np.nan
+    # number of pixels to keep as the highest 2.5%
+    n_top = int(np.ceil(pixels.size * 0.025))
+    # sort pixels in cell and find highest 2.5%
     top_values = bn.partition(pixels, len(pixels) - n_top)[-n_top:]
     # find mean of these highest pixels
     return np.mean(top_values)
@@ -261,8 +264,9 @@ def max5px_median(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    # sort pixels in cell
+    # drop any NaN pixels so partition orders correctly
     pixels = trap_image[cell_mask]
+    pixels = pixels[~np.isnan(pixels)]
     if len(pixels) > 5:
         top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
         # find mean of five brightest pixels
@@ -271,7 +275,7 @@ def max5px_median(cell_mask, trap_image) -> float:
         if med == 0:
             return np.nan
         else:
-            return max5px / np.median(pixels)
+            return max5px / med
     else:
         return np.nan
 
@@ -289,7 +293,7 @@ def std(cell_mask, trap_image):
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.std(pixels)
+    return np.nanstd(pixels)
 
 
 def moment_of_inertia(cell_mask, trap_image):
