@@ -7,6 +7,11 @@ from aliby.pipeline import Pipeline, PipelineParameters
 # all functions are in extraction/core/functions/cell_functions.py
 global_settings.fluorescence_functions.append("max5px_median")
 
+# add calculation of a pixel-by-pixel ratio of two fluorescence channels
+global_settings.fluorescence_functions.extend(
+    ["ratio_1_over_2", "ratio_2_over_1"]
+)
+
 
 params = PipelineParameters.default(
     general={
