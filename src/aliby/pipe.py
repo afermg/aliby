@@ -593,7 +593,7 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                 )
                 table = table.append_column(
                     "metadata_tp",
-                    pyarrow.array([tp] * len(table), pyarrow.uint8()),
+                    pyarrow.array([tp] * len(table), pyarrow.uint16()),
                 )
                 data[step_prefix].append(table)
 
