@@ -25,31 +25,29 @@ omero_dir = "/Users/pswain/wip/aliby_input/"
 # with one subdirectory per position
 omid = "test26643_tiff"
 
-params = PipelineParameters.default(
-    general={
-        "expt_id": omero_dir + omid,
-        "distributed": 0,
-        "directory": h5dir,
-        "filter": [0],
-        "tps": 8,
-    },
-    # optional if log files exist in the master directory
-    metadata={
-        "channels": ["Brightfield", "GFP_Z", "mCherry_Z"],
-        "time_settings/ntimepoints": 240,
-        "time_settings/timeinterval": 300,
-    },
-)
-
-
-p = Pipeline(params)
-p.run()
-
-
-# run dataloader
-dl = DataLoader(h5dir, ".")
-g = dl.load(omid, key_index="mean_GFP_Z", cutoff=0.8)
-
-kymograph(dl.df, hue="volume")
-# Dataloader automatically drops _Z from any fluorescence names
-kymograph(dl.df, hue="mean_GFP")
+# guard the entry point so that, under the spawn start method on macOS,
+# worker processes re-importing this module do not re-run the pipeline
+if __name__ == "__main__":
+    params = PipelineParameters.default(
+        general={
+            "expt_id": omero_dir + omid,
+            "distributed": 0,
+            "directory": h5dir,
+            "filter": [0],
+            "tps": 8,
+        },
+        # optional if log files exist in the master directory
+        metadata={
+            "channels": ["Brightfield", "GFP_Z", "mCherry_Z"],
+            "time_settings/ntimepoints": 240,
+            "time_settings/timeinterval": 300,
+        },
+    )
+    p = Pipeline(params)
+    p.run()
+    # run dataloader
+    dl = DataLoader(h5dir, ".")
+    g = dl.load(omid, key_index="mean_GFP_Z", cutoff=0.8)
+    kymograph(dl.df, hue="volume")
+    # Dataloader automatically drops _Z from any fluorescence names
+    kymograph(dl.df, hue="mean_GFP")

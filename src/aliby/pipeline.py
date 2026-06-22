@@ -7,6 +7,7 @@ Include tiling, segmentation, extraction, and then post-processing.
 import logging
 import multiprocessing
 import os
+import platform
 import re
 import typing as t
 from pathlib import Path
@@ -31,7 +32,7 @@ from extraction.core.extractor import (
     build_extraction_tree_from_meta,
 )
 from extraction.core.recursive_merge import recursive_merge_extractor
-from pathos.multiprocessing import Pool
+import multiprocess
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
@@ -511,8 +512,15 @@ class Pipeline(ProcessABC):
         # create and run pipelines
         distributed = config["general"]["distributed"]
         if distributed != 0:
-            # multiple cores
-            with Pool(distributed) as p:
+            # multiple cores; pathos/multiprocess defaults to fork, which
+            # deadlocks on macOS once native multi-threaded libraries (baby,
+            # BLAS, HDF5) have loaded, so use spawn on macOS and the faster
+            # fork elsewhere
+            start_method = (
+                "spawn" if platform.system() == "Darwin" else "fork"
+            )
+            ctx = multiprocess.get_context(start_method)
+            with ctx.Pool(distributed) as p:
                 results = p.map(
                     self.run_one_position,
                     [position_id for position_id in position_ids.items()],
