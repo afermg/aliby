@@ -7,7 +7,6 @@ Include tiling, segmentation, extraction, and then post-processing.
 import logging
 import multiprocessing
 import os
-import platform
 import re
 import typing as t
 from pathlib import Path
@@ -18,6 +17,10 @@ import baby.errors
 import numpy as np
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData
+from agora.parallel import (
+    make_process_executor,
+    resolve_no_processors,
+)
 from agora.io.signal import Signal
 from agora.io.writers import (
     BabyWriter,
@@ -32,7 +35,6 @@ from extraction.core.extractor import (
     build_extraction_tree_from_meta,
 )
 from extraction.core.recursive_merge import recursive_merge_extractor
-import multiprocess
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
@@ -510,20 +512,21 @@ class Pipeline(ProcessABC):
             ntps = config["metadata"]["minimal"]["time_settings/ntimepoints"]
             print(f"Processing {ntps} timepoints.")
         # create and run pipelines
-        distributed = config["general"]["distributed"]
-        if distributed != 0:
-            # multiple cores; pathos/multiprocess defaults to fork, which
-            # deadlocks on macOS once native multi-threaded libraries (baby,
-            # BLAS, HDF5) have loaded, so use spawn on macOS and the faster
-            # fork elsewhere
-            start_method = (
-                "spawn" if platform.system() == "Darwin" else "fork"
-            )
-            ctx = multiprocess.get_context(start_method)
-            with ctx.Pool(distributed) as p:
-                results = p.map(
-                    self.run_one_position,
-                    [position_id for position_id in position_ids.items()],
+        no_processors = resolve_no_processors(config["general"]["distributed"])
+        if no_processors > 1:
+            # spawn multiprocessing: baby runs
+            # segmentation on the Apple GPU via Metal, which cannot be
+            # reached from a forked process; only a freshly exec-ed spawn
+            # worker initialises Metal cleanly, so fork and forkserver both
+            # crash here with BrokenProcessPool
+            with make_process_executor(
+                no_processors, start_method="spawn"
+            ) as executor:
+                results = list(
+                    executor.map(
+                        self.run_one_position,
+                        list(position_ids.items()),
+                    )
                 )
         else:
             # single core
