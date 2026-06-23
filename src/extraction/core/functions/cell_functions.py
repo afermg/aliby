@@ -454,10 +454,8 @@ def _get_model(name: str):
             else:
                 raise ValueError(f"Unknown model: {name}")
         except ImportError:
-            logging.getLogger("aliby").warning(
-                f"Optional model '{name}' is not installed; "
-                "related features will be skipped."
-            )
+            # stay silent here so the warning is not repeated by every
+            # worker process; warn_about_missing_models reports it once
             _model_cache[name] = None
     return _model_cache[name]
 
@@ -465,6 +463,36 @@ def _get_model(name: str):
 def is_model_available(name: str) -> bool:
     """Return True if the named model's package is importable."""
     return _get_model(name) is not None
+
+
+def warn_about_missing_models(extraction: dict) -> None:
+    """
+    Warn once for each optional model the run needs but cannot import.
+
+    Call from the main process before any extraction so the warning is
+    emitted a single time rather than by every worker. The set of needed
+    models mirrors the gating in the extractor: function-gated models
+    (those in ``_FUNCTION_TO_MODEL``) are always filtered when the cell
+    functions are loaded, whereas param-gated models (those in
+    ``_MODEL_TO_PARAM``) are only used when vacuole identification is on
+    and the mapped attribute is non-empty.
+
+    Parameters
+    ----------
+    extraction: dict
+        Extraction parameters, as in ``config["extraction"]``.
+    """
+    needed = set(_FUNCTION_TO_MODEL.values())
+    if extraction.get("identify_vacuoles"):
+        for model_name, param_attr in _MODEL_TO_PARAM.items():
+            if extraction.get(param_attr):
+                needed.add(model_name)
+    for name in sorted(needed):
+        if not is_model_available(name):
+            logging.getLogger("aliby").warning(
+                f"Optional model '{name}' is not installed; "
+                "related features will be skipped."
+            )
 
 
 def nucloc(cell_mask, trap_image, channels):

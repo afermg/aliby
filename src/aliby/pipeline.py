@@ -34,6 +34,9 @@ from extraction.core.extractor import (
     ExtractorParameters,
     build_extraction_tree_from_meta,
 )
+from extraction.core.functions.cell_functions import (
+    warn_about_missing_models,
+)
 from extraction.core.recursive_merge import recursive_merge_extractor
 from postprocessor.core.postprocessing import (
     PostProcessor,
@@ -511,6 +514,9 @@ class Pipeline(ProcessABC):
         if "time_settings/ntimepoints" in config["metadata"]["minimal"]:
             ntps = config["metadata"]["minimal"]["time_settings/ntimepoints"]
             print(f"Processing {ntps} timepoints.")
+        # warn once here, in the main process, about any optional models
+        # that are unavailable, so each worker does not repeat the warning
+        warn_about_missing_models(config["extraction"])
         # create and run pipelines
         no_processors = resolve_no_processors(config["general"]["distributed"])
         if no_processors > 1:
