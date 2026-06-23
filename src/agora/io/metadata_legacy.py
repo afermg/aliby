@@ -5,10 +5,10 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 import typing as t
 import pandas as pd
 from logfile_parser import Parser
-from pytz import timezone
 
 _warned_multiple_files = False
 
@@ -80,7 +80,7 @@ def flatten_dict(nested_dict, separator="/"):
 def datetime_to_timestamp(time, locale="Europe/London"):
     """Convert datetime object to UNIX timestamp."""
     # h5 attributes do not support datetime objects
-    return timezone(locale).localize(time).timestamp()
+    return time.replace(tzinfo=ZoneInfo(locale)).timestamp()
 
 
 def find_file_legacy(root_dir, regex):
