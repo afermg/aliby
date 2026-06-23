@@ -318,7 +318,7 @@ def _find_valid_trap_regions(
     valid_regions = [
         region
         for region in regionprops(label_image)
-        if (min_trap_size < region.major_axis_length < tile_size)
+        if (min_trap_size < region.axis_major_length < tile_size)
         and (
             half_tile_size
             < region.centroid[0]
