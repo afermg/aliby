@@ -17,9 +17,19 @@ from aliby.pipe_core import _attach_trackastra
 
 
 def _create_extract_multich_tree(
-    channels: Sequence[int], extract_ncores: int | None
+    channels: Sequence[int],
+    extract_ncores: int | None,
+    cp_measure_feature_kwargs: dict[str, dict] | None = None,
 ) -> dict:
-    """Build the extract_multich tree dict for colocalization."""
+    """Build the extract_multich tree dict for colocalization.
+
+    ``cp_measure_feature_kwargs`` (optional) lands under
+    ``kwargs["cp_measure_kwargs"]`` so the extractor sees per-feature
+    options (e.g. ``{"intensity": {"edge_measurements": False}}``).
+    """
+    kwargs: dict = {"ncores": extract_ncores}
+    if cp_measure_feature_kwargs:
+        kwargs["cp_measure_kwargs"] = dict(cp_measure_feature_kwargs)
     return {
         "tree": {
             pair: {
@@ -29,9 +39,7 @@ def _create_extract_multich_tree(
             }
             for pair in combinations(channels, r=2)
         },
-        "kwargs": {
-            "ncores": extract_ncores,
-        },
+        "kwargs": kwargs,
     }
 
 
@@ -51,6 +59,7 @@ def build_pipeline_steps(
     steps_to_write: Sequence[str] | None = None,
     trackastra_address: str | None = None,
     trackastra_parameters: dict | None = None,
+    cp_measure_feature_kwargs: dict[str, dict] | None = None,
 ) -> dict:
     """Build a Cellpose + cp_measure pipeline definition (no IO).
 
@@ -70,6 +79,14 @@ def build_pipeline_steps(
         Step names whose outputs are written to disk. Defaults to segment steps.
     trackastra_address, trackastra_parameters
         If both provided, attach a ``nahual_trackastra`` global step.
+    cp_measure_feature_kwargs : dict of {feature_name: kwargs_dict} or None
+        Optional per-feature kwargs forwarded to the underlying
+        ``cp_measure`` functions, e.g.
+        ``{"intensity": {"edge_measurements": False}}`` to skip the
+        expensive boundary-pixel pass. Lands under
+        ``steps["extract*_<obj>"]["kwargs"]["cp_measure_kwargs"]`` for
+        both single-channel and multi-channel extract steps. Defaults
+        to ``None`` → no change in behaviour for existing callers.
     """
     if channels_to_segment is None:
         channels_to_segment = {"nuclei": 1, "cell": 0}
@@ -88,15 +105,24 @@ def build_pipeline_steps(
             channel_to_segment=ch_id,
         )
 
+    # cp_measure per-feature kwargs land in extract step ``kwargs``,
+    # picked up by ``extraction.extract.process_tree_masks`` →
+    # ``extract_tree``/``extract_tree_multi`` and used to build a fresh
+    # per-step ``CELL_FUNS`` overlay.
+    extract_kwargs: dict = dict(ncores=extract_ncores)
+    if cp_measure_feature_kwargs:
+        extract_kwargs["cp_measure_kwargs"] = dict(cp_measure_feature_kwargs)
     extract_base = dict(
         tree={"None": {"None": ("sizeshape",)}},
-        kwargs=dict(ncores=extract_ncores),
+        kwargs=extract_kwargs,
     )
     for i in channels_to_extract:
         extract_base["tree"][i] = {"max": features_to_extract}
 
     extract_multich_base = _create_extract_multich_tree(
-        channels_to_extract, extract_ncores
+        channels_to_extract,
+        extract_ncores,
+        cp_measure_feature_kwargs=cp_measure_feature_kwargs,
     )
 
     extract_variants = [("", extract_base), ("multi", extract_multich_base)]
