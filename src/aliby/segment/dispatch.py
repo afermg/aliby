@@ -52,28 +52,14 @@ def dispatch_segmenter(
             )
 
             def segment(pixels):
-                # Baby returns list of (n_layers, Y, X) per tile.
-                # Collapse layers into a single 2D label mask (Y, X) per tile
-                # using max-projection (safe: DSatur ensures no pixel overlap
-                # across layers, so max gives the unique cell label at each pixel).
-                # Return as list so process_tree_masks sees a per-tile structure.
-                tile_shape = pixels.shape[-2:]  # (Y, X) from input
-                per_tile = _process(pixels)
-                projected = [
-                    nyx.max(axis=0)
-                    if nyx.shape[0] > 0
-                    else np.zeros(tile_shape, dtype=np.uint16)
-                    for nyx in per_tile
-                ]
-                for tile_labels in projected:
-                    if (
-                        tile_labels.size
-                        and tile_labels.max() >= np.iinfo(np.uint16).max
-                    ):
-                        raise OverflowError(
-                            f"Baby produced {tile_labels.max()} labels; uint16 cast unsafe."
-                        )
-                return [t.astype(np.uint16, copy=False) for t in projected]
+                # With return_metadata=True, nahual already collapses each
+                # tile to a 2-D label image and returns a dict with both the
+                # masks (for extract via passed_data) and the per-tile
+                # tracking/lineage metadata (consumed by
+                # ``aliby.pipe_baby._save_baby_tracking_lineage``).
+                result = _process(pixels)
+                masks = [_to_uint16_labels(m) for m in result["masks"]]
+                return {"masks": masks, "metadata": result["metadata"]}
 
             return segment
         case "nahual_cellpose":
