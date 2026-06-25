@@ -25,12 +25,29 @@ def load_cellfuns_core():
     }
 
 
-def load_cellfuns():
+def load_cellfuns(
+    cp_measure_kwargs: t.Mapping[str, t.Mapping[str, t.Any]] | None = None,
+):
     """
     Create a dict of core functions for use on cell_masks.
 
     The core functions only work on a single mask.
+
+    Parameters
+    ----------
+    cp_measure_kwargs : mapping of {feature_name: kwargs_dict} or None
+        Optional per-feature kwargs forwarded to the underlying
+        ``cp_measure`` function (e.g.
+        ``{"intensity": {"edge_measurements": False}}``). Keys must
+        match cp_measure feature names from
+        ``get_core_measurements()`` / ``get_correlation_measurements()``.
+        Defaults to ``None`` → no extra kwargs (existing behaviour).
+        Must be plain dicts of primitives so the resulting
+        ``functools.partial`` round-trips through cloudpickle when
+        joblib loky workers fan out.
     """
+    cp_measure_kwargs = dict(cp_measure_kwargs or {})
+
     # create dict of the core functions from cell.py - these functions apply to a single mask
     cell_funs = load_cellfuns_core()
     # create a dict of functions that apply the core functions to an array of cell_masks
@@ -48,12 +65,16 @@ def load_cellfuns():
 
             CELL_FUNS[f_name] = new_fun
 
-    # Add cp_measure measurements
+    # Add cp_measure measurements. Per-feature kwargs (if any) are baked
+    # into the partial so they survive cloudpickle when joblib loky
+    # serialises CELL_FUNS for cross-process fan-out.
     for fun_name, f in get_core_measurements().items():
-        CELL_FUNS[fun_name] = partial(wrap_cp_measure_features, fun=f)
+        kw = dict(cp_measure_kwargs.get(fun_name, {}))
+        CELL_FUNS[fun_name] = partial(wrap_cp_measure_features, fun=f, fun_kwargs=kw)
 
     for fun_name, f in get_correlation_measurements().items():
-        CELL_FUNS[fun_name] = partial(wrap_cp_corr_features, fun=f)
+        kw = dict(cp_measure_kwargs.get(fun_name, {}))
+        CELL_FUNS[fun_name] = partial(wrap_cp_corr_features, fun=f, fun_kwargs=kw)
 
     return CELL_FUNS
 
@@ -68,9 +89,19 @@ def load_trapfuns():
     return TRAP_FUNS
 
 
-def load_funs():
-    """Combine all automatically loaded functions."""
-    CELL_FUNS = load_cellfuns()
+def load_funs(
+    cp_measure_kwargs: t.Mapping[str, t.Mapping[str, t.Any]] | None = None,
+):
+    """Combine all automatically loaded functions.
+
+    Parameters
+    ----------
+    cp_measure_kwargs : mapping of {feature_name: kwargs_dict} or None
+        Forwarded to :func:`load_cellfuns` so cp_measure feature
+        partials carry per-feature kwargs. Default ``None`` preserves
+        the historical behaviour for callers that don't customise it.
+    """
+    CELL_FUNS = load_cellfuns(cp_measure_kwargs=cp_measure_kwargs)
     TRAP_FUNS = load_trapfuns()
     # return dict of cell funs, dict of trap funs, and dict of both
     return CELL_FUNS, TRAP_FUNS, {**TRAP_FUNS, **CELL_FUNS}
@@ -102,24 +133,37 @@ def load_redfuns() -> t.Dict[str, t.Callable]:
 
 
 def wrap_cp_measure_features(
-    mask: np.ndarray, pixels: np.ndarray, fun: t.Callable = None
+    mask: np.ndarray,
+    pixels: np.ndarray,
+    fun: t.Callable = None,
+    fun_kwargs: t.Mapping[str, t.Any] | None = None,
 ) -> t.Callable:
-    # results = [
-    #     {k: v[0] for k, v in fun(m, pixels).items()} for m in masks.astype(np.uint16)
-    # ]
-    results = fun(mask.astype(np.uint16), pixels)
+    """Apply a cp_measure single-image feature ``fun`` to ``(mask, pixels)``.
 
+    ``fun_kwargs`` is an optional per-feature kwargs dict (e.g.
+    ``{"edge_measurements": False}`` for ``intensity``); it is baked
+    into the partial by :func:`load_cellfuns`, so each invocation only
+    needs to spread it on top of the positional args.
+    """
+    kw = fun_kwargs or {}
+    results = fun(mask.astype(np.uint16), pixels, **kw)
     return results
 
 
 def wrap_cp_corr_features(
-    mask: np.ndarray, pixels1: np.ndarray, pixels2: np.ndarray, fun: t.Callable = None
+    mask: np.ndarray,
+    pixels1: np.ndarray,
+    pixels2: np.ndarray,
+    fun: t.Callable = None,
+    fun_kwargs: t.Mapping[str, t.Any] | None = None,
 ) -> t.Callable:
-    # results = [
-    #     {k: v[0] for k, v in fun(m, pixels1, pixels2).items()}
-    #     for m in masks.astype(np.uint16)
-    # ]
-    results = fun(pixels1, pixels2, mask)
+    """Apply a cp_measure two-image correlation ``fun`` to ``(pixels1, pixels2, mask)``.
+
+    ``fun_kwargs`` mirrors :func:`wrap_cp_measure_features` and is also
+    baked in at partial-construction time.
+    """
+    kw = fun_kwargs or {}
+    results = fun(pixels1, pixels2, mask, **kw)
     return results
 
 

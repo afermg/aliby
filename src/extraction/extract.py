@@ -244,6 +244,7 @@ def process_tree_masks(
     measure_fn: Callable,
     ncores: int or None = None,
     progress_bar: bool = False,
+    cp_measure_kwargs: dict[str, dict] | None = None,
 ) -> tuple[list, list]:
     """
     Orchestrates the processing of all masks using a tree of instructions.
@@ -258,6 +259,9 @@ def process_tree_masks(
         The image.
     measure_fn : callable
         The measurement function to apply, it can be `measure_mono` or `measure_multi`.
+    cp_measure_kwargs : dict of {feature_name: kwargs_dict} or None
+        Forwarded to ``measure_fn`` so cp_measure feature partials get
+        per-step kwargs (e.g. ``intensity.edge_measurements=False``).
 
     Returns
     -------
@@ -282,8 +286,16 @@ def process_tree_masks(
             instructions,
         )
     )
+    extra = {}
+    if cp_measure_kwargs is not None:
+        extra["cp_measure_kwargs"] = cp_measure_kwargs
     result = measure_fn(
-        tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
+        tileid_instructions,
+        masks,
+        pixels,
+        ncores=ncores,
+        progress_bar=progress_bar,
+        **extra,
     )
 
     return tileid_instructions, result
@@ -296,6 +308,7 @@ def extract_tree(
     ncores: int | bool = False,
     progress_bar: bool = False,
     overlap: bool = False,
+    cp_measure_kwargs: dict[str, dict] | None = None,
 ) -> dict[str, np.ndarray]:
     """
     Extracts features from one channels.
@@ -308,12 +321,26 @@ def extract_tree(
         A list of mask values for feature extraction. Note that it is a list because the first dimension are tiles.
     pixels : numpy array
         The pixel values used in the extraction process.
+    cp_measure_kwargs : dict of {feature_name: kwargs_dict} or None
+        If provided, build a fresh per-call ``CELL_FUNS`` that bakes
+        these kwargs into the cp_measure feature partials (rather than
+        using the module-level singleton). Used by ``pipe_builder`` to
+        wire e.g. ``{"intensity": {"edge_measurements": False}}``
+        through to the extractor without re-importing aliby.
 
     Returns
     -------
     list
         A list of extracted features from the tree branches.
     """
+    # Per-step CELL_FUNS overlay when the pipeline supplied
+    # cp_measure_kwargs. The module-level singleton is left intact; we
+    # just hand ``measure_*`` a freshly-built dict for this step.
+    active_cell_funs = CELL_FUNS
+    if cp_measure_kwargs:
+        from extraction.core.functions.loaders import load_cellfuns
+
+        active_cell_funs = load_cellfuns(cp_measure_kwargs=cp_measure_kwargs)
 
     result = []
     if len(tileid_instructions):
@@ -327,7 +354,7 @@ def extract_tree(
                     masks=binmasks,
                     pixels=pixels,
                     REDUCTION_FUNS=REDUCTION_FUNS,
-                    CELL_FUNS=CELL_FUNS,
+                    CELL_FUNS=active_cell_funs,
                 )
                 result.append(measurement)
         else:
@@ -339,7 +366,7 @@ def extract_tree(
                             masks=binmasks,
                             pixels=pixels,
                             REDUCTION_FUNS=REDUCTION_FUNS,
-                            CELL_FUNS=CELL_FUNS,
+                            CELL_FUNS=active_cell_funs,
                         )
                     )(x)
                     for x in tqdm(tileid_instructions)
@@ -356,6 +383,7 @@ def extract_tree_multi(
     pixels: np.ndarray,
     ncores: None or int = None,
     progress_bar: bool = False,
+    cp_measure_kwargs: dict[str, dict] | None = None,
 ) -> list:
     """
     Extracts features from multiple channels.
@@ -383,6 +411,15 @@ def extract_tree_multi(
     assert isinstance(masks, list) or masks.ndim >= 3, (
         "Masks dimensions < 2. It should include batch/tile dimension."
     )
+    # Same per-step CELL_FUNS overlay as extract_tree: when the pipeline
+    # supplied cp_measure_kwargs, bake them into a freshly-built dict for
+    # this multi-channel step only.
+    active_cell_funs = CELL_FUNS
+    if cp_measure_kwargs:
+        from extraction.core.functions.loaders import load_cellfuns
+
+        active_cell_funs = load_cellfuns(cp_measure_kwargs=cp_measure_kwargs)
+
     result = []
     if len(tileid_instructions):
         binmasks = [transform_2d_to_3d(mask) for mask in masks]
@@ -393,7 +430,7 @@ def extract_tree_multi(
                     masks=binmasks,
                     pixels=pixels,
                     REDUCTION_FUNS=REDUCTION_FUNS,
-                    CELL_FUNS=CELL_FUNS,
+                    CELL_FUNS=active_cell_funs,
                 )
                 for ids_instructions in tileid_instructions
             ]
@@ -406,7 +443,7 @@ def extract_tree_multi(
                             masks=binmasks,
                             pixels=pixels,
                             REDUCTION_FUNS=REDUCTION_FUNS,
-                            CELL_FUNS=CELL_FUNS,
+                            CELL_FUNS=active_cell_funs,
                         )
                     )(x)
                     for x in tileid_instructions
@@ -424,6 +461,7 @@ def process_tree_masks_overlap(  # overlap
     ncores: int or None = None,
     progress_bar: bool = False,
     overlap: bool = True,
+    cp_measure_kwargs: dict[str, dict] | None = None,
 ) -> tuple[list, list]:
     """
     Orchestrates the processing of all masks using a tree of instructions.
@@ -464,8 +502,16 @@ def process_tree_masks_overlap(  # overlap
                 tile_stack_mask.append((tile_i, stack_i, mask_i))
 
     tileid_instructions = tuple(product(tile_stack_mask, instructions))
+    extra = {}
+    if cp_measure_kwargs is not None:
+        extra["cp_measure_kwargs"] = cp_measure_kwargs
     result = measure_fn(
-        tileid_instructions, masks, pixels, ncores=ncores, progress_bar=progress_bar
+        tileid_instructions,
+        masks,
+        pixels,
+        ncores=ncores,
+        progress_bar=progress_bar,
+        **extra,
     )
 
     return tileid_instructions, result

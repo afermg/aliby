@@ -147,9 +147,26 @@ def dispatch_segmenter(
                         f"(shape={arr.shape}); want FCZYX or TFCZYX."
                     )
                 result = remote(arr)
+                # Squeeze the (N=1) leading dim so the mask is 2D (Y, X),
+                # not 3D with Z=1. cp_measure's sizeshape path calls
+                # skimage.measure.marching_cubes which requires every
+                # spatial axis ≥ 2 — a 3D mask with Z=1 crashes with
+                # "Input array must be at least 2x2x2". Cellpose's
+                # equivalent path returns 2D and avoids that branch.
+                # Likewise cp_measure.get_intensity (called via
+                # wrap_cp_measure_features) reshapes 2D pixels to
+                # ``(1, H, W)`` internally, then indexes ``masked_image``
+                # by a label-mask that ends up 4D for 3D input — raising
+                # ``IndexError: too many indices for array``.
+
+                def _squeeze_lead(r):
+                    if hasattr(r, "ndim") and r.ndim == 3 and r.shape[0] == 1:
+                        return np.squeeze(r, axis=0)
+                    return r
+
                 if isinstance(result, list):
-                    return [_to_uint16_labels(r) for r in result]
-                return _to_uint16_labels(result)
+                    return [_to_uint16_labels(_squeeze_lead(r)) for r in result]
+                return _to_uint16_labels(_squeeze_lead(result))
 
             return segment
         case "cellpose":  # One of the cellpose models
