@@ -540,7 +540,31 @@ class Pipeline(ProcessABC):
                 self.run_one_position(position_id)
                 for position_id in position_ids.items()
             ]
+        self.report_h5_sizes()
         return results
+
+    def report_h5_sizes(self):
+        """
+        Print the names and sizes of the h5 files created.
+
+        Sizes are given in megabytes. Failed h5 files are usually much
+        smaller than successful ones.
+
+        Returns
+        -------
+        sizes : dict[str, float]
+            Mapping from each h5 file's name to its size in megabytes.
+        """
+        config = self.parameters.to_dict()
+        out_dir = Path(config["general"]["directory"])
+        sizes = {
+            h5file.name: h5file.stat().st_size / 1e6
+            for h5file in sorted(out_dir.glob("*.h5"))
+        }
+        self.log("h5 files created:", "info")
+        for name, size in sizes.items():
+            self.log(f"\t{name}: {size:.1f} M", "info")
+        return sizes
 
     def generate_h5file(self, image_id):
         """Delete any existing and then create h5file for one position."""
