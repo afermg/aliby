@@ -160,11 +160,7 @@ def dispatch_segmenter(
                 # ``IndexError: too many indices for array``.
 
                 def _squeeze_lead(r):
-                    if (
-                        hasattr(r, "ndim")
-                        and r.ndim == 3
-                        and r.shape[0] == 1
-                    ):
+                    if hasattr(r, "ndim") and r.ndim == 3 and r.shape[0] == 1:
                         return np.squeeze(r, axis=0)
                     return r
 
