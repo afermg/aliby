@@ -20,14 +20,11 @@ dict and reports its shape.
 
 import json
 from pathlib import Path
-from tempfile import mkdtemp
 
 import zarr
 
 from aliby.io.dataset import DatasetZarr
-from aliby.pipe_baby import run_pipeline_and_post
 from aliby.pipe_builder_baby import build_pipeline_steps
-from aliby.pipe_core import configure_logging
 from aliby.test_data import get_dataset, get_dataset_path
 
 # ---------------------------------------------------------------------------
@@ -40,8 +37,10 @@ print(f"Zarr root: {ROOT_PATH}")
 
 dataset = DatasetZarr(ROOT_PATH)
 positions = dataset.get_position_ids()
-print(f"Discovered {len(positions)} per-position zarr arrays: "
-      f"{[p['key'] for p in positions]}")
+print(
+    f"Discovered {len(positions)} per-position zarr arrays: "
+    f"{[p['key'] for p in positions]}"
+)
 # Expected: Discovered 2 per-position zarr arrays: ['PDR5_GFP_001', 'PDR5_GFP_002']
 POSITION_PATH = Path(positions[0]["path"]) / positions[0]["key"]
 print(f"Working on: {POSITION_PATH}")
@@ -75,7 +74,7 @@ print(f"Wrapped: group_path={GROUP_PATH}  key={KEY}")
 # BABY runs in a separate process behind a baby-phone Nahual server.
 # `baby_address` and `baby_modelset` are both required by
 # `pipe_builder_baby.build_pipeline_steps`.
-BABY_ADDRESS = "ipc:///tmp/baby.ipc"               # Replace if your server differs
+BABY_ADDRESS = "ipc:///tmp/baby.ipc"  # Replace if your server differs
 BABY_MODELSET = "yeast_alcatras_brightfield_60x_5z"  # See BABY docs for the catalogue
 REF_CHANNEL = 0
 REF_Z = 0
@@ -120,7 +119,9 @@ def build_pipeline(
             "dimorder": "TCZYX",
         },
     )
-    pipeline["steps"]["segment_cell"]["segmenter_kwargs"]["extra_args"] = BABY_EXTRA_ARGS
+    pipeline["steps"]["segment_cell"]["segmenter_kwargs"]["extra_args"] = (
+        BABY_EXTRA_ARGS
+    )
     # pipe_builder_baby leaves passed_methods empty (BABY pulls pixels via
     # its own tiler). Re-wire the cellpose-style accessor so the segmenter
     # receives the per-timepoint stack.
@@ -144,9 +145,11 @@ if __name__ == "__main__":
         ntps=NTPS,
     )
     print(f"Pipeline steps: {list(pipeline['steps'])}")
-    print(f"ntps={pipeline['ntps']}  "
-          f"segmenter={pipeline['steps']['segment_cell']['segmenter_kwargs']['kind']}  "
-          f"baby_address={pipeline['steps']['segment_cell']['segmenter_kwargs']['address']}")
+    print(
+        f"ntps={pipeline['ntps']}  "
+        f"segmenter={pipeline['steps']['segment_cell']['segmenter_kwargs']['kind']}  "
+        f"baby_address={pipeline['steps']['segment_cell']['segmenter_kwargs']['address']}"
+    )
     # Expected:
     #   Pipeline steps: ['tile', 'segment_cell', 'extract_cell']
     #   ntps=2  segmenter=nahual_baby  baby_address=ipc:///tmp/baby.ipc

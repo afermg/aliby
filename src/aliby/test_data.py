@@ -32,8 +32,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ZENODO_URL = (
-    "https://zenodo.org/api/records/19411429/files/"
-    "aliby_test_dataset.tar.gz/content"
+    "https://zenodo.org/api/records/19411429/files/aliby_test_dataset.tar.gz/content"
 )
 ZENODO_HASH = "3a8b1b7b362f002098ba44e65622862057cfe46f0b459514bf270349c8bce4a7"
 DOWNLOAD_NAME = "aliby_test_dataset.tar.gz"

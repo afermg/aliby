@@ -152,5 +152,7 @@ def test_example_03_yeast_timelapse_baby_pipeline_shape(tmp_path):
     )
     assert pipeline["ntps"] == 2
     assert "segment_cell" in pipeline["steps"]
-    assert pipeline["steps"]["segment_cell"]["segmenter_kwargs"]["kind"] == "nahual_baby"
+    assert (
+        pipeline["steps"]["segment_cell"]["segmenter_kwargs"]["kind"] == "nahual_baby"
+    )
     assert pipeline["passed_methods"] == {"segment_cell": ("tile", "get_fczyx")}

@@ -35,9 +35,9 @@ from aliby.test_data import get_dataset, get_dataset_path
 # at 256x256, one position (well A01, field 1). 516 KB on disk.
 ENTRY = get_dataset("crop_cellpainting_256")
 DATA_PATH = get_dataset_path(ENTRY["name"])
-REGEX = ENTRY["regex"]                  # r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+)\.tif"
+REGEX = ENTRY["regex"]  # r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+)\.tif"
 CAPTURE_ORDER = ENTRY["capture_order"]  # "WFC" -- well, field, channel
-CHANNELS = ENTRY["channels"]            # {"DNA": 0, "ER": 1, "RNA": 2, "AGP": 3, "Mito": 4}
+CHANNELS = ENTRY["channels"]  # {"DNA": 0, "ER": 1, "RNA": 2, "AGP": 3, "Mito": 4}
 
 # ---------------------------------------------------------------------------
 # 2. Discover positions in the dataset.
@@ -139,9 +139,7 @@ if __name__ == "__main__":
     print(f"Writing per-position outputs under {OUTPUT_DIR}")
 
     Parallel(n_jobs=1, backend="loky")(
-        delayed(run_one_position)(
-            base_pipeline, pos, OUTPUT_DIR, NAHUAL_ADDRESSES, i
-        )
+        delayed(run_one_position)(base_pipeline, pos, OUTPUT_DIR, NAHUAL_ADDRESSES, i)
         for i, pos in enumerate(positions)
     )
 
@@ -151,8 +149,10 @@ if __name__ == "__main__":
     profiles_files = sorted((OUTPUT_DIR / "profiles").glob("*.parquet"))
     print(f"Wrote {len(profiles_files)} profiles parquet files.")
     table = pyarrow.parquet.read_table(profiles_files[0])
-    print(f"First profile: {profiles_files[0].name} -- {table.num_rows} rows, "
-          f"{len(table.column_names)} columns")
+    print(
+        f"First profile: {profiles_files[0].name} -- {table.num_rows} rows, "
+        f"{len(table.column_names)} columns"
+    )
     # Expected output on the bundled fixture, approximately:
     #   Wrote 1 profiles parquet files.
     #   First profile: A01__1.parquet -- 26 rows, 632 columns

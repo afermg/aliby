@@ -162,8 +162,10 @@ if __name__ == "__main__":
     )
     embed_step = next(k for k in pipeline["steps"] if k.startswith("nahual_embed_"))
     print(f"Built pipeline with steps: {list(pipeline['steps'])}")
-    print(f"Embed step: {embed_step}  tile_size={MODEL_CONFIG['tile_size']}  "
-          f"selected_channels={MODEL_CONFIG['selected_channels']}")
+    print(
+        f"Embed step: {embed_step}  tile_size={MODEL_CONFIG['tile_size']}  "
+        f"selected_channels={MODEL_CONFIG['selected_channels']}"
+    )
     # Expected: Built pipeline with steps: ['tile', 'nahual_embed_dinov2']
     #           Embed step: nahual_embed_dinov2  tile_size=224  selected_channels=[0, 1, 2]
 
@@ -189,8 +191,10 @@ if __name__ == "__main__":
         stub_embedding = np.arange(12, dtype=np.float32).reshape(3, 4)
         state = {"data": {embed_step: [stub_embedding]}}
         profiles = get_profiles_from_state(state, pipeline)
-        print(f"Stubbed profiles: {profiles.num_rows} rows, "
-              f"columns={profiles.column_names}")
+        print(
+            f"Stubbed profiles: {profiles.num_rows} rows, "
+            f"columns={profiles.column_names}"
+        )
         assert isinstance(profiles, pa.Table) and profiles.num_rows > 0
         # Expected: Stubbed profiles: 3 rows,
         # columns=['tile', 'label', 'X_0', 'X_1', 'X_2', 'X_3',
