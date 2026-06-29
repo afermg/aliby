@@ -472,7 +472,12 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
         step_prefix = ext_step.split("_")[0]
         for tp, ext_output in enumerate(state["data"][ext_step]):
             if isinstance(ext_output, numpy.ndarray):  # arbitrary embedders
-                ext_output = (cycle((("__", "__"),)), (ext_output,))
+                # Wrap a single embedding ndarray as (instructions, metrics)
+                # tuples of equal length so format_extraction's strict-zip
+                # accepts them. format_extraction's ndarray branch (extract.py
+                # lines 563-568) consumes the whole array in one iteration, so
+                # length-1 on both sides is what was logically intended.
+                ext_output = ((("__", "__"),), (ext_output,))
             table: pyarrow.Table = format_extraction(ext_output)
             rename_map = {"tile": "metadata_tile", "label": "metadata_label"}
             new_names = [rename_map.get(c, c) for c in table.column_names]
