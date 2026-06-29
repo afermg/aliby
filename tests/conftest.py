@@ -1,18 +1,15 @@
 import pytest
-from pathlib import Path
-import pooch
+
+from aliby.test_data import get_data_root
 
 
 @pytest.fixture(scope="session")
 def data_dir():
-    data_path = Path("/datastore/alan/aliby/test_dataset/data/")
-    if not data_path.exists():
-        marker = "aliby_tests/"
-        files = pooch.retrieve(
-            url="https://zenodo.org/api/records/19411429/files/aliby_test_dataset.tar.gz/content",
-            known_hash="3a8b1b7b362f002098ba44e65622862057cfe46f0b459514bf270349c8bce4a7",
-            fname="aliby_test_dataset.tar.gz",
-            processor=pooch.Untar(extract_dir="aliby_tests"),
-        )
-        data_path = Path(files[0].split(marker)[0] + marker)
-    return data_path
+    """Path to the unpacked aliby test dataset (Zenodo record 19411429).
+
+    Resolved by :func:`aliby.test_data.get_data_root` -- uses the legacy
+    on-disk copy at ``/datastore/alan/aliby/test_dataset/data/`` when
+    present, otherwise fetches from Zenodo via pooch and caches under
+    ``~/.cache/pooch/aliby_tests/``.
+    """
+    return get_data_root()
