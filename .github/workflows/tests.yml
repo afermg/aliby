@@ -32,6 +32,28 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --all-groups
+      - name: Cache pooch Zenodo dataset
+        # The aliby test dataset (record 19411429, ~18 MB) is fetched once
+        # via pooch and reused by both pytest fixtures and the example
+        # scripts. Caching by the dataset's known hash skips the Zenodo
+        # round-trip on subsequent runs.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pooch
+          key: pooch-aliby-tests-3a8b1b7b362f002098ba44e65622862057cfe46f0b459514bf270349c8bce4a7
       - name: Test
         run: |
-          pytest tests/ --cov --color=yes --cov-report=xml -s
+          uv run pytest tests/ --cov --color=yes --cov-report=xml -s
+      - name: Smoke-test example scripts
+        # Each example is notebook-style: linear top-to-bottom, defaults to
+        # the bundled Zenodo fixture. Running them here catches drift that
+        # the in-test imports of these modules might miss (the test only
+        # imports them and calls specific helpers; running as __main__
+        # exercises the script's flow end-to-end). Example 02 stubs the
+        # embedder when no Nahual server is available, and example 03
+        # stops after building the pipeline dict, so both complete without
+        # a remote model server.
+        run: |
+          uv run python examples/01_cell_painting_tiff.py
+          uv run python examples/02_zarr_deep_embeddings.py
+          uv run python examples/03_yeast_timelapse_baby.py
