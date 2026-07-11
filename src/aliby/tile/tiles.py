@@ -21,21 +21,10 @@ class Tile:
         """
         Return tile's centre by applying drifts.
 
-        Parameters
-        ----------
-        tp: integer
-            Index for the time point of interest.
-        """
-        drifts = self.parent_class.drifts
-        tile_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
-        return list(tile_centre.astype(int))
-
-    def as_tile(self, tp: int):
-        """
-        Return tile in the OMERO tile format of x, y, w, h.
-
-        Here x, y are at the bottom left corner of the tile
-        and w and h are the tile width and height.
+        The centre is (y, x) - row first - because trap locations come from
+        skimage's peak_local_max and regionprops.centroid and the drifts from
+        phase_cross_correlation, all of which are (row, column). The result is
+        truncated to integers, so a tile's origin is always an integer.
 
         Parameters
         ----------
@@ -44,24 +33,47 @@ class Tile:
 
         Returns
         -------
-        x: int
-            x-coordinate of bottom left corner of tile.
+        A list of the y- and x-coordinates of the tile's centre.
+        """
+        drifts = self.parent_class.drifts
+        tile_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
+        return list(tile_centre.astype(int))
+
+    def as_tile(self, tp: int):
+        """
+        Return tile as y, x, h, w.
+
+        Here y, x are the tile's top left corner - its [0, 0] pixel - and h
+        and w are the tile's height and width.
+
+        Parameters
+        ----------
+        tp: integer
+            Index for the time point of interest.
+
+        Returns
+        -------
         y: int
-            y-coordinate of bottom left corner of tile.
-        w: int
-            Width of tile.
+            y-coordinate, the row, of the tile's top left corner.
+        x: int
+            x-coordinate, the column, of the tile's top left corner.
         h: int
             Height of tile.
+        w: int
+            Width of tile.
         """
-        x, y = self.centre_at_time(tp)
-        # tile bottom corner
-        x = int(x - self.half_size)
+        y, x = self.centre_at_time(tp)
+        # tile top left corner
         y = int(y - self.half_size)
-        return x, y, self.size, self.size
+        x = int(x - self.half_size)
+        return y, x, self.size, self.size
 
     def as_range(self, tp: int):
         """
-        Return a horizontal and a vertical slice of a tile.
+        Return a vertical and a horizontal slice of a tile.
+
+        Rows first: the first slice indexes the y-axis of an image, as in
+        image_array[:, y, x].
 
         Parameters
         ----------
@@ -70,11 +82,11 @@ class Tile:
 
         Returns
         -------
-        A slice of x coordinates from left to right
         A slice of y coordinates from top to bottom
+        A slice of x coordinates from left to right
         """
-        x, y, w, h = self.as_tile(tp)
-        return slice(x, x + w), slice(y, y + h)
+        y, x, h, w = self.as_tile(tp)
+        return slice(y, y + h), slice(x, x + w)
 
 
 class TileLocations:
@@ -143,7 +155,7 @@ class TileLocations:
         return res
 
     def centres_at_time(self, tp: int) -> np.ndarray:
-        """Return an array of tile centres (x- and y-coords)."""
+        """Return an array of tile centres (y- and x-coords, rows first)."""
         return np.array([tile.centre_at_time(tp) for tile in self.tiles])
 
     @classmethod

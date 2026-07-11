@@ -625,11 +625,12 @@ class Tiler(StepABC):
 
         Parameters
         ----------
-        full: array
-            Slice of image (zstacks, x, y) - the entire position
+        image_array: array
+            Slice of image (zstacks, y, x) - the entire position
             with zstacks as first axis
         slices: tuple of two slices
-            Delineates indices for the x- and y- ranges of the tile.
+            Delineates indices for the y- and x- ranges of the tile,
+            rows first, as everything here is (row, column).
 
         Returns
         -------
@@ -638,13 +639,14 @@ class Tiler(StepABC):
             If some padding is needed, edge values are replicated.
             If much padding is needed, a tile of NaN is returned.
         """
-        # number of pixels in the y direction
+        # number of pixels in the x direction; tiles are square and images are
+        # clipped with this in both axes
         max_size = image_array.shape[-1]
         # ignore parts of the tile outside of the image
         y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
         # get the tile including all z stacks
         tile = image_array[:, y, x]
-        # find extent of padding needed in x and y
+        # find extent of padding needed in y and x
         padding = np.array(
             [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
         )
