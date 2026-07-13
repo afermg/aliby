@@ -43,7 +43,7 @@ omero-py = ">=5.20.0"
 [tool.poetry.group.baby]
 optional = true
 [tool.poetry.group.baby.dependencies]
-baby-seg = { path = "../../datasync/wip/bairn", develop = true }
+baby-torch = { git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/baby-torch.git" }
 
 
 [tool.poetry.group.dev]
