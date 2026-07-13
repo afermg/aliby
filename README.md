@@ -63,10 +63,7 @@ but, depending on success with installing zeroc-ice, this might work too
  ```bash 
 poetry install --with omero
  ```
-- Version **0.3** on, uses **pytorch**.
-
-** For installing tensorflow on earlier versions < 0.3 **
-
+- From version **0.3** on, we use **pytorch**.
 
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
 
