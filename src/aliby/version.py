@@ -1,1 +1,4 @@
-__version__ = "0.24"
+"""Get the version from the installed package's metadata."""
+from importlib.metadata import version
+
+__version__ = version("alibylite")
