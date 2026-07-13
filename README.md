@@ -63,13 +63,10 @@ but, depending on success with installing zeroc-ice, this might work too
  ```bash 
 poetry install --with omero
  ```
+- Version **0.3** on, uses **pytorch**.
 
-- On an M4 Mac, you may need to install tensorflow by hand:
- 
-```bash 
-pip install tensorflow-macos==2.14
-pip install tensorflow-metal==1.2.0
-```
+** For installing tensorflow on earlier versions < 0.3 **
+
 
 - If you have issues with zeroc-ice, there are now pre-built binaries available at [Glencoe software](https://www.glencoesoftware.com/blog/2023/12/08/ice-binaries-for-omero.html).
 
@@ -85,6 +82,28 @@ pip install https://github.com/glencoesoftware/zeroc-ice-py-linux-x86_64/release
 pip install "PyQt5<5.16"
 pip install napari 
  ```
+**For installing tensorflow on earlier versions < 0.3**
+
+- On an M4 Mac, you may need to install tensorflow by hand:
+ 
+```bash 
+pip install tensorflow-macos==2.14
+pip install tensorflow-metal==1.2.0
+```
+
+ - On an M1 Mac, these commands proved helpful
+
+ ```bash 
+conda install openblas
+conda uninstall numpy
+conda install numpy    
+ ```
+
+ and reinstalling tensorflow
+
+ ```bash 
+python -m pip install tensorflow-macos==2.9.0 tensorflow-metal==0.5.0 --force-reinstall
+```
 
 **Old suggestions for the Python 3.10 version**
 
@@ -101,16 +120,3 @@ conda search -f matplotlib
 conda install matplotlib=3.8.0 
  ```
 
- - On an M1 Mac, these commands proved helpful
-
- ```bash 
-conda install openblas
-conda uninstall numpy
-conda install numpy    
- ```
-
- and reinstalling tensorflow
-
- ```bash 
-python -m pip install tensorflow-macos==2.9.0 tensorflow-metal==0.5.0 --force-reinstall
-```
