@@ -165,6 +165,36 @@ tracks a dye ramp cleanly over a 2.8x range.
 - Controlled by `ExtractorParameters.mask_pdms` (default `True`); disabled
   automatically if the mask covers over 60% of a tile
 
+### Cells exclude the Cy5 dye
+
+Measured on experiment 4802, using every trap and every *segmented* cell from
+`cell_info` — 261766 trap-timepoints. Normalising each trap-timepoint's
+`median_background` by the median over traps at that timepoint, to strip out the
+dye ramp:
+
+| correlation with the background | |
+| --- | --- |
+| pooled, against cell count | +0.097 |
+| within-trap, against cell count | +0.034 |
+| within-trap, against cell **area** | **-0.099** |
+
+Within a trap, the timepoints at which it holds more cell area are the timepoints
+at which its Cy5 background is *lower*, and the effect strengthens with the dye
+level (slope -0.006 per 1000 px at a dye level of 30, -0.017 at 70+). Cells
+displace dye-bearing medium. Dye *binding to cells* would push the background up
+with occupancy and is ruled out by the sign.
+
+Beware of measuring this from a wela tsv: those hold only picked cells and only
+the traps that contain them — 736 of about 1193 traps for 4802 — which inflates
+the apparent effect roughly twofold and makes it look positive. Most of what
+looks like an occupancy effect pooled across traps is a between-trap confound:
+traps that habitually hold more cells sit where the background is brighter.
+
+A consequence for the empty-trap fix above: a trap carrying a typical ~2000 px of
+cells should read about 3% *higher* when empty, at high dye. Genuinely empty
+traps cannot be measured from data extracted before that fix, because they are
+exactly the rows that were missing, so this remains an extrapolation.
+
 **Distributors** (`extraction.core.functions.distributors`)
 - Collapse multiple z-sections to 2D images
 
