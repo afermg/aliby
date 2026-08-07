@@ -124,10 +124,32 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 ### PDMS masking
 
-The PDMS trap is autofluorescent but lies outside the cells, so it is counted as
-background unless excluded. `median_background` is robust to it while the PDMS
-covers under half the non-cell pixels; `mean_background` and `std_background`
+The PDMS trap lies outside the cells and so is counted as background unless it is
+excluded. In principle `median_background` is robust to it while the PDMS covers
+under half the non-cell pixels, whereas `mean_background` and `std_background`
 are not.
+
+**How much this matters depends strongly on the channel.**
+
+*GFP* — measured on four positions across experiments 3451 and 2179: the trap
+covers 15.4-15.7% of a tile and is only **1.02-1.04x** as bright as the medium.
+Masking shifts the median and mean by under 1% and moves the std by -2% to +7%.
+Barely worth having.
+
+*Cy5* — the dye **binds to the PDMS**, so the pillars grow brighter as dye
+accumulates. Inferred from experiment 4802's stored median, mean and std
+backgrounds together with the 15.5% coverage measured from brightfield: the
+relative std of the Cy5 background rises from **0.06** early in the ramp to
+**0.31** late, reaching **0.40-0.65** in chambers 1704 and 1705, implying pillars
+of roughly **1.9-2.4x** the medium. This is not caused by unsegmented cells: within
+each chamber the relative std is flat against the number of cells in a trap
+(correlations +0.10, -0.11, -0.01), and the chamber with the *most* cells (1352,
+5.6 per trap) has the *least* heterogeneity (0.07) and also the lowest dye.
+
+So for Cy5, `mean_background` and `std_background` are materially wrong late in an
+experiment and the masking is worth having. `median_background` stays protected
+because the PDMS is well under half the non-cell pixels, which is why `median_cy5`
+tracks a dye ramp cleanly over a 2.8x range.
 
 - `compute_pdms_mask()` in `extractor.py` finds the trap from the **brightfield**
   tiles, which are always imaged, so the masking works for experiments with no Cy5
