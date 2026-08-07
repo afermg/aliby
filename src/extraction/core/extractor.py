@@ -368,8 +368,11 @@ class Extractor(StepABC):
         for trap_id, (mask_set, trap, local_cell_labels) in enumerate(
             zip(masks, traps, cell_labels.values())
         ):
-            # ignore empty traps
-            if len(mask_set):
+            # cell functions need cells, but background functions
+            # need only an image because a trap with no cells is
+            # entirely background
+            has_data = len(mask_set) if is_cell_fun else trap is not None
+            if has_data:
                 # find property from the tile
                 result = self.all_funs[fun_name](mask_set, trap, channels)
                 if is_cell_fun:
