@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+# location in the h5 file of the mask of the PDMS trap within a tile
+pdms_mask_path = "extraction/pdms_mask"
+
 
 def write_meta_to_h5(
     file: str | Path, meta: dict[str, str | int | list[int] | list[str]]
@@ -325,6 +328,28 @@ class ExtractorWriter(CoreWriter):
         for extract_name, df in data.items():
             dset_path = "/extraction/" + extract_name
             self.add_df(dataset=dset_path, df=df)
+
+    def write_pdms_mask(self, mask: NDArray):
+        """
+        Write the mask of the PDMS trap within a tile.
+
+        Store the mask both to reuse if the position is run again and
+        to allow the masking to be checked by eye.
+
+        Parameters
+        ----------
+        mask: array
+            A boolean array, shape (Y, X), that is True for the
+            pixels of the PDMS trap.
+        """
+        with h5py.File(self.file, "a") as f:
+            if pdms_mask_path in f:
+                del f[pdms_mask_path]
+            f.create_dataset(
+                pdms_mask_path,
+                data=np.asarray(mask, dtype=bool),
+                compression=self.compression,
+            )
 
 
 class PostProcessorWriter(CoreWriter):

@@ -697,6 +697,8 @@ class Pipeline(ProcessABC):
                     # run extraction
                     result = extractor.run_tp(i)
                     extractor_writer.write(data=result)
+                    if i == 0 and extractor.pdms_mask is not None:
+                        extractor_writer.write_pdms_mask(extractor.pdms_mask)
                     # check and report clogging
                     frac_clogged_traps = check_earlystop(
                         out_file,

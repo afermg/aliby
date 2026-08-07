@@ -1,7 +1,9 @@
 """Extract areas, volumes and fluorescence for the cells in one position."""
 
 import copy
+import logging
 import typing as t
+import warnings
 from pathlib import Path
 
 import bottleneck as bn
@@ -11,6 +13,7 @@ import numpy as np
 import pandas as pd
 from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
+from agora.io.writers import pdms_mask_path
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
 from extraction.core.functions.cell_functions import (
@@ -22,6 +25,14 @@ from extraction.core.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
+from scipy.ndimage import (
+    binary_closing,
+    binary_dilation,
+    binary_fill_holes,
+    label as label_regions,
+)
+from skimage.filters import threshold_otsu
+from skimage.morphology import disk
 
 # define types
 reduction_method = t.Union[t.Callable, str]
@@ -83,7 +94,114 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
     }
     tree_dict["identify_vacuoles"] = True
     tree_dict["background_channels"] = background_channels
+    tree_dict["mask_pdms"] = True
     return tree_dict
+
+
+def remove_small_regions(mask: np.ndarray, min_size: int) -> np.ndarray:
+    """
+    Remove connected regions comprising fewer than min_size pixels.
+
+    Parameters
+    ----------
+    mask: array
+        A boolean array.
+    min_size: int
+        Smallest number of pixels a region may have.
+    """
+    labelled, no_regions = label_regions(mask)
+    if no_regions:
+        sizes = np.bincount(labelled.ravel())
+        small = np.flatnonzero(sizes < min_size)
+        mask = mask & ~np.isin(labelled, small)
+    return mask
+
+
+def compute_pdms_mask(
+    brightfield: np.ndarray,
+    masks: t.List[np.ndarray],
+    min_no_tiles: int = 10,
+) -> t.Optional[np.ndarray]:
+    """
+    Find the PDMS trap within a tile from the brightfield images.
+
+    The PDMS is autofluorescent and so is not background, but it lies
+    outside the cells and is therefore included in any estimate of the
+    background unless it is explicitly excluded.
+
+    Tiles are corrected for drift and are centred on the traps, and so
+    the trap lies at the same place in every tile both over time and
+    from one tile to the next. Taking the median over tiles therefore
+    reinforces the trap. Cells are blanked rather than averaged away
+    because cells are held in the trap's pocket and so lie in similar
+    places in different tiles.
+
+    Parameters
+    ----------
+    brightfield: array
+        Brightfield images for all tiles, shape (no_tiles, Y, X).
+    masks: list of arrays
+        Segmentation masks per tile, each (no_cells, Y, X).
+    min_no_tiles: int (optional)
+        Minimum number of usable tiles needed to find the trap.
+
+    Returns
+    -------
+    mask: array or None
+        A boolean array, shape (Y, X), that is True for the pixels of
+        the PDMS trap, or None if the trap cannot be found reliably.
+    """
+    logger = logging.getLogger("aliby")
+    if brightfield is None or not len(brightfield):
+        return None
+    stack = np.array(brightfield, dtype=float)
+    # blank the cells
+    for tile_id, mask_set in enumerate(masks):
+        if len(mask_set):
+            stack[tile_id][np.any(mask_set, axis=0)] = np.nan
+    # ignore tiles that are padded or wholly covered by cells
+    stack = stack[~np.all(np.isnan(stack), axis=(1, 2))]
+    if len(stack) < min_no_tiles:
+        logger.warning(
+            f"Extractor: only {len(stack)} tiles are available, and so "
+            "the PDMS trap will not be masked."
+        )
+        return None
+    with warnings.catch_warnings():
+        # some pixels may be covered by cells in every tile
+        warnings.simplefilter("ignore", RuntimeWarning)
+        static = np.nanmedian(stack, axis=0)
+    level = np.nanmedian(static)
+    static = np.where(np.isnan(static), level, static)
+    # the trap both absorbs and refracts and so appears either darker
+    # or brighter than the medium
+    deviation = np.abs(static - level)
+    mask = deviation > threshold_otsu(deviation)
+    # the trap's interior may match the medium, lying between its edges;
+    # treat pixels beyond a tile as trap so that a trap running into a
+    # tile's edge is not eroded, erring towards masking too much
+    mask = binary_closing(mask, disk(3), border_value=1)
+    mask = binary_fill_holes(mask)
+    mask = remove_small_regions(mask, max(9, mask.size // 1000))
+    # allow for drift and for tiles being imperfectly centred on traps
+    mask = binary_dilation(mask, disk(2))
+    fraction = mask.mean()
+    if fraction > 0.6:
+        logger.warning(
+            f"Extractor: the PDMS trap appears to cover {fraction:.0%} of "
+            "a tile, which is implausible, and so it will not be masked."
+        )
+        return None
+    elif fraction > 0.4:
+        logger.warning(
+            f"Extractor: the PDMS trap covers {fraction:.0%} of a tile. "
+            "Background estimates may be unreliable."
+        )
+    else:
+        logger.info(
+            f"Extractor: the PDMS trap covers {fraction:.0%} of a tile."
+        )
+    return mask
 
 
 def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
@@ -120,6 +238,7 @@ class ExtractorParameters(ParametersABC):
         intracellular_masks: set = set(),
         identify_vacuoles: bool = True,
         background_channels: set = set(),
+        mask_pdms: bool = True,
     ):
         """
         Initialise.
@@ -148,6 +267,10 @@ class ExtractorParameters(ParametersABC):
             A set of strings of the channels for which to extract
             the median background signal (pixels outside all cells).
             Defaults to Cy5 channels when built from metadata.
+        mask_pdms: bool
+            If True (default), find the PDMS trap in the brightfield
+            images and exclude it from all background estimates. The
+            PDMS is autofluorescent and so is not background.
         """
         self.tree = tree
         self.subtract_background = subtract_background
@@ -155,6 +278,7 @@ class ExtractorParameters(ParametersABC):
         self.intracellular_masks = intracellular_masks
         self.identify_vacuoles = identify_vacuoles
         self.background_channels = background_channels
+        self.mask_pdms = mask_pdms
 
     @classmethod
     def default(cls):
@@ -241,6 +365,9 @@ class Extractor(StepABC):
                     setattr(self.params, param_attr, set())
         self.store = store
         self.cell_fun_names, self.all_funs = load_all_functions()
+        # found once per position from the brightfield images
+        self.pdms_mask = self.load_pdms_mask()
+        self.sought_pdms_mask = self.pdms_mask is not None
 
     @classmethod
     def from_tiler(
@@ -373,16 +500,23 @@ class Extractor(StepABC):
             # entirely background
             has_data = len(mask_set) if is_cell_fun else trap is not None
             if has_data:
-                # find property from the tile
-                result = self.all_funs[fun_name](mask_set, trap, channels)
                 if is_cell_fun:
+                    # find property from the tile
+                    result = self.all_funs[fun_name](mask_set, trap, channels)
                     # store results for each cell separately
                     for cell_label, val in zip(local_cell_labels, result):
                         results.append(val)
                         idx.append((trap_id, cell_label))
                 else:
                     # background function for cy5-like signals
-                    results.append(result)
+                    results.append(
+                        self.all_funs[fun_name](
+                            mask_set,
+                            trap,
+                            channels,
+                            exclude_mask=self.pdms_mask,
+                        )
+                    )
                     idx.append(trap_id)
         return (tuple(results), tuple(idx))
 
@@ -582,9 +716,54 @@ class Extractor(StepABC):
                 ]
             )
             bgs = ~combined
+            if self.pdms_mask is not None:
+                # the PDMS trap is autofluorescent and is not background
+                bgs = bgs & ~self.pdms_mask
         else:
             bgs = np.array([])
         return bgs
+
+    def load_pdms_mask(self):
+        """
+        Read any PDMS mask already found for this position.
+
+        Reuse the mask so that a resumed run gives the same background
+        estimates as the run it continues.
+
+        Returns
+        -------
+        mask: array or None
+            A boolean array, shape (Y, X), or None if no mask is
+            stored or if masking the PDMS is switched off.
+        """
+        if not self.params.mask_pdms or not Path(self.store).exists():
+            return None
+        try:
+            with h5py.File(self.store, "r") as f:
+                if pdms_mask_path in f:
+                    return f[pdms_mask_path][()].astype(bool)
+        except OSError:
+            # the h5 file is not yet readable
+            pass
+        return None
+
+    def set_pdms_mask(self, brightfield, masks):
+        """
+        Find the PDMS trap unless it has been sought already.
+
+        Look only once per position: the trap does not move and a
+        failure to find it will recur at every time point.
+
+        Parameters
+        ----------
+        brightfield: array
+            Brightfield images for all tiles, shape (no_tiles, Y, X).
+        masks: list of arrays
+            Segmentation masks per tile, each (no_cells, Y, X).
+        """
+        if self.params.mask_pdms and not self.sought_pdms_mask:
+            self.pdms_mask = compute_pdms_mask(brightfield, masks)
+            self.sought_pdms_mask = True
 
     def compute_intracellular_masks(self, outlines, masks, img):
         """
@@ -894,14 +1073,17 @@ class Extractor(StepABC):
         # fluorescence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
         tiles = self.get_tiles(tp, channels=tree_dict["channels"], lazy=False)
+        # brightfield images as (traps, Y, X)
+        brightfield = self.get_tiles(
+            tp, channels=["Brightfield"], lazy=False
+        )[:, 0, 0, ...]
+        # find the PDMS trap before any background is estimated
+        self.set_pdms_mask(brightfield, masks)
         bgs = self.get_background_masks(masks, tile_size)
         img, img_bgsub = self.get_imgs_background_subtract(
             tree_dict, tiles, bgs
         )
-        # add brightfield images as (traps, channels, 1, Z, X, Y)
-        img["Brightfield"] = self.get_tiles(
-            tp, channels=["Brightfield"], lazy=False
-        )[:, 0, 0, ...]
+        img["Brightfield"] = brightfield
         return cell_labels, masks, outlines, img, img_bgsub
 
     def extract_tp(

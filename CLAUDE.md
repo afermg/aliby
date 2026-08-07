@@ -118,6 +118,30 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - Per-tile background statistics (median, mean, std of pixels outside all cells)
 - Used for background channels such as Cy5; results are stored with `cell_label = -1`
 - Loaded by `load_background_functions()` in `loaders.py`
+- Tiles with no cells are *not* skipped: a tile with no cells is entirely background.
+  Skipping them left gaps that became NaN in `Signal.dataset_to_df`'s pivot
+- All three take an optional `exclude_mask` for the PDMS trap (see below)
+
+### PDMS masking
+
+The PDMS trap is autofluorescent but lies outside the cells, so it is counted as
+background unless excluded. `median_background` is robust to it while the PDMS
+covers under half the non-cell pixels; `mean_background` and `std_background`
+are not.
+
+- `compute_pdms_mask()` in `extractor.py` finds the trap from the **brightfield**
+  tiles, which are always imaged, so the masking works for experiments with no Cy5
+- Tiles are drift-corrected and centred on traps, so the trap lies at the same place
+  in every tile; the median over tiles reinforces it
+- Cells are blanked before the median, never averaged away: cells sit in the trap's
+  pocket and so lie in similar places in different tiles
+- Found once per position at the first extracted time point, stored at
+  `/extraction/pdms_mask` by `ExtractorWriter.write_pdms_mask`, and reloaded on a
+  resumed run so that it stays consistent
+- Applied both to the background functions and to `get_background_masks`, which
+  feeds the per-z median subtraction behind every channel's `_bgsub` images
+- Controlled by `ExtractorParameters.mask_pdms` (default `True`); disabled
+  automatically if the mask covers over 60% of a tile
 
 **Distributors** (`extraction.core.functions.distributors`)
 - Collapse multiple z-sections to 2D images
