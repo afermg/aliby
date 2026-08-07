@@ -757,13 +757,20 @@ class Extractor(StepABC):
         Parameters
         ----------
         brightfield: array
-            Brightfield images for all tiles, shape (no_tiles, Y, X).
+            Brightfield images for all tiles, shape
+            (no_tiles, Z, Y, X).
         masks: list of arrays
             Segmentation masks per tile, each (no_cells, Y, X).
         """
         if self.params.mask_pdms and not self.sought_pdms_mask:
-            self.pdms_mask = compute_pdms_mask(brightfield, masks)
             self.sought_pdms_mask = True
+            if brightfield is None or not len(brightfield):
+                return
+            # project over z, as the vacuole CNN also does, because
+            # the trap is in focus at no single z
+            self.pdms_mask = compute_pdms_mask(
+                brightfield.mean(axis=1), masks
+            )
 
     def compute_intracellular_masks(self, outlines, masks, img):
         """
@@ -778,7 +785,7 @@ class Extractor(StepABC):
             Cell masks per trap, each (ncells, Y, X).
         img: dict
             Image dict containing "Brightfield" key with shape
-            (ntraps, Y, X).
+            (ntraps, Z, Y, X); the vacuole CNN projects over z.
 
         Returns
         -------
@@ -1073,7 +1080,7 @@ class Extractor(StepABC):
         # fluorescence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, X, Y)
         tiles = self.get_tiles(tp, channels=tree_dict["channels"], lazy=False)
-        # brightfield images as (traps, Y, X)
+        # brightfield images as (traps, Z, Y, X)
         brightfield = self.get_tiles(
             tp, channels=["Brightfield"], lazy=False
         )[:, 0, 0, ...]
