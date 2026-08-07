@@ -8,8 +8,10 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-# location in the h5 file of the mask of the PDMS trap within a tile
-pdms_mask_path = "extraction/pdms_mask"
+# location in the h5 file of the mask of the PDMS trap within a tile;
+# in trap_info, with the other data that is per position rather than
+# per cell, and not in extraction, which holds only signals
+pdms_mask_path = "trap_info/pdms_mask"
 
 
 def write_meta_to_h5(
@@ -334,7 +336,12 @@ class ExtractorWriter(CoreWriter):
         Write the mask of the PDMS trap within a tile.
 
         Store the mask both to reuse if the position is run again and
-        to allow the masking to be checked by eye.
+        to allow the masking to be checked by eye. The mask determines
+        every background value in the file, and so is kept for the same
+        reason as the picker's and merger's choices.
+
+        Write to trap_info, which holds the data that is per position
+        rather than per cell, even though the Extractor finds the mask.
 
         Parameters
         ----------

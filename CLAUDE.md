@@ -158,8 +158,11 @@ tracks a dye ramp cleanly over a 2.8x range.
 - Cells are blanked before the median, never averaged away: cells sit in the trap's
   pocket and so lie in similar places in different tiles
 - Found once per position at the first extracted time point, stored at
-  `/extraction/pdms_mask` by `ExtractorWriter.write_pdms_mask`, and reloaded on a
-  resumed run so that it stays consistent
+  `/trap_info/pdms_mask` by `ExtractorWriter.write_pdms_mask`, and reloaded on a
+  resumed run so that it stays consistent. It lives in `trap_info`, with the other
+  per-position data, rather than in `extraction`, which holds only signals; it is
+  kept for the same reason as the picker's and merger's choices, being what
+  determines every background value in the file
 - Applied both to the background functions and to `get_background_masks`, which
   feeds the per-z median subtraction behind every channel's `_bgsub` images
 - Controlled by `ExtractorParameters.mask_pdms` (default `True`); disabled
