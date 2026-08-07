@@ -13,7 +13,7 @@ import bottleneck as bn
 import numpy as np
 from scipy import ndimage
 from skimage.measure import regionprops_table
-from skimage.morphology import binary_erosion, closing, disk
+from skimage.morphology import closing, disk
 from sklearn.mixture import GaussianMixture
 
 ###
@@ -365,12 +365,17 @@ def membrane_fluorescence(
             )
             # remove any disconnected pixels and cause failure for small cells
             bright_mask = closing(bright_mask, disk(3))
-            # remove outer layer
-            bright_mask = binary_erosion(bright_mask, disk(1))
+            # remove outer layer; scipy's erosion with border_value=1
+            # matches skimage's, which is deprecated from version 0.26
+            bright_mask = ndimage.binary_erosion(
+                bright_mask, disk(1), border_value=1
+            )
             # remove interior pixels
             membrane_mask = (
                 bright_mask
-                & ~binary_erosion(bright_mask, disk(membrane_thickness))
+                & ~ndimage.binary_erosion(
+                    bright_mask, disk(membrane_thickness), border_value=1
+                )
             ).astype(bool)
     res = {"fl": np.nan, "remaining_fl": np.nan, "ecc": np.nan}
     if np.any(membrane_mask):
