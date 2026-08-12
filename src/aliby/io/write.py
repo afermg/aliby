@@ -48,7 +48,7 @@ def write_ndarray(result, steps_dir: Path, subpath: str or int, tp: int) -> None
             meta_file = this_step_path / f"{tp:04d}_meta.json"
             meta_file.write_text(json.dumps(result["metadata"]))
     else:
-        np.savez_compressed(out_file, np.array(result))
+        np.savez_compressed(out_file, np.asarray(result))
 
 
 def write_parquet(

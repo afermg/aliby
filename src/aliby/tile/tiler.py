@@ -245,6 +245,8 @@ class Tiler(StepABC):
 
         self.tile_locs = tile_locs
         self.tile_size = self.tile_size or self.pixels.shape[-2:]
+        if isinstance(self.tile_size, int):
+            self.tile_size = (self.tile_size, self.tile_size)
 
     @classmethod
     def from_image(
