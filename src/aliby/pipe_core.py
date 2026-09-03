@@ -174,6 +174,18 @@ def _initial_state(steps: dict) -> dict:
     }
 
 
+def _initialise_timepoint_step(
+    pipeline: dict,
+    state: dict,
+    step_name: str,
+    init_step_fn: Callable,
+) -> None:
+    if step_name not in state["fn"]:
+        state["fn"][step_name] = init_step_fn(
+            step_name, pipeline["steps"][step_name], state["fn"]
+        )
+
+
 def _run_timepoint_step(
     pipeline: dict,
     state: dict,
@@ -205,16 +217,25 @@ def _run_timepoint_step(
     # Pull pixels from a method on a previous-step object when configured.
     args = ()
     method_spec = pipeline.get("passed_methods", {}).get(step_name)
-    if method_spec is not None and step_name.startswith("segment"):
+    if method_spec is not None:
         source_step, method = method_spec
         args = (getattr(state["fn"][source_step], method)(tp),)
 
     return run_step(step, *args, tp=tp, **passed_data)
 
 
-def _commit_timepoint_step(
-    pipeline: dict,
+def _publish_timepoint_step(
     state: dict,
+    step_name: str,
+    tp: int,
+    step_result,
+) -> None:
+    state["data"][step_name].append(step_result)
+    state["tps"][step_name] = tp + 1
+
+
+def _write_timepoint_step(
+    pipeline: dict,
     steps_dir: str | None,
     step_name: str,
     tp: int,
@@ -227,9 +248,6 @@ def _commit_timepoint_step(
         print(f"Saving {step_name} to {steps_dir}")
         write_fn = dispatch_write_fn(step_name)
         write_fn(step_result, steps_dir=steps_dir, subpath=step_name, tp=tp)
-
-    state["data"][step_name].append(step_result)
-    state["tps"][step_name] = tp + 1
 
 
 def _finish_timepoint(pipeline: dict, state: dict) -> None:
@@ -263,12 +281,10 @@ def pipeline_step(
     tp = next(iter(state["tps"].values()))
 
     for step_name in graph.step_order:
-        if step_name not in state["fn"]:
-            state["fn"][step_name] = init_step_fn(
-                step_name, steps[step_name], state["fn"]
-            )
+        _initialise_timepoint_step(pipeline, state, step_name, init_step_fn)
         result = _run_timepoint_step(pipeline, state, step_name, tp)
-        _commit_timepoint_step(pipeline, state, steps_dir, step_name, tp, result)
+        _write_timepoint_step(pipeline, steps_dir, step_name, tp, result)
+        _publish_timepoint_step(state, step_name, tp, result)
 
     _finish_timepoint(pipeline, state)
     return state
@@ -291,19 +307,15 @@ def pipeline_step_concurrent(
         state = _initial_state(steps)
     tp = next(iter(state["tps"].values()))
 
-    # Initialisers may inspect previously initialised step objects (for example
-    # BABY's tiler), so initialise once in deterministic topological order.
-    for step_name in graph.step_order:
-        if step_name not in state["fn"]:
-            state["fn"][step_name] = init_step_fn(
-                step_name, steps[step_name], state["fn"]
-            )
-
     run_concurrent_dag(
         graph,
         lambda step_name: _run_timepoint_step(pipeline, state, step_name, tp),
-        lambda step_name, result: _commit_timepoint_step(
-            pipeline, state, steps_dir, step_name, tp, result
+        lambda step_name, result: _publish_timepoint_step(state, step_name, tp, result),
+        lambda step_name, result: _write_timepoint_step(
+            pipeline, steps_dir, step_name, tp, result
+        ),
+        prepare_node=lambda step_name: _initialise_timepoint_step(
+            pipeline, state, step_name, init_step_fn
         ),
         max_workers=max_workers,
         resource_limits=resource_limits,
@@ -349,7 +361,15 @@ def validate_pipeline(pipeline: dict) -> None:
     if not isinstance(passed_methods, dict):
         raise TypeError("'passed_methods' must be a dictionary.")
     for target_step, method_dep in passed_methods.items():
-        if not isinstance(method_dep, (list, tuple)) or len(method_dep) < 2:
+        if target_step not in steps:
+            raise ValueError(
+                f"'passed_methods' references target step '{target_step}', but it is not defined in 'steps'."
+            )
+        if not target_step.startswith("segment"):
+            raise ValueError(
+                f"'passed_methods' is only supported for segment steps, got '{target_step}'."
+            )
+        if not isinstance(method_dep, (list, tuple)) or len(method_dep) != 2:
             raise ValueError(
                 f"Invalid method dependency format for '{target_step}': {method_dep}"
             )
@@ -530,13 +550,9 @@ def _run_pipeline_and_post_impl(
             post_state_hook(state, pipeline, output_path, pipeline_name)
 
         post_results = {}
+        graph = compile_pipeline_graph(pipeline)
         for step_name, parameters in pipeline.get("global_steps", {}).items():
-            associated_data = [
-                x for x in pipeline["global_passed_data"] if x.startswith(step_name)
-            ]
-            assert len(associated_data), (
-                f"Incorrect pipeline: Missing information of which data to ingest for step {step_name}"
-            )
+            associated_data = graph.global_outputs[step_name]
             for output_name in associated_data:
                 step_fn = init_step_fn(step_name, parameters)
                 input_data = get_step_output(
@@ -547,16 +563,15 @@ def _run_pipeline_and_post_impl(
                 post_result = step_fn(input_data=input_data)
                 post_results[output_name] = post_result
 
-            if step_name in pipeline["save"]:
+            if step_name in (pipeline.get("save") or ()):
                 write_fn = dispatch_write_fn(step_name)
-                for output_subdir in post_results:
-                    if output_subdir.startswith(step_name):
-                        write_fn(
-                            post_result,
-                            output_path,
-                            subpath=output_subdir,
-                            filename=pipeline_name,
-                        )
+                for output_subdir in associated_data:
+                    write_fn(
+                        post_results[output_subdir],
+                        output_path,
+                        subpath=output_subdir,
+                        filename=pipeline_name,
+                    )
     else:
         logger.info(f"Skipping {pipeline_name}")
         profiles, post_results = None, None

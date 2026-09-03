@@ -11,6 +11,7 @@ import os
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from graphlib import TopologicalSorter
+from heapq import heappop, heappush
 from typing import Callable, Mapping
 
 
@@ -21,6 +22,7 @@ class PipelineGraph:
     dependencies: dict[str, tuple[str, ...]]
     step_order: tuple[str, ...]
     global_dependencies: dict[str, tuple[str, ...]]
+    global_outputs: dict[str, tuple[str, ...]]
 
 
 class PipelineStepError(RuntimeError):
@@ -38,6 +40,48 @@ class PipelineStepError(RuntimeError):
 def _ordered_add(items: list[str], item: str) -> None:
     if item not in items:
         items.append(item)
+
+
+def _associate_global_outputs(
+    global_steps: dict, global_passed_data: dict
+) -> dict[str, list[str]]:
+    """Assign output keys by exact or underscore-delimited step-name prefix."""
+    associated: dict[str, list[str]] = {name: [] for name in global_steps}
+    for output_name in global_passed_data:
+        if not isinstance(output_name, str):
+            raise TypeError("'global_passed_data' output names must be strings.")
+        matches = [
+            name
+            for name in global_steps
+            if output_name == name or output_name.startswith(f"{name}_")
+        ]
+        if not matches:
+            raise ValueError(
+                f"'global_passed_data' entry '{output_name}' does not match a global step."
+            )
+        if len(matches) > 1:
+            raise ValueError(
+                f"'global_passed_data' entry '{output_name}' ambiguously matches global steps {matches}."
+            )
+        associated[matches[0]].append(output_name)
+    return associated
+
+
+def _stable_topological_order(
+    dependencies: dict[str, tuple[str, ...]], insertion_order: dict[str, int]
+) -> tuple[str, ...]:
+    """Topologically sort while preserving an already-valid insertion order."""
+    sorter = TopologicalSorter(dependencies)
+    sorter.prepare()
+    ready: list[tuple[int, str]] = []
+    ordered = []
+    while sorter.is_active():
+        for name in sorter.get_ready():
+            heappush(ready, (insertion_order[name], name))
+        name = heappop(ready)[1]
+        ordered.append(name)
+        sorter.done(name)
+    return tuple(ordered)
 
 
 def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
@@ -87,7 +131,11 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
             raise ValueError(
                 f"'passed_methods' references target step '{target}', but it is not defined in 'steps'."
             )
-        if not isinstance(spec, (list, tuple)) or len(spec) < 2:
+        if not target.startswith("segment"):
+            raise ValueError(
+                f"'passed_methods' is only supported for segment steps, got '{target}'."
+            )
+        if not isinstance(spec, (list, tuple)) or len(spec) != 2:
             raise ValueError(f"Invalid method dependency format for '{target}': {spec}")
         source = spec[0]
         if source not in steps:
@@ -96,16 +144,39 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
             )
         _ordered_add(dependencies[target], source)
 
+    # BABY receives its tiler object during initialisation rather than through
+    # passed_methods. Make that existing implicit relationship part of the DAG.
+    tile_steps = [name for name in steps if name.startswith("tile")]
+    for target, parameters in steps.items():
+        if not target.startswith("segment") or not isinstance(parameters, dict):
+            continue
+        segmenter_kwargs = parameters.get("segmenter_kwargs", {})
+        if not isinstance(segmenter_kwargs, dict):
+            continue
+        if segmenter_kwargs.get("kind") == "nahual_baby":
+            if not tile_steps:
+                raise ValueError(
+                    f"BABY step '{target}' requires a tile step, but none is defined."
+                )
+            _ordered_add(dependencies[target], tile_steps[0])
+
     frozen_dependencies = {
         name: tuple(predecessors) for name, predecessors in dependencies.items()
     }
-    # static_order both validates cycles and gives the serial reference backend
-    # a stable dependency-respecting order. Dict insertion order breaks ties.
-    step_order = tuple(TopologicalSorter(frozen_dependencies).static_order())
+    # Preserve the legacy dictionary order whenever it already satisfies the
+    # dependencies, while still repairing out-of-order DAG declarations.
+    step_order = _stable_topological_order(
+        frozen_dependencies, {name: index for index, name in enumerate(steps)}
+    )
 
     global_steps = pipeline.get("global_steps", {})
     if not isinstance(global_steps, dict):
         raise TypeError("'global_steps' must be a dictionary.")
+    for name, parameters in global_steps.items():
+        if not isinstance(parameters, dict):
+            raise TypeError(
+                f"Parameters for global step '{name}' must be a dictionary."
+            )
     overlap = set(steps).intersection(global_steps)
     if overlap:
         name = next(name for name in steps if name in overlap)
@@ -117,16 +188,16 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
     global_passed_data = pipeline.get("global_passed_data", {})
     if not isinstance(global_passed_data, dict):
         raise TypeError("'global_passed_data' must be a dictionary.")
-    unmatched_outputs = set(global_passed_data)
-    for global_name in global_steps:
-        output_names = [
-            name for name in global_passed_data if name.startswith(global_name)
-        ]
+    global_outputs = _associate_global_outputs(global_steps, global_passed_data)
+
+    saved_steps = pipeline.get("save") or ()
+    save_interval = pipeline.get("save_interval", 1)
+    ntps = pipeline.get("ntps", 1)
+    for global_name, output_names in global_outputs.items():
         if not output_names:
             raise ValueError(
                 f"Global step '{global_name}' has no entry in 'global_passed_data'."
             )
-        unmatched_outputs.difference_update(output_names)
         for output_name in output_names:
             fetchers = global_passed_data[output_name]
             if not isinstance(fetchers, (list, tuple)):
@@ -135,10 +206,25 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
                 )
             for fetcher in fetchers:
                 if isinstance(fetcher, str):
+                    from_disk = fetcher.startswith("from_disk:")
                     source = fetcher.removeprefix("from_disk:")
                     if source not in steps:
                         raise ValueError(
                             f"Global step '{global_name}' expects data from '{source}', but '{source}' is not defined in 'steps'."
+                        )
+                    if from_disk and source not in saved_steps:
+                        raise ValueError(
+                            f"Global step '{global_name}' reads 'from_disk:{source}', but '{source}' is not listed in 'save'."
+                        )
+                    if from_disk and save_interval != 1:
+                        raise ValueError(
+                            f"Global step '{global_name}' reads 'from_disk:{source}', so save_interval must be 1."
+                        )
+                    if from_disk and (
+                        not isinstance(ntps, int) or isinstance(ntps, bool) or ntps < 1
+                    ):
+                        raise ValueError(
+                            f"Global step '{global_name}' reads 'from_disk:{source}', so ntps must be a positive int."
                         )
                     _ordered_add(global_dependencies[global_name], source)
                 elif callable(fetcher):
@@ -150,13 +236,6 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
                     raise TypeError(
                         f"Invalid global data fetcher for '{output_name}': {fetcher!r}"
                     )
-    if unmatched_outputs:
-        output_name = next(
-            name for name in global_passed_data if name in unmatched_outputs
-        )
-        raise ValueError(
-            f"'global_passed_data' entry '{output_name}' does not match a global step."
-        )
 
     frozen_global = {
         name: tuple(predecessors) for name, predecessors in global_dependencies.items()
@@ -171,6 +250,9 @@ def compile_pipeline_graph(pipeline: dict) -> PipelineGraph:
         dependencies=frozen_dependencies,
         step_order=step_order,
         global_dependencies=frozen_global,
+        global_outputs={
+            name: tuple(output_names) for name, output_names in global_outputs.items()
+        },
     )
 
 
@@ -189,12 +271,12 @@ def _resource_amount(value: object, description: str) -> int:
 def _remote_address(parameters: dict) -> str | None:
     addresses = []
     address = parameters.get("address")
-    if isinstance(address, str):
+    if isinstance(address, str) and address:
         addresses.append(address)
     segmenter_kwargs = parameters.get("segmenter_kwargs", {})
     if isinstance(segmenter_kwargs, dict):
         address = segmenter_kwargs.get("address")
-        if isinstance(address, str):
+        if isinstance(address, str) and address:
             addresses.append(address)
     unique = tuple(dict.fromkeys(addresses))
     return unique[0] if len(unique) == 1 else None
@@ -214,9 +296,13 @@ def compile_resource_requirements(
     configured = pipeline.get("step_resources", {})
     if not isinstance(configured, dict):
         raise TypeError("'step_resources' must be a dictionary.")
-    known_steps = set(graph.dependencies) | set(graph.global_dependencies)
+    local_steps = set(graph.dependencies)
     for name, explicit in configured.items():
-        if name not in known_steps:
+        if name in graph.global_dependencies:
+            raise ValueError(
+                f"'step_resources' cannot configure global step '{name}'; global steps run sequentially after the time series."
+            )
+        if name not in local_steps:
             raise ValueError(
                 f"'step_resources' references step '{name}', but it is not defined."
             )
@@ -298,8 +384,10 @@ def resolve_resources(
 def run_concurrent_dag(
     graph: PipelineGraph,
     run_node: Callable[[str], object],
+    publish_node: Callable[[str, object], None],
     commit_node: Callable[[str, object], None],
     *,
+    prepare_node: Callable[[str], None] | None = None,
     max_workers: int,
     resource_limits: Mapping[str, int],
     requirements: Mapping[str, Mapping[str, int]],
@@ -310,8 +398,10 @@ def run_concurrent_dag(
     sorter.prepare()
     rank = {name: index for index, name in enumerate(graph.step_order)}
     available = dict(resource_limits)
-    ready: list[str] = []
+    pending: list[str] = []
     futures: dict[Future, str] = {}
+    results: dict[str, object] = {}
+    failures: dict[str, Exception] = {}
 
     def fits(step_name: str) -> bool:
         return all(
@@ -326,20 +416,27 @@ def run_concurrent_dag(
     executor = ThreadPoolExecutor(max_workers=max_workers)
     try:
         while sorter.is_active():
-            ready.extend(sorter.get_ready())
-            ready.sort(key=rank.__getitem__)
+            newly_ready = sorted(sorter.get_ready(), key=rank.__getitem__)
+            if prepare_node is not None:
+                for step_name in newly_ready:
+                    prepare_node(step_name)
+            pending.extend(newly_ready)
+            pending.sort(key=rank.__getitem__)
 
             index = 0
-            while index < len(ready) and len(futures) < max_workers:
-                step_name = ready[index]
+            while index < len(pending) and len(futures) < max_workers:
+                step_name = pending[index]
                 if fits(step_name):
                     reserve(step_name, 1)
                     futures[executor.submit(run_node, step_name)] = step_name
-                    ready.pop(index)
+                    pending.pop(index)
                 else:
                     index += 1
 
             if not futures:
+                if failures and not pending:
+                    # Descendants of failed nodes intentionally remain blocked.
+                    break
                 raise RuntimeError(
                     "Concurrent scheduler could not make progress with the configured resources."
                 )
@@ -351,9 +448,21 @@ def run_concurrent_dag(
                 try:
                     result = future.result()
                 except Exception as exc:
-                    raise PipelineStepError(step_name, tp, exc) from exc
-                commit_node(step_name, result)
-                sorter.done(step_name)
+                    failures[step_name] = exc
+                else:
+                    results[step_name] = result
+                    publish_node(step_name, result)
+                    sorter.done(step_name)
+
+        if failures:
+            step_name = min(failures, key=rank.__getitem__)
+            cause = failures[step_name]
+            raise PipelineStepError(step_name, tp, cause) from cause
+
+        # Writes and other executor-owned output effects are delayed until all
+        # nodes succeed, then committed in the stable serial graph order.
+        for step_name in graph.step_order:
+            commit_node(step_name, results[step_name])
     finally:
         for future in futures:
             future.cancel()

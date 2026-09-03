@@ -95,7 +95,10 @@ the pipeline format. The graph is compiled from the existing `steps`,
 `passed_data`, and `passed_methods` entries; global steps and their declared
 inputs are validated as part of the same graph. The default
 `backend="sequential"` remains the reference behavior. The concurrent backend
-uses local threads and has no distributed scheduler or persistent cache.
+uses local threads and has no distributed scheduler or persistent cache. Ready
+steps execute concurrently, while results, failures, and writes are committed in
+deterministic graph order. `passed_methods` is the existing segment-input hook
+and is therefore accepted only for `segment*` target steps.
 
 This microscopy example branches a tiled image into Cellpose segmentation plus
 `cp_measure`, and a DINOv2 embedding served by Nahual:
@@ -156,7 +159,29 @@ that inference.
 
 Global steps remain in the existing sequential post-time-series phase in this
 small executor; their missing dependencies are still rejected before any local
-step starts.
+step starts. A `from_disk:<step>` global input means output produced by the
+current run: that step must be in `save` and `save_interval` must be 1.
+Pre-existing disk inputs are not a separate input mode. `step_resources`
+therefore applies only to per-timepoint steps and is rejected for global steps.
+
+Concurrent callables must be thread-safe and must treat shared upstream results
+as read-only. Cancellation is cooperative: after a failure, already-running and
+independent threads are allowed to finish and may retain external side effects;
+descendants of the failed step do not run. State and files are not fully
+transactional, so prior timepoints and external side effects are not rolled
+back. Executor-owned writes for a successful timepoint are committed in stable
+serial graph order after its nodes finish. If multiple runnable nodes fail,
+ALIBY reports the graph-first failure; side effects performed inside user
+callables can still occur in operating-system scheduling order.
+
+A successful node makes its descendants ready immediately, including while
+other branches remain active. This is a thread backend: RPC, I/O, and native
+code that releases the GIL may overlap, but pure-Python CPU work may not speed
+up. Resource slots only gate local submissions; they do not bind CPU sets,
+select devices, or enforce limits inside Nahual services. Timepoints and global
+steps remain sequential. The executor currently has no task-span event API, so
+publication benchmarks need external instrumentation for ready/start/end and
+overlap attribution.
 
 ## Core Concepts & Glossary
 
