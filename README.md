@@ -88,6 +88,76 @@ result = run_pipeline_and_post(
 
 See the [examples/](examples/) directory for more advanced use cases.
 
+## Local DAG execution
+
+ALIBY can execute independent per-timepoint steps concurrently without changing
+the pipeline format. The graph is compiled from the existing `steps`,
+`passed_data`, and `passed_methods` entries; global steps and their declared
+inputs are validated as part of the same graph. The default
+`backend="sequential"` remains the reference behavior. The concurrent backend
+uses local threads and has no distributed scheduler or persistent cache.
+
+This microscopy example branches a tiled image into Cellpose segmentation plus
+`cp_measure`, and a DINOv2 embedding served by Nahual:
+
+```python
+from aliby.pipe import run_pipeline_and_post
+from aliby.pipe_builder import build_pipeline_steps
+
+address = "ipc:///tmp/dinov2_0.ipc"
+pipeline = build_pipeline_steps(
+    channels_to_segment={"nuclei": 0},
+    channels_to_extract=[0, 1, 2],
+    features_to_extract=("intensity", "sizeshape"),
+)
+pipeline["steps"]["tile"]["image_kwargs"] = {
+    "source": {"key": "A01-1", "path": "images"},
+    "regex": r".*__([A-Z][0-9]{2})__([0-9])__([A-Za-z]+).tif",
+    "capture_order": "WFC",
+}
+pipeline["steps"]["nahual_embed_nuclei"] = {
+    "address": address,
+    "model_group": "dinov2",
+    "setup_params": {
+        "repo_or_dir": "facebookresearch/dinov2",
+        "model_name": "dinov2_vits14",
+        "pretrained": True,
+        "device": -1,
+    },
+    "selected_channels": [0, 1, 2],
+}
+pipeline["passed_data"]["nahual_embed_nuclei"] = [
+    ("pixels", "tile", "data")
+]
+
+# Slot declarations coordinate work; they do not select/configure a device.
+pipeline["step_resources"] = {
+    "segment_nuclei": {"gpu": 1},
+    "nahual_embed_nuclei": {f"remote:{address}": 1},
+}
+run_pipeline_and_post(
+    pipeline=pipeline,
+    pipeline_name="A01-1",
+    output_path="results",
+    backend="concurrent",
+    max_workers=4,
+    resource_limits={"cpu": 4, "gpu": 1, f"remote:{address}": 1},
+)
+```
+
+Every step uses one CPU slot by default. An explicit `step_resources` entry can
+add `cpu`, `gpu`, or any named resource requirement (and can set `cpu` to zero).
+All explicitly required non-CPU resources need a matching positive
+`resource_limits` entry. When a step has no explicit resource entry and exactly
+one string address is present in its existing `address` or
+`segmenter_kwargs.address`, ALIBY infers a `remote:<address>` requirement with a
+one-slot default limit. Explicit `step_resources` is authoritative and disables
+that inference.
+
+Global steps remain in the existing sequential post-time-series phase in this
+small executor; their missing dependencies are still rejected before any local
+step starts.
+
 ## Core Concepts & Glossary
 
 Microscopy terminology can vary. Here’s how ALIBY defines these concepts:

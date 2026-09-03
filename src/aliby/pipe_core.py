@@ -19,6 +19,13 @@ import pyarrow as pa
 from imagecodecs.numcodecs import Jpegxl
 from loguru import logger
 
+from aliby.executor import (
+    PipelineGraph,
+    compile_pipeline_graph,
+    compile_resource_requirements,
+    resolve_resources,
+    run_concurrent_dag,
+)
 from aliby.global_steps import dispatch_global_step
 from aliby.io.image import dispatch_image
 from aliby.io.write import dispatch_write_fn
@@ -159,95 +166,151 @@ def run_step(step, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def pipeline_step(
+def _initial_state(steps: dict) -> dict:
+    return {
+        "tps": dict(zip(steps, cycle([0]))),
+        "data": {step_name: [] for step_name in steps},
+        "fn": {},
+    }
+
+
+def _run_timepoint_step(
     pipeline: dict,
-    state: dict | None,
+    state: dict,
+    step_name: str,
+    tp: int,
+):
+    step = state["fn"][step_name]
+
+    # Pull data from previous steps via passed_data spec.
+    # Format: {consumer_step: [(arg_name, producer_step, *opt_var), ...]}
+    passed_data = {}
+    for kwd, from_step, *varname in pipeline["passed_data"].get(step_name, {}):
+        passed_value = state["data"].get(from_step, [])
+        step_argname = varname[0] if varname else kwd
+
+        if len(passed_value):
+            if step_name == "track" and kwd == "masks":
+                # tracker reads last 2 timepoints; reshape tp,tile,y,x -> tile,tp,y,x
+                passed_data[step_argname] = [
+                    [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
+                    for tile in range(len(passed_value[-1]))
+                ]
+            else:
+                last_value = passed_value[-1]
+                if isinstance(last_value, dict):
+                    last_value = last_value[kwd]
+                passed_data[step_argname] = last_value
+
+    # Pull pixels from a method on a previous-step object when configured.
+    args = ()
+    method_spec = pipeline.get("passed_methods", {}).get(step_name)
+    if method_spec is not None and step_name.startswith("segment"):
+        source_step, method = method_spec
+        args = (getattr(state["fn"][source_step], method)(tp),)
+
+    return run_step(step, *args, tp=tp, **passed_data)
+
+
+def _commit_timepoint_step(
+    pipeline: dict,
+    state: dict,
     steps_dir: str | None,
-    init_step_fn: Callable,
-) -> dict:
-    """Run one timepoint of the pipeline using the provided init_step_fn."""
-    if state is None:
-        state = {}
+    step_name: str,
+    tp: int,
+    step_result,
+) -> None:
+    steps_to_write = pipeline.get("save") or []
+    save_interval = pipeline.get("save_interval", 1)
+    should_save = bool(steps_to_write) and (tp % save_interval) == 0
+    if should_save and step_name in steps_to_write:
+        print(f"Saving {step_name} to {steps_dir}")
+        write_fn = dispatch_write_fn(step_name)
+        write_fn(step_result, steps_dir=steps_dir, subpath=step_name, tp=tp)
 
-    steps = pipeline["steps"]
-    passed_methods = pipeline.get("passed_methods", {})
+    state["data"][step_name].append(step_result)
+    state["tps"][step_name] = tp + 1
 
-    if not state:
-        state = {"tps": dict(zip(steps, cycle([0]))), "data": {}, "fn": {}}
-    tp = next(iter(state["tps"].values()))
 
-    for step_name, parameters in steps.items():
-        if step_name not in state["data"]:
-            state["data"][step_name] = []
-        if step_name not in state["fn"]:
-            state["fn"][step_name] = init_step_fn(step_name, parameters, state["fn"])
-        step = state["fn"][step_name]
-
-        # Pull data from previous steps via passed_data spec.
-        # Format: {consumer_step: [(arg_name, producer_step, *opt_var), ...]}
-        this_step_receives = pipeline["passed_data"].get(step_name, {})
-        passed_data = {}
-        for kwd, from_step, *varname in this_step_receives:
-            passed_value = state["data"].get(from_step, [])
-            step_argname = varname[0] if varname else kwd
-
-            if len(passed_value):
-                if step_name == "track" and kwd == "masks":
-                    # tracker reads last 2 timepoints; reshape tp,tile,y,x -> tile,tp,y,x
-                    passed_data[step_argname] = [
-                        [tp_tiles[tile] for tp_tiles in passed_value[-2:]]
-                        for tile in range(len(passed_value[-1]))
-                    ]
-                else:
-                    last_value = passed_value[-1]
-                    if isinstance(last_value, dict):
-                        last_value = last_value[kwd]
-                    passed_data[step_argname] = last_value
-
-        # Pull pixels from a method on a previous-step object when configured.
-        # Cellpose builder emits passed_methods[segment_*] = ("tile", "get_fczyx").
-        # BABY builder does NOT emit one for segment steps because BABY pulls
-        # pixels through its embedded tiler (injected at init time).
-        args = ()
-        method_spec = passed_methods.get(step_name)
-        if method_spec is not None and step_name.startswith("segment"):
-            source_step, method = method_spec
-            args = (getattr(state["fn"][source_step], method)(tp),)
-
-        step_result = run_step(step, *args, tp=tp, **passed_data)
-
-        # Save outputs that are listed in pipeline["save"]
-        steps_to_write = pipeline.get("save") or []
-        save_interval = pipeline.get("save_interval", 1)
-        should_save = (
-            bool(steps_to_write) and save_interval > 0 and (tp % save_interval) == 0
-        )
-        if should_save and step_name in steps_to_write:
-            print(f"Saving {step_name} to {steps_dir}")
-            write_fn = dispatch_write_fn(step_name)
-            write_fn(step_result, steps_dir=steps_dir, subpath=step_name, tp=tp)
-
-        state["data"][step_name].append(step_result)
-        if step_name not in state["fn"]:
-            state["fn"][step_name] = step
-        state["tps"][step_name] = tp + 1
-
-    # End-of-tp memory hygiene.
-    # Drop the raw pixel block from the last tile entry: tile pixels are only
-    # consumed within the same tp via passed_data and never re-read after.
+def _finish_timepoint(pipeline: dict, state: dict) -> None:
+    # Tile pixels are consumed within the same timepoint and never re-read.
     for step_name in state["data"]:
         if step_name.startswith("tile"):
             entry = state["data"][step_name][-1] if state["data"][step_name] else None
             if isinstance(entry, dict) and "pixels" in entry:
                 del entry["pixels"]
 
-    # Trim per-step history per the pipeline's "retain" config.
     retain_cfg = pipeline.get("retain", {})
     for step_name, history in state["data"].items():
         keep = retain_cfg.get(step_name, "all")
         if isinstance(keep, int) and keep >= 0 and len(history) > keep:
             del history[: len(history) - keep]
 
+
+def pipeline_step(
+    pipeline: dict,
+    state: dict | None,
+    steps_dir: str | None,
+    init_step_fn: Callable,
+    *,
+    graph: PipelineGraph | None = None,
+) -> dict:
+    """Run one timepoint with the compatible sequential reference backend."""
+    steps = pipeline["steps"]
+    if not state:
+        state = _initial_state(steps)
+    graph = graph or compile_pipeline_graph(pipeline)
+    tp = next(iter(state["tps"].values()))
+
+    for step_name in graph.step_order:
+        if step_name not in state["fn"]:
+            state["fn"][step_name] = init_step_fn(
+                step_name, steps[step_name], state["fn"]
+            )
+        result = _run_timepoint_step(pipeline, state, step_name, tp)
+        _commit_timepoint_step(pipeline, state, steps_dir, step_name, tp, result)
+
+    _finish_timepoint(pipeline, state)
+    return state
+
+
+def pipeline_step_concurrent(
+    pipeline: dict,
+    state: dict | None,
+    steps_dir: str | None,
+    init_step_fn: Callable,
+    *,
+    graph: PipelineGraph,
+    max_workers: int,
+    resource_limits: dict[str, int],
+    requirements: dict[str, dict[str, int]],
+) -> dict:
+    """Run one timepoint with the concurrent local DAG backend."""
+    steps = pipeline["steps"]
+    if not state:
+        state = _initial_state(steps)
+    tp = next(iter(state["tps"].values()))
+
+    # Initialisers may inspect previously initialised step objects (for example
+    # BABY's tiler), so initialise once in deterministic topological order.
+    for step_name in graph.step_order:
+        if step_name not in state["fn"]:
+            state["fn"][step_name] = init_step_fn(
+                step_name, steps[step_name], state["fn"]
+            )
+
+    run_concurrent_dag(
+        graph,
+        lambda step_name: _run_timepoint_step(pipeline, state, step_name, tp),
+        lambda step_name, result: _commit_timepoint_step(
+            pipeline, state, steps_dir, step_name, tp, result
+        ),
+        max_workers=max_workers,
+        resource_limits=resource_limits,
+        requirements=requirements,
+        tp=tp,
+    )
+    _finish_timepoint(pipeline, state)
     return state
 
 
@@ -364,17 +427,52 @@ def validate_pipeline(pipeline: dict) -> None:
         if not isinstance(pipeline["global_passed_data"], dict):
             raise TypeError("'global_passed_data' must be a dictionary.")
 
+    # Graph compilation is part of validation so missing target nodes and cycles
+    # fail before any step initialiser or callable runs.
+    graph = compile_pipeline_graph(pipeline)
+    compile_resource_requirements(pipeline, graph)
+
 
 def run_pipeline_return_state(
     pipeline: dict,
     steps_dir: str | None,
     init_step_fn: Callable,
+    *,
+    backend: str = "sequential",
+    max_workers: int | None = None,
+    resource_limits: dict[str, int] | None = None,
 ) -> dict:
+    """Run all timepoints with the sequential or concurrent local backend."""
     validate_pipeline(pipeline)
+    graph = compile_pipeline_graph(pipeline)
+    if backend not in {"sequential", "concurrent"}:
+        raise ValueError(
+            f"Unknown pipeline backend {backend!r}; expected 'sequential' or 'concurrent'."
+        )
+
+    concurrent_config = None
+    if backend == "concurrent":
+        concurrent_config = resolve_resources(
+            pipeline, graph, max_workers, resource_limits
+        )
+
     state = {}
     ntps = pipeline.get("ntps", 1)
     for _ in range(ntps):
-        state = pipeline_step(pipeline, state, steps_dir, init_step_fn)
+        if concurrent_config is None:
+            state = pipeline_step(pipeline, state, steps_dir, init_step_fn, graph=graph)
+        else:
+            workers, limits, requirements = concurrent_config
+            state = pipeline_step_concurrent(
+                pipeline,
+                state,
+                steps_dir,
+                init_step_fn,
+                graph=graph,
+                max_workers=workers,
+                resource_limits=limits,
+                requirements=requirements,
+            )
     return state
 
 
@@ -386,6 +484,9 @@ def _run_pipeline_and_post_impl(
     *,
     init_step_fn: Callable,
     post_state_hook: Callable | None = None,
+    backend: str = "sequential",
+    max_workers: int | None = None,
+    resource_limits: dict[str, int] | None = None,
 ) -> tuple[pyarrow.Table, dict | None]:
     """Run a step-based pipeline and any post-processing global steps.
 
@@ -397,6 +498,12 @@ def _run_pipeline_and_post_impl(
         Optional callable ``(state, pipeline, output_path, pipeline_name) -> None``
         invoked after profiles are written and before global steps. Used by the
         BABY pipeline to extract tracking/lineage from segmenter metadata.
+    backend
+        ``"sequential"`` (the compatible reference backend) or ``"concurrent"``
+        (the local thread-based DAG backend). Global steps remain sequential.
+    max_workers, resource_limits
+        Bounds for the concurrent backend. Per-step requirements are read from
+        ``pipeline["step_resources"]``; every step uses one CPU slot by default.
     """
     output_path = Path(output_path)
     steps_dir = output_path / "steps" / pipeline_name
@@ -406,7 +513,14 @@ def _run_pipeline_and_post_impl(
     post_results = None
 
     if overwrite or not profiles_file.exists():
-        state = run_pipeline_return_state(pipeline, steps_dir, init_step_fn)
+        state = run_pipeline_return_state(
+            pipeline,
+            steps_dir,
+            init_step_fn,
+            backend=backend,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+        )
         profiles = get_profiles_from_state(state, pipeline)
 
         profiles_file.parent.mkdir(parents=True, exist_ok=True)
