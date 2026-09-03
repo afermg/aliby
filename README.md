@@ -96,9 +96,10 @@ the pipeline format. The graph is compiled from the existing `steps`,
 inputs are validated as part of the same graph. The default
 `backend="sequential"` remains the reference behavior. The concurrent backend
 uses local threads and has no distributed scheduler or persistent cache. Ready
-steps execute concurrently, while results, failures, and writes are committed in
-deterministic graph order. `passed_methods` is the existing segment-input hook
-and is therefore accepted only for `segment*` target steps.
+steps execute concurrently, and successful results become available as they
+complete so descendants can start promptly. Failure selection and
+executor-owned write order are deterministic. `passed_methods` is the existing
+segment-input hook and is therefore accepted only for `segment*` target steps.
 
 This microscopy example branches a tiled image into Cellpose segmentation plus
 `cp_measure`, and a DINOv2 embedding served by Nahual:
@@ -160,8 +161,10 @@ that inference.
 Global steps remain in the existing sequential post-time-series phase in this
 small executor; their missing dependencies are still rejected before any local
 step starts. A `from_disk:<step>` global input means output produced by the
-current run: that step must be in `save` and `save_interval` must be 1.
-Pre-existing disk inputs are not a separate input mode. `step_resources`
+current run: that step must be in `save` and `save_interval` must be 1. ALIBY
+loads exactly `0000.npz` through `{ntps-1:04d}.npz`, rejects a missing expected
+file, and ignores stale trailing files. Pre-existing disk inputs are not a
+separate input mode. `step_resources`
 therefore applies only to per-timepoint steps and is rejected for global steps.
 
 Concurrent callables must be thread-safe and must treat shared upstream results

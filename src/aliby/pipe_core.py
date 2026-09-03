@@ -559,6 +559,7 @@ def _run_pipeline_and_post_impl(
                     state["data"],
                     pipeline["global_passed_data"][output_name],
                     steps_dir=steps_dir,
+                    expected_ntps=pipeline.get("ntps", 1),
                 )
                 post_result = step_fn(input_data=input_data)
                 post_results[output_name] = post_result
@@ -645,8 +646,9 @@ def get_step_output(
     state_data: dict,
     fetchers: tuple[Callable | str],
     steps_dir: Path | None = None,
+    expected_ntps: int | None = None,
 ) -> numpy.ndarray:
-    """Aggregate outputs across timepoints from in-memory state or per-tp .npz files."""
+    """Aggregate outputs across timepoints from memory or expected per-tp files."""
     combined_outputs = []
     for fetcher in fetchers:
         if isinstance(fetcher, str):
@@ -657,7 +659,10 @@ def get_step_output(
                         "get_step_output(..., steps_dir=...)"
                     )
                 step_name = fetcher.removeprefix("from_disk:")
-                aggregated_output = _load_per_tp_masks(Path(steps_dir) / step_name)
+                aggregated_output = _load_per_tp_masks(
+                    Path(steps_dir) / step_name,
+                    expected_ntps=expected_ntps,
+                )
             else:
                 # Monotile assumption (mirrored by _load_per_tp_masks for disk path)
                 aggregated_output = [x[0] for x in state_data[fetcher]]
@@ -672,15 +677,38 @@ def get_step_output(
     return numpy.asarray(combined_outputs)
 
 
-def _load_per_tp_masks(step_dir: Path) -> list[numpy.ndarray]:
+def _load_per_tp_masks(
+    step_dir: Path,
+    expected_ntps: int | None = None,
+) -> list[numpy.ndarray]:
     """Read per-tp .npz mask files written by io.write.write_ndarray.
 
-    Two on-disk formats are supported:
+    When ``expected_ntps`` is provided, only the current run's expected files
+    (``0000.npz`` through ``{expected_ntps - 1:04d}.npz``) are loaded. Extra
+    files are deliberately ignored, while any missing expected file is an
+    error. Two on-disk formats are supported:
       - baby segmenters: keys ``tile_0``, ``tile_1``, ... (one per tile)
       - other segmenters: a single key ``arr_0`` holding a stacked
         (tiles, Y, X) array
     """
-    files = sorted(step_dir.glob("*.npz"))
+    if expected_ntps is None:
+        files = sorted(step_dir.glob("*.npz"))
+    else:
+        if (
+            not isinstance(expected_ntps, int)
+            or isinstance(expected_ntps, bool)
+            or expected_ntps < 1
+        ):
+            raise ValueError(
+                f"expected_ntps must be a positive int, got {expected_ntps!r}."
+            )
+        files = [step_dir / f"{tp:04d}.npz" for tp in range(expected_ntps)]
+        missing = [path.name for path in files if not path.is_file()]
+        if missing:
+            raise FileNotFoundError(
+                f"Missing expected per-tp .npz files under {step_dir}: {missing}"
+            )
+
     if not files:
         raise FileNotFoundError(
             f"No per-tp .npz files found under {step_dir}; ensure this step "

@@ -13,7 +13,7 @@ from aliby.executor import (
     compile_pipeline_graph,
     compile_resource_requirements,
 )
-from aliby.pipe_core import run_pipeline_return_state
+from aliby.pipe_core import get_step_output, run_pipeline_return_state
 
 WAIT_TIMEOUT = 10
 
@@ -277,6 +277,90 @@ def test_from_disk_global_input_must_be_produced_before_local_work(
     with pytest.raises(ValueError, match=match):
         run_pipeline_return_state(pipeline, None, init)
     assert initialised == []
+
+
+def test_from_disk_loads_only_current_run_timepoints(tmp_path):
+    step_dir = tmp_path / "segment"
+    step_dir.mkdir()
+    for tp, value in enumerate((10, 11, 99)):
+        np.savez_compressed(
+            step_dir / f"{tp:04d}.npz",
+            np.full((1, 2, 2), value, dtype=np.uint16),
+        )
+
+    result = get_step_output(
+        {},
+        ("from_disk:segment",),
+        steps_dir=tmp_path,
+        expected_ntps=2,
+    )
+
+    assert result.shape == (1, 2, 2, 2)
+    assert result[0, 0].tolist() == [[10, 10], [10, 10]]
+    assert result[0, 1].tolist() == [[11, 11], [11, 11]]
+    assert 99 not in result
+
+
+def test_global_from_disk_ignores_stale_trailing_timepoint(tmp_path):
+    stale_dir = tmp_path / "steps" / "synthetic" / "segment"
+    stale_dir.mkdir(parents=True)
+    np.savez_compressed(
+        stale_dir / "0002.npz",
+        np.full((1, 2, 2), 99, dtype=np.uint16),
+    )
+
+    def init(_step_name, parameters, _other_steps=None):
+        return parameters["callable"]
+
+    pipeline = {
+        "ntps": 2,
+        "steps": {
+            "segment": {"callable": lambda: np.full((1, 2, 2), 7, dtype=np.uint16)},
+        },
+        "passed_data": {},
+        "passed_methods": {},
+        "global_steps": {
+            "summary": {"callable": lambda input_data: input_data},
+        },
+        "global_passed_data": {
+            "summary_result": ("from_disk:segment",),
+        },
+        "save": ["segment"],
+        "save_interval": 1,
+    }
+
+    _profiles, post_results = pipe_core._run_pipeline_and_post_impl(
+        pipeline,
+        "synthetic",
+        tmp_path,
+        init_step_fn=init,
+    )
+
+    assert post_results is not None
+    result = post_results["summary_result"]
+    assert result.shape == (1, 2, 2, 2)
+    assert np.all(result == 7)
+
+
+def test_from_disk_rejects_missing_current_run_timepoint(tmp_path):
+    step_dir = tmp_path / "segment"
+    step_dir.mkdir()
+    np.savez_compressed(
+        step_dir / "0000.npz",
+        np.zeros((1, 2, 2), dtype=np.uint16),
+    )
+    np.savez_compressed(
+        step_dir / "0002.npz",
+        np.full((1, 2, 2), 99, dtype=np.uint16),
+    )
+
+    with pytest.raises(FileNotFoundError, match="0001.npz"):
+        get_step_output(
+            {},
+            ("from_disk:segment",),
+            steps_dir=tmp_path,
+            expected_ntps=2,
+        )
 
 
 def test_sequential_and_concurrent_results_are_equivalent():
