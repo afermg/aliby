@@ -31,7 +31,13 @@ pip install omero-py
 black src/
 ```
 
-### No test framework detected 
+### Tests
+```bash
+# unit tests mock omero, so they need no OMERO server
+python -m pytest tests/
+# include the slow integration tests
+python -m pytest tests/ --run-slow
+```
 
 ## Architecture Overview
 
@@ -86,6 +92,14 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading)
 - `agora.signal`: Gets extracted properties for all cells/timepoints from HDF5 (used in postprocessing)
 - `agora.bridge`: Interface layer for HDF5 file operations
+- `aliby.io.omero.Image.tiles` (used by wela's `GrabTiles.get_tiles`) asks
+  OMERO for only each tile's region. It once cut tiles from lazily loaded
+  planes, but a slice of a lazy plane still downloads the whole plane — over
+  100 times the data for a 117-pixel tile of a 1200-pixel image. A tile past
+  the image's edge is cut and padded by `tile_in_image` and
+  `too_far_outside` in `aliby.tile.tiles`, the rule
+  `Tiler.get_tile_and_pad` uses, so a tile is the same whichever way it is
+  loaded
 - `postprocessor.grouper`: Concatenates signals across positions to generate experiment-wide dataframes
 
 ### Dependencies and Integration

@@ -38,7 +38,7 @@ from agora.abc import ParametersABC, StepABC
 from agora.io.bridge import BridgeH5
 from aliby.global_settings import global_settings
 from aliby.tile.process_traps import segment_traps
-from aliby.tile.tiles import TileLocations
+from aliby.tile.tiles import TileLocations, tile_in_image, too_far_outside
 from omero.gateway import ImageWrapper
 from skimage.registration import phase_cross_correlation
 
@@ -642,19 +642,16 @@ class Tiler(StepABC):
         # number of pixels in the x direction; tiles are square and images are
         # clipped with this in both axes
         max_size = image_array.shape[-1]
-        # ignore parts of the tile outside of the image
-        y, x = [slice(max(0, s.start), min(max_size, s.stop)) for s in slices]
+        # ignore parts of the tile outside of the image, and find the extent
+        # of padding needed in y and x
+        (y, x), padding = tile_in_image(slices, (max_size, max_size))
         # get the tile including all z stacks
         tile = image_array[:, y, x]
-        # find extent of padding needed in y and x
-        padding = np.array(
-            [(-min(0, s.start), -min(0, max_size - s.stop)) for s in slices]
-        )
         if padding.any():
             if tile_size is None:
                 # use slice size to guess tile_size
                 tile_size = slices[0].stop - slices[0].start
-            if (padding > tile_size / 4).any():
+            if too_far_outside(padding, tile_size):
                 # fill with NaN: too much of the tile is outside of the image
                 tile = da.full(
                     (image_array.shape[0], tile_size, tile_size), np.nan

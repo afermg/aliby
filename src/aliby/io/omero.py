@@ -10,6 +10,7 @@ import dask.array as da
 import numpy as np
 from agora.io.bridge import BridgeH5
 from agora.utils.indexing import wrap_int
+from aliby.tile.tiles import tile_in_image, too_far_outside
 from dask import delayed
 from yaml import safe_load
 
@@ -455,6 +456,12 @@ def load_data_lazy(image: ImageWrapper) -> da.Array:
     return dask_array
 
 
+@delayed
+def load_tile(pixels, z, c, tp, region):
+    """Load one region, (x, y, width, height), of a plane lazily."""
+    return pixels.getTile(z, c, tp, tile=region)
+
+
 def load_tiles_lazy(
     image: ImageWrapper,
     tile_slices: Iterable[tuple[slice, slice]],
@@ -463,18 +470,60 @@ def load_tiles_lazy(
     zs: Iterable[int],
 ) -> list[da.Array]:
     """
-    Load tiles from OMERO image as dask arrays.
+    Load tiles from an OMERO image as dask arrays.
 
-    Tiles are arranged as z stacks for each channel for each time point.
+    Ask the server for only each tile's region. Tiles were once cut from a
+    lazily loaded plane, but a slice of a lazy plane still downloads the
+    whole plane when computed: over 100 times the data for a 117-pixel tile
+    of a 1200-pixel image. A tile extending past the image's edge is cut and
+    padded by the rule the tiler uses, ``tile_in_image`` and
+    ``too_far_outside``, so that a tile is the same whichever way it is
+    loaded; one mostly outside the image is NaN and costs no request.
+
+    Parameters
+    ----------
+    image: ImageWrapper
+        The OMERO image.
+    tile_slices: list of tuples of two slices
+        Each tile's y- and x-ranges, rows first, one for each time point.
+    tps: list of int
+        The time points.
+    channel_indices: list of int
+        The channels.
+    zs: list of int
+        The z slices.
+
+    Returns
+    -------
+    tiles: list of dask arrays
+        Tiles arranged as z stacks for each channel for each time point.
     """
     if len(tile_slices) != len(tps):
         raise ValueError("For each time point, you need a tile location.")
-    # shape: (T, C, Z, Y, X)
-    data = load_data_lazy(image)
+    shape_yx = (image.getSizeY(), image.getSizeX())
+    pixels = image.getPrimaryPixels()
+    dtype = PIXEL_TYPES.get(pixels.getPixelsType().getValue(), np.uint16)
     tiles = []
     for tp, tile_slice in zip(tps, tile_slices):
+        (y, x), padding = tile_in_image(tile_slice, shape_yx)
+        size = tile_slice[0].stop - tile_slice[0].start
+        outside = too_far_outside(padding, size)
+        region = (x.start, y.start, x.stop - x.start, y.stop - y.start)
         for c in channel_indices:
             for z in zs:
-                plane = data[tp, c, z]
-                tiles.append(plane[tile_slice])
+                if outside:
+                    # too much of the tile is outside of the image
+                    tile = da.full(
+                        (size, tile_slice[1].stop - tile_slice[1].start),
+                        np.nan,
+                    )
+                else:
+                    tile = da.from_delayed(
+                        load_tile(pixels, z, c, tp, region),
+                        shape=(region[3], region[2]),
+                        dtype=dtype,
+                    )
+                    if padding.any():
+                        tile = da.pad(tile, padding.tolist(), "edge")
+                tiles.append(tile)
     return tiles
