@@ -89,7 +89,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - `postprocessor.core.postprocessing.PostProcessor`: Applies cell picking, track merging, and runs processes like budding analysis
 
 **Data Access Classes**
-- `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading)
+- `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading). `Cells.at_time` returns **one mask per cell the file records**, an empty edge mask included: its masks are matched to traps by position, and the extractor (`get_outlines`) matches them to `labels_at_time` by position again, so dropping a cell from one list and keeping it in the other — as it did until `tests/test_cells.py` was written — gave every later cell in that time point the trap and the label of the cell before it
 - `agora.signal`: Gets extracted properties for all cells/timepoints from HDF5 (used in postprocessing)
 - `agora.bridge`: Interface layer for HDF5 file operations
 - `aliby.io.omero.Image.tiles` (used by wela's `GrabTiles.get_tiles`) asks

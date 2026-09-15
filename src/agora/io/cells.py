@@ -174,15 +174,17 @@ class Cells:
     def at_time(
         self, timepoint: int, kind="mask"
     ) -> t.List[t.List[np.ndarray]]:
-        """Return a dict with traps as keys and cell masks as values for a time point."""
+        """
+        Return a dict with traps as keys and cell masks as values for a time point.
+
+        Return one mask per cell the h5 records, an empty one included.
+        The masks are matched to the traps by position here, and to the
+        labels from labels_at_time by position downstream.
+        """
         idx = self["timepoint"] == timepoint
         traps = self["trap"][idx]
         edgemasks = self.edgemasks_from_idx(idx)
-        masks = [
-            Cells.astype(edgemask, kind)
-            for edgemask in edgemasks
-            if edgemask.any()
-        ]
+        masks = [Cells.astype(edgemask, kind) for edgemask in edgemasks]
         return self.group_by_traps(traps, masks)
 
     def at_times(
