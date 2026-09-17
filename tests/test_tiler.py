@@ -292,13 +292,13 @@ def test_initialise_tiles_drops_trap_near_edge_of_shorter_axis():
     assert tiler.no_tiles == 1
 
 
-def _moving_square_tiler(shifts, initial_tp):
+def _moving_square_tiler(shifts, initial_processing_tp):
     T = len(shifts)
     arr = np.zeros((T, 1, 1, 64, 64), dtype=np.float32)
     for tp, shift in enumerate(shifts):
         arr[tp, 0, 0, 10 + shift : 20 + shift, 10:20] = 1
     params = TilerParameters.default().to_dict()
-    params["initial_tp"] = initial_tp
+    params["initial_processing_tp"] = initial_processing_tp
     tiler = Tiler(
         da.from_array(arr),
         {"channels": ["Brightfield"]},
@@ -308,23 +308,68 @@ def _moving_square_tiler(shifts, initial_tp):
     return tiler
 
 
-def test_find_drift_measures_frames_after_initial_tp():
-    # the square moves only between frames 2 and 3; with initial_tp=2
-    # the tiler's tp 1 is frame 3, so its drift is the move
-    tiler = _moving_square_tiler([0, 0, 0, 5], initial_tp=2)
-    tiler.find_drift(0)
-    tiler.find_drift(1)
-    assert tiler.tile_locs.drifts == [[0.0, 0.0], [-5.0, 0.0]]
+def test_drifts_are_indexed_by_image_from_the_first_processed():
+    # the square moves before image 2, which is ignored, and between
+    # images 2 and 3; time points are the images' own indices
+    tiler = _moving_square_tiler([0, 7, 0, 5], initial_processing_tp=2)
+    tiler.find_drift(2)
+    tiler.find_drift(3)
+    assert tiler.tile_locs.drifts == [
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [-5.0, 0.0],
+    ]
 
 
-def test_run_tiles_only_frames_after_initial_tp():
-    tiler = _moving_square_tiler([0, 0, 0, 5], initial_tp=2)
+def test_find_drift_refuses_a_time_point_before_the_first_processed():
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_processing_tp=2)
+    with pytest.raises(ValueError, match="before the first to process"):
+        tiler.find_drift(1)
+
+
+def test_run_tiles_from_the_first_processed_image():
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_processing_tp=2)
+    tiler.tile_size = 20
+    with patch(
+        "aliby.tile.tiler.segment_traps", return_value=[[32, 32]]
+    ) as segment:
+        tiler.run()
+    # traps are found in image 2, not image 0
+    np.testing.assert_array_equal(
+        np.asarray(segment.call_args[0][0]),
+        np.asarray(tiler.image[2, 0, 0]),
+    )
+    assert len(tiler.tile_locs.drifts) == 4
+
+
+def test_first_processed_time_point_exports_every_drift_up_to_it():
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_processing_tp=2)
     tiler.tile_size = 20
     with patch(
         "aliby.tile.tiler.segment_traps", return_value=[[32, 32]]
     ):
-        tiler.run()
-    assert len(tiler.tile_locs.drifts) == 2
+        first = tiler.run_tp(2)
+        second = tiler.run_tp(3)
+    assert "trap_locations" in first
+    np.testing.assert_array_equal(first["drifts"], np.zeros((3, 2)))
+    assert "trap_locations" not in second
+    np.testing.assert_array_equal(second["drifts"], [[-5.0, 0.0]])
+
+
+def test_tile_data_is_read_from_the_image_of_its_time_point():
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_processing_tp=2)
+    tiler.tile_locs = TileLocations([[15, 15]], tile_size=10, drifts=[])
+    tiler.tile_locs.drifts = [[0, 0]] * 4
+    tile = tiler.get_tile_data(0, tp=3, c=0, lazy=False)
+    np.testing.assert_array_equal(
+        tile, np.asarray(tiler.image[3, 0, :, 10:20, 10:20])
+    )
+
+
+def test_initial_tp_is_refused_with_its_new_name():
+    with pytest.raises(ValueError, match="initial_processing_tp"):
+        TilerParameters.default(initial_tp=2)
 
 
 def test_tiler_takes_channels_from_image_metadata_without_microscopy():
@@ -356,12 +401,14 @@ def test_tiler_imports_without_omero():
 # ---------------------------------------------------------------------------
 
 
-def _labelled_tiler(n_frames, initial_tp=0, **parameters):
+def _labelled_tiler(n_frames, initial_processing_tp=0, **parameters):
     # each image is filled with its own frame number, so a fake registration
     # can tell which images it was given
     arr = np.ones((n_frames, 1, 1, 8, 8), dtype=np.float32)
     arr *= np.arange(n_frames, dtype=np.float32)[:, None, None, None, None]
-    params = TilerParameters.default(initial_tp=initial_tp, **parameters)
+    params = TilerParameters.default(
+        initial_processing_tp=initial_processing_tp, **parameters
+    )
     tiler = Tiler(da.from_array(arr), {"channels": ["Brightfield"]}, params)
     tiler.tile_locs = TileLocations([[4, 4]], tile_size=4, drifts=[])
     return tiler
@@ -400,21 +447,24 @@ def test_drifts_sum_to_each_image_displacement_from_the_first():
     assert tiler.drift_disagreements == []
 
 
-def test_drift_is_registered_to_the_first_image_after_initial_tp():
-    tiler = _labelled_tiler(5, initial_tp=2)
-    references = []
+def test_drift_is_registered_to_the_first_processed_image():
+    tiler = _labelled_tiler(5, initial_processing_tp=2)
+    pairs = []
 
     def register(reference, moving):
-        references.append(int(np.asarray(reference)[0, 0]))
+        pairs.append(
+            (int(np.asarray(reference)[0, 0]), int(np.asarray(moving)[0, 0]))
+        )
         return np.zeros(2), 0.0, 0.0
 
     with patch(
         "aliby.tile.tiler.phase_cross_correlation", side_effect=register
     ):
-        for tp in range(3):
+        for tp in range(2, 5):
             tiler.find_drift(tp)
-    # each time point registers to the one before and to frame initial_tp
-    assert references == [2, 2, 2, 2, 3, 2]
+    # each image registers to the one before, never before image 2, and
+    # to image 2
+    assert pairs == [(2, 2), (2, 2), (2, 3), (2, 3), (3, 4), (2, 4)]
 
 
 def test_one_bad_registration_is_flagged_and_does_not_persist():

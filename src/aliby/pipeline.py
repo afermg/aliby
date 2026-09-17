@@ -622,19 +622,21 @@ class Pipeline(ProcessABC):
                     f" time points not {tps}."
                 )
                 tps = image.data.shape[0]
-            # potentially skip initial_tp number of images
-            if tps < config["tiler"]["initial_tp"]:
+            # potentially skip the first images; time points stay the
+            # images' own indices
+            first_tp = tiler.first_processed_tp
+            if tps <= first_tp:
                 raise ValueError(
-                    f'Initial time point {config["tiler"]["initial_tp"]}'
-                    " is greater than the number of time points."
+                    f"The first time point to process, {first_tp}, is not "
+                    f"less than the number of time points, {tps}."
                 )
-            all_tps = range(tps - config["tiler"]["initial_tp"])
+            all_tps = range(first_tp, tps)
             progress_bar = tqdm(all_tps, desc=image.name)
             # run through time points
             for i in progress_bar:
                 if (
                     frac_clogged_traps < earlystop["thresh_pos_clogged"]
-                    or i < earlystop["min_tp"]
+                    or i - first_tp < earlystop["min_tp"]
                 ):
                     # run tiler
                     result = tiler.run_tp(i)
@@ -643,7 +645,7 @@ class Pipeline(ProcessABC):
                         overwrite=[],
                         tp=i,
                     )
-                    if i == 0:
+                    if i == first_tp:
                         self.log(
                             f"Found {tiler.no_tiles} traps in {image.name}.",
                             "info",
@@ -697,7 +699,7 @@ class Pipeline(ProcessABC):
                     # run extraction
                     result = extractor.run_tp(i)
                     extractor_writer.write(data=result)
-                    if i == 0 and extractor.pdms_mask is not None:
+                    if i == first_tp and extractor.pdms_mask is not None:
                         # mask showing traps used for background correcting
                         extractor_writer.write_pdms_mask(extractor.pdms_mask)
                     # check and report clogging
@@ -718,7 +720,7 @@ class Pipeline(ProcessABC):
                     )
                     break
             # run post-processing
-            if i == 0:
+            if i == first_tp:
                 self.log(f"Position {image.name} failed.", "info")
             else:
                 result = PostProcessor(
@@ -730,7 +732,9 @@ class Pipeline(ProcessABC):
                 postprocessor_writer.write(data=result)
                 self.log(
                     f"{config['tiler']['position_name']}: Analysis finished"
-                    f" at time point {i} - {i/(len(all_tps)-1)*100:.0f}% complete.",
+                    f" at time point {i} - "
+                    f"{(i - first_tp) / max(1, len(all_tps) - 1) * 100:.0f}%"
+                    " complete.",
                     "info",
                 )
 

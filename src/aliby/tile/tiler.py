@@ -47,7 +47,13 @@ if t.TYPE_CHECKING:
 
 
 class TilerParameters(ParametersABC):
-    """Define default values for tile size and the reference channels."""
+    """
+    Define default values for tile size and the reference channels.
+
+    initial_processing_tp is the first image to process. Time points are
+    always the images' own indices, so processing from image 3 writes time
+    point 3 first, and nothing before it.
+    """
 
     _defaults = {
         "tile_size": global_settings.imaging_specifications["tile_size"],
@@ -57,13 +63,23 @@ class TilerParameters(ParametersABC):
         "magnification": global_settings.imaging_specifications[
             "magnification"
         ],
-        "initial_tp": 0,
+        "initial_processing_tp": 0,
         # register each image to the first ("first") or to the one before
         # ("previous", aliby's method until 2026)
         "drift_reference": "first",
         # warn when the two registrations disagree by more pixels than this
         "drift_check_px": 3,
     }
+
+    def __init__(self, **kwargs):
+        """Refuse initial_tp, whose meaning has changed."""
+        if "initial_tp" in kwargs:
+            raise ValueError(
+                "initial_tp is now initial_processing_tp and no longer "
+                "renumbers time points: processing from image k writes time "
+                "point k, not time point 0."
+            )
+        super().__init__(**kwargs)
 
 
 class Tiler(StepABC):
@@ -216,6 +232,11 @@ class Tiler(StepABC):
         return self.image.shape
 
     @property
+    def first_processed_tp(self) -> int:
+        """Return the first time point to process."""
+        return int(getattr(self, "initial_processing_tp", 0))
+
+    @property
     def no_processed(self):
         """Return the number of processed images."""
         if not hasattr(self, "_no_processed"):
@@ -244,7 +265,7 @@ class Tiler(StepABC):
             The size of a tile.
         """
         initial_image = self.image[
-            self.initial_tp, self.ref_channel_index, self.ref_z
+            self.first_processed_tp, self.ref_channel_index, self.ref_z
         ]
         if tile_size:
             half_tile = tile_size // 2
@@ -300,26 +321,32 @@ class Tiler(StepABC):
                 f"drift_reference must be 'first' or 'previous', "
                 f"not {reference!r}."
             )
+        first_tp = self.first_processed_tp
+        if tp < first_tp:
+            raise ValueError(
+                f"Tiler: time point {tp} is before the first to process, "
+                f"{first_tp}."
+            )
+        if tp == first_tp and len(self.tile_locs.drifts) < tp:
+            # images before the first processed do not move its tiles
+            self.tile_locs.drifts.extend(
+                [[0.0, 0.0]] * (tp - len(self.tile_locs.drifts))
+            )
         if len(self.tile_locs.drifts) < tp:
             raise ValueError(
                 f"Tiler: cannot find the drift at time point {tp} without "
                 f"the drifts of the {tp} before it."
             )
-        # tp counts from initial_tp, as the images tiles are cut from do
-        image = self.image[
-            tp + self.initial_tp, self.ref_channel_index, self.ref_z
-        ]
+        image = self.image[tp, self.ref_channel_index, self.ref_z]
         previous_image = self.image[
-            max(0, tp - 1) + self.initial_tp,
-            self.ref_channel_index,
-            self.ref_z,
+            max(first_tp, tp - 1), self.ref_channel_index, self.ref_z
         ]
         step, _, _ = phase_cross_correlation(previous_image, image)
         if reference == "previous":
             drift = step
         else:
             first_image = self.image[
-                self.initial_tp, self.ref_channel_index, self.ref_z
+                first_tp, self.ref_channel_index, self.ref_z
             ]
             displacement, _, _ = phase_cross_correlation(first_image, image)
             previous_displacement = np.sum(
@@ -378,7 +405,7 @@ class Tiler(StepABC):
         image_all_z: an array of z slices for the entire image
             Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
-        image_all_z = self.image[tp + self.initial_tp, c]
+        image_all_z = self.image[tp, c]
         if not lazy and hasattr(image_all_z, "compute"):
             # if using dask fetch images
             image_all_z = image_all_z.compute(scheduler="synchronous")
@@ -408,7 +435,7 @@ class Tiler(StepABC):
         """
         tile = self.tile_locs.tiles[tile_id]
         tile_range = tile.as_range(tp)
-        image_all_z = self.image[tp + self.initial_tp, c]
+        image_all_z = self.image[tp, c]
         return self.get_tile_and_pad(image_all_z, tile_range, self.tile_size)
 
     def get_tile_data(
@@ -435,7 +462,7 @@ class Tiler(StepABC):
             An array of (z, y, x) arrays, one for each z stack
         """
         # use lazy loading by default to avoid memory issues
-        image_all_z = self.image[tp + self.initial_tp, c]
+        image_all_z = self.image[tp, c]
         tile = self.tile_locs.tiles[tile_id]
         ndtile = self.get_tile_and_pad(
             image_all_z, tile.as_range(tp), self.tile_size
@@ -472,13 +499,13 @@ class Tiler(StepABC):
         # update no_processed
         self.no_processed = tp + 1
         # return result for writer
-        return self.tile_locs.to_dict(tp)
+        return self.tile_locs.to_dict(tp, first_tp=self.first_processed_tp)
 
     def run(self, time_dim=None):
         """Tile all time points in an experiment at once."""
         if time_dim is None:
             time_dim = 0
-        for tp in range(self.image.shape[time_dim] - self.initial_tp):
+        for tp in range(self.first_processed_tp, self.image.shape[time_dim]):
             self.run_tp(tp)
         return None
 
@@ -507,7 +534,7 @@ class Tiler(StepABC):
         """
         tiles = []
         # use lazy tile views instead of loading full image
-        image_all_z = self.image[tp + self.initial_tp, c]
+        image_all_z = self.image[tp, c]
         # decompose into tiles using lazy views
         for tile in self.tile_locs:
             # pad tile if necessary - this remains lazy until computed

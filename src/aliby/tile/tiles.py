@@ -137,21 +137,28 @@ class TileLocations:
         """Return the number of tiles and the number of drifts."""
         return len(self.tiles), len(self.drifts)
 
-    def to_dict(self, tp: int):
+    def to_dict(self, tp: int, first_tp: int = 0):
         """
         Export initial locations, tile_size, max_size, and drifts as a dict.
+
+        At the first time point processed, export the drifts of every time
+        point up to it, so that drifts are indexed by time point.
 
         Parameters
         ----------
         tp: integer
             An index for a time point
+        first_tp: integer
+            The first time point processed.
         """
         res = dict()
-        if tp == 0:
+        if tp == first_tp:
             res["trap_locations"] = self.initial_location
             res["attrs/tile_size"] = self.tile_size
             res["attrs/max_size"] = self.max_size
-        res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
+            res["drifts"] = np.asarray(self.drifts[: tp + 1])
+        else:
+            res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
         return res
 
     def centres_at_time(self, tp: int) -> np.ndarray:
