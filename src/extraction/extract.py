@@ -346,8 +346,8 @@ def extract_tree(
     if len(tileid_instructions):
         # These should be a list of binary masks
         binmasks = [transform_2d_to_3d(mask) if len(mask) else None for mask in masks]
+        measure_fn = measure_mono_overlap if overlap else measure_mono
         if ncores is None:  # Threaded or not
-            measure_fn = measure_mono_overlap if overlap else measure_mono
             for tileid_x in tqdm(tileid_instructions):
                 measurement = measure_fn(
                     tileid_x,
@@ -362,7 +362,7 @@ def extract_tree(
                 Parallel(n_jobs=min(len(tileid_instructions), ncores))(
                     delayed(
                         partial(
-                            measure_mono,
+                            measure_fn,
                             masks=binmasks,
                             pixels=pixels,
                             REDUCTION_FUNS=REDUCTION_FUNS,
@@ -462,9 +462,9 @@ def process_tree_masks_overlap(  # overlap
     progress_bar: bool = False,
     overlap: bool = True,
     cp_measure_kwargs: dict[str, dict] | None = None,
-) -> tuple[list, list]:
+) -> tuple[tuple, list, dict]:
     """
-    Orchestrates the processing of all masks using a tree of instructions.
+    Orchestrates the processing of overlapping masks using compact labels.
 
     Parameters
     ----------
@@ -480,7 +480,8 @@ def process_tree_masks_overlap(  # overlap
     Returns
     -------
     tuple
-        A tuple containing the instructions and results.
+        The instructions, measurement results, and per-layer inverse mappings
+        from compact labels to persistent labels.
     """
     if not isinstance(masks, list):  # Hacky fix when tile level is not provided
         masks = [masks]
@@ -491,15 +492,19 @@ def process_tree_masks_overlap(  # overlap
 
     tile_stack_mask = []
     inverse_mappings = {}
+    compact_masks = []
     for tile_i, masks_in_tile in enumerate(masks):
+        compact_tile = np.zeros_like(masks_in_tile)
         for stack_i, stack_pixels in enumerate(masks_in_tile):
             relabeled, _, inverse_mapping = relabel_sequential(stack_pixels)
+            compact_tile[stack_i] = relabeled
             inverse_mappings[(tile_i, stack_i)] = inverse_mapping
 
-            # Labels should not be 0-indexed, and it should match the nuber of masks!
-            in_values = inverse_mapping.in_values
-            for mask_i in in_values[in_values > 0]:
+            # Measurement indexes the compact labels; formatting maps them back
+            # to BABY's persistent labels.
+            for mask_i in inverse_mapping.in_values[inverse_mapping.in_values > 0]:
                 tile_stack_mask.append((tile_i, stack_i, mask_i))
+        compact_masks.append(compact_tile)
 
     tileid_instructions = tuple(product(tile_stack_mask, instructions))
     extra = {}
@@ -507,14 +512,14 @@ def process_tree_masks_overlap(  # overlap
         extra["cp_measure_kwargs"] = cp_measure_kwargs
     result = measure_fn(
         tileid_instructions,
-        masks,
+        compact_masks,
         pixels,
         ncores=ncores,
         progress_bar=progress_bar,
         **extra,
     )
 
-    return tileid_instructions, result
+    return tileid_instructions, result, inverse_mappings
 
 
 def format_extraction(

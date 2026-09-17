@@ -679,8 +679,7 @@ def set_areas_of_interest(
             tile_locs = segment_traps(pixels, tile_size_min)
         except Exception as e:
             warnings.warn(f"Trap detection failed ({e}), falling back to center tile.")
-            tile_locs = get_center(shape)
-            return tile_locs
+            return get_center(shape, tile_size)
         # keep only tiles that are not near an edge
         tile_locs = [
             [x, y]
@@ -691,12 +690,15 @@ def set_areas_of_interest(
         # store tiles in an instance of TileLocations
         tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size, max_size)
     else:
-        tile_locs = get_center(shape)
-        # one tile with its centre at the image's centre
+        # one tile with its centre at the image's centre; preserve an explicit
+        # requested size, using the full field of view only when it is absent.
+        tile_locs = get_center(shape, tile_size)
     return tile_locs
 
 
-def get_center(pixels_shape: tuple[int]) -> tuple[tuple[int]]:
+def get_center(
+    pixels_shape: tuple[int], tile_size: int | list[int] | None = None
+) -> TileLocations:
     """
     Calculate the center of the image and initialize a single tile location.
 
@@ -705,6 +707,8 @@ def get_center(pixels_shape: tuple[int]) -> tuple[tuple[int]]:
     pixels_shape : tuple of int
         The shape of the pixel data array. The last two dimensions are assumed
         to represent the Y and X axes.
+    tile_size : int or list of int, optional
+        Requested tile extent. If omitted, use the full field of view.
 
     Returns
     -------
@@ -714,5 +718,6 @@ def get_center(pixels_shape: tuple[int]) -> tuple[tuple[int]]:
     """
     yx_shape = pixels_shape[-2:]
     tile_locs = (tuple(x // 2 for x in yx_shape),)
-    tile_locs = TileLocations.from_tiler_init(tile_locs, max_size=yx_shape)
-    return tile_locs
+    return TileLocations.from_tiler_init(
+        tile_locs, tile_size=tile_size, max_size=yx_shape
+    )

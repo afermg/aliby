@@ -34,6 +34,7 @@ from extraction.extract import (
     extract_tree,
     extract_tree_multi,
     format_extraction,
+    format_extraction_overlap,
     process_tree_masks,
     process_tree_masks_overlap,
 )
@@ -608,10 +609,13 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
                 # lines 563-568) consumes the whole array in one iteration, so
                 # length-1 on both sides is what was logically intended.
                 ext_output = ((("__", "__"),), (ext_output,))
-            table: pyarrow.Table = format_extraction(ext_output)
-            rename_map = {"tile": "metadata_tile", "label": "metadata_label"}
-            new_names = [rename_map.get(c, c) for c in table.column_names]
-            table = table.rename_columns(new_names)
+            if len(ext_output) == 3:
+                table = format_extraction_overlap(ext_output)
+            else:
+                table = format_extraction(ext_output)
+                rename_map = {"tile": "metadata_tile", "label": "metadata_label"}
+                new_names = [rename_map.get(c, c) for c in table.column_names]
+                table = table.rename_columns(new_names)
 
             if len(table):
                 table = table.append_column(
