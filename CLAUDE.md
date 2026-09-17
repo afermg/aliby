@@ -84,6 +84,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 **Core Processing Classes**
 - `aliby.tile.tiler.Tiler`: Tiles images into regions of interest (one per trap), ignoring tiles without cells
+  - The tiling itself lives in the `tiler` package (git.ecdf.ed.ac.uk/swain-lab/aliby/tiler), shared with wela, bairn and the curation GUI: `tiler.detect` finds traps (`aliby.tile.process_traps` re-exports it), `tiler.drift` measures drift and `tiler.crop` cuts and pads tiles (`aliby.tile.tiles` re-exports `tile_in_image` and `too_far_outside`). `Tiler` is the pipeline step around them; change tiling in tiler, not here
   - Where a tile sits is `sooth.tiles`, the definition of record; `aliby.tile.tiles.Tile` calls it, and `tests/test_tile_golden.py` pins it against real layouts
   - Drift registers each image to the first processed image (`drift_reference="first"`), stored as the change since the previous time point so drifts still sum to a displacement; a second registration to the previous image logs a warning when the two differ by more than `drift_check_px` (3). Registering to the previous image, the old method, accumulated 2-7 px of error on 192- and 288-frame movies against about 0.5 px
   - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises

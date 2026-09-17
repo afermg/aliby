@@ -4078,6 +4078,34 @@ xml = ["defusedxml", "lxml"]
 zarr = ["fsspec", "kerchunk", "zarr (>=3.1.5)"]
 
 [[package]]
+name = "tiler"
+version = "0.1.0"
+description = "Find traps, measure drift and cut tiles for aliby, bairn and the curation GUI."
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+markers = "sys_platform == \"win32\" or sys_platform == \"emscripten\" or sys_platform != \"win32\" and sys_platform != \"emscripten\""
+files = []
+develop = false
+
+[package.dependencies]
+numpy = ">=1.24"
+scikit-image = ">=0.25.2"
+scipy = ">=1.15.2"
+sooth = {git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git"}
+
+[package.extras]
+aliby = ["h5py (>=3.10)"]
+dask = ["dask"]
+plot = ["matplotlib"]
+
+[package.source]
+type = "git"
+url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/tiler.git"
+reference = "HEAD"
+resolved_reference = "cb178087c7d31f653109e2ce935ac4b07fd0a36e"
+
+[[package]]
 name = "toolz"
 version = "1.1.0"
 description = "List processing tools and functional utilities"
@@ -4511,4 +4539,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <3.12"
-content-hash = "351f7486c441c181e1e004d87ddfb02bb83c8a4d9dbba2129c03a8bb3921947c"
+content-hash = "1a46e7bea649dfcb6bee0536ea1b9d6b95a9df953fdc29a6b965ae4764e12ad0"

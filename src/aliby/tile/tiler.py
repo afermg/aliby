@@ -37,9 +37,10 @@ import numpy as np
 from agora.abc import ParametersABC, StepABC
 from agora.io.bridge import BridgeH5
 from aliby.global_settings import global_settings
-from aliby.tile.process_traps import segment_traps
-from aliby.tile.tiles import TileLocations, tile_in_image, too_far_outside
-from skimage.registration import phase_cross_correlation
+from aliby.tile.tiles import TileLocations
+from tiler.crop import cut_tile
+from tiler.detect import keep_away_from_edges, segment_traps, whole_image
+from tiler.drift import drift_at
 
 if t.TYPE_CHECKING:
     # omero is optional and needed here only to annotate
@@ -268,43 +269,32 @@ class Tiler(StepABC):
             self.first_processed_tp, self.ref_channel_index, self.ref_z
         ]
         if tile_size:
-            half_tile = tile_size // 2
-            # the numbers of rows and of columns bound each axis separately
-            n_rows, n_columns = self.image.shape[-2:]
-            # find the tiles, as (row, column)
-            tile_locs = segment_traps(initial_image, tile_size)
-            # keep only tiles that are not near an edge
-            # add extra margin to account for potential drift
-            margin = half_tile + half_tile // 8
-            tile_locs = [
-                [row, column]
-                for row, column in tile_locs
-                if margin < row < n_rows - margin
-                and margin < column < n_columns - margin
-            ]
+            # find the tiles, as (row, column), keeping those clear of the
+            # edges with a margin for drift
+            tile_locs = keep_away_from_edges(
+                segment_traps(initial_image, tile_size),
+                self.image.shape[-2:],
+                tile_size,
+            )
             # store tiles in an instance of TileLocations
             self.tile_locs = TileLocations.from_tiler(tile_locs, tile_size)
         else:
             # one tile with its centre at the image's centre
-            yx_shape = self.image.shape[-2:]
-            tile_locs = [[x // 2 for x in yx_shape]]
+            tile_locs, max_size = whole_image(self.image.shape[-2:])
             self.tile_locs = TileLocations.from_tiler(
-                tile_locs, max_size=min(yx_shape)
+                tile_locs, max_size=max_size
             )
 
     def find_drift(self, tp: int):
         """
         Find the translational drift of an image from the one before.
 
-        By default, register the image to the first image, where the tiles
-        were found, and store the change in that displacement since the
-        previous time point. Summing drifts then gives each image's
-        displacement from the first with the error of one registration.
-        Registering each image to the one before instead, as aliby did
-        until 2026, sums the error of every registration: on real movies
-        of 192 and 288 time points tiles wandered 2 to 7 pixels off centre,
-        against about half a pixel registering to the first image, media
-        switches included.
+        Use tiler.drift.drift_at: by default, register the image to the
+        first image processed, where the tiles were found, and store the
+        change in that displacement since the previous time point.
+        Registering each image to the one before instead
+        (drift_reference="previous"), as aliby did until 2026, sums the
+        error of every registration.
 
         As a check, also register the image to the one before and log a
         warning if the two drifts disagree by more than drift_check_px,
@@ -315,61 +305,19 @@ class Tiler(StepABC):
         tp: integer
             Index for a time point.
         """
-        reference = getattr(self, "drift_reference", "first")
-        if reference not in ("first", "previous"):
-            raise ValueError(
-                f"drift_reference must be 'first' or 'previous', "
-                f"not {reference!r}."
-            )
-        first_tp = self.first_processed_tp
-        if tp < first_tp:
-            raise ValueError(
-                f"Tiler: time point {tp} is before the first to process, "
-                f"{first_tp}."
-            )
-        if tp == first_tp and len(self.tile_locs.drifts) < tp:
-            # images before the first processed do not move its tiles
-            self.tile_locs.drifts.extend(
-                [[0.0, 0.0]] * (tp - len(self.tile_locs.drifts))
-            )
-        if len(self.tile_locs.drifts) < tp:
-            raise ValueError(
-                f"Tiler: cannot find the drift at time point {tp} without "
-                f"the drifts of the {tp} before it."
-            )
-        image = self.image[tp, self.ref_channel_index, self.ref_z]
-        previous_image = self.image[
-            max(first_tp, tp - 1), self.ref_channel_index, self.ref_z
-        ]
-        step, _, _ = phase_cross_correlation(previous_image, image)
-        if reference == "previous":
-            drift = step
-        else:
-            first_image = self.image[
-                first_tp, self.ref_channel_index, self.ref_z
-            ]
-            displacement, _, _ = phase_cross_correlation(first_image, image)
-            previous_displacement = np.sum(
-                np.asarray(self.tile_locs.drifts[:tp], dtype=float).reshape(
-                    -1, 2
-                ),
-                axis=0,
-            )
-            drift = displacement - previous_displacement
-            disagreement = np.abs(drift - step).max()
-            if disagreement > getattr(self, "drift_check_px", 3):
-                self.drift_disagreements.append(tp)
-                logging.getLogger("aliby").warning(
-                    f"Tiler: at time point {tp} the drift from the first "
-                    f"image, {drift.tolist()}, and from the previous image, "
-                    f"{step.tolist()}, differ by {disagreement:g} pixels; "
-                    "registration may have failed."
-                )
-        # store drift
-        if tp < len(self.tile_locs.drifts):
-            self.tile_locs.drifts[tp] = np.asarray(drift).tolist()
-        else:
-            self.tile_locs.drifts.append(np.asarray(drift).tolist())
+        _, disagrees = drift_at(
+            lambda frame: self.image[
+                frame, self.ref_channel_index, self.ref_z
+            ],
+            tp,
+            self.tile_locs.drifts,
+            first_tp=self.first_processed_tp,
+            reference=getattr(self, "drift_reference", "first"),
+            check_px=getattr(self, "drift_check_px", 3),
+            log=logging.getLogger("aliby"),
+        )
+        if disagrees:
+            self.drift_disagreements.append(tp)
 
     @property
     def drift_disagreements(self) -> list[int]:
@@ -733,24 +681,8 @@ class Tiler(StepABC):
             If some padding is needed, edge values are replicated.
             If much padding is needed, a tile of NaN is returned.
         """
-        # ignore parts of the tile outside of the image, and find the extent
-        # of padding needed in y and x
-        (y, x), padding = tile_in_image(slices, image_array.shape[-2:])
-        # get the tile including all z stacks
-        tile = image_array[:, y, x]
-        if padding.any():
-            if tile_size is None:
-                # use slice size to guess tile_size
-                tile_size = slices[0].stop - slices[0].start
-            if too_far_outside(padding, tile_size):
-                # fill with NaN: too much of the tile is outside of the image
-                tile = da.full(
-                    (image_array.shape[0], tile_size, tile_size), np.nan
-                )
-            else:
-                # pad tile with edge values to maintain lazy evaluation
-                tile = da.pad(tile, [[0, 0]] + padding.tolist(), "edge")
-        return tile
+        # tiler.crop.cut_tile cuts and pads; a dask image keeps tiles lazy
+        return cut_tile(da.asarray(image_array), slices, tile_size)
 
 
 def find_channel_index(image_channels: t.List[str], channel_regex: str):

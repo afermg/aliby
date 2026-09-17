@@ -221,7 +221,7 @@ def test_find_drift_first_tp_appends():
     tiler = _make_tiler()
     tiler.tile_locs = TileLocations([[64, 64]], tile_size=32, drifts=[])
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         return_value=(np.array([1.0, 2.0]), None, None),
     ):
         tiler.find_drift(0)
@@ -235,7 +235,7 @@ def test_find_drift_second_tp_appends():
         [[64, 64]], tile_size=32, drifts=[[0.0, 0.0]]
     )
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         return_value=(np.array([0.5, -1.0]), None, None),
     ):
         tiler.find_drift(1)
@@ -435,7 +435,7 @@ def test_drifts_sum_to_each_image_displacement_from_the_first():
     from_first = {1: [2, 0], 2: [3, -1], 3: [5, -1]}
     steps = {1: [2, 0], 2: [1, -1], 3: [2, 0]}
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         side_effect=_fake_registration(from_first, steps),
     ):
         for tp in range(4):
@@ -458,7 +458,7 @@ def test_drift_is_registered_to_the_first_processed_image():
         return np.zeros(2), 0.0, 0.0
 
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation", side_effect=register
+        "tiler.drift.phase_cross_correlation", side_effect=register
     ):
         for tp in range(2, 5):
             tiler.find_drift(tp)
@@ -473,7 +473,7 @@ def test_one_bad_registration_is_flagged_and_does_not_persist():
     from_first = {1: [1, 0], 2: [40, 30], 3: [3, 0], 4: [4, 0]}
     steps = {1: [1, 0], 2: [1, 0], 3: [1, 0], 4: [1, 0]}
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         side_effect=_fake_registration(from_first, steps),
     ):
         for tp in range(5):
@@ -489,7 +489,7 @@ def test_small_disagreement_is_not_flagged():
     from_first = {1: [3, 0], 2: [3, 0]}
     steps = {1: [0, 0], 2: [0, 0]}
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         side_effect=_fake_registration(from_first, steps),
     ):
         for tp in range(3):
@@ -503,7 +503,7 @@ def test_previous_reference_sums_steps():
     from_first = {1: [1, 0], 2: [9, 9], 3: [9, 9]}
     steps = {1: [1, 0], 2: [1, 0], 3: [1, 0]}
     with patch(
-        "aliby.tile.tiler.phase_cross_correlation",
+        "tiler.drift.phase_cross_correlation",
         side_effect=_fake_registration(from_first, steps),
     ):
         for tp in range(4):

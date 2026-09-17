@@ -129,12 +129,42 @@ def drift_sequence() -> np.ndarray:
     return np.stack(frames)[:, None, None].astype(np.float32)
 
 
+def make_ring_image(n_rows, n_cols, tile_size, ring_radius):
+    """Create a synthetic image with bright rings on a black background.
+
+    Parameters
+    ----------
+    n_rows: int
+    n_cols: int
+    tile_size: int
+    ring_radius: float
+        Radius of each ring in pixels.
+
+    Returns
+    -------
+    image: 2D float32 array
+    centres: array of shape (n_rows*n_cols, 2)
+        Row, col coordinates of ring centres.
+    """
+    H = (n_rows + 1) * tile_size
+    W = (n_cols + 1) * tile_size
+    image = np.zeros((H, W), dtype=np.float32)
+    yy, xx = np.ogrid[:H, :W]
+    centres = []
+    for i in range(n_rows):
+        for j in range(n_cols):
+            cy = (i + 1) * tile_size
+            cx = (j + 1) * tile_size
+            centres.append((cy, cx))
+            dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+            image[np.abs(dist - ring_radius) < 2] = 1.0
+    return image, np.array(centres)
+
+
 def ring_grid_image() -> np.ndarray:
     """Return a noisy, non-square image of a six by eight grid of rings."""
-    from test_process_traps import _make_ring_image
-
     rng = np.random.default_rng(0)
-    image, _ = _make_ring_image(6, 8, 117, 35)
+    image, _ = make_ring_image(6, 8, 117, 35)
     return image + rng.normal(0, 0.05, image.shape).astype(np.float32)
 
 

@@ -6,6 +6,10 @@ import h5py
 import numpy as np
 import sooth
 
+# the rule for cutting and padding a tile lives in tiler; the OMERO loader
+# imports it from here
+from tiler.crop import tile_in_image, too_far_outside  # noqa: F401
+
 
 class Tile:
     """Define a tile."""
@@ -186,58 +190,3 @@ class TileLocations:
         tile_loc_cls = cls(initial_locations, tile_size, max_size=max_size)
         tile_loc_cls.drifts = drifts
         return tile_loc_cls
-
-
-def tile_in_image(
-    slices: tuple[slice, slice], shape_yx: tuple[int, int]
-) -> tuple[tuple[slice, slice], np.ndarray]:
-    """
-    Find the part of a tile inside an image and the padding the tile lacks.
-
-    A drift-corrected tile can extend past the image's edge. This is the one
-    rule for where it is cut, shared by the tiler, which cuts tiles from
-    whole planes, and by OMERO's tile loader, which asks the server for only
-    the part inside the image.
-
-    Parameters
-    ----------
-    slices: tuple of two slices
-        The tile's y- and x-ranges, rows first.
-    shape_yx: tuple of two ints
-        The image's height and width.
-
-    Returns
-    -------
-    inside: tuple of two slices
-        The tile's y- and x-ranges clipped to the image.
-    padding: array
-        The rows and columns the clipped tile lacks, as
-        ``[[top, bottom], [left, right]]``.
-    """
-    inside = tuple(
-        slice(max(0, s.start), min(size, s.stop))
-        for s, size in zip(slices, shape_yx)
-    )
-    padding = np.array(
-        [
-            (-min(0, s.start), -min(0, size - s.stop))
-            for s, size in zip(slices, shape_yx)
-        ]
-    )
-    return inside, padding
-
-
-def too_far_outside(padding: np.ndarray, tile_size: int) -> bool:
-    """
-    Return whether too much of a tile lies outside the image to pad it.
-
-    Such a tile is filled with NaN rather than padded with edge values.
-
-    Parameters
-    ----------
-    padding: array
-        The padding the tile lacks, as ``tile_in_image`` returns it.
-    tile_size: int
-        Length of one side of the square tile.
-    """
-    return bool((padding > tile_size / 4).any())

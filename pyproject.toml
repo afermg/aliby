@@ -34,6 +34,8 @@ xmltodict = "*"
 zarr = ">=3"
 # the shared cell-geometry format, which defines where a tile sits
 sooth = { git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git" }
+# finds traps, measures drift and cuts tiles, for aliby and its siblings
+tiler = { git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/tiler.git" }
 
 
 [tool.poetry.group.omero]
