@@ -652,8 +652,8 @@ def if_out_of_bounds_pad(
 
 def set_areas_of_interest(
     pixels: np.ndarray,
-    tile_size: int | list[int] = None,
-) -> tuple[tuple[int]]:
+    tile_size: int | list[int] | tuple[int, int] | None = None,
+) -> TileLocations:
     """
     Find initial positions of tiles, or determine that the entire image is
     an area of interest.
@@ -663,14 +663,18 @@ def set_areas_of_interest(
 
     Parameters
     ----------
-    tile_size: int or list[integer]
-        The size of a tile (scalar or [height, width])
+    tile_size: int, list[integer], tuple[integer, integer], or None
+        The size of a tile (scalar or [height, width]); None selects the full
+        rectangular field of view.
     """
     shape = pixels.shape
+    if tile_size is None:
+        return get_center(shape)
+
     # normalise tile_size to a scalar for comparisons
     tile_size_min = tile_size if isinstance(tile_size, int) else min(tile_size)
     # only tile if the image fits more than one non-overlaping tile
-    if tile_size is not None and min(shape) // 2 > tile_size_min // 2:
+    if min(shape) // 2 > tile_size_min // 2:
         half_tile = tile_size_min // 2
         # max_size is the minimum of the numbers of x and y pixels
         max_size = min(shape[-2:])
@@ -697,7 +701,8 @@ def set_areas_of_interest(
 
 
 def get_center(
-    pixels_shape: tuple[int], tile_size: int | list[int] | None = None
+    pixels_shape: tuple[int],
+    tile_size: int | list[int] | tuple[int, int] | None = None,
 ) -> TileLocations:
     """
     Calculate the center of the image and initialize a single tile location.
@@ -707,7 +712,7 @@ def get_center(
     pixels_shape : tuple of int
         The shape of the pixel data array. The last two dimensions are assumed
         to represent the Y and X axes.
-    tile_size : int or list of int, optional
+    tile_size : int, list of int, or tuple of int, optional
         Requested tile extent. If omitted, use the full field of view.
 
     Returns

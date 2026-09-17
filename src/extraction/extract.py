@@ -11,6 +11,7 @@ Types of measurements:
 
 from collections.abc import Callable
 from functools import partial, reduce
+from numbers import Real
 from itertools import product
 
 import numpy as np
@@ -494,6 +495,19 @@ def process_tree_masks_overlap(  # overlap
     inverse_mappings = {}
     compact_masks = []
     for tile_i, masks_in_tile in enumerate(masks):
+        label_layers = {}
+        for stack_i, stack_pixels in enumerate(masks_in_tile):
+            for persistent_label in np.unique(stack_pixels):
+                if persistent_label == 0:
+                    continue
+                if persistent_label in label_layers:
+                    raise ValueError(
+                        f"Persistent label {persistent_label} appears in multiple "
+                        f"overlap layers for tile {tile_i}: layers "
+                        f"{label_layers[persistent_label]} and {stack_i}."
+                    )
+                label_layers[persistent_label] = stack_i
+
         compact_tile = np.zeros_like(masks_in_tile)
         for stack_i, stack_pixels in enumerate(masks_in_tile):
             relabeled, _, inverse_mapping = relabel_sequential(stack_pixels)
@@ -629,13 +643,15 @@ def format_extraction_overlap(
         branch = "/".join(str(x) for x in inst[1])
         inverse_mapping = inverse_mappings[tileid, stack_id]
         if isinstance(
-            metrics, (int, float)
+            metrics, Real
         ):  # When an instruction results in a scalar (e.g., max2p5pc)
             metric_fullname = f"{branch}/{inst[1][-1]}"
             formatted["tile"].append(tileid)
             formatted["label"].append(inverse_mapping[label])
             formatted["metric"].append(metric_fullname)
-            formatted["value"].append(metrics)
+            formatted["value"].append(
+                metrics.item() if isinstance(metrics, np.generic) else metrics
+            )
         elif isinstance(
             metrics, dict
         ):  # When it results in a dictionary (e.g., cp_measure measurements)
@@ -653,6 +669,11 @@ def format_extraction_overlap(
                 formatted["label"].append(inverse_mapping[label])
                 formatted["metric"].append(metric_fullname)
                 formatted["value"].append(value)
+        else:
+            raise TypeError(
+                "Overlap extraction metric payload has unsupported type "
+                f"{type(metrics).__name__}; expected a real scalar, dict, or list."
+            )
 
     pivoted_data = {}
     for t, lbl, m, v in zip(
@@ -665,6 +686,11 @@ def format_extraction_overlap(
         key = (t, lbl)
         if key not in pivoted_data:
             pivoted_data[key] = {"tile": t, "label": lbl}
+        if m in pivoted_data[key]:
+            raise ValueError(
+                f"Duplicate overlap metric {m!r} for tile {t}, label {lbl}; "
+                "overlap labels and metrics must be unique."
+            )
         pivoted_data[key][m] = v
 
     metrics_list = sorted(list(set(formatted["metric"])))
