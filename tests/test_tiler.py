@@ -240,3 +240,111 @@ def test_find_drift_second_tp_appends():
         tiler.find_drift(1)
     assert len(tiler.tile_locs.drifts) == 2
     assert tiler.tile_locs.drifts[1] == [0.5, -1.0]
+
+
+# ---------------------------------------------------------------------------
+# bugs: non-square images, initial_tp, metadata
+# ---------------------------------------------------------------------------
+
+
+def test_get_tile_and_pad_interior_tile_of_tall_image():
+    # clipping to the width called rows 250-290 of a 300-row image outside
+    img = da.ones((1, 300, 200))
+    slices = (slice(250, 290), slice(50, 90))
+    arr = Tiler.get_tile_and_pad(img, slices, tile_size=40).compute()
+    assert arr.shape == (1, 40, 40)
+    assert not np.isnan(arr).any()
+
+
+def test_get_tile_and_pad_pads_past_bottom_of_wide_image():
+    # clipping to the width left a tile past the bottom 10 rows high
+    img = da.ones((1, 200, 300))
+    slices = (slice(190, 230), slice(250, 290))
+    arr = Tiler.get_tile_and_pad(img, slices, tile_size=40).compute()
+    assert arr.shape == (1, 40, 40)
+    assert np.isnan(arr).all()
+    slices = (slice(165, 205), slice(250, 290))
+    arr = Tiler.get_tile_and_pad(img, slices, tile_size=40).compute()
+    assert arr.shape == (1, 40, 40)
+    assert not np.isnan(arr).any()
+
+
+def test_initialise_tiles_keeps_traps_along_longer_axis():
+    tiler = _make_tiler(Y=128, X=512)
+    # both traps are well inside; the second is past x=128
+    with patch(
+        "aliby.tile.tiler.segment_traps",
+        return_value=[[64, 64], [64, 400]],
+    ):
+        tiler.initialise_tiles(tile_size=64)
+    assert tiler.no_tiles == 2
+
+
+def test_initialise_tiles_drops_trap_near_edge_of_shorter_axis():
+    tiler = _make_tiler(Y=512, X=128)
+    # rows first: the second trap's column is too near the right edge
+    with patch(
+        "aliby.tile.tiler.segment_traps",
+        return_value=[[256, 64], [256, 110]],
+    ):
+        tiler.initialise_tiles(tile_size=64)
+    assert tiler.no_tiles == 1
+
+
+def _moving_square_tiler(shifts, initial_tp):
+    T = len(shifts)
+    arr = np.zeros((T, 1, 1, 64, 64), dtype=np.float32)
+    for tp, shift in enumerate(shifts):
+        arr[tp, 0, 0, 10 + shift : 20 + shift, 10:20] = 1
+    params = TilerParameters.default().to_dict()
+    params["initial_tp"] = initial_tp
+    tiler = Tiler(
+        da.from_array(arr),
+        {"channels": ["Brightfield"]},
+        TilerParameters.from_dict(params),
+    )
+    tiler.tile_locs = TileLocations([[32, 32]], tile_size=20, drifts=[])
+    return tiler
+
+
+def test_find_drift_measures_frames_after_initial_tp():
+    # the square moves only between frames 2 and 3; with initial_tp=2
+    # the tiler's tp 1 is frame 3, so its drift is the move
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_tp=2)
+    tiler.find_drift(0)
+    tiler.find_drift(1)
+    assert tiler.tile_locs.drifts == [[0.0, 0.0], [-5.0, 0.0]]
+
+
+def test_run_tiles_only_frames_after_initial_tp():
+    tiler = _moving_square_tiler([0, 0, 0, 5], initial_tp=2)
+    tiler.tile_size = 20
+    with patch(
+        "aliby.tile.tiler.segment_traps", return_value=[[32, 32]]
+    ):
+        tiler.run()
+    assert len(tiler.tile_locs.drifts) == 2
+
+
+def test_tiler_takes_channels_from_image_metadata_without_microscopy():
+    # a zarr image's data is not a dask array
+    image = np.zeros((1, 2, 1, 32, 32))
+    tiler = Tiler(
+        image, {"channels": ["GFP", "Brightfield"]}, TilerParameters.default()
+    )
+    assert tiler.channels == ["GFP", "Brightfield"]
+    assert tiler.ref_channel_index == 1
+
+
+def test_tiler_imports_without_omero():
+    import subprocess
+
+    code = (
+        "import sys; sys.modules['omero'] = None; "
+        "sys.modules['omero.gateway'] = None; "
+        "import aliby.tile.tiler"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

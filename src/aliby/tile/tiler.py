@@ -39,8 +39,11 @@ from agora.io.bridge import BridgeH5
 from aliby.global_settings import global_settings
 from aliby.tile.process_traps import segment_traps
 from aliby.tile.tiles import TileLocations, tile_in_image, too_far_outside
-from omero.gateway import ImageWrapper
 from skimage.registration import phase_cross_correlation
+
+if t.TYPE_CHECKING:
+    # omero is optional and needed here only to annotate
+    from omero.gateway import ImageWrapper
 
 
 class TilerParameters(ParametersABC):
@@ -94,11 +97,17 @@ class Tiler(StepABC):
         if "channels" in image_metadata and isinstance(image, da.Array):
             # information for a particular image
             self.channels = image_metadata["channels"]
-        elif "channels_by_position" in microscopy_metadata["full"]:
+        elif (
+            microscopy_metadata is not None
+            and "channels_by_position" in microscopy_metadata["full"]
+        ):
             # likely zarr array
             self.channels = microscopy_metadata["full"][
                 "channels_by_position"
             ][self.position_name]
+        elif "channels" in image_metadata:
+            # an image whose data is not a dask array, such as a zarr array
+            self.channels = image_metadata["channels"]
         else:
             self.channels = list(range(image_metadata.get("size_c", 0)))
         # get spatial location of position
@@ -134,7 +143,7 @@ class Tiler(StepABC):
     @classmethod
     def from_image(
         cls,
-        image: ImageWrapper,
+        image: "ImageWrapper",
         parameters: TilerParameters,
         microscopy_metadata: t.Dict = None,
     ):
@@ -160,7 +169,7 @@ class Tiler(StepABC):
     @classmethod
     def from_h5(
         cls,
-        image: ImageWrapper,
+        image: "ImageWrapper",
         filepath: t.Union[str, Path],
         parameters: t.Optional[TilerParameters] = None,
     ):
@@ -234,22 +243,18 @@ class Tiler(StepABC):
         ]
         if tile_size:
             half_tile = tile_size // 2
-            # max_size is the minimum of the numbers of x and y pixels
-            max_size = min(self.image.shape[-2:])
-            # find the tiles
+            # the numbers of rows and of columns bound each axis separately
+            n_rows, n_columns = self.image.shape[-2:]
+            # find the tiles, as (row, column)
             tile_locs = segment_traps(initial_image, tile_size)
             # keep only tiles that are not near an edge
             # add extra margin to account for potential drift
-            drift_margin = half_tile // 8
+            margin = half_tile + half_tile // 8
             tile_locs = [
-                [x, y]
-                for x, y in tile_locs
-                if half_tile + drift_margin
-                < x
-                < max_size - half_tile - drift_margin
-                and half_tile + drift_margin
-                < y
-                < max_size - half_tile - drift_margin
+                [row, column]
+                for row, column in tile_locs
+                if margin < row < n_rows - margin
+                and margin < column < n_columns - margin
             ]
             # store tiles in an instance of TileLocations
             self.tile_locs = TileLocations.from_tiler(tile_locs, tile_size)
@@ -272,11 +277,13 @@ class Tiler(StepABC):
         tp: integer
             Index for a time point.
         """
-        prev_tp = max(0, tp - 1)
+        # tp counts from initial_tp, as the images tiles are cut from do
+        frame = tp + self.initial_tp
+        prev_frame = max(0, tp - 1) + self.initial_tp
         # cross-correlate
         drift, _, _ = phase_cross_correlation(
-            self.image[prev_tp, self.ref_channel_index, self.ref_z],
-            self.image[tp, self.ref_channel_index, self.ref_z],
+            self.image[prev_frame, self.ref_channel_index, self.ref_z],
+            self.image[frame, self.ref_channel_index, self.ref_z],
         )
         # store drift
         if 0 < tp < len(self.tile_locs.drifts):
@@ -411,8 +418,8 @@ class Tiler(StepABC):
         """Tile all time points in an experiment at once."""
         if time_dim is None:
             time_dim = 0
-        for frame in range(self.image.shape[time_dim]):
-            self.run_tp(frame)
+        for tp in range(self.image.shape[time_dim] - self.initial_tp):
+            self.run_tp(tp)
         return None
 
     def get_tp_data_for_one_channel(
@@ -639,12 +646,9 @@ class Tiler(StepABC):
             If some padding is needed, edge values are replicated.
             If much padding is needed, a tile of NaN is returned.
         """
-        # number of pixels in the x direction; tiles are square and images are
-        # clipped with this in both axes
-        max_size = image_array.shape[-1]
         # ignore parts of the tile outside of the image, and find the extent
         # of padding needed in y and x
-        (y, x), padding = tile_in_image(slices, (max_size, max_size))
+        (y, x), padding = tile_in_image(slices, image_array.shape[-2:])
         # get the tile including all z stacks
         tile = image_array[:, y, x]
         if padding.any():
