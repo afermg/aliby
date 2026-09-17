@@ -197,13 +197,14 @@ def test_tiles_timepoint_shape_is_pinned():
     assert tiles.shape == (2, 2, 1, 2, 16, 16)
 
 
-def test_drifts_match_golden(update_golden):
+@pytest.mark.parametrize("reference", ["previous", "first"])
+def test_drifts_match_golden(update_golden, reference):
     """Measure drift over a textured sequence with known shifts."""
     name = "golden_tile_drifts.npz"
     tiler = Tiler(
         da.from_array(drift_sequence()),
         {"channels": ["Brightfield"]},
-        TilerParameters.default(),
+        TilerParameters.default(drift_reference=reference),
     )
     tiler.tile_locs = TileLocations([[64, 64]], tile_size=32)
     for tp in range(len(DRIFT_SHIFTS)):
@@ -225,8 +226,15 @@ def test_trap_detection_matches_golden(update_golden):
 
 
 @pytest.mark.slow
-def test_real_zarr_layout_matches_golden(update_golden):
-    """Detect traps and measure drift on six real brightfield frames."""
+@pytest.mark.parametrize("reference", ["previous", "first"])
+def test_real_zarr_layout_matches_golden(update_golden, reference):
+    """
+    Detect traps and measure drift on six real brightfield frames.
+
+    Drift registered to the previous image is aliby's method until 2026 and
+    its golden was recorded before registering to the first image became
+    the default; the two differ in four of twelve values here.
+    """
     name = "golden_tiler_zarr.npz"
     path = os.environ.get("ALIBY_GOLDEN_ZARR")
     if path is None:
@@ -237,6 +245,7 @@ def test_real_zarr_layout_matches_golden(update_golden):
         data = da.from_array(np.asarray(image.data[:6]))
     parameters = TilerParameters.default().to_dict()
     parameters["ref_z"] = 2
+    parameters["drift_reference"] = reference
     tiler = Tiler(
         data,
         {"channels": ["Brightfield", "Flavin", "mCherry"]},
@@ -248,7 +257,10 @@ def test_real_zarr_layout_matches_golden(update_golden):
     locations = np.asarray(tiler.tile_locs.initial_location)
     drifts = np.asarray(tiler.tile_locs.drifts)
     if update_golden:
-        save_golden(name, locations=locations, drifts=drifts)
+        golden = load_golden(name)
+        golden["locations"] = locations
+        golden[f"drifts_{reference}"] = drifts
+        save_golden(name, **golden)
     golden = load_golden(name)
     np.testing.assert_array_equal(locations, golden["locations"])
-    np.testing.assert_array_equal(drifts, golden["drifts"])
+    np.testing.assert_array_equal(drifts, golden[f"drifts_{reference}"])

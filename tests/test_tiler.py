@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import dask.array as da
 import numpy as np
+import pytest
 from aliby.tile.tiler import (
     Tiler,
     TilerParameters,
@@ -348,3 +349,124 @@ def test_tiler_imports_without_omero():
         [sys.executable, "-c", code], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# drift registered to the first image, checked against the previous
+# ---------------------------------------------------------------------------
+
+
+def _labelled_tiler(n_frames, initial_tp=0, **parameters):
+    # each image is filled with its own frame number, so a fake registration
+    # can tell which images it was given
+    arr = np.ones((n_frames, 1, 1, 8, 8), dtype=np.float32)
+    arr *= np.arange(n_frames, dtype=np.float32)[:, None, None, None, None]
+    params = TilerParameters.default(initial_tp=initial_tp, **parameters)
+    tiler = Tiler(da.from_array(arr), {"channels": ["Brightfield"]}, params)
+    tiler.tile_locs = TileLocations([[4, 4]], tile_size=4, drifts=[])
+    return tiler
+
+
+def _fake_registration(from_first, steps):
+    # return from_first[frame] against the first image, steps[frame]
+    # against the one before
+    def register(reference, moving):
+        ref, frame = int(np.asarray(reference)[0, 0]), int(
+            np.asarray(moving)[0, 0]
+        )
+        if ref == frame:
+            return np.zeros(2), 0.0, 0.0
+        if frame - ref == 1 and not (ref == 0 and frame in from_first):
+            return np.asarray(steps[frame], dtype=float), 0.0, 0.0
+        return np.asarray(from_first[frame], dtype=float), 0.0, 0.0
+
+    return register
+
+
+def test_drifts_sum_to_each_image_displacement_from_the_first():
+    tiler = _labelled_tiler(4)
+    from_first = {1: [2, 0], 2: [3, -1], 3: [5, -1]}
+    steps = {1: [2, 0], 2: [1, -1], 3: [2, 0]}
+    with patch(
+        "aliby.tile.tiler.phase_cross_correlation",
+        side_effect=_fake_registration(from_first, steps),
+    ):
+        for tp in range(4):
+            tiler.find_drift(tp)
+    cumulative = np.cumsum(tiler.tile_locs.drifts, axis=0)
+    np.testing.assert_array_equal(
+        cumulative, [[0, 0], [2, 0], [3, -1], [5, -1]]
+    )
+    assert tiler.drift_disagreements == []
+
+
+def test_drift_is_registered_to_the_first_image_after_initial_tp():
+    tiler = _labelled_tiler(5, initial_tp=2)
+    references = []
+
+    def register(reference, moving):
+        references.append(int(np.asarray(reference)[0, 0]))
+        return np.zeros(2), 0.0, 0.0
+
+    with patch(
+        "aliby.tile.tiler.phase_cross_correlation", side_effect=register
+    ):
+        for tp in range(3):
+            tiler.find_drift(tp)
+    # each time point registers to the one before and to frame initial_tp
+    assert references == [2, 2, 2, 2, 3, 2]
+
+
+def test_one_bad_registration_is_flagged_and_does_not_persist():
+    tiler = _labelled_tiler(5)
+    # registration to the first image fails at time point 2 only
+    from_first = {1: [1, 0], 2: [40, 30], 3: [3, 0], 4: [4, 0]}
+    steps = {1: [1, 0], 2: [1, 0], 3: [1, 0], 4: [1, 0]}
+    with patch(
+        "aliby.tile.tiler.phase_cross_correlation",
+        side_effect=_fake_registration(from_first, steps),
+    ):
+        for tp in range(5):
+            tiler.find_drift(tp)
+    cumulative = np.cumsum(tiler.tile_locs.drifts, axis=0)
+    # the failure moves time point 2 only
+    np.testing.assert_array_equal(cumulative[3:], [[3, 0], [4, 0]])
+    assert tiler.drift_disagreements == [2, 3]
+
+
+def test_small_disagreement_is_not_flagged():
+    tiler = _labelled_tiler(3, drift_check_px=3)
+    from_first = {1: [3, 0], 2: [3, 0]}
+    steps = {1: [0, 0], 2: [0, 0]}
+    with patch(
+        "aliby.tile.tiler.phase_cross_correlation",
+        side_effect=_fake_registration(from_first, steps),
+    ):
+        for tp in range(3):
+            tiler.find_drift(tp)
+    assert tiler.drift_disagreements == []
+
+
+def test_previous_reference_sums_steps():
+    tiler = _labelled_tiler(4, drift_reference="previous")
+    # at time point 1 the previous image is the first image
+    from_first = {1: [1, 0], 2: [9, 9], 3: [9, 9]}
+    steps = {1: [1, 0], 2: [1, 0], 3: [1, 0]}
+    with patch(
+        "aliby.tile.tiler.phase_cross_correlation",
+        side_effect=_fake_registration(from_first, steps),
+    ):
+        for tp in range(4):
+            tiler.find_drift(tp)
+    assert tiler.tile_locs.drifts == [
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 0.0],
+    ]
+
+
+def test_find_drift_refuses_a_gap_in_drifts():
+    tiler = _labelled_tiler(4)
+    with pytest.raises(ValueError, match="drifts of the 2 before"):
+        tiler.find_drift(2)
