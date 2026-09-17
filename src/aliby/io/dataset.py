@@ -17,7 +17,6 @@ from abc import ABC, abstractmethod, abstractproperty
 from pathlib import Path
 
 from aliby.io.image import ImageLocalOME
-from aliby.io.omero import Dataset
 
 
 def dispatch_dataset(expt_id: int or str, **kwargs):
@@ -37,7 +36,9 @@ def dispatch_dataset(expt_id: int or str, **kwargs):
     A callable Dataset instance, either network-dependent or local.
     """
     if isinstance(expt_id, int):
-        # data available from OMERO
+        # data available from OMERO; omero is optional, so import it here
+        from aliby.io.omero import Dataset
+
         return Dataset(expt_id, **kwargs)
     elif isinstance(expt_id, str):
         # data available locally

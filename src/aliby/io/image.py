@@ -23,7 +23,6 @@ import numpy as np
 import xmltodict
 import zarr
 from agora.io.metadata import parse_microscopy_logs
-from aliby.io.omero import Image
 from dask.array.image import imread
 from tifffile import TiffFile
 from skimage import io
@@ -52,6 +51,9 @@ def instantiate_image(
 def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     """Pick the appropriate Image class for the source of data."""
     if isinstance(source, (int, np.int64)):
+        # omero is optional, so import it only for OMERO data
+        from aliby.io.omero import Image
+
         instantiator = Image
     elif isinstance(source, dict) or (
         isinstance(source, (str, Path)) and Path(source).is_dir()
