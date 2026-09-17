@@ -32,6 +32,8 @@ h5py = "*"
 tqdm = "*"
 xmltodict = "*"
 zarr = ">=3"
+# the shared cell-geometry format, which defines where a tile sits
+sooth = { git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git" }
 
 
 [tool.poetry.group.omero]

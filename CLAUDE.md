@@ -84,6 +84,9 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 **Core Processing Classes**
 - `aliby.tile.tiler.Tiler`: Tiles images into regions of interest (one per trap), ignoring tiles without cells
+  - Where a tile sits is `sooth.tiles`, the definition of record; `aliby.tile.tiles.Tile` calls it, and `tests/test_tile_golden.py` pins it against real layouts
+  - Drift registers each image to the first processed image (`drift_reference="first"`), stored as the change since the previous time point so drifts still sum to a displacement; a second registration to the previous image logs a warning when the two differ by more than `drift_check_px` (3). Registering to the previous image, the old method, accumulated 2-7 px of error on 192- and 288-frame movies against about 0.5 px
+  - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises
 - `aliby.baby_sitter.BabyRunner`: Interfaces with Baby-seg to return cell masks, mother-bud pairs, and tracking data
 - `extraction.core.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)
 - `postprocessor.core.postprocessing.PostProcessor`: Applies cell picking, track merging, and runs processes like budding analysis

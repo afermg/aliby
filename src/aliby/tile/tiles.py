@@ -4,6 +4,7 @@ import typing as t
 
 import h5py
 import numpy as np
+import sooth
 
 
 class Tile:
@@ -26,6 +27,8 @@ class Tile:
         phase_cross_correlation, all of which are (row, column). The result is
         truncated to integers, so a tile's origin is always an integer.
 
+        The rule is sooth's, the definition of record for placing a tile.
+
         Parameters
         ----------
         tp: integer
@@ -35,9 +38,9 @@ class Tile:
         -------
         A list of the y- and x-coordinates of the tile's centre.
         """
-        drifts = self.parent_class.drifts
-        tile_centre = self.centre - np.sum(drifts[: tp + 1], axis=0)
-        return list(tile_centre.astype(int))
+        return list(
+            sooth.centre_at_time(self.centre, self.parent_class.drifts, tp)
+        )
 
     def as_tile(self, tp: int):
         """
@@ -62,10 +65,7 @@ class Tile:
         w: int
             Width of tile.
         """
-        y, x = self.centre_at_time(tp)
-        # tile top left corner
-        y = int(y - self.half_size)
-        x = int(x - self.half_size)
+        y, x = sooth.tile_origin_yx(self.centre_at_time(tp), self.size)
         return y, x, self.size, self.size
 
     def as_range(self, tp: int):
@@ -85,8 +85,7 @@ class Tile:
         A slice of y coordinates from top to bottom
         A slice of x coordinates from left to right
         """
-        y, x, h, w = self.as_tile(tp)
-        return slice(y, y + h), slice(x, x + w)
+        return sooth.tile_slices(self.centre_at_time(tp), self.size)
 
 
 class TileLocations:
