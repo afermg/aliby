@@ -2,10 +2,12 @@
 Tests pinning how the image readers read pixels before they move into
 ``tiler``.
 
-The golden tests pin what the readers do today. The tests marked
-``xfail(strict=True)`` are confirmed bugs: each is fixed when the reader moves
-to tiler, and the mark is then removed. A strict xfail fails if the bug
-disappears unnoticed.
+The golden tests pin what the readers did before they moved. Three were
+bugs, fixed when the readers moved to tiler: a folder of TIFFs named its
+channels in the log's order but stacked them in sorted file order, swapping
+channels whose order is not alphabetical, as in experiments 2801 and 2809; a
+zarr with no log beside it could not be opened; and ImageLocalOME could not
+read an OME-TIFF.
 
 Two tests read a real experiment and need ``ALIBY_GOLDEN_ZARR`` set to
 ``htb2mCherry_001.zarr`` and ``ALIBY_GOLDEN_TIFFS`` to the same position
@@ -98,14 +100,6 @@ def test_a_tiff_folder_is_tczyx_with_channels_in_sorted_file_order(tmp_path):
     assert image.data.chunksize == (1, 1, 1, 6, 9)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: planes are stacked in sorted file order but named in the "
-        "log's order, so with channels Brightfield, GFP, mCherry, cy5 "
-        "(as in experiments 2801 and 2809) mCherry and cy5 swap"
-    ),
-)
 def test_a_tiff_folder_names_each_channel_by_its_own_planes(tmp_path):
     folder = write_tiff_folder(tmp_path / "expt" / "pos_001")
     (tmp_path / "expt" / "pos.log").write_text(SWAINLAB_LOG)
@@ -139,13 +133,6 @@ def test_a_zarr_is_read_as_stored(tmp_path):
     } == dict(size_T=3, size_C=2, size_Z=2, size_Y=5, size_X=7)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: with no log beside it, a zarr's shape is sought from TIFF "
-        "files inside it, and opening it raises IndexError"
-    ),
-)
 def test_a_zarr_without_a_log_can_be_read(tmp_path):
     path = tmp_path / "pos_001.zarr"
     array = write_zarr(path)
@@ -153,13 +140,6 @@ def test_a_zarr_without_a_log_can_be_read(tmp_path):
     np.testing.assert_array_equal(np.asarray(image.data), array)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "bug: ImageLocalOME cannot read an OME-TIFF; its dimorder "
-        "property recurses without end"
-    ),
-)
 def test_an_ome_tiff_is_read_as_tczyx(tmp_path):
     path = tmp_path / "pos_001.ome.tif"
     rng = np.random.default_rng(1)

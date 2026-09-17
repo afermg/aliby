@@ -4093,17 +4093,22 @@ numpy = ">=1.24"
 scikit-image = ">=0.25.2"
 scipy = ">=1.15.2"
 sooth = {git = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git"}
+tifffile = {version = "*", optional = true}
+zarr = {version = ">=3", optional = true}
 
 [package.extras]
 aliby = ["h5py (>=3.10)"]
 dask = ["dask"]
+omero = ["h5py (>=3.10)", "omero-py"]
 plot = ["matplotlib"]
+tiff = ["tifffile"]
+zarr = ["zarr (>=3)"]
 
 [package.source]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/tiler.git"
 reference = "HEAD"
-resolved_reference = "cb178087c7d31f653109e2ce935ac4b07fd0a36e"
+resolved_reference = "72aa29a5ad6e309ea2d9a06bd8781ea48c25dd7b"
 
 [[package]]
 name = "toolz"
@@ -4539,4 +4544,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <3.12"
-content-hash = "1a46e7bea649dfcb6bee0536ea1b9d6b95a9df953fdc29a6b965ae4764e12ad0"
+content-hash = "f66dc1e4b39fbeeb87cc73682645c4ec6ae1c0063d03989de1c09cf68281d294"

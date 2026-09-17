@@ -1,19 +1,19 @@
 """
 Image: Loads images and registers them.
 
-Image instances loads images from a specified directory into an object that
-also contains image properties such as name and metadata.  Pixels from images
+Image instances load images from a specified directory into an object that
+also contains image properties such as name and metadata. Pixels from images
 are stored in dask arrays; the standard way is to store them in 5-dimensional
 arrays: T(ime point), C(channel), Z(-stack), Y, X.
 
-This module consists of a base Image class (BaseLocalImage).  ImageLocalOME
-handles local OMERO images.  ImageDir handles cases in which images are split
-into directories, with each time point and channel having its own image file.
-ImageDummy is a dummy class for silent failure testing.
+The pixels are read by tiler's sources, which aliby shares with wela, bairn
+and the curation GUI; this module adds what aliby knows and they do not, the
+microscope's log files. BaseLocalImage is the base class. ImageLocalOME
+handles a multi-dimensional OME-TIFF. ImageDir handles a directory with one
+TIFF for each time point, channel and z slice. ImageZarr handles a zarr
+store.
 """
 
-import re
-import typing as t
 from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
 from pathlib import Path
@@ -21,22 +21,17 @@ from pathlib import Path
 import dask.array as da
 import numpy as np
 import xmltodict
-import zarr
 from agora.io.metadata import parse_microscopy_logs
-from dask.array.image import imread
-from tifffile import TiffFile
-from skimage import io
+from tiler import TiffFolderSource, TiffSource, ZarrSource, as_dask
 
 
-def instantiate_image(
-    source: t.Union[str, int, t.Dict[str, str], Path], **kwargs
-):
+def instantiate_image(source: str | int | dict[str, str] | Path, **kwargs):
     """
     Instantiate the image.
 
     Parameters
     ----------
-    source : t.Union[str, int, t.Dict[str, str], Path]
+    source : str, int, dict or Path
         Image identifier
 
     Examples
@@ -48,7 +43,7 @@ def instantiate_image(
     return dispatch_image(source)(source, **kwargs)
 
 
-def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
+def dispatch_image(source: str | int | dict[str, str] | Path):
     """Pick the appropriate Image class for the source of data."""
     if isinstance(source, (int, np.int64)):
         # omero is optional, so import it only for OMERO data
@@ -58,7 +53,6 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     elif isinstance(source, dict) or (
         isinstance(source, (str, Path)) and Path(source).is_dir()
     ):
-        # zarr files are considered directories
         if Path(source).suffix == ".zarr":
             instantiator = ImageZarr
         else:
@@ -70,58 +64,24 @@ def dispatch_image(source: t.Union[str, int, t.Dict[str, str], Path]):
     return instantiator
 
 
-def files_to_image_shape(path: Path, suffix="tiff"):
-    """Deduce the image shape from the naming convention of tiff files."""
-    meta = {}
-    meta["size_t"], meta["size_c"], meta["size_z"] = (
-        find_image_size_from_tiff_direc(path)
-    )
-    tiff_files = list(path.glob(f"*.{suffix}"))
-    meta["size_y"], meta["size_x"] = io.imread(tiff_files[0]).shape[:2]
-    return meta
-
-
-def filename_to_dict_indices(stem: str):
-    """Split string into a dict."""
-    return {
-        dim_number[0]: int(dim_number[1:])
-        for dim_number in stem.split("_")[1:]
-    }
-
-
-def find_image_size_from_tiff_direc(directory_path):
-    """
-    Find nos of timepoints, channels, z_sections from a tiff directory.
-
-    Assume files are named like position_t0001_GFP_z01.tiff.
-    """
-    timepoints = set()
-    channels = set()
-    z_sections = set()
-    pattern = r"_t(\d+)_([^_]+)_z(\d+)\.tiff$"
-    for filepath in Path(directory_path).glob("*.tiff"):
-        match = re.search(pattern, filepath.name)
-        if match:
-            timepoints.add(int(match.group(1)))
-            channels.add(match.group(2))
-            z_sections.add(int(match.group(3)))
-        else:
-            raise ValueError(
-                f"{filepath.name} is named incorrectly.\n"
-                "Files should be named following myo1_t0001_GFP_z01.tiff: "
-                "for position myo1, the first time point, the GFP"
-                " channel, and the first z slice."
-            )
-    return len(timepoints), len(channels), len(z_sections)
+def shape_to_meta(shape: tuple[int, ...]) -> dict[str, int]:
+    """Describe an image by the sizes of its dimensions, TCZYX."""
+    return {f"size_{dim}": int(size) for dim, size in zip("tczyx", shape)}
 
 
 class BaseLocalImage(ABC):
-    """Set path and provide method for context management."""
+    """
+    Set path and provide method for context management.
+
+    A subclass sets ``source``, the tiler source that reads its pixels.
+    Leaving a with block closes nothing, so the pixels stay readable, as a
+    Tiler built inside the block expects.
+    """
 
     # default image order
     default_dimorder = "tczyx"
 
-    def __init__(self, path: t.Union[str, Path]):
+    def __init__(self, path: str | Path):
         """Initiate with data directory."""
         self.path = Path(path)
 
@@ -137,20 +97,6 @@ class BaseLocalImage(ABC):
                 print(e)
         return False
 
-    def rechunk_data(self, img):
-        """Format image using x and y size from metadata."""
-        self._rechunked_img = da.rechunk(
-            img,
-            chunks=(
-                1,
-                1,
-                1,
-                self.meta["size_y"],
-                self.meta["size_x"],
-            ),
-        )
-        return self._rechunked_img
-
     @property
     def data(self):
         """Get data."""
@@ -161,12 +107,20 @@ class BaseLocalImage(ABC):
         """Get metadata."""
         return self.meta
 
+    @property
+    def pixel_size_um(self) -> float | None:
+        """Return the pixel size the image records, or None."""
+        return self.source.pixel_size_um
+
     def set_meta(self):
-        """Load metadata from microscopy logs."""
+        """
+        Load metadata from microscopy logs.
+
+        With no log, describe the image by the sizes of its dimensions.
+        """
         self.meta = parse_microscopy_logs(self.path)
         if self.meta is None:
-            # try to deduce metadata on the image shape
-            self.meta = files_to_image_shape(self.path)
+            self.meta = shape_to_meta(self.source.shape)
 
     @abstractmethod
     def get_data_lazy(self):
@@ -193,37 +147,40 @@ class ImageLocalOME(BaseLocalImage):
     """
 
     def __init__(self, path: str, dimorder=None, **kwargs):
-        """Initialise using file name."""
+        """
+        Initialise using file name.
+
+        Parameters
+        ----------
+        path : str
+            The OME-TIFF.
+        dimorder : str, optional
+            The image's axes, such as "TCYX", overriding the file's.
+        """
         super().__init__(path)
         self._id = str(path)
-        self.set_meta(str(path))
+        self.source = TiffSource(self.path, axes=dimorder)
+        self.set_meta()
 
-    def set_meta(self, path):
-        """Get metadata from the associated tiff file."""
-        meta = dict()
-        try:
-            with TiffFile(path) as f:
-                self.meta = xmltodict.parse(f.ome_metadata)["OME"]
-            for dim in self.dimorder:
-                meta["size_" + dim.lower()] = int(
-                    self.meta["Image"]["Pixels"]["@Size" + dim]
-                )
-                meta["channels"] = [
-                    x["@Name"] for x in self.meta["Image"]["Pixels"]["Channel"]
-                ]
-                meta["name"] = self.meta["Image"]["@Name"]
-                meta["type"] = self.meta["Image"]["Pixels"]["@Type"]
-        except Exception as e:
-            # images not in OMEXML
-            print("Warning:Metadata not found: {}".format(e))
-            print(
-                "Warning: No dimensional info provided. "
-                f"Assuming {self.default_dimorder}"
-            )
-            # mark non-existent dimensions for padding
-            self.base = self.default_dimorder
-            self.dimorder = self.base
-            self.meta = meta
+    def set_meta(self):
+        """Get metadata from the tiff file itself."""
+        ome_metadata = self.source.tif.ome_metadata
+        self.ome = (
+            xmltodict.parse(ome_metadata)["OME"] if ome_metadata else {}
+        )
+        self.meta = shape_to_meta(self.source.shape)
+        self.meta["channels"] = self.source.channels
+        self.meta["name"] = self.ome_image_name() or self.source.name
+        self.meta["type"] = str(self.source.dtype)
+
+    def ome_image_name(self) -> str | None:
+        """Return the name the OME-XML gives the first image, if any."""
+        image = self.ome.get("Image")
+        if isinstance(image, list):
+            image = image[0] if image else None
+        if not isinstance(image, dict):
+            return None
+        return image.get("@Name")
 
     @property
     def name(self):
@@ -235,53 +192,19 @@ class ImageLocalOME(BaseLocalImage):
         """Get date of experiment."""
         date_str = [
             x
-            for x in self.meta["StructuredAnnotations"]["TagAnnotation"]
+            for x in self.ome["StructuredAnnotations"]["TagAnnotation"]
             if x["Description"] == "Date"
         ][0]["Value"]
         return datetime.strptime(date_str, "%d-%b-%Y")
 
     @property
     def dimorder(self):
-        """Return order of dimensions in the image."""
-        if not hasattr(self, "dimorder"):
-            self.dimorder = self.meta["Image"]["Pixels"]["@DimensionOrder"]
-        return self.dimorder
-
-    @dimorder.setter
-    def dimorder(self, order: str):
-        self.dimorder = order
-        return self.dimorder
+        """Return the order of dimensions in the data."""
+        return "TCZYX"
 
     def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array via lazy-loading of tiff files."""
-        if not hasattr(self, "formatted_img"):
-            if not hasattr(self, "ids"):
-                # standard order of image dimensions
-                img = (imread(str(self.path))[0],)
-            else:
-                # bespoke order, so rearrange axes for compatibility
-                img = imread(str(self.path))[0]
-                for i, d in enumerate(self.dimorder):
-                    self.meta["size_" + d.lower()] = img.shape[i]
-                target_order = (
-                    *self.ids,
-                    *[
-                        i
-                        for i, d in enumerate(self.base)
-                        if d not in self.dimorder
-                    ],
-                )
-                reshaped = da.reshape(
-                    img,
-                    shape=(
-                        *img.shape,
-                        *[1 for _ in range(5 - len(self.dimorder))],
-                    ),
-                )
-                img = da.moveaxis(
-                    reshaped, range(len(reshaped.shape)), target_order
-                )
-        return self.rechunk_data(img)
+        """Return 5D dask array, reading a page when it is computed."""
+        return as_dask(self.source)
 
 
 class ImageDir(BaseLocalImage):
@@ -293,29 +216,25 @@ class ImageDir(BaseLocalImage):
        position_t0001_channel_z01.tiff
 
     We assume that the images are shaped Y times X.
-    The data is put in the order of TCZYX.
+    The data is put in the order of TCZYX. The channels follow the
+    microscope's log, if there is one, and each channel is read from the
+    files that name it.
     """
 
-    def __init__(self, path: t.Union[str, Path], **kwargs):
+    def __init__(self, path: str | Path, **kwargs):
         """Initialise and define metadata."""
         super().__init__(path)
-        self.set_meta()
+        log_meta = parse_microscopy_logs(self.path)
+        channels = None if log_meta is None else log_meta.get("channels")
+        self.source = TiffFolderSource(self.path, channels=channels)
+        self.meta = log_meta
+        if self.meta is None:
+            self.meta = shape_to_meta(self.source.shape)
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
-        img = imread(str(self.path / "*.tiff"))
-        if len(img.shape) != 3:
-            raise ValueError(
-                "The image loaded from tiff files is the wrong shape."
-            )
-        ntps, nch, nz = find_image_size_from_tiff_direc(self.path)
-        self.meta["size_y"], self.meta["size_x"] = img.shape[-2:]
-        # reshape assuming TCZYX
-        img = da.reshape(
-            img, (ntps, nch, nz, self.meta["size_y"], self.meta["size_x"])
-        )
-        pixels = self.rechunk_data(img)
-        return pixels
+        self.meta["size_y"], self.meta["size_x"] = self.source.shape[-2:]
+        return as_dask(self.source)
 
     @property
     def name(self):
@@ -331,26 +250,23 @@ class ImageDir(BaseLocalImage):
 class ImageZarr(BaseLocalImage):
     """Read zarr compressed files."""
 
-    def __init__(self, path: t.Union[str, Path], **kwargs):
+    def __init__(self, path: str | Path, **kwargs):
         """Initialise using file name."""
         super().__init__(path)
+        self.source = ZarrSource(self.path)
         self.set_meta()
-        try:
-            self._img = zarr.open(self.path)
-            self.add_size_to_meta()
-        except Exception as e:
-            print(f"ImageZarr: Could not add size info to metadata: {e}.")
+        self.add_size_to_meta()
 
-    def get_data_lazy(self) -> da.Array:
-        """Return 5D dask array for lazy-loading local zarr files."""
-        return self._img
+    def get_data_lazy(self):
+        """Return the zarr array, which reads lazily."""
+        return self.source.array
 
     def add_size_to_meta(self):
         """Add shape of image array to metadata."""
         self.meta.update(
             {
                 f"size_{dim}": shape
-                for dim, shape in zip(self.dimorder, self._img.shape)
+                for dim, shape in zip(self.dimorder, self.source.array.shape)
             }
         )
 
@@ -361,5 +277,5 @@ class ImageZarr(BaseLocalImage):
 
     @property
     def dimorder(self):
-        """Impose a hard-coded order of dimensions based on the zarr compression script."""
+        """Return the order of dimensions the zarr script writes."""
         return "TCZYX"

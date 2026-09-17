@@ -1,9 +1,9 @@
 """
-Unit tests for loading tiles from OMERO in aliby.io.omero.
+Unit tests for loading images and tiles from OMERO in aliby.io.omero.
 
 A fake OMERO image serves each requested region from a numpy array and
-refuses to serve a whole plane, so the tests fail if a tile is ever cut from
-a downloaded plane again.
+refuses to serve a whole plane for a tile, so the tests fail if a tile is
+ever cut from a downloaded plane again.
 """
 
 import sys
@@ -19,8 +19,9 @@ sys.modules.setdefault("omero", MagicMock())
 sys.modules.setdefault("omero.gateway", MagicMock())
 sys.modules.setdefault("omero.model", MagicMock())
 
-from aliby.io.omero import load_tiles_lazy  # noqa: E402
+from aliby.io.omero import Image, load_tiles_lazy  # noqa: E402
 from aliby.tile.tiler import Tiler  # noqa: E402
+from tiler import OmeroSource  # noqa: E402
 
 T, C, Z, Y, X = 3, 2, 2, 64, 64
 TILE_SIZE = 32
@@ -32,6 +33,7 @@ class FakePixels:
     def __init__(self, data):
         self.data = data
         self.requests = []
+        self.planes_allowed = False
 
     def getPixelsType(self):
         return SimpleNamespace(getValue=lambda: "uint16")
@@ -43,8 +45,11 @@ class FakePixels:
         self.requests.append((z, c, t, tile))
         return self.data[t, c, z, y : y + height, x : x + width].copy()
 
-    def getPlane(self, *args):
-        raise AssertionError("a whole plane was downloaded")
+    def getPlane(self, z, c, t):
+        if not self.planes_allowed:
+            raise AssertionError("a whole plane was downloaded")
+        self.requests.append((z, c, t))
+        return self.data[t, c, z].copy()
 
 
 class FakeImage:
@@ -73,6 +78,34 @@ class FakeImage:
     def getPrimaryPixels(self):
         return self.pixels
 
+    def getName(self):
+        return "pos_001"
+
+    def getChannelLabels(self):
+        return ["Brightfield", "cy5"]
+
+    def getPixelSizeX(self, units=None):
+        return SimpleNamespace(getValue=lambda: 0.182)
+
+
+class FakeGateway:
+    """Stand in for a BlitzGateway holding one image, id 5."""
+
+    def __init__(self, image):
+        self.image = image
+        self.closed = False
+
+    def getObject(self, kind, object_id):
+        return self.image if (kind, object_id) == ("Image", 5) else None
+
+    def close(self):
+        self.closed = True
+
+
+def source_of(image):
+    """Return a tiler source reading the fake image."""
+    return OmeroSource(5, connect=lambda: FakeGateway(image))
+
 
 def tiler_tile(image, slices, tp, c, z):
     """Return the tile the tiler cuts from the whole plane."""
@@ -84,7 +117,7 @@ def tiler_tile(image, slices, tp, c, z):
 def test_interior_tile_requests_only_its_region():
     image = FakeImage()
     slices = (slice(10, 42), slice(20, 52))
-    (tile,) = load_tiles_lazy(image, [slices], [1], [1], [0])
+    (tile,) = load_tiles_lazy(source_of(image), [slices], [1], [1], [0])
     result = tile.compute()
     np.testing.assert_array_equal(result, image.data[1, 1, 0, 10:42, 20:52])
     assert image.pixels.requests == [(0, 1, 1, (20, 10, 32, 32))]
@@ -101,7 +134,7 @@ def test_interior_tile_requests_only_its_region():
 )
 def test_edge_tile_is_padded_as_the_tiler_pads(slices):
     image = FakeImage()
-    (tile,) = load_tiles_lazy(image, [slices], [2], [0], [1])
+    (tile,) = load_tiles_lazy(source_of(image), [slices], [2], [0], [1])
     result = tile.compute()
     assert result.shape == (TILE_SIZE, TILE_SIZE)
     np.testing.assert_array_equal(
@@ -114,7 +147,7 @@ def test_tile_mostly_outside_is_nan_and_requests_nothing():
     image = FakeImage()
     # 20 px outside of a 32 px tile is more than a quarter
     slices = (slice(-20, 12), slice(16, 48))
-    (tile,) = load_tiles_lazy(image, [slices], [0], [0], [0])
+    (tile,) = load_tiles_lazy(source_of(image), [slices], [0], [0], [0])
     result = tile.compute()
     assert result.shape == (TILE_SIZE, TILE_SIZE)
     assert np.isnan(result).all()
@@ -125,7 +158,7 @@ def test_tiles_are_ordered_by_time_then_channel_then_z():
     image = FakeImage()
     slices = [(slice(0, 32), slice(0, 32)), (slice(8, 40), slice(16, 48))]
     tps, channels, zs = [0, 2], [1, 0], [0, 1]
-    tiles = load_tiles_lazy(image, slices, tps, channels, zs)
+    tiles = load_tiles_lazy(source_of(image), slices, tps, channels, zs)
     expected = [
         image.data[tp, c, z][tile_slice]
         for tp, tile_slice in zip(tps, slices)
@@ -139,12 +172,52 @@ def test_tiles_are_ordered_by_time_then_channel_then_z():
 
 def test_nothing_is_requested_until_computed():
     image = FakeImage()
-    load_tiles_lazy(image, [(slice(0, 32), slice(0, 32))], [0], [0], [0, 1])
+    load_tiles_lazy(
+        source_of(image), [(slice(0, 32), slice(0, 32))], [0], [0], [0, 1]
+    )
     assert image.pixels.requests == []
 
 
 def test_one_tile_location_is_needed_for_each_time_point():
     with pytest.raises(ValueError):
         load_tiles_lazy(
-            FakeImage(), [(slice(0, 32), slice(0, 32))], [0, 1], [0], [0]
+            source_of(FakeImage()),
+            [(slice(0, 32), slice(0, 32))],
+            [0, 1],
+            [0],
+            [0],
         )
+
+
+def test_an_image_is_read_through_one_login():
+    image = FakeImage()
+    image.pixels.planes_allowed = True
+    gateways = []
+
+    def connect():
+        gateways.append(FakeGateway(image))
+        return gateways[-1]
+
+    with Image(5, connect=connect) as omero_image:
+        assert omero_image.name == "pos_001"
+        assert omero_image.metadata == {
+            "size_x": X,
+            "size_y": Y,
+            "size_z": Z,
+            "size_c": C,
+            "size_t": T,
+            "channels": ["Brightfield", "cy5"],
+            "name": "pos_001",
+        }
+        assert omero_image.pixel_size_um == 0.182
+        data = omero_image.data
+        assert isinstance(data, da.Array)
+        assert data.chunksize == (1, 1, 1, Y, X)
+        np.testing.assert_array_equal(
+            data[2, 1, 0].compute(), image.data[2, 1, 0]
+        )
+        (tile,) = omero_image.tiles([(slice(0, 32), slice(0, 32))], 1, 0, 1)
+        np.testing.assert_array_equal(
+            tile.compute(), image.data[1, 0, 1, :32, :32]
+        )
+    assert len(gateways) == 1 and gateways[0].closed

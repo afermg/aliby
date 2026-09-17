@@ -10,25 +10,19 @@ import dask.array as da
 import numpy as np
 from agora.io.bridge import BridgeH5
 from agora.utils.indexing import wrap_int
-from aliby.tile.tiles import tile_in_image, too_far_outside
 from dask import delayed
+from tiler import (
+    ImageSource,
+    OmeroSource,
+    as_dask,
+    read_tile,
+    tile_in_image,
+    too_far_outside,
+)
 from yaml import safe_load
 
 import omero
-from omero.gateway import BlitzGateway, ImageWrapper
-from omero.model import enums as omero_enums
-
-# convert OMERO definitions into numpy types
-PIXEL_TYPES = {
-    omero_enums.PixelsTypeint8: np.int8,
-    omero_enums.PixelsTypeuint8: np.uint8,
-    omero_enums.PixelsTypeint16: np.int16,
-    omero_enums.PixelsTypeuint16: np.uint16,
-    omero_enums.PixelsTypeint32: np.int32,
-    omero_enums.PixelsTypeuint32: np.uint32,
-    omero_enums.PixelsTypefloat: np.float32,
-    omero_enums.PixelsTypedouble: np.float64,
-}
+from omero.gateway import BlitzGateway
 
 
 class BridgeOmero:
@@ -346,19 +340,36 @@ class Dataset(BridgeOmero):
 
 
 class Image(BridgeOmero):
-    """Load images from OMERO and their data and metadata."""
+    """
+    Load images from OMERO and their data and metadata.
 
-    def __init__(self, image_id: int, **server_info):
+    The pixels are read by tiler's OmeroSource, which holds the login for
+    the with block, retries a request whose connection fails, and asks the
+    server for only the region a tile needs.
+    """
+
+    def __init__(self, image_id: int, connect=None, **server_info):
         """
         Connect to the OMERO server.
 
         Parameters
         ----------
         image_id: integer
+        connect: callable, optional
+            Returns a connected gateway, instead of logging in.
         server_info: dictionary
             Specifies the host, username, and password as strings
         """
-        super().__init__(ome_id=image_id, **server_info)
+        if connect is None:
+            super().__init__(ome_id=image_id, **server_info)
+        else:
+            self.conn = None
+            self.host = server_info.get("host")
+            self.username = server_info.get("username")
+            self.password = server_info.get("password")
+            self.ome_id = image_id
+        self.connect = connect
+        self.source = None
 
     @classmethod
     def from_h5(
@@ -379,15 +390,45 @@ class Image(BridgeOmero):
         image_id = bridge.meta_h5["image_id"]
         return cls(image_id, **cls.server_info_from_h5(filepath))
 
+    def create_gate(self):
+        """Log in to OMERO and open the image."""
+        self.source = OmeroSource(
+            self.ome_id,
+            host=self.host,
+            username=self.username,
+            password=self.password,
+            connect=self.connect,
+        )
+        self.conn = self.source.gateway
+
+    def destroy_gate(self) -> bool:
+        """Log out of OMERO."""
+        if self.source is not None:
+            self.source.close()
+        self.conn = None
+        return True
+
+    @property
+    def ome_class(self):
+        """Return OMERO's wrapper of the image."""
+        if self.source is None:
+            raise ConnectionError("No Blitz connection or valid OMERO ID.")
+        return self.source.image
+
     @property
     def name(self):
         """Get name."""
-        return self.ome_class.getName()
+        return self.source.name
 
     @property
     def data(self):
-        """Load image data as a 5D dask array - TCXYZ."""
-        return load_data_lazy(self.ome_class)
+        """Load image data as a 5D dask array - TCZYX."""
+        return as_dask(self.source)
+
+    @property
+    def pixel_size_um(self) -> float | None:
+        """Return the pixel size OMERO records, in micrometres, or None."""
+        return self.source.pixel_size_um
 
     @property
     def metadata(self):
@@ -397,15 +438,16 @@ class Image(BridgeOmero):
         Get image size, number of time points, labels of channels,
         and image name.
         """
-        meta = dict()
-        meta["size_x"] = self.ome_class.getSizeX()
-        meta["size_y"] = self.ome_class.getSizeY()
-        meta["size_z"] = self.ome_class.getSizeZ()
-        meta["size_c"] = self.ome_class.getSizeC()
-        meta["size_t"] = self.ome_class.getSizeT()
-        meta["channels"] = self.ome_class.getChannelLabels()
-        meta["name"] = self.ome_class.getName()
-        return meta
+        size_t, size_c, size_z, size_y, size_x = self.source.shape
+        return {
+            "size_x": size_x,
+            "size_y": size_y,
+            "size_z": size_z,
+            "size_c": size_c,
+            "size_t": size_t,
+            "channels": self.source.channels,
+            "name": self.source.name,
+        }
 
     def tiles(self, tile_slices, tps, channel_indices, zs):
         """Get tiles as dask arrays."""
@@ -415,7 +457,7 @@ class Image(BridgeOmero):
             wrap_int(zs),
         )
         return load_tiles_lazy(
-            image=self.ome_class,
+            source=self.source,
             tile_slices=tile_slices,
             tps=tps,
             channel_indices=channel_indices,
@@ -423,67 +465,27 @@ class Image(BridgeOmero):
         )
 
 
-@delayed
-def load_plane(pixels, z, c, tp):
-    """Load a single plane lazily."""
-    return pixels.getPlane(z, c, tp)
-
-
-def load_data_lazy(image: ImageWrapper) -> da.Array:
-    """Load a 5D dask array (T, C, Z, Y, X) from OMERO image."""
-    nt, nc, nz, ny, nx = (
-        image.getSizeT(),
-        image.getSizeC(),
-        image.getSizeZ(),
-        image.getSizeY(),
-        image.getSizeX(),
-    )
-    # get dtype
-    pixels = image.getPrimaryPixels()
-    omero_type = pixels.getPixelsType().getValue()
-    dtype = PIXEL_TYPES.get(omero_type, np.uint16)
-    # create delayed objects for each plane
-    delayed_planes = []
-    for tp in range(nt):
-        for c in range(nc):
-            for z in range(nz):
-                delayed_planes.append(load_plane(pixels, z, c, tp))
-    arrays = [
-        da.from_delayed(delayed_plane, shape=(ny, nx), dtype=dtype)
-        for delayed_plane in delayed_planes
-    ]
-    dask_array = da.stack(arrays).reshape(nt, nc, nz, ny, nx)
-    return dask_array
-
-
-@delayed
-def load_tile(pixels, z, c, tp, region):
-    """Load one region, (x, y, width, height), of a plane lazily."""
-    return pixels.getTile(z, c, tp, tile=region)
-
-
 def load_tiles_lazy(
-    image: ImageWrapper,
+    source: ImageSource,
     tile_slices: Iterable[tuple[slice, slice]],
     tps: Iterable[int],
     channel_indices: Iterable[int],
     zs: Iterable[int],
 ) -> list[da.Array]:
     """
-    Load tiles from an OMERO image as dask arrays.
+    Load tiles as dask arrays, reading only each tile's region.
 
-    Ask the server for only each tile's region. Tiles were once cut from a
-    lazily loaded plane, but a slice of a lazy plane still downloads the
-    whole plane when computed: over 100 times the data for a 117-pixel tile
-    of a 1200-pixel image. A tile extending past the image's edge is cut and
-    padded by the rule the tiler uses, ``tile_in_image`` and
-    ``too_far_outside``, so that a tile is the same whichever way it is
-    loaded; one mostly outside the image is NaN and costs no request.
+    Tiles were once cut from a lazily loaded plane, but a slice of a lazy
+    plane still downloads the whole plane when computed: over 100 times the
+    data for a 117-pixel tile of a 1200-pixel image. A tile is read by
+    tiler's ``read_tile``, so it is the tile the Tiler cuts from the whole
+    plane, padding included; one mostly outside the image is NaN and costs
+    no request.
 
     Parameters
     ----------
-    image: ImageWrapper
-        The OMERO image.
+    source: tiler.ImageSource
+        The image, such as an OmeroSource.
     tile_slices: list of tuples of two slices
         Each tile's y- and x-ranges, rows first, one for each time point.
     tps: list of int
@@ -500,30 +502,19 @@ def load_tiles_lazy(
     """
     if len(tile_slices) != len(tps):
         raise ValueError("For each time point, you need a tile location.")
-    shape_yx = (image.getSizeY(), image.getSizeX())
-    pixels = image.getPrimaryPixels()
-    dtype = PIXEL_TYPES.get(pixels.getPixelsType().getValue(), np.uint16)
     tiles = []
     for tp, tile_slice in zip(tps, tile_slices):
-        (y, x), padding = tile_in_image(tile_slice, shape_yx)
         size = tile_slice[0].stop - tile_slice[0].start
+        _, padding = tile_in_image(tile_slice, source.shape[-2:])
         outside = too_far_outside(padding, size)
-        region = (x.start, y.start, x.stop - x.start, y.stop - y.start)
+        dtype = np.float64 if outside else source.dtype
         for c in channel_indices:
             for z in zs:
-                if outside:
-                    # too much of the tile is outside of the image
-                    tile = da.full(
-                        (size, tile_slice[1].stop - tile_slice[1].start),
-                        np.nan,
-                    )
-                else:
-                    tile = da.from_delayed(
-                        load_tile(pixels, z, c, tp, region),
-                        shape=(region[3], region[2]),
+                tiles.append(
+                    da.from_delayed(
+                        delayed(read_tile)(source, tile_slice, tp, c, z),
+                        shape=(size, tile_slice[1].stop - tile_slice[1].start),
                         dtype=dtype,
                     )
-                    if padding.any():
-                        tile = da.pad(tile, padding.tolist(), "edge")
-                tiles.append(tile)
+                )
     return tiles

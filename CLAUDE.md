@@ -96,14 +96,29 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading). `Cells.at_time` returns **one mask per cell the file records**, an empty edge mask included: its masks are matched to traps by position, and the extractor (`get_outlines`) matches them to `labels_at_time` by position again, so dropping a cell from one list and keeping it in the other — as it did until `tests/test_cells.py` was written — gave every later cell in that time point the trap and the label of the cell before it
 - `agora.signal`: Gets extracted properties for all cells/timepoints from HDF5 (used in postprocessing)
 - `agora.bridge`: Interface layer for HDF5 file operations
-- `aliby.io.omero.Image.tiles` (used by wela's `GrabTiles.get_tiles`) asks
-  OMERO for only each tile's region. It once cut tiles from lazily loaded
-  planes, but a slice of a lazy plane still downloads the whole plane — over
-  100 times the data for a 117-pixel tile of a 1200-pixel image. A tile past
-  the image's edge is cut and padded by `tile_in_image` and
-  `too_far_outside` in `aliby.tile.tiles`, the rule
-  `Tiler.get_tile_and_pad` uses, so a tile is the same whichever way it is
-  loaded
+- `aliby.io.image` and `aliby.io.omero` read pixels through tiler's sources
+  (`ZarrSource`, `TiffFolderSource`, `TiffSource`, `OmeroSource`), shared
+  with wela, bairn and the curation GUI; aliby adds only the microscope's
+  log files. `dispatch_image` and the Image classes keep their API. Change
+  how a format is read in tiler, not here. `tests/test_image_golden.py` pins
+  the readers, and running the regression pipeline on `test26643_tiff`
+  reproduces `golden_df.pkl` exactly
+  - `ImageDir` passes the log's channels to `TiffFolderSource`, which reads
+    each channel from the files that name it. It used to stack the files in
+    sorted order and name them in the log's, swapping channels whose order
+    is not alphabetical (Brightfield, GFP, mCherry, cy5 in experiments 2801
+    and 2809, which ran from OMERO and are unaffected)
+  - The OMERO `Image` holds one tiler `OmeroSource` for its with block,
+    which retries a request whose connection fails. `Image.tiles` (used by
+    wela's `GrabTiles.get_tiles`) asks OMERO for only each tile's region: a
+    slice of a lazy plane still downloads the whole plane, over 100 times
+    the data for a 117-pixel tile of a 1200-pixel image. `tiler.read_tile`
+    pads it by the rule `cut_tile` uses, so a tile is the same whichever way
+    it is loaded
+  - A local image's with block closes nothing, because wela builds a Tiler
+    inside one and reads from it afterwards
+  - omero is imported only when OMERO data is opened, so local data and the
+    pipeline need no omero-py
 - `postprocessor.grouper`: Concatenates signals across positions to generate experiment-wide dataframes
 
 ### Dependencies and Integration
