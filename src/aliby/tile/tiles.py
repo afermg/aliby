@@ -5,29 +5,11 @@ import typing as t
 import h5py
 import numpy as np
 import sooth
-from sooth import tile_shape
+from sooth import stored_tile_size, tile_shape
 
 # the rule for cutting and padding a tile lives in tiler; the OMERO loader
 # imports it from here
 from tiler.crop import tile_in_image, too_far_outside  # noqa: F401
-
-
-def aliby_tile_size(size) -> int | np.ndarray | None:
-    """
-    Return a tile's size as an h5 attribute records it.
-
-    A square tile is written as the one number every h5 already holds, so a
-    reader that casts it is unaffected; only a rectangle is written as its
-    height and width. A size nobody set stays unset.
-    """
-    if size is None:
-        return None
-    height, width = tile_shape(size)
-    return (
-        height
-        if height == width
-        else np.asarray([height, width], dtype=int)
-    )
 
 
 class Tile:
@@ -196,7 +178,7 @@ class TileLocations:
         res = dict()
         if tp == first_tp:
             res["trap_locations"] = self.initial_location
-            res["attrs/tile_size"] = aliby_tile_size(self.tile_size)
+            res["attrs/tile_size"] = stored_tile_size(self.tile_size)
             res["attrs/max_size"] = self.max_size
             if self.image_size_yx is not None:
                 res["attrs/image_size"] = np.asarray(
