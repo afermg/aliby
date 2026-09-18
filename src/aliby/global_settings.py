@@ -15,9 +15,12 @@ class GlobalSettings:
             "ntps_to_eval": 5,
         }
 
-        # microscope and camera properties
+        # microscope and camera properties. There is no pixel size here:
+        # aliby measures in pixels, and where a physical size is wanted the
+        # data records it -- tiler's readers give the image's own, and None
+        # when it records none, so a default cannot apply itself silently to
+        # whatever microscope took the images.
         self.imaging_specifications = {
-            "pixel_size": 0.236,
             "z_size": 0.6,
             "z_spacing": 0.6,
             "magnification": 60,
