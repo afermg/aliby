@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
+import re
+import shutil
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -196,41 +200,265 @@ def collect_live_roi_state(tiler: Any, timepoints: int) -> dict[str, np.ndarray]
     }
 
 
-def _released_artifact_hashes(output_path: Path, pipeline_name: str) -> dict[str, str]:
-    candidates: set[Path] = set()
-    steps_dir = output_path / "steps" / pipeline_name
-    if steps_dir.is_dir():
-        for segment_dir in steps_dir.iterdir():
-            if segment_dir.is_dir() and segment_dir.name.startswith("segment"):
-                candidates.update(
-                    path
-                    for path in segment_dir.rglob("*")
-                    if path.is_file() and path.suffix in {".npz", ".json"}
-                )
-    profile = output_path / "profiles" / f"{pipeline_name}.parquet"
-    if profile.is_file():
-        candidates.add(profile)
+SAFE_COMPONENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+
+
+def _lexists(path: Path) -> bool:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def validate_safe_component(value: Any, name: str) -> str:
+    """Require one non-dot path component with a conservative spelling."""
+    if not isinstance(value, str) or not SAFE_COMPONENT.fullmatch(value):
+        raise ValueError(f"{name} must be one nonempty safe path component.")
+    if value in {".", ".."}:
+        raise ValueError(f"{name} must not be a dot path component.")
+    return value
+
+
+def provenance_enabled(pipeline: dict) -> bool:
+    value = pipeline.get("publish_roi_provenance", False)
+    if not isinstance(value, bool):
+        raise TypeError("publish_roi_provenance must be boolean.")
+    return value
+
+
+def baby_segment_steps(pipeline: dict, *, validate_names: bool = True) -> list[str]:
+    result = []
+    for step_name, parameters in pipeline.get("steps", {}).items():
+        if validate_names:
+            validate_safe_component(step_name, "pipeline step name")
+        if step_name.startswith("segment"):
+            kind = parameters.get("segmenter_kwargs", {}).get("kind", "")
+            if isinstance(kind, str) and kind.endswith("baby"):
+                result.append(step_name)
+    return result
+
+
+def _require_directory(path: Path, name: str, *, required: bool = True) -> None:
+    try:
+        details = path.lstat()
+    except FileNotFoundError:
+        if required:
+            raise FileNotFoundError(f"Required {name} does not exist: {path}")
+        return
+    if stat.S_ISLNK(details.st_mode):
+        raise ValueError(f"{name} must not be a symlink: {path}")
+    if not stat.S_ISDIR(details.st_mode):
+        raise ValueError(f"{name} must be a directory: {path}")
+
+
+def _require_regular_file(path: Path, name: str) -> None:
+    try:
+        details = path.lstat()
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"Required {name} does not exist: {path}") from error
+    if stat.S_ISLNK(details.st_mode):
+        raise ValueError(f"{name} must not be a symlink: {path}")
+    if not stat.S_ISREG(details.st_mode):
+        raise ValueError(f"{name} must be a regular file: {path}")
+
+
+def _validate_existing_regular_file(path: Path, name: str) -> None:
+    try:
+        details = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(details.st_mode):
+        raise ValueError(f"{name} must not be a symlink: {path}")
+    if not stat.S_ISREG(details.st_mode):
+        raise ValueError(f"{name} must be a regular file: {path}")
+
+
+def _enforce_containment(output_path: Path, candidate: Path) -> None:
+    root = output_path.absolute()
+    path = candidate.absolute()
+    if os.path.commonpath((root, path)) != str(root):
+        raise ValueError(f"Provenance path escapes output root: {candidate}")
+
+
+def _sha256_nofollow(path: Path) -> str:
+    before = path.lstat()
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ValueError(f"Artifact must be a non-symlink regular file: {path}")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise RuntimeError(f"Artifact changed while opening it: {path}")
+        digest = hashlib.sha256()
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        after = os.fstat(descriptor)
+        if (after.st_size, after.st_mtime_ns) != (
+            before.st_size,
+            before.st_mtime_ns,
+        ):
+            raise RuntimeError(f"Artifact changed while hashing it: {path}")
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def validate_provenance_preflight(
+    pipeline: dict, output_path: str | Path, pipeline_name: str
+) -> None:
+    """Fail before pipeline output mutation when opt-in publication is unsafe."""
+    if not provenance_enabled(pipeline):
+        return
+    pipeline_name = validate_safe_component(pipeline_name, "pipeline_name")
+    if not isinstance(pipeline.get("run_binding"), dict) or not pipeline["run_binding"]:
+        raise ValueError("run_binding must be a nonempty dictionary for publication.")
+    _json_safe(pipeline["run_binding"])
+
+    segments = baby_segment_steps(pipeline)
+    if not segments:
+        raise ValueError("ROI provenance requires at least one BABY segment step.")
+    saved = pipeline.get("save") or ()
+    missing = [step for step in segments if step not in saved]
+    if missing:
+        raise ValueError(f"BABY segment steps must be saved: {missing}")
+
+    timepoints = pipeline.get("ntps", 1)
+    if (
+        not isinstance(timepoints, int)
+        or isinstance(timepoints, bool)
+        or timepoints < 1
+    ):
+        raise ValueError("ntps must be a positive integer for publication.")
+
+    output_path = Path(output_path)
+    _require_directory(output_path, "output root", required=False)
+    tiling_dir = output_path / "tiling"
+    steps_dir = output_path / "steps"
+    site_steps_dir = steps_dir / pipeline_name
+    profiles_dir = output_path / "profiles"
     tracking_dir = output_path / "tracking"
-    if tracking_dir.is_dir():
-        candidates.update(
-            path
-            for path in tracking_dir.glob(f"{pipeline_name}_*.parquet")
-            if path.is_file()
+    for path, name in (
+        (tiling_dir, "tiling directory"),
+        (steps_dir, "steps directory"),
+        (site_steps_dir, "site steps directory"),
+        (profiles_dir, "profiles directory"),
+        (tracking_dir, "tracking directory"),
+    ):
+        _enforce_containment(output_path, path)
+        _require_directory(path, name, required=False)
+    for step_name in segments:
+        segment_dir = site_steps_dir / step_name
+        _enforce_containment(output_path, segment_dir)
+        _require_directory(
+            segment_dir, f"segment directory {step_name}", required=False
         )
+        for tp in range(timepoints):
+            for filename in (f"{tp:04d}.npz", f"{tp:04d}_meta.json"):
+                artifact = segment_dir / filename
+                _enforce_containment(output_path, artifact)
+                _validate_existing_regular_file(artifact, "released segment artifact")
+    for artifact in (
+        profiles_dir / f"{pipeline_name}.parquet",
+        *(tracking_dir / f"{pipeline_name}_{step}.parquet" for step in segments),
+    ):
+        _enforce_containment(output_path, artifact)
+        _validate_existing_regular_file(artifact, "released table artifact")
+
+    final_dir = tiling_dir / pipeline_name
+    _enforce_containment(output_path, final_dir)
+    if _lexists(final_dir):
+        details = final_dir.lstat()
+        if stat.S_ISLNK(details.st_mode):
+            raise ValueError(
+                f"final provenance destination must not be a symlink: {final_dir}"
+            )
+        raise FileExistsError(
+            f"ROI provenance destination already exists for {pipeline_name!r}."
+        )
+
+
+def _expected_artifacts(
+    pipeline: dict, output_path: Path, pipeline_name: str
+) -> list[Path]:
+    timepoints = pipeline.get("ntps", 1)
+    if (
+        not isinstance(timepoints, int)
+        or isinstance(timepoints, bool)
+        or timepoints < 1
+    ):
+        raise ValueError("ntps must be a positive integer for publication.")
+    segments = baby_segment_steps(pipeline)
+
+    _require_directory(output_path, "output root")
+    steps_dir = output_path / "steps"
+    site_steps_dir = steps_dir / pipeline_name
+    profiles_dir = output_path / "profiles"
+    tracking_dir = output_path / "tracking"
+    for path, name in (
+        (steps_dir, "steps directory"),
+        (site_steps_dir, "site steps directory"),
+        (profiles_dir, "profiles directory"),
+        (tracking_dir, "tracking directory"),
+    ):
+        _enforce_containment(output_path, path)
+        _require_directory(path, name)
+
+    expected = [profiles_dir / f"{pipeline_name}.parquet"]
+    expected_tracking_names = {
+        f"{pipeline_name}_{step_name}.parquet" for step_name in segments
+    }
+    actual_tracking_names = {
+        entry.name
+        for entry in os.scandir(tracking_dir)
+        if entry.name.startswith(f"{pipeline_name}_")
+    }
+    if actual_tracking_names != expected_tracking_names:
+        raise ValueError(
+            "Tracking artifact inventory mismatch: "
+            f"expected {sorted(expected_tracking_names)}, got {sorted(actual_tracking_names)}."
+        )
+    expected.extend(tracking_dir / name for name in sorted(expected_tracking_names))
+
+    for step_name in segments:
+        segment_dir = site_steps_dir / step_name
+        _enforce_containment(output_path, segment_dir)
+        _require_directory(segment_dir, f"segment directory {step_name}")
+        expected_names = {
+            name
+            for tp in range(timepoints)
+            for name in (f"{tp:04d}.npz", f"{tp:04d}_meta.json")
+        }
+        actual_names = {entry.name for entry in os.scandir(segment_dir)}
+        if actual_names != expected_names:
+            raise ValueError(
+                f"Segment artifact inventory mismatch for {step_name}: "
+                f"expected {sorted(expected_names)}, got {sorted(actual_names)}."
+            )
+        expected.extend(segment_dir / name for name in sorted(expected_names))
+
+    for path in expected:
+        _enforce_containment(output_path, path)
+        _require_regular_file(path, "released artifact")
+    return sorted(expected, key=lambda path: path.relative_to(output_path).as_posix())
+
+
+def _released_artifact_hashes(
+    pipeline: dict, output_path: Path, pipeline_name: str
+) -> dict[str, str]:
     return {
-        path.relative_to(output_path).as_posix(): _sha256(path)
-        for path in sorted(
-            candidates, key=lambda item: item.relative_to(output_path).as_posix()
-        )
+        path.relative_to(output_path).as_posix(): _sha256_nofollow(path)
+        for path in _expected_artifacts(pipeline, output_path, pipeline_name)
     }
 
 
-def _temporary_path(directory: Path, suffix: str) -> Path:
-    descriptor, name = tempfile.mkstemp(
-        prefix=".roi-provenance-", suffix=suffix, dir=directory
-    )
-    os.close(descriptor)
-    return Path(name)
+def _write_fsynced(path: Path, content: bytes) -> None:
+    with path.open("xb") as stream:
+        stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def write_roi_provenance(
@@ -239,38 +467,42 @@ def write_roi_provenance(
     output_path: str | Path,
     pipeline_name: str,
 ) -> tuple[Path, Path]:
-    """Atomically publish non-overwriting NPZ and JSON ROI provenance files."""
+    """Publish a validated immutable state directory with one atomic rename."""
+    if not provenance_enabled(pipeline):
+        raise ValueError("ROI provenance publication is not enabled.")
+    validate_provenance_preflight(pipeline, output_path, pipeline_name)
+    pipeline_name = validate_safe_component(pipeline_name, "pipeline_name")
     output_path = Path(output_path)
-    output_dir = output_path / "tiling"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    npz_path = output_dir / f"{pipeline_name}.npz"
-    json_path = output_dir / f"{pipeline_name}.json"
-    if npz_path.exists() or json_path.exists():
-        raise FileExistsError(
-            f"ROI provenance destination already exists for {pipeline_name!r}."
-        )
-
     timepoints = pipeline.get("ntps", 1)
     arrays = collect_live_roi_state(tiler, timepoints)
-    run_binding = _json_safe(pipeline.get("run_binding", {}))
+    run_binding = _json_safe(pipeline["run_binding"])
     roi_source = getattr(tiler.tile_locs, "roi_source", None)
     if not isinstance(roi_source, str) or not roi_source:
         raise ValueError("Live tile locations have no valid roi_source.")
+    artifact_hashes = _released_artifact_hashes(pipeline, output_path, pipeline_name)
 
-    npz_temp = _temporary_path(output_dir, ".npz")
-    json_temp = _temporary_path(output_dir, ".json")
-    linked_npz = False
-    linked_json = False
+    tiling_dir = output_path / "tiling"
     try:
-        with npz_temp.open("wb") as stream:
+        tiling_dir.mkdir(mode=0o755)
+    except FileExistsError:
+        pass
+    _require_directory(tiling_dir, "tiling directory")
+    final_dir = tiling_dir / pipeline_name
+    temp_dir = Path(
+        tempfile.mkdtemp(prefix=f".{pipeline_name}.roi-provenance-", dir=tiling_dir)
+    )
+    state_path = temp_dir / "state.npz"
+    manifest_path = temp_dir / "manifest.json"
+    try:
+        with state_path.open("xb") as stream:
             np.savez_compressed(stream, **arrays)
             stream.flush()
             os.fsync(stream.fileno())
-        npz_sha256 = _sha256(npz_temp)
+        npz_sha256 = _sha256(state_path)
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "site": pipeline_name,
-            "npz": {"basename": npz_path.name, "sha256": npz_sha256},
+            "npz": {"basename": "state.npz", "sha256": npz_sha256},
             "coordinate_convention": {
                 "axes": "YX",
                 "index_base": 0,
@@ -301,32 +533,45 @@ def write_roi_provenance(
                 ),
             },
             "run_binding": run_binding,
-            "artifacts_sha256": _released_artifact_hashes(output_path, pipeline_name),
+            "artifact_scope": {
+                "included": "BABY segment arrays/metadata, profiles, and BABY tracking",
+                "excluded": "global outputs; this hook runs before global steps",
+            },
+            "artifacts_sha256": artifact_hashes,
         }
-        encoded = (
-            json.dumps(manifest, sort_keys=True, indent=2, allow_nan=False) + "\n"
-        ).encode()
-        with json_temp.open("wb") as stream:
-            stream.write(encoded)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_fsynced(
+            manifest_path,
+            (
+                json.dumps(manifest, sort_keys=True, indent=2, allow_nan=False) + "\n"
+            ).encode(),
+        )
+        os.chmod(state_path, 0o444)
+        os.chmod(manifest_path, 0o444)
+        directory_fd = os.open(temp_dir, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        os.chmod(temp_dir, 0o555)
 
-        # Hard-link publication is atomic and fails rather than replacing an
-        # independently-created destination. Temps are removed below.
-        os.link(npz_temp, npz_path)
-        linked_npz = True
-        os.link(json_temp, json_path)
-        linked_json = True
-        os.chmod(npz_path, 0o444)
-        os.chmod(json_path, 0o444)
+        # Serialise cooperating publishers on the parent directory. The final
+        # existence check plus rename gives a single all-or-none visibility point.
+        parent_fd = os.open(tiling_dir, os.O_RDONLY)
+        try:
+            fcntl.flock(parent_fd, fcntl.LOCK_EX)
+            if _lexists(final_dir):
+                raise FileExistsError(
+                    f"ROI provenance destination already exists for {pipeline_name!r}."
+                )
+            os.rename(temp_dir, final_dir)
+            os.fsync(parent_fd)
+        finally:
+            fcntl.flock(parent_fd, fcntl.LOCK_UN)
+            os.close(parent_fd)
     except Exception:
-        if linked_json:
-            json_path.unlink(missing_ok=True)
-        if linked_npz:
-            npz_path.unlink(missing_ok=True)
+        if _lexists(temp_dir):
+            os.chmod(temp_dir, 0o755)
+            shutil.rmtree(temp_dir)
         raise
-    finally:
-        npz_temp.unlink(missing_ok=True)
-        json_temp.unlink(missing_ok=True)
 
-    return npz_path, json_path
+    return final_dir / "state.npz", final_dir / "manifest.json"

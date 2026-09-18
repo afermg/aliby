@@ -9,14 +9,18 @@ post-run via the ``_save_baby_tracking_lineage`` post-state hook.
 Still supports Nahual embedders alongside BABY segmentation.
 """
 
-from functools import partial
 from pathlib import Path
 from typing import Callable
 
 import pyarrow
 from loguru import logger
 
-from aliby.io.roi_provenance import write_roi_provenance
+from aliby.io.roi_provenance import (
+    baby_segment_steps,
+    provenance_enabled,
+    validate_provenance_preflight,
+    write_roi_provenance,
+)
 from aliby.pipe_core import (
     _init_extract,
     _init_nahual_embed,
@@ -96,13 +100,34 @@ def _save_baby_tracking_lineage(
     state: dict, pipeline: dict, output_path: Path, pipeline_name: str
 ) -> None:
     """Extract and save BABY tracking/lineage from segment metadata across timepoints."""
-    for step_name in pipeline["steps"]:
-        if not step_name.startswith("segment"):
-            continue
-        seg_kwargs = pipeline["steps"][step_name].get("segmenter_kwargs", {})
-        if not seg_kwargs.get("kind", "").endswith("baby"):
-            continue
+    publish = provenance_enabled(pipeline)
+    segment_steps = baby_segment_steps(pipeline, validate_names=publish)
+    tiler = None
+    if publish:
+        tilers = [
+            step
+            for step_name, step in state.get("fn", {}).items()
+            if step_name.startswith("tile")
+        ]
+        if len(tilers) != 1:
+            raise ValueError(
+                "BABY ROI provenance requires exactly one live tile step; "
+                f"found {len(tilers)}."
+            )
+        tiler = tilers[0]
+        timepoints = pipeline.get("ntps", 1)
+        for step_name in segment_steps:
+            step_data = state.get("data", {}).get(step_name, [])
+            if len(step_data) != timepoints or any(
+                not isinstance(result, dict) or "metadata" not in result
+                for result in step_data
+            ):
+                raise ValueError(
+                    f"BABY segment state {step_name!r} must contain exactly "
+                    f"{timepoints} metadata-bearing results."
+                )
 
+    for step_name in segment_steps:
         step_data = state["data"].get(step_name, [])
         baby_meta_history = [
             tp_result["metadata"]
@@ -122,31 +147,46 @@ def _save_baby_tracking_lineage(
         lineage = accumulate_lineage(baby_meta_history)
         table = baby_tracking_to_table(tracking, lineage)
 
-        if len(table):
-            tracking_dir = output_path / "tracking"
-            tracking_dir.mkdir(parents=True, exist_ok=True)
-            out_file = tracking_dir / f"{pipeline_name}_{step_name}.parquet"
-            pyarrow.parquet.write_table(table, out_file, compression="zstd")
-            logger.info(f"Saved baby tracking/lineage to {out_file}")
+        if not len(table):
+            if publish:
+                raise ValueError(
+                    f"BABY tracking for {step_name!r} is empty; provenance requires "
+                    "a released tracking artifact."
+                )
+            continue
+        tracking_dir = output_path / "tracking"
+        tracking_dir.mkdir(parents=True, exist_ok=True)
+        out_file = tracking_dir / f"{pipeline_name}_{step_name}.parquet"
+        pyarrow.parquet.write_table(table, out_file, compression="zstd")
+        logger.info(f"Saved baby tracking/lineage to {out_file}")
 
-    tilers = [
-        step
-        for step_name, step in state.get("fn", {}).items()
-        if step_name.startswith("tile")
-    ]
-    if len(tilers) != 1:
-        raise ValueError(
-            "BABY ROI provenance requires exactly one live tile step; "
-            f"found {len(tilers)}."
+    if publish:
+        npz_path, json_path = write_roi_provenance(
+            tiler, pipeline, output_path, pipeline_name
         )
-    npz_path, json_path = write_roi_provenance(
-        tilers[0], pipeline, output_path, pipeline_name
+        logger.info(f"Saved live ROI provenance to {npz_path} and {json_path}")
+
+
+def run_pipeline_and_post(
+    pipeline: dict,
+    pipeline_name: str,
+    output_path: str | Path,
+    overwrite: bool = True,
+    *,
+    backend: str = "sequential",
+    max_workers: int | None = None,
+    resource_limits: dict[str, int] | None = None,
+) -> tuple[pyarrow.Table, dict | None]:
+    """Run BABY with opt-in ROI provenance preflighted before any output write."""
+    validate_provenance_preflight(pipeline, output_path, pipeline_name)
+    return _run_pipeline_and_post_impl(
+        pipeline,
+        pipeline_name,
+        output_path,
+        overwrite,
+        init_step_fn=init_step,
+        post_state_hook=_save_baby_tracking_lineage,
+        backend=backend,
+        max_workers=max_workers,
+        resource_limits=resource_limits,
     )
-    logger.info(f"Saved live ROI provenance to {npz_path} and {json_path}")
-
-
-run_pipeline_and_post = partial(
-    _run_pipeline_and_post_impl,
-    init_step_fn=init_step,
-    post_state_hook=_save_baby_tracking_lineage,
-)
