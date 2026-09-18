@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 from types import SimpleNamespace
 
 import numpy as np
@@ -44,7 +43,10 @@ def publication_pipeline(**updates):
         "ntps": 3,
         "publish_roi_provenance": True,
         "run_binding": {"acquisition": "run-7", "labels": [1, True, None]},
-        "steps": {"segment_cell": {"segmenter_kwargs": {"kind": "nahual_baby"}}},
+        "steps": {
+            "tile": {},
+            "segment_cell": {"segmenter_kwargs": {"kind": "nahual_baby"}},
+        },
         "save": ["segment_cell"],
     }
     pipeline.update(updates)
@@ -136,7 +138,7 @@ def test_round_trip_exact_keys_dtypes_yx_geometry_and_atomic_inventory(tmp_path)
         "fallback_to_center": False,
     }
     assert manifest["run_binding"] == pipeline["run_binding"]
-    assert "global outputs" in manifest["artifact_scope"]["excluded"]
+    assert manifest["artifact_scope"]["global_steps"].startswith("forbidden")
     assert npz_path.stat().st_mode & 0o222 == 0
     assert json_path.stat().st_mode & 0o222 == 0
     assert npz_path.parent.stat().st_mode & 0o222 == 0
@@ -225,7 +227,7 @@ def test_python_error_removes_uncommitted_temp_directory(tmp_path, monkeypatch):
     def fail_manifest(*_args, **_kwargs):
         raise OSError("manifest write failed")
 
-    monkeypatch.setattr("aliby.io.roi_provenance._write_fsynced", fail_manifest)
+    monkeypatch.setattr("aliby.io.roi_provenance._write_fsynced_at", fail_manifest)
 
     with pytest.raises(OSError, match="manifest write failed"):
         write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
@@ -235,24 +237,91 @@ def test_python_error_removes_uncommitted_temp_directory(tmp_path, monkeypatch):
     assert list(tiling.iterdir()) == []
 
 
-def test_concurrent_final_appearing_at_rename_is_not_replaced(tmp_path, monkeypatch):
+@pytest.mark.parametrize("race_kind", ["empty", "nonempty", "symlink"])
+def test_concurrent_final_appearing_at_commit_is_not_replaced(
+    tmp_path, monkeypatch, race_kind
+):
     pipeline = publication_pipeline()
     make_released_artifacts(tmp_path, pipeline)
     final = tmp_path / "tiling" / "site-A"
-    real_rename = os.rename
+    outside = tmp_path / "outside"
+    outside.mkdir()
 
-    def race_rename(source, destination):
-        final.mkdir()
-        (final / "winner").write_text("other publisher")
-        return real_rename(source, destination)
+    def create_racing_final():
+        if race_kind == "symlink":
+            final.symlink_to(outside, target_is_directory=True)
+        else:
+            final.mkdir()
+            if race_kind == "nonempty":
+                (final / "winner").write_text("other publisher")
 
-    monkeypatch.setattr("aliby.io.roi_provenance.os.rename", race_rename)
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._before_provenance_commit",
+        create_racing_final,
+    )
 
-    with pytest.raises(OSError):
+    with pytest.raises(FileExistsError):
         write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
 
-    assert (final / "winner").read_text() == "other publisher"
+    assert final.is_symlink() if race_kind == "symlink" else final.is_dir()
+    if race_kind == "nonempty":
+        assert (final / "winner").read_text() == "other publisher"
     assert not any("roi-provenance-" in path.name for path in final.parent.iterdir())
+
+
+def test_artifact_path_replacement_after_hash_prevents_commit(tmp_path, monkeypatch):
+    pipeline = publication_pipeline()
+    make_released_artifacts(tmp_path, pipeline)
+    target = tmp_path / "profiles" / "site-A.parquet"
+
+    def replace_pathname():
+        target.rename(target.with_suffix(".old"))
+        target.write_bytes(b"profiles")
+
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._before_provenance_commit", replace_pathname
+    )
+
+    with pytest.raises(RuntimeError, match="Artifact identity"):
+        write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+    assert not (tmp_path / "tiling" / "site-A").exists()
+
+
+def test_parent_directory_swap_after_hash_prevents_commit(tmp_path, monkeypatch):
+    pipeline = publication_pipeline()
+    make_released_artifacts(tmp_path, pipeline)
+    site = tmp_path / "steps" / "site-A"
+
+    def swap_parent():
+        site.rename(tmp_path / "steps" / "old-site-A")
+        site.mkdir()
+
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._before_provenance_commit", swap_parent
+    )
+
+    with pytest.raises(RuntimeError, match="Directory identity"):
+        write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+    assert not (tmp_path / "tiling" / "site-A").exists()
+
+
+def test_artifact_ctime_change_after_hash_prevents_commit(tmp_path, monkeypatch):
+    pipeline = publication_pipeline()
+    make_released_artifacts(tmp_path, pipeline)
+    target = tmp_path / "profiles" / "site-A.parquet"
+    original_mode = target.stat().st_mode & 0o777
+
+    def mutate_metadata():
+        target.chmod(0o600)
+        target.chmod(original_mode)
+
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._before_provenance_commit", mutate_metadata
+    )
+
+    with pytest.raises(RuntimeError, match="metadata changed"):
+        write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+    assert not (tmp_path / "tiling" / "site-A").exists()
 
 
 @pytest.mark.parametrize(
@@ -439,6 +508,54 @@ def test_disabled_wrapper_preserves_return_and_backend_kwargs(tmp_path, monkeypa
     assert calls[0][1]["backend"] == "concurrent"
     assert calls[0][1]["max_workers"] == 3
     assert calls[0][1]["resource_limits"] == {"cpu": 2}
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"save_interval": 2},
+        {"steps": {"segment_cell": {"segmenter_kwargs": {"kind": "nahual_baby"}}}},
+        {
+            "steps": {
+                "tile_a": {},
+                "tile_b": {},
+                "segment_cell": {"segmenter_kwargs": {"kind": "nahual_baby"}},
+            }
+        },
+    ],
+)
+def test_preflight_save_interval_and_tile_count_block_before_core(
+    tmp_path, monkeypatch, updates
+):
+    pipeline = publication_pipeline(**updates)
+    called = False
+
+    def must_not_run(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("aliby.pipe_baby._run_pipeline_and_post_impl", must_not_run)
+
+    with pytest.raises(ValueError, match="save_interval|tile step"):
+        run_pipeline_and_post(pipeline, "site-A", tmp_path)
+
+    assert called is False
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_preflight_rejects_global_outputs_before_core(tmp_path, monkeypatch):
+    pipeline = publication_pipeline(
+        global_steps={"global_summary": {}},
+        global_passed_data={"summary": ("segment_cell",)},
+    )
+    monkeypatch.setattr(
+        "aliby.pipe_baby._run_pipeline_and_post_impl",
+        lambda *_args, **_kwargs: pytest.fail("core must not run"),
+    )
+
+    with pytest.raises(ValueError, match="global steps"):
+        run_pipeline_and_post(pipeline, "site-A", tmp_path)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_preflight_existing_release_blocks_pipeline_before_any_artifact_mutation(

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import fcntl
+import ctypes
+import errno
 import hashlib
 import json
 import os
 import re
-import shutil
 import stat
-import tempfile
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,14 +26,6 @@ NPZ_KEYS = (
     "raw_shape_yx",
     "max_size_yx",
 )
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _int64_array(value: Any, name: str, shape: tuple[int, ...]) -> np.ndarray:
@@ -252,17 +245,6 @@ def _require_directory(path: Path, name: str, *, required: bool = True) -> None:
         raise ValueError(f"{name} must be a directory: {path}")
 
 
-def _require_regular_file(path: Path, name: str) -> None:
-    try:
-        details = path.lstat()
-    except FileNotFoundError as error:
-        raise FileNotFoundError(f"Required {name} does not exist: {path}") from error
-    if stat.S_ISLNK(details.st_mode):
-        raise ValueError(f"{name} must not be a symlink: {path}")
-    if not stat.S_ISREG(details.st_mode):
-        raise ValueError(f"{name} must be a regular file: {path}")
-
-
 def _validate_existing_regular_file(path: Path, name: str) -> None:
     try:
         details = path.lstat()
@@ -281,31 +263,6 @@ def _enforce_containment(output_path: Path, candidate: Path) -> None:
         raise ValueError(f"Provenance path escapes output root: {candidate}")
 
 
-def _sha256_nofollow(path: Path) -> str:
-    before = path.lstat()
-    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
-        raise ValueError(f"Artifact must be a non-symlink regular file: {path}")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
-    try:
-        opened = os.fstat(descriptor)
-        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
-            raise RuntimeError(f"Artifact changed while opening it: {path}")
-        digest = hashlib.sha256()
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        after = os.fstat(descriptor)
-        if (after.st_size, after.st_mtime_ns) != (
-            before.st_size,
-            before.st_mtime_ns,
-        ):
-            raise RuntimeError(f"Artifact changed while hashing it: {path}")
-        return digest.hexdigest()
-    finally:
-        os.close(descriptor)
-
-
 def validate_provenance_preflight(
     pipeline: dict, output_path: str | Path, pipeline_name: str
 ) -> None:
@@ -320,6 +277,20 @@ def validate_provenance_preflight(
     segments = baby_segment_steps(pipeline)
     if not segments:
         raise ValueError("ROI provenance requires at least one BABY segment step.")
+    tile_steps = [name for name in pipeline["steps"] if name.startswith("tile")]
+    if len(tile_steps) != 1:
+        raise ValueError(
+            "ROI provenance requires exactly one configured tile step; "
+            f"found {len(tile_steps)}."
+        )
+    save_interval = pipeline.get("save_interval", 1)
+    if type(save_interval) is not int or save_interval != 1:
+        raise ValueError("ROI provenance requires save_interval exactly 1.")
+    if pipeline.get("global_steps") or pipeline.get("global_passed_data"):
+        raise ValueError(
+            "ROI provenance does not support global steps because publication "
+            "precedes global outputs."
+        )
     saved = pipeline.get("save") or ()
     missing = [step for step in segments if step not in saved]
     if missing:
@@ -380,85 +351,302 @@ def validate_provenance_preflight(
         )
 
 
-def _expected_artifacts(
-    pipeline: dict, output_path: Path, pipeline_name: str
-) -> list[Path]:
-    timepoints = pipeline.get("ntps", 1)
-    if (
-        not isinstance(timepoints, int)
-        or isinstance(timepoints, bool)
-        or timepoints < 1
-    ):
-        raise ValueError("ntps must be a positive integer for publication.")
-    segments = baby_segment_steps(pipeline)
+@dataclass
+class _HeldDirectory:
+    name: str | None
+    fd: int
+    parent: "_HeldDirectory | None"
+    path: Path
+    opened_stat: os.stat_result
 
-    _require_directory(output_path, "output root")
-    steps_dir = output_path / "steps"
-    site_steps_dir = steps_dir / pipeline_name
-    profiles_dir = output_path / "profiles"
-    tracking_dir = output_path / "tracking"
-    for path, name in (
-        (steps_dir, "steps directory"),
-        (site_steps_dir, "site steps directory"),
-        (profiles_dir, "profiles directory"),
-        (tracking_dir, "tracking directory"),
-    ):
-        _enforce_containment(output_path, path)
-        _require_directory(path, name)
 
-    expected = [profiles_dir / f"{pipeline_name}.parquet"]
-    expected_tracking_names = {
-        f"{pipeline_name}_{step_name}.parquet" for step_name in segments
-    }
-    actual_tracking_names = {
-        entry.name
-        for entry in os.scandir(tracking_dir)
-        if entry.name.startswith(f"{pipeline_name}_")
-    }
-    if actual_tracking_names != expected_tracking_names:
+@dataclass
+class _HeldArtifact:
+    relative_path: str
+    name: str
+    fd: int
+    parent: _HeldDirectory
+    opened_stat: os.stat_result
+
+
+def _metadata_identity(details: os.stat_result) -> tuple[int, ...]:
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_mode,
+        details.st_size,
+        details.st_mtime_ns,
+        details.st_ctime_ns,
+    )
+
+
+def _directory_identity(details: os.stat_result) -> tuple[int, int, int]:
+    return details.st_dev, details.st_ino, details.st_mode
+
+
+def _open_root_directory(path: Path) -> _HeldDirectory:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise ValueError(f"Output root must be a real directory: {path}") from error
+    details = os.fstat(descriptor)
+    return _HeldDirectory(None, descriptor, None, path, details)
+
+
+def _open_child_directory(
+    parent: _HeldDirectory, name: str, path: Path
+) -> _HeldDirectory:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent.fd)
+    except OSError as error:
+        raise ValueError(f"Required directory is missing or unsafe: {path}") from error
+    return _HeldDirectory(name, descriptor, parent, path, os.fstat(descriptor))
+
+
+def _open_artifact(
+    parent: _HeldDirectory, name: str, relative_path: str
+) -> _HeldArtifact:
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent.fd)
+    except OSError as error:
         raise ValueError(
-            "Tracking artifact inventory mismatch: "
-            f"expected {sorted(expected_tracking_names)}, got {sorted(actual_tracking_names)}."
-        )
-    expected.extend(tracking_dir / name for name in sorted(expected_tracking_names))
+            f"Required artifact is missing or unsafe: {relative_path}"
+        ) from error
+    details = os.fstat(descriptor)
+    if not stat.S_ISREG(details.st_mode):
+        os.close(descriptor)
+        raise ValueError(f"Artifact must be a regular file: {relative_path}")
+    return _HeldArtifact(relative_path, name, descriptor, parent, details)
 
-    for step_name in segments:
-        segment_dir = site_steps_dir / step_name
-        _enforce_containment(output_path, segment_dir)
-        _require_directory(segment_dir, f"segment directory {step_name}")
-        expected_names = {
-            name
-            for tp in range(timepoints)
-            for name in (f"{tp:04d}.npz", f"{tp:04d}_meta.json")
+
+class _HeldInventory:
+    """No-follow artifact and directory descriptors held through publication."""
+
+    def __init__(self, output_path: Path, pipeline: dict, pipeline_name: str):
+        self.output_path = output_path
+        self.directories: list[_HeldDirectory] = []
+        self.artifacts: list[_HeldArtifact] = []
+        try:
+            self.root = self._root(output_path)
+            self.steps = self._child(self.root, "steps")
+            self.site = self._child(self.steps, pipeline_name)
+            self.profiles = self._child(self.root, "profiles")
+            self.tracking = self._child(self.root, "tracking")
+            try:
+                os.mkdir("tiling", mode=0o755, dir_fd=self.root.fd)
+            except FileExistsError:
+                pass
+            self.tiling = self._child(self.root, "tiling")
+            self._open_expected_artifacts(pipeline, pipeline_name)
+        except Exception:
+            self.close()
+            raise
+
+    def _root(self, path: Path) -> _HeldDirectory:
+        result = _open_root_directory(path)
+        self.directories.append(result)
+        return result
+
+    def _child(self, parent: _HeldDirectory, name: str) -> _HeldDirectory:
+        result = _open_child_directory(parent, name, parent.path / name)
+        self.directories.append(result)
+        return result
+
+    def _artifact(self, parent: _HeldDirectory, name: str, relative_path: str) -> None:
+        self.artifacts.append(_open_artifact(parent, name, relative_path))
+
+    def _open_expected_artifacts(self, pipeline: dict, pipeline_name: str) -> None:
+        timepoints = pipeline.get("ntps", 1)
+        segments = baby_segment_steps(pipeline)
+        profile_name = f"{pipeline_name}.parquet"
+        self._artifact(self.profiles, profile_name, f"profiles/{profile_name}")
+
+        expected_tracking_names = {
+            f"{pipeline_name}_{step_name}.parquet" for step_name in segments
         }
-        actual_names = {entry.name for entry in os.scandir(segment_dir)}
-        if actual_names != expected_names:
+        actual_tracking_names = {
+            name
+            for name in os.listdir(self.tracking.fd)
+            if name.startswith(f"{pipeline_name}_")
+        }
+        if actual_tracking_names != expected_tracking_names:
             raise ValueError(
-                f"Segment artifact inventory mismatch for {step_name}: "
-                f"expected {sorted(expected_names)}, got {sorted(actual_names)}."
+                "Tracking artifact inventory mismatch: "
+                f"expected {sorted(expected_tracking_names)}, "
+                f"got {sorted(actual_tracking_names)}."
             )
-        expected.extend(segment_dir / name for name in sorted(expected_names))
+        for name in sorted(expected_tracking_names):
+            self._artifact(self.tracking, name, f"tracking/{name}")
 
-    for path in expected:
-        _enforce_containment(output_path, path)
-        _require_regular_file(path, "released artifact")
-    return sorted(expected, key=lambda path: path.relative_to(output_path).as_posix())
+        for step_name in segments:
+            segment = self._child(self.site, step_name)
+            expected_names = {
+                name
+                for tp in range(timepoints)
+                for name in (f"{tp:04d}.npz", f"{tp:04d}_meta.json")
+            }
+            actual_names = set(os.listdir(segment.fd))
+            if actual_names != expected_names:
+                raise ValueError(
+                    f"Segment artifact inventory mismatch for {step_name}: "
+                    f"expected {sorted(expected_names)}, got {sorted(actual_names)}."
+                )
+            for name in sorted(expected_names):
+                relative = f"steps/{pipeline_name}/{step_name}/{name}"
+                self._artifact(segment, name, relative)
+
+        self.artifacts.sort(key=lambda artifact: artifact.relative_path)
+
+    def hashes(self) -> dict[str, str]:
+        return {
+            artifact.relative_path: _hash_held_artifact(artifact)
+            for artifact in self.artifacts
+        }
+
+    def revalidate(self) -> None:
+        root_path_stat = os.stat(self.output_path, follow_symlinks=False)
+        root_fd_stat = os.fstat(self.root.fd)
+        if _directory_identity(root_path_stat) != _directory_identity(
+            root_fd_stat
+        ) or _directory_identity(root_fd_stat) != _directory_identity(
+            self.root.opened_stat
+        ):
+            raise RuntimeError("Output root identity changed before publication.")
+
+        for directory in self.directories[1:]:
+            current_path = os.stat(
+                directory.name,
+                dir_fd=directory.parent.fd,
+                follow_symlinks=False,
+            )
+            current_fd = os.fstat(directory.fd)
+            if _directory_identity(current_path) != _directory_identity(
+                current_fd
+            ) or _directory_identity(current_fd) != _directory_identity(
+                directory.opened_stat
+            ):
+                raise RuntimeError(
+                    f"Directory identity changed before publication: {directory.path}"
+                )
+
+        for artifact in self.artifacts:
+            current_path = os.stat(
+                artifact.name,
+                dir_fd=artifact.parent.fd,
+                follow_symlinks=False,
+            )
+            current_fd = os.fstat(artifact.fd)
+            expected = _metadata_identity(artifact.opened_stat)
+            if (
+                _metadata_identity(current_path) != expected
+                or _metadata_identity(current_fd) != expected
+            ):
+                raise RuntimeError(
+                    "Artifact identity or metadata changed before publication: "
+                    f"{artifact.relative_path}"
+                )
+
+    def close(self) -> None:
+        for artifact in reversed(self.artifacts):
+            try:
+                os.close(artifact.fd)
+            except OSError:
+                pass
+        self.artifacts.clear()
+        for directory in reversed(self.directories):
+            try:
+                os.close(directory.fd)
+            except OSError:
+                pass
+        self.directories.clear()
 
 
-def _released_artifact_hashes(
-    pipeline: dict, output_path: Path, pipeline_name: str
-) -> dict[str, str]:
-    return {
-        path.relative_to(output_path).as_posix(): _sha256_nofollow(path)
-        for path in _expected_artifacts(pipeline, output_path, pipeline_name)
-    }
+def _hash_held_artifact(artifact: _HeldArtifact) -> str:
+    expected = _metadata_identity(artifact.opened_stat)
+    if _metadata_identity(os.fstat(artifact.fd)) != expected:
+        raise RuntimeError(f"Artifact changed before hashing: {artifact.relative_path}")
+    os.lseek(artifact.fd, 0, os.SEEK_SET)
+    digest = hashlib.sha256()
+    while chunk := os.read(artifact.fd, 1024 * 1024):
+        digest.update(chunk)
+    if _metadata_identity(os.fstat(artifact.fd)) != expected:
+        raise RuntimeError(f"Artifact changed while hashing: {artifact.relative_path}")
+    return digest.hexdigest()
 
 
-def _write_fsynced(path: Path, content: bytes) -> None:
-    with path.open("xb") as stream:
-        stream.write(content)
-        stream.flush()
-        os.fsync(stream.fileno())
+def _write_fsynced_at(
+    directory_fd: int, name: str, content: bytes, *, mode: int = 0o600
+) -> int:
+    descriptor = os.open(
+        name,
+        os.O_RDWR | os.O_CREAT | os.O_EXCL,
+        mode,
+        dir_fd=directory_fd,
+    )
+    try:
+        remaining = memoryview(content)
+        while remaining:
+            remaining = remaining[os.write(descriptor, remaining) :]
+        os.fsync(descriptor)
+    except Exception:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _rename_noreplace(
+    source_dir_fd: int, source_name: str, destination_dir_fd: int, destination_name: str
+) -> None:
+    """Linux atomic rename with mandatory no-replace semantics."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("renameat2 is unavailable; refusing unsafe publication.")
+    renameat2.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        source_dir_fd,
+        os.fsencode(source_name),
+        destination_dir_fd,
+        os.fsencode(destination_name),
+        1,  # RENAME_NOREPLACE
+    )
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise FileExistsError(
+            error_number,
+            os.strerror(error_number),
+            destination_name,
+        )
+    if error_number in {errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP}:
+        raise RuntimeError(
+            "renameat2 RENAME_NOREPLACE is unsupported; refusing unsafe publication."
+        )
+    raise OSError(error_number, os.strerror(error_number), destination_name)
+
+
+def _before_provenance_commit() -> None:
+    """Test seam immediately before final descriptor revalidation and commit."""
+
+
+def _cleanup_temp(tiling_fd: int, temp_fd: int, temp_name: str) -> None:
+    try:
+        os.fchmod(temp_fd, 0o700)
+        for name in os.listdir(temp_fd):
+            os.unlink(name, dir_fd=temp_fd)
+    finally:
+        os.close(temp_fd)
+    os.rmdir(temp_name, dir_fd=tiling_fd)
 
 
 def write_roi_provenance(
@@ -467,7 +655,7 @@ def write_roi_provenance(
     output_path: str | Path,
     pipeline_name: str,
 ) -> tuple[Path, Path]:
-    """Publish a validated immutable state directory with one atomic rename."""
+    """Publish a validated immutable state directory with atomic no-replace."""
     if not provenance_enabled(pipeline):
         raise ValueError("ROI provenance publication is not enabled.")
     validate_provenance_preflight(pipeline, output_path, pipeline_name)
@@ -479,26 +667,42 @@ def write_roi_provenance(
     roi_source = getattr(tiler.tile_locs, "roi_source", None)
     if not isinstance(roi_source, str) or not roi_source:
         raise ValueError("Live tile locations have no valid roi_source.")
-    artifact_hashes = _released_artifact_hashes(pipeline, output_path, pipeline_name)
 
-    tiling_dir = output_path / "tiling"
+    inventory: _HeldInventory | None = None
+    temp_fd: int | None = None
+    state_fd: int | None = None
+    manifest_fd: int | None = None
+    temp_name: str | None = None
+    committed = False
     try:
-        tiling_dir.mkdir(mode=0o755)
-    except FileExistsError:
-        pass
-    _require_directory(tiling_dir, "tiling directory")
-    final_dir = tiling_dir / pipeline_name
-    temp_dir = Path(
-        tempfile.mkdtemp(prefix=f".{pipeline_name}.roi-provenance-", dir=tiling_dir)
-    )
-    state_path = temp_dir / "state.npz"
-    manifest_path = temp_dir / "manifest.json"
-    try:
-        with state_path.open("xb") as stream:
+        inventory = _HeldInventory(output_path, pipeline, pipeline_name)
+        artifact_hashes = inventory.hashes()
+        temp_name = f".{pipeline_name}.roi-provenance-{uuid.uuid4().hex}"
+        os.mkdir(temp_name, mode=0o700, dir_fd=inventory.tiling.fd)
+        temp_fd = os.open(
+            temp_name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=inventory.tiling.fd,
+        )
+
+        state_fd = os.open(
+            "state.npz",
+            os.O_RDWR | os.O_CREAT | os.O_EXCL,
+            0o600,
+            dir_fd=temp_fd,
+        )
+        with os.fdopen(state_fd, "wb", closefd=False) as stream:
             np.savez_compressed(stream, **arrays)
             stream.flush()
-            os.fsync(stream.fileno())
-        npz_sha256 = _sha256(state_path)
+        os.fsync(state_fd)
+        os.lseek(state_fd, 0, os.SEEK_SET)
+        npz_digest = hashlib.sha256()
+        while chunk := os.read(state_fd, 1024 * 1024):
+            npz_digest.update(chunk)
+        npz_sha256 = npz_digest.hexdigest()
+        os.fchmod(state_fd, 0o444)
+        os.fsync(state_fd)
+
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "site": pipeline_name,
@@ -534,44 +738,52 @@ def write_roi_provenance(
             },
             "run_binding": run_binding,
             "artifact_scope": {
-                "included": "BABY segment arrays/metadata, profiles, and BABY tracking",
-                "excluded": "global outputs; this hook runs before global steps",
+                "included": "complete BABY core outputs: segment, profiles, and tracking",
+                "global_steps": "forbidden because publication precedes global outputs",
             },
             "artifacts_sha256": artifact_hashes,
         }
-        _write_fsynced(
-            manifest_path,
-            (
-                json.dumps(manifest, sort_keys=True, indent=2, allow_nan=False) + "\n"
-            ).encode(),
+        encoded = (
+            json.dumps(manifest, sort_keys=True, indent=2, allow_nan=False) + "\n"
+        ).encode()
+        manifest_fd = _write_fsynced_at(temp_fd, "manifest.json", encoded)
+        os.fchmod(manifest_fd, 0o444)
+        os.fsync(manifest_fd)
+        os.fchmod(temp_fd, 0o555)
+        os.fsync(temp_fd)
+
+        _before_provenance_commit()
+        inventory.revalidate()
+        # Same-user malicious mutation after this check is outside the contract;
+        # renameat2 still guarantees that a destination can never be replaced.
+        _rename_noreplace(
+            inventory.tiling.fd,
+            temp_name,
+            inventory.tiling.fd,
+            pipeline_name,
         )
-        os.chmod(state_path, 0o444)
-        os.chmod(manifest_path, 0o444)
-        directory_fd = os.open(temp_dir, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-        os.chmod(temp_dir, 0o555)
+        committed = True
+        os.fsync(inventory.tiling.fd)
+    finally:
+        if state_fd is not None:
+            os.close(state_fd)
+        if manifest_fd is not None:
+            os.close(manifest_fd)
+        if inventory is not None:
+            if temp_fd is not None:
+                if committed:
+                    os.close(temp_fd)
+                else:
+                    try:
+                        _cleanup_temp(inventory.tiling.fd, temp_fd, temp_name)
+                    except FileNotFoundError:
+                        pass
+            elif temp_name is not None and not committed:
+                try:
+                    os.rmdir(temp_name, dir_fd=inventory.tiling.fd)
+                except FileNotFoundError:
+                    pass
+            inventory.close()
 
-        # Serialise cooperating publishers on the parent directory. The final
-        # existence check plus rename gives a single all-or-none visibility point.
-        parent_fd = os.open(tiling_dir, os.O_RDONLY)
-        try:
-            fcntl.flock(parent_fd, fcntl.LOCK_EX)
-            if _lexists(final_dir):
-                raise FileExistsError(
-                    f"ROI provenance destination already exists for {pipeline_name!r}."
-                )
-            os.rename(temp_dir, final_dir)
-            os.fsync(parent_fd)
-        finally:
-            fcntl.flock(parent_fd, fcntl.LOCK_UN)
-            os.close(parent_fd)
-    except Exception:
-        if _lexists(temp_dir):
-            os.chmod(temp_dir, 0o755)
-            shutil.rmtree(temp_dir)
-        raise
-
+    final_dir = output_path / "tiling" / pipeline_name
     return final_dir / "state.npz", final_dir / "manifest.json"
