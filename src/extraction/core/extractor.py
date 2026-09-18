@@ -16,7 +16,7 @@ from agora.io.cells import Cells
 from agora.io.writers import pdms_mask_path
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
-from sooth import tile_shape
+from sooth import half_size, tile_shape
 from extraction.core.functions.cell_functions import (
     _MODEL_TO_PARAM,
     identify_vacuole,
@@ -1296,12 +1296,20 @@ class Extractor(StepABC):
         y_df = extract_dict["general/null/centroid_y"]
         extract_dict["general/null/image_x"] = x_df.copy()
         extract_dict["general/null/image_y"] = y_df.copy()
-        # the tile's own half-extent on each axis, x before y because the
-        # columns below are (x, y)
-        height, width = tile_shape(self.tiler.tile_size)
-        half_extent = np.asarray([(width - 1) / 2, (height - 1) / 2])
+        # a cell's image coordinate is its tile's origin plus its centroid,
+        # and the origin is sooth's -- centre - size // 2 on each axis --
+        # because that is where the tile was cut. The tile's *geometric*
+        # centre, (size - 1) / 2, is half a pixel away from it for an even
+        # size, which placed every cell of an even tile half a pixel down
+        # and to the right of its own tile. x before y, because the columns
+        # below are (x, y)
+        offset_y, offset_x = half_size(self.tiler.tile_size)
+        half_extent = np.asarray([offset_x, offset_y])
         traps = np.array(x_df.index.get_level_values("trap"))
-        if np.any(traps):
+        # how many traps there are, not whether any is named something
+        # other than zero: a position holding one trap, named 0, had its
+        # cells left at their tile-local centroids
+        if len(traps):
             for tp in x_df.columns:
                 tile_locs = self.tiler.tile_locs.centres_at_time(tp)
                 centroid_coords = np.column_stack(
