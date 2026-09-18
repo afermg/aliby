@@ -14,6 +14,7 @@ class TileLocations:
         tile_size: int or list[int] = None,
         max_size: int or list[int] = 1200,
         drifts: np.array = None,
+        roi_source: str = "provided",
     ):
         """
         Initialise tiles as an array of Tile objects.
@@ -28,6 +29,9 @@ class TileLocations:
             Maximum size of a tile. Default is 1200.
         drifts: array
             An array of translations to correct drift of the microscope.
+        roi_source: str
+            How these locations were selected. Direct constructor callers are
+            treated as providing the locations explicitly.
         """
         if drifts is None:
             drifts = []
@@ -38,6 +42,7 @@ class TileLocations:
             max_size = (max_size, max_size)
         self.max_size = max_size
         self.initial_location = initial_location
+        self.roi_source = roi_source
         self.tiles = [
             Tile(centre, self, tile_size or max_size, max_size)
             for centre in initial_location
@@ -84,9 +89,16 @@ class TileLocations:
         initial_location,
         tile_size: int = None,
         max_size: int = 1200,
+        roi_source: str = "provided",
     ):
         """Instantiate from a Tiler."""
-        return cls(initial_location, tile_size, max_size, drifts=[])
+        return cls(
+            initial_location,
+            tile_size,
+            max_size,
+            drifts=[],
+            roi_source=roi_source,
+        )
 
 
 class Tile:

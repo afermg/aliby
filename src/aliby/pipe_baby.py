@@ -16,6 +16,7 @@ from typing import Callable
 import pyarrow
 from loguru import logger
 
+from aliby.io.roi_provenance import write_roi_provenance
 from aliby.pipe_core import (
     _init_extract,
     _init_nahual_embed,
@@ -127,6 +128,21 @@ def _save_baby_tracking_lineage(
             out_file = tracking_dir / f"{pipeline_name}_{step_name}.parquet"
             pyarrow.parquet.write_table(table, out_file, compression="zstd")
             logger.info(f"Saved baby tracking/lineage to {out_file}")
+
+    tilers = [
+        step
+        for step_name, step in state.get("fn", {}).items()
+        if step_name.startswith("tile")
+    ]
+    if len(tilers) != 1:
+        raise ValueError(
+            "BABY ROI provenance requires exactly one live tile step; "
+            f"found {len(tilers)}."
+        )
+    npz_path, json_path = write_roi_provenance(
+        tilers[0], pipeline, output_path, pipeline_name
+    )
+    logger.info(f"Saved live ROI provenance to {npz_path} and {json_path}")
 
 
 run_pipeline_and_post = partial(

@@ -703,7 +703,7 @@ def set_areas_of_interest(
     """
     shape = pixels.shape
     if tile_size is None:
-        return get_center(shape)
+        return get_center(shape, roi_source="full_fov")
 
     # normalise tile_size to a scalar for comparisons
     tile_size_min = tile_size if isinstance(tile_size, int) else min(tile_size)
@@ -721,7 +721,7 @@ def set_areas_of_interest(
                     "Trap detection failed and fallback_to_center is disabled."
                 ) from e
             warnings.warn(f"Trap detection failed ({e}), falling back to center tile.")
-            return get_center(shape, tile_size)
+            return get_center(shape, tile_size, roi_source="center_fallback")
         # keep only tiles that are not near an edge
         tile_locs = [
             [x, y]
@@ -734,19 +734,22 @@ def set_areas_of_interest(
             if not fallback_to_center:
                 raise RuntimeError(f"{message} and fallback_to_center is disabled.")
             warnings.warn(f"{message}; falling back to center tile.")
-            return get_center(shape, tile_size)
+            return get_center(shape, tile_size, roi_source="center_fallback")
         # store tiles in an instance of TileLocations
-        tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size, max_size)
+        tile_locs = TileLocations.from_tiler_init(
+            tile_locs, tile_size, max_size, roi_source="detected"
+        )
     else:
         # one tile with its centre at the image's centre; preserve an explicit
         # requested size, using the full field of view only when it is absent.
-        tile_locs = get_center(shape, tile_size)
+        tile_locs = get_center(shape, tile_size, roi_source="explicit_center")
     return tile_locs
 
 
 def get_center(
     pixels_shape: tuple[int],
     tile_size: int | list[int] | tuple[int, int] | None = None,
+    roi_source: str | None = None,
 ) -> TileLocations:
     """
     Calculate the center of the image and initialize a single tile location.
@@ -758,6 +761,9 @@ def get_center(
         to represent the Y and X axes.
     tile_size : int, list of int, or tuple of int, optional
         Requested tile extent. If omitted, use the full field of view.
+    roi_source : str, optional
+        Explicit source label. By default a sized tile is ``explicit_center``
+        and an unsized tile is ``full_fov``.
 
     Returns
     -------
@@ -767,6 +773,11 @@ def get_center(
     """
     yx_shape = pixels_shape[-2:]
     tile_locs = (tuple(x // 2 for x in yx_shape),)
+    if roi_source is None:
+        roi_source = "full_fov" if tile_size is None else "explicit_center"
     return TileLocations.from_tiler_init(
-        tile_locs, tile_size=tile_size, max_size=yx_shape
+        tile_locs,
+        tile_size=tile_size,
+        max_size=yx_shape,
+        roi_source=roi_source,
     )
