@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -263,6 +264,54 @@ def _enforce_containment(output_path: Path, candidate: Path) -> None:
         raise ValueError(f"Provenance path escapes output root: {candidate}")
 
 
+def acquire_provenance_run_lock(output_path: str | Path) -> tuple[int, int]:
+    """Create/open the real tiling directory and exclusively lock it."""
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+    root_fd = os.open(output_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    tiling_fd = None
+    try:
+        try:
+            os.mkdir("tiling", mode=0o755, dir_fd=root_fd)
+        except FileExistsError:
+            pass
+        tiling_fd = os.open(
+            "tiling",
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=root_fd,
+        )
+        fcntl.flock(tiling_fd, fcntl.LOCK_EX)
+        root_path_stat = os.stat(output_path, follow_symlinks=False)
+        root_fd_stat = os.fstat(root_fd)
+        tiling_path_stat = os.stat("tiling", dir_fd=root_fd, follow_symlinks=False)
+        tiling_fd_stat = os.fstat(tiling_fd)
+        if _directory_identity(root_path_stat) != _directory_identity(
+            root_fd_stat
+        ) or _directory_identity(tiling_path_stat) != _directory_identity(
+            tiling_fd_stat
+        ):
+            raise RuntimeError(
+                "Output or tiling directory identity changed while locking."
+            )
+        return root_fd, tiling_fd
+    except Exception:
+        if tiling_fd is not None:
+            try:
+                fcntl.flock(tiling_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(tiling_fd)
+        os.close(root_fd)
+        raise
+
+
+def release_provenance_run_lock(root_fd: int, tiling_fd: int) -> None:
+    try:
+        fcntl.flock(tiling_fd, fcntl.LOCK_UN)
+    finally:
+        os.close(tiling_fd)
+        os.close(root_fd)
+
+
 def validate_provenance_preflight(
     pipeline: dict, output_path: str | Path, pipeline_name: str
 ) -> None:
@@ -428,6 +477,9 @@ class _HeldInventory:
         self.output_path = output_path
         self.directories: list[_HeldDirectory] = []
         self.artifacts: list[_HeldArtifact] = []
+        self.segment_inventories: list[tuple[_HeldDirectory, set[str]]] = []
+        self.tracking_prefix = ""
+        self.expected_tracking_names: set[str] = set()
         try:
             self.root = self._root(output_path)
             self.steps = self._child(self.root, "steps")
@@ -463,21 +515,22 @@ class _HeldInventory:
         profile_name = f"{pipeline_name}.parquet"
         self._artifact(self.profiles, profile_name, f"profiles/{profile_name}")
 
-        expected_tracking_names = {
+        self.tracking_prefix = f"{pipeline_name}_"
+        self.expected_tracking_names = {
             f"{pipeline_name}_{step_name}.parquet" for step_name in segments
         }
         actual_tracking_names = {
             name
             for name in os.listdir(self.tracking.fd)
-            if name.startswith(f"{pipeline_name}_")
+            if name.startswith(self.tracking_prefix)
         }
-        if actual_tracking_names != expected_tracking_names:
+        if actual_tracking_names != self.expected_tracking_names:
             raise ValueError(
                 "Tracking artifact inventory mismatch: "
-                f"expected {sorted(expected_tracking_names)}, "
+                f"expected {sorted(self.expected_tracking_names)}, "
                 f"got {sorted(actual_tracking_names)}."
             )
-        for name in sorted(expected_tracking_names):
+        for name in sorted(self.expected_tracking_names):
             self._artifact(self.tracking, name, f"tracking/{name}")
 
         for step_name in segments:
@@ -493,6 +546,7 @@ class _HeldInventory:
                     f"Segment artifact inventory mismatch for {step_name}: "
                     f"expected {sorted(expected_names)}, got {sorted(actual_names)}."
                 )
+            self.segment_inventories.append((segment, expected_names))
             for name in sorted(expected_names):
                 relative = f"steps/{pipeline_name}/{step_name}/{name}"
                 self._artifact(segment, name, relative)
@@ -529,6 +583,21 @@ class _HeldInventory:
             ):
                 raise RuntimeError(
                     f"Directory identity changed before publication: {directory.path}"
+                )
+
+        current_tracking_names = {
+            name
+            for name in os.listdir(self.tracking.fd)
+            if name.startswith(self.tracking_prefix)
+        }
+        if current_tracking_names != self.expected_tracking_names:
+            raise RuntimeError(
+                "Tracking artifact inventory changed before publication."
+            )
+        for segment, expected_names in self.segment_inventories:
+            if set(os.listdir(segment.fd)) != expected_names:
+                raise RuntimeError(
+                    f"Segment artifact inventory changed before publication: {segment.path}"
                 )
 
         for artifact in self.artifacts:
@@ -596,12 +665,15 @@ def _write_fsynced_at(
     return descriptor
 
 
+def _get_renameat2():
+    return getattr(ctypes.CDLL(None, use_errno=True), "renameat2", None)
+
+
 def _rename_noreplace(
     source_dir_fd: int, source_name: str, destination_dir_fd: int, destination_name: str
 ) -> None:
     """Linux atomic rename with mandatory no-replace semantics."""
-    libc = ctypes.CDLL(None, use_errno=True)
-    renameat2 = getattr(libc, "renameat2", None)
+    renameat2 = _get_renameat2()
     if renameat2 is None:
         raise RuntimeError("renameat2 is unavailable; refusing unsafe publication.")
     renameat2.argtypes = (

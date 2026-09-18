@@ -1,5 +1,9 @@
+import ctypes
+import errno
 import hashlib
 import json
+import multiprocessing
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -269,6 +273,27 @@ def test_concurrent_final_appearing_at_commit_is_not_replaced(
     assert not any("roi-provenance-" in path.name for path in final.parent.iterdir())
 
 
+def test_renameat2_unsupported_fails_closed_without_publication(tmp_path, monkeypatch):
+    pipeline = publication_pipeline()
+    make_released_artifacts(tmp_path, pipeline)
+
+    class UnsupportedRename:
+        def __call__(self, *_args):
+            ctypes.set_errno(errno.ENOSYS)
+            return -1
+
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._get_renameat2", lambda: UnsupportedRename()
+    )
+
+    with pytest.raises(RuntimeError, match="unsupported"):
+        write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+
+    tiling = tmp_path / "tiling"
+    assert not (tiling / "site-A").exists()
+    assert list(tiling.iterdir()) == []
+
+
 def test_artifact_path_replacement_after_hash_prevents_commit(tmp_path, monkeypatch):
     pipeline = publication_pipeline()
     make_released_artifacts(tmp_path, pipeline)
@@ -320,6 +345,27 @@ def test_artifact_ctime_change_after_hash_prevents_commit(tmp_path, monkeypatch)
     )
 
     with pytest.raises(RuntimeError, match="metadata changed"):
+        write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+    assert not (tmp_path / "tiling" / "site-A").exists()
+
+
+@pytest.mark.parametrize("location", ["segment", "tracking"])
+def test_unexpected_artifact_after_hash_prevents_commit(
+    tmp_path, monkeypatch, location
+):
+    pipeline = publication_pipeline()
+    make_released_artifacts(tmp_path, pipeline)
+    unexpected = {
+        "segment": tmp_path / "steps" / "site-A" / "segment_cell" / "stale.json",
+        "tracking": tmp_path / "tracking" / "site-A_stale.parquet",
+    }[location]
+
+    monkeypatch.setattr(
+        "aliby.io.roi_provenance._before_provenance_commit",
+        lambda: unexpected.write_text("unexpected"),
+    )
+
+    with pytest.raises(RuntimeError, match="inventory changed"):
         write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
     assert not (tmp_path / "tiling" / "site-A").exists()
 
@@ -556,6 +602,69 @@ def test_preflight_rejects_global_outputs_before_core(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="global steps"):
         run_pipeline_and_post(pipeline, "site-A", tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_publication_lock_serializes_full_run_and_loser_never_enters_core(
+    tmp_path, monkeypatch
+):
+    context = multiprocessing.get_context("fork")
+    pipeline = publication_pipeline()
+    entered = context.Event()
+    release = context.Event()
+    second_started = context.Event()
+    entries = context.Value("i", 0)
+    outcomes = context.Queue()
+    winner_artifact = tmp_path / "winner-artifact"
+
+    def locked_core(_pipeline, pipeline_name, output_path, *_args, **_kwargs):
+        with entries.get_lock():
+            entries.value += 1
+            entry_number = entries.value
+        if entry_number != 1:
+            winner_artifact.write_bytes(b"loser mutated artifacts")
+        entered.set()
+        assert release.wait(10)
+        winner_artifact.write_bytes(b"winner")
+        final = output_path / "tiling" / pipeline_name
+        final.mkdir()
+        (final / "state.npz").write_bytes(b"state")
+        (final / "manifest.json").write_bytes(b"manifest")
+        return None, None
+
+    monkeypatch.setattr("aliby.pipe_baby._run_pipeline_and_post_impl", locked_core)
+
+    def invoke(mark_started=False):
+        if mark_started:
+            second_started.set()
+        try:
+            run_pipeline_and_post(pipeline, "site-A", tmp_path)
+        except Exception as error:
+            outcomes.put(type(error).__name__)
+        else:
+            outcomes.put("success")
+
+    winner = context.Process(target=invoke)
+    winner.start()
+    assert entered.wait(10)
+    loser = context.Process(target=invoke, args=(True,))
+    loser.start()
+    assert second_started.wait(10)
+    time.sleep(0.2)
+    assert entries.value == 1
+    assert loser.is_alive()
+
+    release.set()
+    winner.join(10)
+    loser.join(10)
+
+    assert winner.exitcode == 0
+    assert loser.exitcode == 0
+    assert sorted([outcomes.get(timeout=2), outcomes.get(timeout=2)]) == [
+        "FileExistsError",
+        "success",
+    ]
+    assert entries.value == 1
+    assert winner_artifact.read_bytes() == b"winner"
 
 
 def test_preflight_existing_release_blocks_pipeline_before_any_artifact_mutation(

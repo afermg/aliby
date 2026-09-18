@@ -16,8 +16,10 @@ import pyarrow
 from loguru import logger
 
 from aliby.io.roi_provenance import (
+    acquire_provenance_run_lock,
     baby_segment_steps,
     provenance_enabled,
+    release_provenance_run_lock,
     validate_provenance_preflight,
     write_roi_provenance,
 )
@@ -178,15 +180,29 @@ def run_pipeline_and_post(
     resource_limits: dict[str, int] | None = None,
 ) -> tuple[pyarrow.Table, dict | None]:
     """Run BABY with opt-in ROI provenance preflighted before any output write."""
+    publish = provenance_enabled(pipeline)
     validate_provenance_preflight(pipeline, output_path, pipeline_name)
-    return _run_pipeline_and_post_impl(
-        pipeline,
-        pipeline_name,
-        output_path,
-        overwrite,
-        init_step_fn=init_step,
-        post_state_hook=_save_baby_tracking_lineage,
-        backend=backend,
-        max_workers=max_workers,
-        resource_limits=resource_limits,
-    )
+    lock_fds = None
+    if publish:
+        lock_fds = acquire_provenance_run_lock(output_path)
+        try:
+            # A concurrent winner may have committed while this process waited.
+            validate_provenance_preflight(pipeline, output_path, pipeline_name)
+        except Exception:
+            release_provenance_run_lock(*lock_fds)
+            raise
+    try:
+        return _run_pipeline_and_post_impl(
+            pipeline,
+            pipeline_name,
+            output_path,
+            overwrite,
+            init_step_fn=init_step,
+            post_state_hook=_save_baby_tracking_lineage,
+            backend=backend,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+        )
+    finally:
+        if lock_fds is not None:
+            release_provenance_run_lock(*lock_fds)
