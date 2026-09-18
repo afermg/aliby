@@ -9,6 +9,7 @@ post-run via the ``_save_baby_tracking_lineage`` post-state hook.
 Still supports Nahual embedders alongside BABY segmentation.
 """
 
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -16,12 +17,12 @@ import pyarrow
 from loguru import logger
 
 from aliby.io.roi_provenance import (
+    ProvenanceRunLock,
+    _write_roi_provenance_locked,
     acquire_provenance_run_lock,
     baby_segment_steps,
     provenance_enabled,
-    release_provenance_run_lock,
     validate_provenance_preflight,
-    write_roi_provenance,
 )
 from aliby.pipe_core import (
     _init_extract,
@@ -99,10 +100,19 @@ def init_step(
 
 
 def _save_baby_tracking_lineage(
-    state: dict, pipeline: dict, output_path: Path, pipeline_name: str
+    state: dict,
+    pipeline: dict,
+    output_path: Path,
+    pipeline_name: str,
+    *,
+    provenance_lock: ProvenanceRunLock | None = None,
 ) -> None:
     """Extract and save BABY tracking/lineage from segment metadata across timepoints."""
     publish = provenance_enabled(pipeline)
+    if publish:
+        if provenance_lock is None:
+            raise RuntimeError("Enabled provenance requires an authenticated run lock.")
+        provenance_lock.verify()
     segment_steps = baby_segment_steps(pipeline, validate_names=publish)
     tiler = None
     if publish:
@@ -160,11 +170,19 @@ def _save_baby_tracking_lineage(
         tracking_dir.mkdir(parents=True, exist_ok=True)
         out_file = tracking_dir / f"{pipeline_name}_{step_name}.parquet"
         pyarrow.parquet.write_table(table, out_file, compression="zstd")
-        logger.info(f"Saved baby tracking/lineage to {out_file}")
+        logged_file = out_file
+        if provenance_lock is not None:
+            logged_file = (
+                provenance_lock.lexical_output_path
+                / "tracking"
+                / f"{pipeline_name}_{step_name}.parquet"
+            )
+        logger.info(f"Saved baby tracking/lineage to {logged_file}")
 
     if publish:
-        npz_path, json_path = write_roi_provenance(
-            tiler, pipeline, output_path, pipeline_name
+        provenance_lock.verify()
+        npz_path, json_path = _write_roi_provenance_locked(
+            tiler, pipeline, pipeline_name, provenance_lock
         )
         logger.info(f"Saved live ROI provenance to {npz_path} and {json_path}")
 
@@ -182,27 +200,40 @@ def run_pipeline_and_post(
     """Run BABY with opt-in ROI provenance preflighted before any output write."""
     publish = provenance_enabled(pipeline)
     validate_provenance_preflight(pipeline, output_path, pipeline_name)
-    lock_fds = None
+    lock_context = None
     if publish:
-        lock_fds = acquire_provenance_run_lock(output_path)
+        lock_context = acquire_provenance_run_lock(output_path)
         try:
             # A concurrent winner may have committed while this process waited.
-            validate_provenance_preflight(pipeline, output_path, pipeline_name)
+            validate_provenance_preflight(
+                pipeline, lock_context.lexical_output_path, pipeline_name
+            )
+            lock_context.verify()
         except Exception:
-            release_provenance_run_lock(*lock_fds)
+            lock_context.release()
             raise
     try:
-        return _run_pipeline_and_post_impl(
+        post_state_hook = _save_baby_tracking_lineage
+        core_output_path = output_path
+        if lock_context is not None:
+            post_state_hook = partial(
+                _save_baby_tracking_lineage, provenance_lock=lock_context
+            )
+            core_output_path = lock_context.descriptor_output_path
+        result = _run_pipeline_and_post_impl(
             pipeline,
             pipeline_name,
-            output_path,
+            core_output_path,
             overwrite,
             init_step_fn=init_step,
-            post_state_hook=_save_baby_tracking_lineage,
+            post_state_hook=post_state_hook,
             backend=backend,
             max_workers=max_workers,
             resource_limits=resource_limits,
         )
+        if lock_context is not None:
+            lock_context.verify()
+        return result
     finally:
-        if lock_fds is not None:
-            release_provenance_run_lock(*lock_fds)
+        if lock_context is not None:
+            lock_context.release()

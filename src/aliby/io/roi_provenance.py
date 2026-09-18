@@ -264,11 +264,69 @@ def _enforce_containment(output_path: Path, candidate: Path) -> None:
         raise ValueError(f"Provenance path escapes output root: {candidate}")
 
 
-def acquire_provenance_run_lock(output_path: str | Path) -> tuple[int, int]:
+_LOCK_AUTHORITY = object()
+
+
+@dataclass
+class ProvenanceRunLock:
+    """Authenticated ownership of one lexical output root and its run lock."""
+
+    lexical_output_path: Path
+    root_fd: int
+    tiling_fd: int
+    root_identity: tuple[int, int, int]
+    tiling_identity: tuple[int, int, int]
+    owner_pid: int
+    authority: object
+    active: bool = True
+
+    @property
+    def descriptor_output_path(self) -> Path:
+        return Path(f"/proc/self/fd/{self.root_fd}")
+
+    def verify(self) -> None:
+        if (
+            not self.active
+            or self.owner_pid != os.getpid()
+            or self.authority is not _LOCK_AUTHORITY
+        ):
+            raise RuntimeError("Provenance run lock is inactive or not owned here.")
+        root_fd_identity = _directory_identity(os.fstat(self.root_fd))
+        tiling_fd_identity = _directory_identity(os.fstat(self.tiling_fd))
+        root_path_identity = _directory_identity(
+            os.stat(self.lexical_output_path, follow_symlinks=False)
+        )
+        tiling_path_identity = _directory_identity(
+            os.stat("tiling", dir_fd=self.root_fd, follow_symlinks=False)
+        )
+        if (
+            root_fd_identity != self.root_identity
+            or root_path_identity != self.root_identity
+            or tiling_fd_identity != self.tiling_identity
+            or tiling_path_identity != self.tiling_identity
+        ):
+            raise RuntimeError("Lexical output root or tiling lock binding changed.")
+
+    def release(self) -> None:
+        if not self.active:
+            return
+        if self.owner_pid != os.getpid():
+            raise RuntimeError(
+                "Provenance run lock cannot be released by another process."
+            )
+        try:
+            fcntl.flock(self.tiling_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self.tiling_fd)
+            os.close(self.root_fd)
+            self.active = False
+
+
+def acquire_provenance_run_lock(output_path: str | Path) -> ProvenanceRunLock:
     """Create/open the real tiling directory and exclusively lock it."""
-    output_path = Path(output_path)
-    output_path.mkdir(parents=True, exist_ok=True)
-    root_fd = os.open(output_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    lexical_output_path = Path(output_path)
+    lexical_output_path.mkdir(parents=True, exist_ok=True)
+    root_fd = os.open(lexical_output_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     tiling_fd = None
     try:
         try:
@@ -281,19 +339,17 @@ def acquire_provenance_run_lock(output_path: str | Path) -> tuple[int, int]:
             dir_fd=root_fd,
         )
         fcntl.flock(tiling_fd, fcntl.LOCK_EX)
-        root_path_stat = os.stat(output_path, follow_symlinks=False)
-        root_fd_stat = os.fstat(root_fd)
-        tiling_path_stat = os.stat("tiling", dir_fd=root_fd, follow_symlinks=False)
-        tiling_fd_stat = os.fstat(tiling_fd)
-        if _directory_identity(root_path_stat) != _directory_identity(
-            root_fd_stat
-        ) or _directory_identity(tiling_path_stat) != _directory_identity(
-            tiling_fd_stat
-        ):
-            raise RuntimeError(
-                "Output or tiling directory identity changed while locking."
-            )
-        return root_fd, tiling_fd
+        context = ProvenanceRunLock(
+            lexical_output_path=lexical_output_path,
+            root_fd=root_fd,
+            tiling_fd=tiling_fd,
+            root_identity=_directory_identity(os.fstat(root_fd)),
+            tiling_identity=_directory_identity(os.fstat(tiling_fd)),
+            owner_pid=os.getpid(),
+            authority=_LOCK_AUTHORITY,
+        )
+        context.verify()
+        return context
     except Exception:
         if tiling_fd is not None:
             try:
@@ -302,14 +358,6 @@ def acquire_provenance_run_lock(output_path: str | Path) -> tuple[int, int]:
                 os.close(tiling_fd)
         os.close(root_fd)
         raise
-
-
-def release_provenance_run_lock(root_fd: int, tiling_fd: int) -> None:
-    try:
-        fcntl.flock(tiling_fd, fcntl.LOCK_UN)
-    finally:
-        os.close(tiling_fd)
-        os.close(root_fd)
 
 
 def validate_provenance_preflight(
@@ -433,16 +481,6 @@ def _directory_identity(details: os.stat_result) -> tuple[int, int, int]:
     return details.st_dev, details.st_ino, details.st_mode
 
 
-def _open_root_directory(path: Path) -> _HeldDirectory:
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as error:
-        raise ValueError(f"Output root must be a real directory: {path}") from error
-    details = os.fstat(descriptor)
-    return _HeldDirectory(None, descriptor, None, path, details)
-
-
 def _open_child_directory(
     parent: _HeldDirectory, name: str, path: Path
 ) -> _HeldDirectory:
@@ -473,31 +511,55 @@ def _open_artifact(
 class _HeldInventory:
     """No-follow artifact and directory descriptors held through publication."""
 
-    def __init__(self, output_path: Path, pipeline: dict, pipeline_name: str):
-        self.output_path = output_path
+    def __init__(
+        self, lock_context: ProvenanceRunLock, pipeline: dict, pipeline_name: str
+    ):
+        lock_context.verify()
+        self.output_path = lock_context.lexical_output_path
         self.directories: list[_HeldDirectory] = []
         self.artifacts: list[_HeldArtifact] = []
         self.segment_inventories: list[tuple[_HeldDirectory, set[str]]] = []
         self.tracking_prefix = ""
         self.expected_tracking_names: set[str] = set()
         try:
-            self.root = self._root(output_path)
+            self.root = self._duplicate_root(lock_context)
             self.steps = self._child(self.root, "steps")
             self.site = self._child(self.steps, pipeline_name)
             self.profiles = self._child(self.root, "profiles")
             self.tracking = self._child(self.root, "tracking")
-            try:
-                os.mkdir("tiling", mode=0o755, dir_fd=self.root.fd)
-            except FileExistsError:
-                pass
-            self.tiling = self._child(self.root, "tiling")
+            self.tiling = self._duplicate_tiling(lock_context)
             self._open_expected_artifacts(pipeline, pipeline_name)
         except Exception:
             self.close()
             raise
 
-    def _root(self, path: Path) -> _HeldDirectory:
-        result = _open_root_directory(path)
+    def _duplicate_root(self, lock_context: ProvenanceRunLock) -> _HeldDirectory:
+        descriptor = os.dup(lock_context.root_fd)
+        details = os.fstat(descriptor)
+        if _directory_identity(details) != lock_context.root_identity:
+            os.close(descriptor)
+            raise RuntimeError("Held inventory root does not match the run lock.")
+        result = _HeldDirectory(
+            None, descriptor, None, lock_context.lexical_output_path, details
+        )
+        self.directories.append(result)
+        return result
+
+    def _duplicate_tiling(self, lock_context: ProvenanceRunLock) -> _HeldDirectory:
+        descriptor = os.dup(lock_context.tiling_fd)
+        details = os.fstat(descriptor)
+        if _directory_identity(details) != lock_context.tiling_identity:
+            os.close(descriptor)
+            raise RuntimeError(
+                "Held inventory tiling directory does not match the lock."
+            )
+        result = _HeldDirectory(
+            "tiling",
+            descriptor,
+            self.root,
+            lock_context.lexical_output_path / "tiling",
+            details,
+        )
         self.directories.append(result)
         return result
 
@@ -721,18 +783,18 @@ def _cleanup_temp(tiling_fd: int, temp_fd: int, temp_name: str) -> None:
     os.rmdir(temp_name, dir_fd=tiling_fd)
 
 
-def write_roi_provenance(
+def _write_roi_provenance_locked(
     tiler: Any,
     pipeline: dict,
-    output_path: str | Path,
     pipeline_name: str,
+    lock_context: ProvenanceRunLock,
 ) -> tuple[Path, Path]:
-    """Publish a validated immutable state directory with atomic no-replace."""
+    """Publish using an authenticated lock already held across the pipeline."""
     if not provenance_enabled(pipeline):
         raise ValueError("ROI provenance publication is not enabled.")
-    validate_provenance_preflight(pipeline, output_path, pipeline_name)
+    lock_context.verify()
     pipeline_name = validate_safe_component(pipeline_name, "pipeline_name")
-    output_path = Path(output_path)
+    output_path = lock_context.lexical_output_path
     timepoints = pipeline.get("ntps", 1)
     arrays = collect_live_roi_state(tiler, timepoints)
     run_binding = _json_safe(pipeline["run_binding"])
@@ -747,7 +809,7 @@ def write_roi_provenance(
     temp_name: str | None = None
     committed = False
     try:
-        inventory = _HeldInventory(output_path, pipeline, pipeline_name)
+        inventory = _HeldInventory(lock_context, pipeline, pipeline_name)
         artifact_hashes = inventory.hashes()
         temp_name = f".{pipeline_name}.roi-provenance-{uuid.uuid4().hex}"
         os.mkdir(temp_name, mode=0o700, dir_fd=inventory.tiling.fd)
@@ -825,6 +887,7 @@ def write_roi_provenance(
         os.fsync(temp_fd)
 
         _before_provenance_commit()
+        lock_context.verify()
         inventory.revalidate()
         # Same-user malicious mutation after this check is outside the contract;
         # renameat2 still guarantees that a destination can never be replaced.
@@ -859,3 +922,26 @@ def write_roi_provenance(
 
     final_dir = output_path / "tiling" / pipeline_name
     return final_dir / "state.npz", final_dir / "manifest.json"
+
+
+def write_roi_provenance(
+    tiler: Any,
+    pipeline: dict,
+    output_path: str | Path,
+    pipeline_name: str,
+) -> tuple[Path, Path]:
+    """Acquire the full run lock and publish through the descriptor-bound writer."""
+    if not provenance_enabled(pipeline):
+        raise ValueError("ROI provenance publication is not enabled.")
+    validate_provenance_preflight(pipeline, output_path, pipeline_name)
+    lock_context = acquire_provenance_run_lock(output_path)
+    try:
+        validate_provenance_preflight(
+            pipeline, lock_context.lexical_output_path, pipeline_name
+        )
+        lock_context.verify()
+        return _write_roi_provenance_locked(
+            tiler, pipeline, pipeline_name, lock_context
+        )
+    finally:
+        lock_context.release()

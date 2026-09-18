@@ -11,6 +11,7 @@ import pytest
 
 from aliby.io.roi_provenance import (
     NPZ_KEYS,
+    acquire_provenance_run_lock,
     collect_live_roi_state,
     validate_provenance_preflight,
     write_roi_provenance,
@@ -473,7 +474,7 @@ def test_baby_hook_is_opt_in_and_generic_tracking_behavior_remains(
         "steps": {"segment_cell": {"segmenter_kwargs": {"kind": "nahual_baby"}}}
     }
     monkeypatch.setattr(
-        "aliby.pipe_baby.write_roi_provenance",
+        "aliby.pipe_baby._write_roi_provenance_locked",
         lambda *_args: pytest.fail("disabled publication must not be called"),
     )
 
@@ -490,11 +491,21 @@ def test_opt_in_hook_rejects_empty_tracking_without_publication(tmp_path):
         "data": {"segment_cell": [{"metadata": [{"cell_label": []}]}]},
     }
 
-    with pytest.raises(ValueError, match="tracking.*empty"):
-        _save_baby_tracking_lineage(state, pipeline, tmp_path, "site-A")
+    lock_context = acquire_provenance_run_lock(tmp_path)
+    try:
+        with pytest.raises(ValueError, match="tracking.*empty"):
+            _save_baby_tracking_lineage(
+                state,
+                pipeline,
+                lock_context.descriptor_output_path,
+                "site-A",
+                provenance_lock=lock_context,
+            )
+    finally:
+        lock_context.release()
 
     assert not (tmp_path / "tracking").exists()
-    assert not (tmp_path / "tiling").exists()
+    assert not (tmp_path / "tiling" / "site-A").exists()
 
 
 def test_baby_hook_publishes_only_after_tracking_and_requires_complete_state(
@@ -510,22 +521,42 @@ def test_baby_hook_publishes_only_after_tracking_and_requires_complete_state(
     pipeline = publication_pipeline(ntps=1)
     calls = []
 
-    def publish(tiler, passed_pipeline, output_path, pipeline_name):
-        tracking = output_path / "tracking" / "site-A_segment_cell.parquet"
+    def publish(tiler, passed_pipeline, pipeline_name, lock_context):
+        tracking = (
+            lock_context.descriptor_output_path
+            / "tracking"
+            / "site-A_segment_cell.parquet"
+        )
         assert tracking.is_file()
-        calls.append((tiler, passed_pipeline, pipeline_name))
+        calls.append((tiler, passed_pipeline, pipeline_name, lock_context))
         return (
-            output_path / "tiling/site-A/state.npz",
-            output_path / "tiling/site-A/manifest.json",
+            lock_context.lexical_output_path / "tiling/site-A/state.npz",
+            lock_context.lexical_output_path / "tiling/site-A/manifest.json",
         )
 
-    monkeypatch.setattr("aliby.pipe_baby.write_roi_provenance", publish)
-    _save_baby_tracking_lineage(state, pipeline, tmp_path, "site-A")
-    assert calls == [(tile_step, pipeline, "site-A")]
+    monkeypatch.setattr("aliby.pipe_baby._write_roi_provenance_locked", publish)
+    lock_context = acquire_provenance_run_lock(tmp_path)
+    try:
+        _save_baby_tracking_lineage(
+            state,
+            pipeline,
+            lock_context.descriptor_output_path,
+            "site-A",
+            provenance_lock=lock_context,
+        )
+        assert calls == [(tile_step, pipeline, "site-A", lock_context)]
 
-    state["data"]["segment_cell"] = []
-    with pytest.raises(ValueError, match="metadata-bearing"):
-        _save_baby_tracking_lineage(state, pipeline, tmp_path, "site-B")
+        state["data"]["segment_cell"] = []
+        with pytest.raises(ValueError, match="metadata-bearing"):
+            _save_baby_tracking_lineage(
+                state,
+                pipeline,
+                lock_context.descriptor_output_path,
+                "site-B",
+                provenance_lock=lock_context,
+            )
+    finally:
+        lock_context.release()
 
 
 def test_disabled_wrapper_preserves_return_and_backend_kwargs(tmp_path, monkeypatch):
@@ -604,8 +635,43 @@ def test_preflight_rejects_global_outputs_before_core(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("replaced", ["root", "tiling"])
+def test_wrapper_core_is_descriptor_bound_and_lexical_replacement_fails(
+    tmp_path, monkeypatch, replaced
+):
+    pipeline = publication_pipeline()
+    detached_root = tmp_path.parent / f"{tmp_path.name}-detached"
+
+    def replace_during_core(_pipeline, _name, output_path, *_args, **_kwargs):
+        assert str(output_path).startswith("/proc/self/fd/")
+        if replaced == "root":
+            tmp_path.rename(detached_root)
+            tmp_path.mkdir()
+            held_root = detached_root
+        else:
+            held_root = tmp_path
+            (tmp_path / "tiling").rename(tmp_path / "detached-tiling")
+            (tmp_path / "tiling").mkdir()
+        (output_path / "core-write").write_bytes(b"held inode")
+        return None, None
+
+    monkeypatch.setattr(
+        "aliby.pipe_baby._run_pipeline_and_post_impl", replace_during_core
+    )
+
+    with pytest.raises(RuntimeError, match="binding changed"):
+        run_pipeline_and_post(pipeline, "site-A", tmp_path)
+
+    held_root = detached_root if replaced == "root" else tmp_path
+    assert (held_root / "core-write").read_bytes() == b"held inode"
+    if replaced == "root":
+        assert not (tmp_path / "core-write").exists()
+    assert not (tmp_path / "tiling" / "site-A").exists()
+
+
+@pytest.mark.parametrize("loser_kind", ["wrapper", "direct_writer"])
 def test_publication_lock_serializes_full_run_and_loser_never_enters_core(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, loser_kind
 ):
     context = multiprocessing.get_context("fork")
     pipeline = publication_pipeline()
@@ -633,11 +699,14 @@ def test_publication_lock_serializes_full_run_and_loser_never_enters_core(
 
     monkeypatch.setattr("aliby.pipe_baby._run_pipeline_and_post_impl", locked_core)
 
-    def invoke(mark_started=False):
+    def invoke(mark_started=False, direct_writer=False):
         if mark_started:
             second_started.set()
         try:
-            run_pipeline_and_post(pipeline, "site-A", tmp_path)
+            if direct_writer:
+                write_roi_provenance(make_live_tiler(), pipeline, tmp_path, "site-A")
+            else:
+                run_pipeline_and_post(pipeline, "site-A", tmp_path)
         except Exception as error:
             outcomes.put(type(error).__name__)
         else:
@@ -646,7 +715,7 @@ def test_publication_lock_serializes_full_run_and_loser_never_enters_core(
     winner = context.Process(target=invoke)
     winner.start()
     assert entered.wait(10)
-    loser = context.Process(target=invoke, args=(True,))
+    loser = context.Process(target=invoke, args=(True, loser_kind == "direct_writer"))
     loser.start()
     assert second_started.wait(10)
     time.sleep(0.2)
