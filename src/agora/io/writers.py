@@ -242,7 +242,10 @@ class TilerWriter(CoreWriter):
         "trap_locations": ((None, 2), np.uint16),
         "drifts": ((None, 2), np.float32),
         "attrs/tile_size": ((1,), np.uint16),
+        # a default, not a measurement: image_size is the field the traps
+        # were found in
         "attrs/max_size": ((1,), np.uint16),
+        "attrs/image_size": ((2,), np.uint16),
     }
     group = "trap_info"
 

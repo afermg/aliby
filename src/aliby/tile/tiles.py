@@ -101,6 +101,7 @@ class TileLocations:
         tile_size: int = None,
         max_size: int = 1200,
         drifts: np.array = None,
+        image_size_yx: tuple[int, int] = None,
     ):
         """
         Initialise tiles as an array of Tile objects.
@@ -115,11 +116,16 @@ class TileLocations:
             Default is 1200.
         drifts: array
             An array of translations to correct drift of the microscope.
+        image_size_yx: tuple of two integers, optional
+            The size of the image the tiles were found in, rows first.
+            Recorded so that a reader knows the field the traps sit in:
+            max_size is a default, not a measurement.
         """
         if drifts is None:
             drifts = []
         self.tile_size = tile_size
         self.max_size = max_size
+        self.image_size_yx = image_size_yx
         self.initial_location = initial_location
         self.tiles = [
             Tile(centre, self, tile_size or max_size, max_size)
@@ -159,6 +165,10 @@ class TileLocations:
             res["trap_locations"] = self.initial_location
             res["attrs/tile_size"] = self.tile_size
             res["attrs/max_size"] = self.max_size
+            if self.image_size_yx is not None:
+                res["attrs/image_size"] = np.asarray(
+                    self.image_size_yx, dtype=int
+                )
             res["drifts"] = np.asarray(self.drifts[: tp + 1])
         else:
             res["drifts"] = np.expand_dims(self.drifts[tp], axis=0)
@@ -174,9 +184,16 @@ class TileLocations:
         initial_location,
         tile_size: int = None,
         max_size: int = 1200,
+        image_size_yx: tuple[int, int] = None,
     ):
         """Instantiate from a Tiler."""
-        return cls(initial_location, tile_size, max_size, drifts=[])
+        return cls(
+            initial_location,
+            tile_size,
+            max_size,
+            drifts=[],
+            image_size_yx=image_size_yx,
+        )
 
     @classmethod
     def from_h5(cls, file):

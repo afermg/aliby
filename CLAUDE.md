@@ -87,6 +87,10 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   - The tiling itself lives in the `tiler` package (git.ecdf.ed.ac.uk/swain-lab/aliby/tiler), shared with wela, bairn and the curation GUI: `tiler.detect` finds traps (`aliby.tile.process_traps` re-exports it), `tiler.drift` measures drift and `tiler.crop` cuts and pads tiles (`aliby.tile.tiles` re-exports `tile_in_image` and `too_far_outside`). `Tiler` is the pipeline step around them; change tiling in tiler, not here
   - Where a tile sits is `sooth.tiles`, the definition of record; `aliby.tile.tiles.Tile` calls it, and `tests/test_tile_golden.py` pins it against real layouts
   - Drift registers each image to the first processed image (`drift_reference="first"`), stored as the change since the previous time point so drifts still sum to a displacement; a second registration to the previous image logs a warning when the two differ by more than `drift_check_px` (3). Registering to the previous image, the old method, accumulated 2-7 px of error on 192- and 288-frame movies against about 0.5 px
+  - The h5 records `trap_info/attrs/image_size`, the field the traps were
+    found in, because `max_size` is alibylite's own default of 1200 and not
+    a measurement: a reader that sized a position by it drew a map of the
+    wrong shape for any other camera
   - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises
 - `aliby.baby_sitter.BabyRunner`: Interfaces with Baby-seg to return cell masks, mother-bud pairs, and tracking data
 - `extraction.core.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)

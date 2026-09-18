@@ -277,12 +277,15 @@ class Tiler(StepABC):
                 tile_size,
             )
             # store tiles in an instance of TileLocations
-            self.tile_locs = TileLocations.from_tiler(tile_locs, tile_size)
+            self.tile_locs = TileLocations.from_tiler(
+                tile_locs, tile_size, image_size_yx=self.image.shape[-2:]
+            )
         else:
             # one tile with its centre at the image's centre
             tile_locs, max_size = whole_image(self.image.shape[-2:])
             self.tile_locs = TileLocations.from_tiler(
-                tile_locs, max_size=max_size
+                tile_locs, max_size=max_size,
+                image_size_yx=self.image.shape[-2:],
             )
 
     def find_drift(self, tp: int):
@@ -557,7 +560,11 @@ class Tiler(StepABC):
         Returns
         -------
         final: array
-            Data arranged as (tiles, channels, Z, X, Y)
+            Data arranged as (tiles, channels, 1, Z, Y, X), rows before
+            columns. The axis of length one is a relic: callers index it
+            away with [:, 0, 0], and tests/test_tile_golden.py pins the
+            shape. tiler's own read_trap gives (time points, channels, Z,
+            Y, X).
             Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
         if channels is None:
