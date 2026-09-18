@@ -42,6 +42,7 @@ from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+from sooth import tile_shape
 from tqdm import tqdm
 
 from aliby.global_settings import global_settings
@@ -748,7 +749,9 @@ class Pipeline(ProcessABC):
         print()
 
 
-def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
+def check_earlystop(
+    filename: str, es_parameters: dict, tile_size: int | tuple[int, int]
+):
     """
     Check recent time points for tiles with too many cells.
 
@@ -767,9 +770,12 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
                 'thresh_trap_ncells': 8,
                 'thresh_trap_area': 0.9,
                 'ntps_to_eval': 5}
-    tile_size: int
+    tile_size: int or tuple of two ints
         Size of tile.
     """
+    # a tile's area, which is its height times its width
+    height, width = tile_shape(tile_size)
+    area = height * width
     # get the area of the cells organised by trap and cell number
     s = Signal(filename)
     df = s.get_raw("/extraction/general/null/area")
@@ -784,7 +790,7 @@ def check_earlystop(filename: str, es_parameters: dict, tile_size: int):
     )
     # find tiles with cells covering too great a fraction of the tiles' area
     traps_above_athresh = (
-        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / tile_size**2
+        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / area
         > es_parameters["thresh_trap_area"]
     )
     return (traps_above_nthresh & traps_above_athresh).mean()

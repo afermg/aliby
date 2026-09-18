@@ -42,7 +42,7 @@ class Cells:
         self.filename: t.Optional[t.Union[str, Path]] = filename
         self.cinfo_path: t.Optional[str] = path
         self._edgemasks: t.Optional[str] = None
-        self._tile_size: t.Optional[int] = None
+        self._tile_size: tuple[int, int] | None = None
 
     def __getitem__(self, item):
         """
@@ -120,8 +120,14 @@ class Cells:
         return list(set(self["trap"]))
 
     @property
-    def tile_size(self) -> t.Union[int, t.Tuple[int], None]:
-        """Give the x- and y- sizes of a tile."""
+    def tile_size(self) -> tuple[int, int] | None:
+        """
+        Give a tile's height and width.
+
+        Read off the stored edge masks rather than the tile_size attribute,
+        so it is the shape the masks actually have. A tile need not be
+        square: a mother machine's channel is tall and narrow.
+        """
         if self._tile_size is None:
             with h5py.File(self.filename, mode="r") as f:
                 self._tile_size = f["cell_info/edgemasks"].shape[1:]

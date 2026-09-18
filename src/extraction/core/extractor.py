@@ -16,6 +16,7 @@ from agora.io.cells import Cells
 from agora.io.writers import pdms_mask_path
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
+from sooth import tile_shape
 from extraction.core.functions.cell_functions import (
     _MODEL_TO_PARAM,
     identify_vacuole,
@@ -642,7 +643,7 @@ class Extractor(StepABC):
                     masks[trap_id] = np.stack(np.array(trap_cells)).astype(
                         bool
                     )
-        # one array of shape (n_cells, tile_size, tile_size) per trap
+        # one array of shape (n_cells, Y, X) per trap
         masks = [np.array(v) for v in masks.values()]
         return masks
 
@@ -707,7 +708,7 @@ class Extractor(StepABC):
                     (
                         np.any(m, axis=0)
                         if len(m)
-                        else np.zeros((tile_size, tile_size), dtype=bool)
+                        else np.zeros(tile_shape(tile_size), dtype=bool)
                     )
                     for m in masks
                 ]
@@ -1114,7 +1115,7 @@ class Extractor(StepABC):
             Size of the tile to be extracted.
         masks: list of arrays
             A list of masks per trap with each mask having dimensions
-            (ncells, tile_size, tile_size) and with one mask per cell.
+            (ncells, Y, X) and with one mask per cell.
         cell_labels: dict
             A dictionary with trap_ids as keys and cell_labels as
             values.
@@ -1295,7 +1296,10 @@ class Extractor(StepABC):
         y_df = extract_dict["general/null/centroid_y"]
         extract_dict["general/null/image_x"] = x_df.copy()
         extract_dict["general/null/image_y"] = y_df.copy()
-        half_width = (self.tiler.tile_size - 1) / 2
+        # the tile's own half-extent on each axis, x before y because the
+        # columns below are (x, y)
+        height, width = tile_shape(self.tiler.tile_size)
+        half_extent = np.asarray([(width - 1) / 2, (height - 1) / 2])
         traps = np.array(x_df.index.get_level_values("trap"))
         if np.any(traps):
             for tp in x_df.columns:
@@ -1304,7 +1308,9 @@ class Extractor(StepABC):
                     (x_df[tp].values, y_df[tp].values)
                 )
                 coords_in_image = (
-                    centroid_coords + tile_locs[traps][:, ::-1] - half_width
+                    centroid_coords
+                    + tile_locs[traps][:, ::-1]
+                    - half_extent
                 )
                 extract_dict["general/null/image_x"][tp] = coords_in_image[
                     :, 0

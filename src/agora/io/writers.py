@@ -7,6 +7,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+from sooth import tile_shape
 
 # location in the h5 file of the mask of the PDMS trap within a tile;
 # in trap_info, with the other data that is per position rather than
@@ -241,7 +242,9 @@ class TilerWriter(CoreWriter):
     datatypes = {
         "trap_locations": ((None, 2), np.uint16),
         "drifts": ((None, 2), np.float32),
-        "attrs/tile_size": ((1,), np.uint16),
+        # one number for a square tile, two for a rectangle; an attr's
+        # shape is h5py's to infer, so this entry only permits the key
+        "attrs/tile_size": ((None,), np.uint16),
         # a default, not a measurement: image_size is the field the traps
         # were found in
         "attrs/max_size": ((1,), np.uint16),
@@ -297,7 +300,7 @@ class BabyWriter(CoreWriter):
         data: dict,
         overwrite: list[str],
         tp: int | None = None,
-        tile_size: int | None = None,
+        tile_size: int | tuple[int, int] | None = None,
     ):
         """
         Write data for one time point and one position.
@@ -310,8 +313,12 @@ class BabyWriter(CoreWriter):
             A list of datasets to overwrite
         tp: int
             The time point of interest
+        tile_size: int or tuple of two ints
+            The tile's size, rows first, which is the shape of a stored
+            edge mask. One number is a square tile.
         """
-        self.datatypes["edgemasks"] = ((None, tile_size, tile_size), bool)
+        height, width = tile_shape(tile_size)
+        self.datatypes["edgemasks"] = ((None, height, width), bool)
         with h5py.File(self.file, "a") as store:
             hgroup = store.require_group(self.group)
             available_tps = hgroup.get("timepoint", None)

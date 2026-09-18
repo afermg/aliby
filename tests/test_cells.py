@@ -101,3 +101,35 @@ def test_mask_kind_fills_the_boundary(empty_mask_h5):
     outline = cells.at_time(0, kind="edgemask")[1][0]
     assert filled[2, 2] and not outline[2, 2]
     assert filled.sum() > outline.sum()
+
+
+def test_a_rectangular_tile_stores_masks_of_its_own_shape(tmp_path):
+    """
+    Check the h5 a tall tile writes is self-consistent.
+
+    The edgemask dataset's shape is the tile's, so a mother machine's
+    channel has to reach it as two numbers; declared square, every stored
+    mask would be clipped to the shorter side. Cells reads the size back off
+    that raster rather than off the attr, so the two must agree.
+    """
+    from agora.io.writers import BabyWriter
+
+    path = tmp_path / "pos001.h5"
+    masks = np.zeros((2, 240, 80), dtype=bool)
+    masks[0, 10:20, 5:15] = True
+    masks[1, 200:210, 60:70] = True
+    BabyWriter(path).write(
+        data={
+            "edgemasks": masks,
+            "trap": np.array([0, 0]),
+            "cell_label": np.array([1, 2]),
+            "timepoint": np.array([0, 0]),
+        },
+        overwrite=[],
+        tp=0,
+        tile_size=(240, 80),
+    )
+
+    with h5py.File(path, "r") as h5:
+        assert h5["cell_info/edgemasks"].shape == (2, 240, 80)
+    assert Cells(path).tile_size == (240, 80)

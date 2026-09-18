@@ -520,3 +520,59 @@ def test_find_drift_refuses_a_gap_in_drifts():
     tiler = _labelled_tiler(4)
     with pytest.raises(ValueError, match="drifts of the 2 before"):
         tiler.find_drift(2)
+
+
+# ---------------------------------------------------------------------------
+# rectangular tiles
+# ---------------------------------------------------------------------------
+
+
+def test_a_tall_tile_keeps_both_of_its_sides():
+    locs = TileLocations([[120, 40]], tile_size=(240, 80), drifts=[[0, 0]])
+    tile = locs.tiles[0]
+    y, x, height, width = tile.as_tile(0)
+    rows, columns = tile.as_range(0)
+
+    assert locs.tile_size == (240, 80)
+    assert tile.size == (240, 80)
+    assert tile.half_size == (120, 40)
+    assert (y, x) == (0, 0)
+    assert (height, width) == (240, 80)
+    assert (rows.stop - rows.start, columns.stop - columns.start) == (240, 80)
+
+
+def test_a_square_tile_is_still_written_as_one_number():
+    # every h5 already written holds a bare number, and a reader that casts
+    # one would break on a pair
+    written = TileLocations(
+        [[10, 10]], tile_size=16, drifts=[[0, 0]]
+    ).to_dict(0)["attrs/tile_size"]
+
+    assert written == 16
+    assert np.ndim(written) == 0
+
+
+def test_a_rectangular_tile_is_written_as_its_height_and_width():
+    written = TileLocations(
+        [[120, 40]], tile_size=(240, 80), drifts=[[0, 0]]
+    ).to_dict(0)["attrs/tile_size"]
+
+    np.testing.assert_array_equal(written, [240, 80])
+
+
+def test_a_size_nobody_set_stays_unset():
+    # the whole-image path gives TileLocations no tile size, and a size that
+    # was never set must not be invented here
+    locs = TileLocations([[10, 10]], max_size=32, drifts=[[0, 0]])
+    assert locs.tile_size is None
+    assert locs.to_dict(0)["attrs/tile_size"] is None
+    # the tile itself falls back to the maximum size, as it always did
+    assert locs.tiles[0].size == (32, 32)
+
+
+def test_detection_refuses_a_rectangle_rather_than_looking_for_one():
+    # the detector is built on one length, so looking for a tall trap would
+    # find something that is not there. Such a layout comes with its centres
+    tiler = _make_tiler(Y=400, X=400)
+    with pytest.raises(ValueError, match="square traps"):
+        tiler.initialise_tiles(tile_size=(240, 80))

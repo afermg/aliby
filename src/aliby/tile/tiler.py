@@ -38,6 +38,7 @@ from agora.abc import ParametersABC, StepABC
 from agora.io.bridge import BridgeH5
 from aliby.global_settings import global_settings
 from aliby.tile.tiles import TileLocations
+from sooth import tile_shape
 from tiler.crop import cut_tile
 from tiler.detect import keep_away_from_edges, segment_traps, whole_image
 from tiler.drift import drift_at
@@ -145,21 +146,26 @@ class Tiler(StepABC):
         # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
+        # a tile's size is its height and width, one number meaning square
+        if self.tile_size is not None:
+            self.tile_size = tile_shape(self.tile_size)
         # adjust for non-standard magnification
-        if (
-            self.tile_size
-            != global_settings.imaging_specifications["tile_size"]
-        ):
+        default_size = tile_shape(
+            global_settings.imaging_specifications["tile_size"]
+        )
+        if self.tile_size != default_size:
             print(
                 "Warning: tile_size has been changed."
                 "\nConsider changing magnification instead."
             )
         else:
             # adjust tile_size for any magnification differing from default
-            self.tile_size = int(
-                self.tile_size
-                * self.magnification
+            scale = (
+                self.magnification
                 / global_settings.imaging_specifications["magnification"]
+            )
+            self.tile_size = tile_shape(
+                [int(side * scale) for side in self.tile_size]
             )
 
     @classmethod
@@ -253,7 +259,7 @@ class Tiler(StepABC):
         """Return number of tiles."""
         return len(self.tile_locs)
 
-    def initialise_tiles(self, tile_size: int = None):
+    def initialise_tiles(self, tile_size: int | tuple[int, int] = None):
         """
         Find initial positions of tiles.
 
@@ -262,17 +268,26 @@ class Tiler(StepABC):
 
         Parameters
         ----------
-        tile_size: integer
-            The size of a tile.
+        tile_size: integer or tuple of two integers
+            The tile's size, rows first. One number is a square tile.
+            Detection finds square traps, so a rectangular size must come
+            with its centres, from an aliby h5 or a curator.
         """
         initial_image = self.image[
             self.first_processed_tp, self.ref_channel_index, self.ref_z
         ]
         if tile_size:
+            height, width = tile_shape(tile_size)
+            if height != width:
+                raise ValueError(
+                    "Detection finds square traps, so it cannot look for a "
+                    f"{height}x{width} tile. Give the centres too, from an "
+                    "aliby h5 or a curator."
+                )
             # find the tiles, as (row, column), keeping those clear of the
             # edges with a margin for drift
             tile_locs = keep_away_from_edges(
-                segment_traps(initial_image, tile_size),
+                segment_traps(initial_image, height),
                 self.image.shape[-2:],
                 tile_size,
             )

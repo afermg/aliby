@@ -5,21 +5,46 @@ import typing as t
 import h5py
 import numpy as np
 import sooth
+from sooth import tile_shape
 
 # the rule for cutting and padding a tile lives in tiler; the OMERO loader
 # imports it from here
 from tiler.crop import tile_in_image, too_far_outside  # noqa: F401
 
 
+def aliby_tile_size(size) -> int | np.ndarray | None:
+    """
+    Return a tile's size as an h5 attribute records it.
+
+    A square tile is written as the one number every h5 already holds, so a
+    reader that casts it is unaffected; only a rectangle is written as its
+    height and width. A size nobody set stays unset.
+    """
+    if size is None:
+        return None
+    height, width = tile_shape(size)
+    return (
+        height
+        if height == width
+        else np.asarray([height, width], dtype=int)
+    )
+
+
 class Tile:
     """Define a tile."""
 
     def __init__(self, centre, parent_class, size, max_size):
-        """Initialise using a parent class."""
+        """
+        Initialise using a parent class.
+
+        The size is the tile's height and width. One number means a square
+        tile - every ALCATRAS trap - and a mother machine's channel says
+        both.
+        """
         self.centre = centre
         self.parent_class = parent_class  # used to access drifts
-        self.size = size
-        self.half_size = size // 2
+        self.size = tile_shape(size)
+        self.half_size = tuple(side // 2 for side in self.size)
         self.max_size = max_size
 
     def centre_at_time(self, tp: int) -> t.List[int]:
@@ -70,7 +95,8 @@ class Tile:
             Width of tile.
         """
         y, x = sooth.tile_origin_yx(self.centre_at_time(tp), self.size)
-        return y, x, self.size, self.size
+        height, width = self.size
+        return y, x, height, width
 
     def as_range(self, tp: int):
         """
@@ -98,7 +124,7 @@ class TileLocations:
     def __init__(
         self,
         initial_location: np.array,
-        tile_size: int = None,
+        tile_size: int | tuple[int, int] = None,
         max_size: int = 1200,
         drifts: np.array = None,
         image_size_yx: tuple[int, int] = None,
@@ -110,8 +136,9 @@ class TileLocations:
         ----------
         initial_location: array
             An array of tile centres.
-        tile_size: int
-            Length of one side of a square tile.
+        tile_size: int or tuple of two ints
+            The tile's size, rows first. One number is a square tile;
+            a mother machine's channel gives its height and width.
         max_size: int, optional
             Default is 1200.
         drifts: array
@@ -123,12 +150,14 @@ class TileLocations:
         """
         if drifts is None:
             drifts = []
-        self.tile_size = tile_size
+        self.tile_size = (
+            None if tile_size is None else tile_shape(tile_size)
+        )
         self.max_size = max_size
         self.image_size_yx = image_size_yx
         self.initial_location = initial_location
         self.tiles = [
-            Tile(centre, self, tile_size or max_size, max_size)
+            Tile(centre, self, self.tile_size or max_size, max_size)
             for centre in initial_location
         ]
         self.drifts = drifts
@@ -159,11 +188,15 @@ class TileLocations:
             An index for a time point
         first_tp: integer
             The first time point processed.
+
+        A square tile's size is written as the one number every h5 already
+        holds, so a reader that casts it is unaffected; only a rectangle is
+        written as its height and width.
         """
         res = dict()
         if tp == first_tp:
             res["trap_locations"] = self.initial_location
-            res["attrs/tile_size"] = self.tile_size
+            res["attrs/tile_size"] = aliby_tile_size(self.tile_size)
             res["attrs/max_size"] = self.max_size
             if self.image_size_yx is not None:
                 res["attrs/image_size"] = np.asarray(
@@ -182,7 +215,7 @@ class TileLocations:
     def from_tiler(
         cls,
         initial_location,
-        tile_size: int = None,
+        tile_size: int | tuple[int, int] = None,
         max_size: int = 1200,
         image_size_yx: tuple[int, int] = None,
     ):
@@ -203,7 +236,8 @@ class TileLocations:
             initial_locations = tile_info["trap_locations"][()]
             drifts = tile_info["drifts"][()].tolist()
             max_size = tile_info.attrs["max_size"]
-            tile_size = tile_info.attrs["tile_size"]
+            # one number is a square tile, two its height and width
+            tile_size = tile_shape(tile_info.attrs["tile_size"])
         tile_loc_cls = cls(initial_locations, tile_size, max_size=max_size)
         tile_loc_cls.drifts = drifts
         return tile_loc_cls
