@@ -45,18 +45,38 @@ from aliby.tile.tiles import TileLocations
 
 
 class TilerParameters(ParametersABC):
-    """Define default values for tile size and the reference channels."""
+    """Configure tile geometry, reference images, drift, and detector failure."""
+
+    track_drift: bool
+    fallback_to_center: bool
 
     _defaults = {
         "tile_size": 117,
         "ref_channel": 0,
         "ref_z": 0,
-        "track_drift": True,
+        "track_drift": False,
+        "fallback_to_center": True,
     }
 
 
 def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
-    """Returns a Tiler class constructor that requires an Image (class)."""
+    """Return a Tiler constructor that requires an Image instance.
+
+    ``calculate_drift`` is accepted as a deprecated configuration alias so it
+    controls behavior rather than being silently discarded. New callers should
+    use ``track_drift``.
+    """
+    kwargs = kwargs.copy()
+    if "calculate_drift" in kwargs:
+        if "track_drift" in kwargs:
+            raise TypeError("Specify only 'track_drift', not 'calculate_drift'.")
+        warnings.warn(
+            "'calculate_drift' is deprecated; use 'track_drift' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        kwargs["track_drift"] = kwargs.pop("calculate_drift")
+
     # Separate TilerParameters fields from extra kwargs
     tiler_param_keys = set(TilerParameters._defaults.keys())
     tiler_kwargs = {k: v for k, v in kwargs.items() if k in tiler_param_keys}
@@ -68,7 +88,9 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
         case _:
             tiler = Tiler
     return partial(
-        tiler.from_image, parameters=TilerParameters(**tiler_kwargs), **extra_kwargs
+        tiler.from_image,
+        parameters=TilerParameters.default(**tiler_kwargs),
+        **extra_kwargs,
     )
 
 
@@ -411,6 +433,7 @@ class Tiler(StepABC):
                 self.tile_locs = set_areas_of_interest(
                     initial_image,
                     self.tile_size,
+                    fallback_to_center=self.fallback_to_center,
                 )
             else:
                 self.tile_locs = get_center(self.pixels.shape)
@@ -424,11 +447,9 @@ class Tiler(StepABC):
                 )
                 self.no_processed = drift_len
 
-        # Only calculate drift and correct it when explicitly indicated
-        if not hasattr(self, "calculate_drift"):
-            self.calculate_drift = False
-
-        if self.calculate_drift:
+        # A manually assigned legacy attribute remains an explicit override.
+        track_drift = getattr(self, "calculate_drift", self.track_drift)
+        if track_drift:
             # determine drift for this time point and update tile_locs.drifts
             self.find_drift(tp)
         else:
@@ -653,6 +674,7 @@ def if_out_of_bounds_pad(
 def set_areas_of_interest(
     pixels: np.ndarray,
     tile_size: int | list[int] | tuple[int, int] | None = None,
+    fallback_to_center: bool = True,
 ) -> TileLocations:
     """
     Find initial positions of tiles, or determine that the entire image is
@@ -666,6 +688,9 @@ def set_areas_of_interest(
     tile_size: int, list[integer], tuple[integer, integer], or None
         The size of a tile (scalar or [height, width]); None selects the full
         rectangular field of view.
+    fallback_to_center: bool
+        If true, use a centered tile of the requested size when trap detection
+        raises. If false, fail without creating a fallback region of interest.
     """
     shape = pixels.shape
     if tile_size is None:
@@ -682,6 +707,10 @@ def set_areas_of_interest(
         try:
             tile_locs = segment_traps(pixels, tile_size_min)
         except Exception as e:
+            if not fallback_to_center:
+                raise RuntimeError(
+                    "Trap detection failed and fallback_to_center is disabled."
+                ) from e
             warnings.warn(f"Trap detection failed ({e}), falling back to center tile.")
             return get_center(shape, tile_size)
         # keep only tiles that are not near an edge

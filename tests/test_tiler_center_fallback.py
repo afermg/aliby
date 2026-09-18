@@ -18,12 +18,14 @@ def test_trap_detection_exception_preserves_requested_center_tile(monkeypatch):
         raise RuntimeError("forced detector failure")
 
     monkeypatch.setattr("aliby.tile.tiler.segment_traps", fail_trap_detection)
+    parameters = TilerParameters.default(tile_size=117)
     tiler = Tiler(
         pixels,
         meta={},
-        parameters=TilerParameters.default(tile_size=117),
+        parameters=parameters,
     )
 
+    assert parameters.fallback_to_center is True
     with pytest.warns(UserWarning, match="forced detector failure"):
         result = tiler._run_tp(0)
 
@@ -34,6 +36,29 @@ def test_trap_detection_exception_preserves_requested_center_tile(monkeypatch):
     assert tile.as_range(0) == (slice(42, 159), slice(52, 169))
     assert result["drift"]["attrs/tile_size"] == (117, 117)
     assert result["pixels"].shape == (1, 1, 1, 117, 117)
+
+
+def test_trap_detection_exception_fails_closed_when_fallback_disabled(monkeypatch):
+    pixels = np.zeros((1, 1, 1, 201, 221), dtype=np.float32)
+
+    def fail_trap_detection(*args, **kwargs):
+        raise ValueError("forced detector failure")
+
+    monkeypatch.setattr("aliby.tile.tiler.segment_traps", fail_trap_detection)
+    tiler = Tiler(
+        pixels,
+        meta={},
+        parameters=TilerParameters.default(
+            tile_size=117,
+            fallback_to_center=False,
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="fallback_to_center is disabled") as error:
+        tiler._run_tp(0)
+
+    assert isinstance(error.value.__cause__, ValueError)
+    assert tiler.tile_locs is None
 
 
 @pytest.mark.parametrize(
