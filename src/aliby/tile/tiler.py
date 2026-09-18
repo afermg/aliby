@@ -77,9 +77,12 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
         )
         kwargs["track_drift"] = kwargs.pop("calculate_drift")
 
-    # Separate TilerParameters fields from extra kwargs
+    # Separate TilerParameters fields from extra kwargs. Inject only the new
+    # controls; omitted geometry/reference fields retain existing semantics.
     tiler_param_keys = set(TilerParameters._defaults.keys())
     tiler_kwargs = {k: v for k, v in kwargs.items() if k in tiler_param_keys}
+    tiler_kwargs.setdefault("track_drift", False)
+    tiler_kwargs.setdefault("fallback_to_center", True)
     extra_kwargs = {k: v for k, v in kwargs.items() if k not in tiler_param_keys}
 
     match kind:
@@ -89,7 +92,7 @@ def dispatch_tiler(kind: str, kwargs: dict) -> Callable:
             tiler = Tiler
     return partial(
         tiler.from_image,
-        parameters=TilerParameters.default(**tiler_kwargs),
+        parameters=TilerParameters(**tiler_kwargs),
         **extra_kwargs,
     )
 
@@ -433,7 +436,7 @@ class Tiler(StepABC):
                 self.tile_locs = set_areas_of_interest(
                     initial_image,
                     self.tile_size,
-                    fallback_to_center=self.fallback_to_center,
+                    fallback_to_center=getattr(self, "fallback_to_center", True),
                 )
             else:
                 self.tile_locs = get_center(self.pixels.shape)
@@ -448,14 +451,19 @@ class Tiler(StepABC):
                 self.no_processed = drift_len
 
         # A manually assigned legacy attribute remains an explicit override.
-        track_drift = getattr(self, "calculate_drift", self.track_drift)
-        if track_drift:
+        if hasattr(self, "calculate_drift"):
+            track_drift = self.calculate_drift
+        else:
+            track_drift = getattr(self, "track_drift", False)
+
+        if tp > 0 and track_drift:
             # determine drift for this time point and update tile_locs.drifts
             self.find_drift(tp)
         else:
+            # Time point zero defines the registration reference, so its drift
+            # is exactly zero and never requires phase correlation.
             drift = [0.0, 0.0]
-            # store drift
-            if 0 < tp < len(self.tile_locs.drifts):
+            if tp < len(self.tile_locs.drifts):
                 self.tile_locs.drifts[tp] = drift
             else:
                 self.tile_locs.drifts.append(drift)
@@ -690,7 +698,8 @@ def set_areas_of_interest(
         rectangular field of view.
     fallback_to_center: bool
         If true, use a centered tile of the requested size when trap detection
-        raises. If false, fail without creating a fallback region of interest.
+        raises or retains no in-bounds locations. If false, fail without
+        creating a fallback region of interest.
     """
     shape = pixels.shape
     if tile_size is None:
@@ -720,6 +729,12 @@ def set_areas_of_interest(
             if half_tile < x < max_size - half_tile
             and half_tile < y < max_size - half_tile
         ]
+        if not tile_locs:
+            message = "Trap detection returned no in-bounds tile locations"
+            if not fallback_to_center:
+                raise RuntimeError(f"{message} and fallback_to_center is disabled.")
+            warnings.warn(f"{message}; falling back to center tile.")
+            return get_center(shape, tile_size)
         # store tiles in an instance of TileLocations
         tile_locs = TileLocations.from_tiler_init(tile_locs, tile_size, max_size)
     else:

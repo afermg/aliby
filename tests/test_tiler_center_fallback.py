@@ -38,6 +38,43 @@ def test_trap_detection_exception_preserves_requested_center_tile(monkeypatch):
     assert result["pixels"].shape == (1, 1, 1, 117, 117)
 
 
+def test_trap_detection_with_no_in_bounds_tiles_falls_back_to_requested_center(
+    monkeypatch,
+):
+    pixels = np.zeros((201, 221), dtype=np.float32)
+    monkeypatch.setattr(
+        "aliby.tile.tiler.segment_traps",
+        lambda *_args: [[10, 10], [190, 190]],
+    )
+
+    with pytest.warns(UserWarning, match="no in-bounds tile locations"):
+        configured = set_areas_of_interest(
+            pixels,
+            tile_size=117,
+            fallback_to_center=True,
+        )
+
+    tile = configured.tiles[0]
+    assert tuple(tile.centre) == (100, 110)
+    assert configured.tile_size == (117, 117)
+    assert tile.as_range(0) == (slice(42, 159), slice(52, 169))
+
+
+def test_trap_detection_with_no_in_bounds_tiles_fails_closed(monkeypatch):
+    pixels = np.zeros((201, 221), dtype=np.float32)
+    monkeypatch.setattr(
+        "aliby.tile.tiler.segment_traps",
+        lambda *_args: [[10, 10], [190, 190]],
+    )
+
+    with pytest.raises(RuntimeError, match="no in-bounds tile locations"):
+        set_areas_of_interest(
+            pixels,
+            tile_size=117,
+            fallback_to_center=False,
+        )
+
+
 def test_trap_detection_exception_fails_closed_when_fallback_disabled(monkeypatch):
     pixels = np.zeros((1, 1, 1, 201, 221), dtype=np.float32)
 
