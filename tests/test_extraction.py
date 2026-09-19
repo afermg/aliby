@@ -105,3 +105,107 @@ def test_a_position_whose_only_trap_is_trap_zero_is_placed_too():
     )
     assert result["general/null/image_x"][0].iloc[0] == wanted_x
     assert result["general/null/image_y"][0].iloc[0] == wanted_y
+
+
+class FakeTile:
+    """Stand in for a Tile, cut at a fixed place."""
+
+    def __init__(self, slices):
+        self.slices = slices
+
+    def as_range(self, tp):
+        """Return the tile's slices, which do not drift."""
+        return self.slices
+
+
+def square(top, left, side=6, shape=(20, 20)):
+    """Return a square cell mask."""
+    mask = np.zeros(shape, dtype=bool)
+    mask[top : top + side, left : left + side] = True
+    return mask
+
+
+def extractor_for_obscured(slices, image_yx=(100, 100), exclude=True):
+    """Return something with what find_obscured and the functions read."""
+    return SimpleNamespace(
+        params=SimpleNamespace(exclude_obscured=exclude),
+        tiler=SimpleNamespace(
+            shape=(1, 1, 1, *image_yx),
+            tile_size=20,
+            tile_locs=SimpleNamespace(tiles=[FakeTile(slices)]),
+        ),
+        obscured={},
+        pdms_mask=None,
+        cell_fun_names={"area"},
+        all_funs={
+            "area": lambda masks, trap, channels: masks.sum(axis=(1, 2)),
+            "background_area": lambda masks, trap, channels, exclude_mask: (
+                ~masks.any(axis=0)
+            ).sum(),
+        },
+    )
+
+
+def test_a_cell_cut_off_by_its_tile_is_obscured():
+    """
+    Check a cell touching the tile border is set aside.
+
+    Its area is that of the part inside the tile, not of the cell.
+    """
+    masks = [np.stack([square(7, 7), square(0, 7), square(7, 14)])]
+    labels = {0: [1, 2, 3]}
+    extractor = extractor_for_obscured((slice(40, 60), slice(40, 60)))
+
+    obscured = Extractor.find_obscured(extractor, 0, masks, labels)
+
+    assert obscured == {0: {2, 3}}
+
+
+def test_a_cell_over_a_tile_padded_beyond_the_image_is_obscured():
+    """
+    Check a cell drawn over padding is set aside.
+
+    The tile hangs three columns off the image's right edge, where tiler
+    repeats the last column, so a cell ending two columns from the tile's
+    border is drawn over pixels that were never imaged.
+    """
+    masks = [np.stack([square(7, 7), square(7, 12)])]
+    labels = {0: [1, 2]}
+    extractor = extractor_for_obscured((slice(40, 60), slice(83, 103)))
+
+    obscured = Extractor.find_obscured(extractor, 0, masks, labels)
+
+    assert obscured == {0: {2}}
+
+
+def test_obscured_cells_are_kept_when_asked():
+    masks = [np.stack([square(0, 7)])]
+    extractor = extractor_for_obscured(
+        (slice(40, 60), slice(40, 60)), exclude=False
+    )
+
+    assert Extractor.find_obscured(extractor, 0, masks, {0: [1]}) == {}
+
+
+def test_an_obscured_cell_is_not_measured_but_is_not_background():
+    """
+    Check an obscured cell is skipped by cell functions alone.
+
+    Its pixels are still a cell's, so a background estimate that counted
+    them would be contaminated by its fluorescence.
+    """
+    masks = [np.stack([square(7, 7), square(0, 7)])]
+    extractor = extractor_for_obscured((slice(40, 60), slice(40, 60)))
+    extractor.obscured = {0: {2}}
+    tile = np.zeros((20, 20))
+
+    areas, cells = Extractor.apply_extraction_function(
+        extractor, [tile], masks, "area", {0: [1, 2]}, ["GFP"]
+    )
+    (background,), _ = Extractor.apply_extraction_function(
+        extractor, [tile], masks, "background_area", {0: [1, 2]}, ["GFP"]
+    )
+
+    assert cells == ((0, 1),)
+    assert areas == (36,)
+    assert background == 400 - 2 * 36

@@ -16,7 +16,8 @@ from agora.io.cells import Cells
 from agora.io.writers import pdms_mask_path
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, find_channel_name
-from sooth import half_size, tile_shape
+from sooth import half_size, is_obscured, tile_shape
+from tiler import shown_in_tile
 from extraction.core.functions.cell_functions import (
     _MODEL_TO_PARAM,
     identify_vacuole,
@@ -96,6 +97,7 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
     tree_dict["identify_vacuoles"] = True
     tree_dict["background_channels"] = background_channels
     tree_dict["mask_pdms"] = True
+    tree_dict["exclude_obscured"] = True
     return tree_dict
 
 
@@ -240,6 +242,7 @@ class ExtractorParameters(ParametersABC):
         identify_vacuoles: bool = True,
         background_channels: set = set(),
         mask_pdms: bool = True,
+        exclude_obscured: bool = True,
     ):
         """
         Initialise.
@@ -272,6 +275,13 @@ class ExtractorParameters(ParametersABC):
             If True (default), find the PDMS trap in the brightfield
             images and exclude it from all background estimates. The
             PDMS is autofluorescent and so is not background.
+        exclude_obscured: bool
+            If True (default), measure no cell that reaches the edge of
+            its tile, or the edge of the image where a tile hangs off
+            it: such a cell is cut off, and its area, volume and
+            fluorescence are those of the visible part. It is still
+            segmented, tracked and stored, and its pixels are still
+            kept out of every background estimate.
         """
         self.tree = tree
         self.subtract_background = subtract_background
@@ -280,6 +290,7 @@ class ExtractorParameters(ParametersABC):
         self.identify_vacuoles = identify_vacuoles
         self.background_channels = background_channels
         self.mask_pdms = mask_pdms
+        self.exclude_obscured = exclude_obscured
 
     @classmethod
     def default(cls):
@@ -366,6 +377,8 @@ class Extractor(StepABC):
         # found once per position from the brightfield images
         self.pdms_mask = self.load_pdms_mask()
         self.sought_pdms_mask = self.pdms_mask is not None
+        # labels, per trap, of the cells not measured at this time point
+        self.obscured = {}
 
     @classmethod
     def from_tiler(
@@ -501,8 +514,12 @@ class Extractor(StepABC):
                 if is_cell_fun:
                     # find property from the tile
                     result = self.all_funs[fun_name](mask_set, trap, channels)
-                    # store results for each cell separately
+                    # store results for each cell separately, except for
+                    # a cell the tile shows only part of
+                    hidden = self.obscured.get(trap_id, set())
                     for cell_label, val in zip(local_cell_labels, result):
+                        if cell_label in hidden:
+                            continue
                         results.append(val)
                         idx.append((trap_id, cell_label))
                 else:
@@ -550,7 +567,10 @@ class Extractor(StepABC):
             for fun in funs
         }
         # check for functions returning a dict rather than a value
-        dict_fns = [fun for fun in d if isinstance(d[fun][0][0], dict)]
+        # a time point whose every cell is obscured has no results
+        dict_fns = [
+            fun for fun in d if d[fun][0] and isinstance(d[fun][0][0], dict)
+        ]
         replacements = {}
         for fn in dict_fns:
             # add to d for each key in returned dict
@@ -1143,6 +1163,9 @@ class Extractor(StepABC):
         cell_labels, masks, outlines, img, img_bgsub = self.load_tp_data(
             tp, tile_size, tree_dict, masks, cell_labels
         )
+        # every cell has already shaped the background; only now are the
+        # cut-off ones set aside, so they are measured by nothing else
+        self.obscured = self.find_obscured(tp, masks, cell_labels)
         # compute intracellular sub-masks if requested
         vac_masks, cyt_masks = None, None
         if self.params.intracellular_masks:
@@ -1167,6 +1190,55 @@ class Extractor(StepABC):
             cell_labels, img, img_bgsub, masks
         )
         return {**res_one, **res_multiple}
+
+    def find_obscured(
+        self, tp: int, masks: list[np.ndarray], cell_labels: dict
+    ) -> dict[int, set[int]]:
+        """
+        Find the cells that their tiles show only part of.
+
+        A cell is obscured if it reaches the tile's border or the pixels
+        a tile hanging off the image is padded with; sooth's
+        ``is_obscured`` is the rule and tiler's ``shown_in_tile`` says
+        which pixels were imaged.
+
+        Parameters
+        ----------
+        tp: int
+            Time point, which places each tile.
+        masks: list of arrays
+            Cell masks per trap, each (ncells, Y, X).
+        cell_labels: dict
+            Cell labels per trap, in the order of the masks.
+
+        Returns
+        -------
+        obscured: dict
+            Trap ids as keys and sets of obscured cell labels as values;
+            empty if exclude_obscured is False.
+        """
+        if not self.params.exclude_obscured:
+            return {}
+        shape_yx = self.tiler.shape[-2:]
+        obscured = {}
+        for trap_id, (mask_set, labels) in enumerate(
+            zip(masks, cell_labels.values())
+        ):
+            if not len(mask_set):
+                continue
+            shown = shown_in_tile(
+                self.tiler.tile_locs.tiles[trap_id].as_range(tp),
+                shape_yx,
+                self.tiler.tile_size,
+            )
+            hidden = {
+                label
+                for mask, label in zip(mask_set, labels)
+                if is_obscured(mask, shown)
+            }
+            if hidden:
+                obscured[trap_id] = hidden
+        return obscured
 
     def get_imgs_background_subtract(self, tree_dict, tiles, bgs):
         """
