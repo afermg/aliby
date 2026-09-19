@@ -3911,7 +3911,7 @@ aliby = ["h5py (>=3.10)"]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git"
 reference = "HEAD"
-resolved_reference = "9a262d7ad542820586e69d462178f0aecf771a38"
+resolved_reference = "bffeff708c9401dd99cbd9594d56aab1e77a797d"
 
 [[package]]
 name = "sympy"
@@ -4108,7 +4108,7 @@ zarr = ["zarr (>=3)"]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/tiler.git"
 reference = "HEAD"
-resolved_reference = "2592291690c56756daa3b739170e40afed78c687"
+resolved_reference = "3d1709285b7a454a0805121a0b87eb6fe61d5071"
 
 [[package]]
 name = "toolz"
