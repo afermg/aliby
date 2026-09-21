@@ -3911,7 +3911,7 @@ aliby = ["h5py (>=3.10)"]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git"
 reference = "HEAD"
-resolved_reference = "bffeff708c9401dd99cbd9594d56aab1e77a797d"
+resolved_reference = "1653dfce907ba392d721f04d5a897f142407f795"
 
 [[package]]
 name = "sympy"
