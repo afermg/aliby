@@ -131,6 +131,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - **HDF5/Zarr**: Data storage formats
 - **Pandas/NumPy**: Data manipulation and analysis
 - Uses Poetry for dependency management with optional groups (baby, omero)
+- **`sooth` and `tiler` float, and the lock does not pin them by intent.** Both are declared without a `rev`, so a commit in `poetry.lock` is wherever this repo last resolved, not a claim that they agree. Do not re-lock because a sibling changed; run `poetry update sooth tiler` when provisioning an environment. The rule, and the guard that replaces the pin (`scripts/check_api_use.py`), are in **sooth's `CLAUDE.md`**.
 
 ### Configuration Patterns
 - All processing steps inherit from `agora.abc.ProcessABC` and use corresponding `ParametersABC` classes
