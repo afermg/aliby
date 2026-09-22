@@ -33,17 +33,31 @@ class FakePixels:
     def __init__(self, data):
         self.data = data
         self.requests = []
+        self.stores = 0
         self.planes_allowed = False
 
     def getPixelsType(self):
         return SimpleNamespace(getValue=lambda: "uint16")
 
+    def getTiles(self, zct_tiles):
+        """
+        Serve a list of regions from one store, as omero-py does.
+
+        One store serves the whole list, which is why tiler asks for a
+        chunk's tiles together; the generator body runs when it is
+        drained, as omero-py's does.
+        """
+        self.stores += 1
+        for z, c, t, tile in zct_tiles:
+            x, y, width, height = tile
+            assert x >= 0 and y >= 0, "a region starts outside the image"
+            assert x + width <= X and y + height <= Y, "a region ends outside"
+            self.requests.append((z, c, t, tile))
+            yield self.data[t, c, z, y : y + height, x : x + width].copy()
+
     def getTile(self, z, c, t, tile):
-        x, y, width, height = tile
-        assert x >= 0 and y >= 0, "a region starts outside the image"
-        assert x + width <= X and y + height <= Y, "a region ends outside"
-        self.requests.append((z, c, t, tile))
-        return self.data[t, c, z, y : y + height, x : x + width].copy()
+        """Serve one region, through a store of its own, as omero-py does."""
+        return list(self.getTiles([(z, c, t, tile)]))[0]
 
     def getPlane(self, z, c, t):
         if not self.planes_allowed:
