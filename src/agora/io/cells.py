@@ -345,15 +345,33 @@ class Cells:
             mother cell is located. The second column is the cell index of a
             mother cell in the tile. The third column is the index of the
             corresponding daughter cell.
+
+        A daughter is named by its cell label. The mothers of a tile are
+        listed in the order of the tile's labels, so a daughter's place
+        in that list is its label only when the labels run 1 to N with
+        no gaps. Cells are lost and labels are skipped: in a tile whose
+        labels are 1, 3 and 7, naming the daughter by its place called
+        cell 7 cell 3, which is a real cell and the wrong one.
         """
         # list of arrays, one per tile, giving mothers of each cell in each tile
         mothers = self.mothers
         if sum([x for y in mothers for x in y]):
+            ids = np.unique(
+                np.stack((self["trap"], self["cell_label"]), axis=1), axis=0
+            )
+            # cell labels for each trap
+            cell_labels = {
+                trap_id: ids[ids[:, 0] == trap_id, 1]
+                for trap_id in np.unique(ids[:, 0])
+            }
+            # a cell with a mother is a daughter
             mothers_daughters = np.array(
                 [
-                    (trap_id, mother, bud)
-                    for trap_id, trapcells in enumerate(mothers)
-                    for bud, mother in enumerate(trapcells, start=1)
+                    (trap_id, mother, cell_label)
+                    for trap_id, trapmothers in enumerate(mothers)
+                    for cell_label, mother in zip(
+                        cell_labels.get(trap_id, []), trapmothers
+                    )
                     if mother
                 ],
                 dtype=np.uint16,

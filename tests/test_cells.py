@@ -133,3 +133,25 @@ def test_a_rectangular_tile_stores_masks_of_its_own_shape(tmp_path):
     with h5py.File(path, "r") as h5:
         assert h5["cell_info/edgemasks"].shape == (2, 240, 80)
     assert Cells(path).tile_size == (240, 80)
+
+
+def test_a_daughter_is_named_by_its_label_and_not_by_its_place(tmp_path):
+    """Name the daughters of a tile whose labels have gaps."""
+    # trap 0 holds cells 1, 3 and 7, and BABY says 7 is a bud of 1 and 3
+    # has no mother. Named by its place among the trap's cells, bud 7 is
+    # called 3. Trap 1's labels have no gaps, so its bud is 2 either way
+    rows = [
+        (0, 0, 1, ring()),
+        (0, 0, 3, ring()),
+        (0, 0, 7, ring()),
+        (1, 0, 1, ring()),
+        (1, 0, 2, ring()),
+    ]
+    path = write_h5(tmp_path / "position.h5", rows)
+    with h5py.File(path, "a") as f:
+        f["cell_info"].create_dataset(
+            "mother_assign_dynamic",
+            data=np.array([0, 0, 1, 0, 1], dtype="uint16"),
+        )
+    cells = Cells.from_source(path)
+    assert cells.mothers_daughters.tolist() == [[0, 1, 7], [1, 1, 2]]
