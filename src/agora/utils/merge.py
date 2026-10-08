@@ -7,32 +7,84 @@ import pandas as pd
 from agora.utils.indexing import find_1st_greater, index_isin
 
 
-def group_merges(merges: np.ndarray) -> t.List[t.Tuple]:
+def chain_ends(merges: np.ndarray) -> t.Dict[t.Tuple, t.Tuple]:
     """
-    Convert merges into a list of merges.
+    Find the last track of the chain of merges that each left track begins.
 
-    First or traps requiring multiple merges and then for traps
-    requiring single merges.
+    A merge joins a left track to the right track that carries on from it.
+    Merges chain: a cell lost twice by the segmenter is three tracks and
+    two merges. Each chain is followed to its own end, so two chains in one
+    trap stay two cells.
+
+    Parameters
+    ----------
+    merges: np.ndarray
+        An array of pairs of (trap, cell) indices to merge.
+
+    Returns
+    -------
+    dict
+        The (trap, cell) index of the last track of its chain for each
+        left track.
     """
-    left_tracks = merges[:, 0]
-    right_tracks = merges[:, 1]
-    # find traps requiring multiple merges
-    linr = merges[index_isin(left_tracks, right_tracks).flatten(), :]
-    rinl = merges[index_isin(right_tracks, left_tracks).flatten(), :]
-    # make unique and order merges for each trap
-    multi_merge = np.unique(np.concatenate((linr, rinl)), axis=0)
-    # find traps requiring a singe merge
-    single_merge = merges[
-        ~index_isin(merges, multi_merge).all(axis=1).flatten(), :
-    ]
-    # convert to lists of arrays
-    single_merge_list = [[sm] for sm in single_merge]
-    multi_merge_list = [
-        multi_merge[multi_merge[:, 0, 0] == trap_id, ...]
-        for trap_id in np.unique(multi_merge[:, 0, 0])
-    ]
-    res = [*multi_merge_list, *single_merge_list]
-    return res
+    right_of = {tuple(left): tuple(right) for left, right in merges.tolist()}
+    ends = {}
+    for track in right_of:
+        end = track
+        seen = {track}
+        # stop if a chain comes back on itself
+        while end in right_of and right_of[end] not in seen:
+            end = right_of[end]
+            seen.add(end)
+        ends[track] = end
+    return ends
+
+
+def find_incorrect_merges(
+    merges: np.ndarray, bud_mother_dict: t.Dict[t.Tuple, t.Tuple]
+) -> t.List[t.Tuple]:
+    """
+    Find merges that give a bud two mothers.
+
+    Each chain of merges is followed from its first track. Where a track is
+    a bud of a different mother from the bud before it in the chain, the two
+    are not one cell and the merge that joins the chain to that track is
+    incorrect. The tracks between them need not be buds.
+
+    Two mothers are the same if they are tracks of one merged cell.
+
+    Parameters
+    ----------
+    merges: np.ndarray
+        An array of pairs of (trap, cell) indices to merge.
+    bud_mother_dict: dict
+        The (trap, cell) index of the mother of each bud.
+
+    Returns
+    -------
+    list
+        The left track of each incorrect merge.
+    """
+    ends = chain_ends(merges)
+    right_of = {tuple(left): tuple(right) for left, right in merges.tolist()}
+
+    def mother_of(track):
+        """Return the merged mother of a track, or None if not a bud."""
+        mother = bud_mother_dict.get(track)
+        return None if mother is None else ends.get(mother, mother)
+
+    incorrect_merges = []
+    for track in set(right_of) - set(right_of.values()):
+        mother = mother_of(track)
+        while track in right_of:
+            next_track = right_of[track]
+            next_mother = mother_of(next_track)
+            if None not in (mother, next_mother) and mother != next_mother:
+                incorrect_merges.append(track)
+            if next_mother is not None:
+                mother = next_mother
+            track = next_track
+    return incorrect_merges
 
 
 def merge_lineage(
@@ -41,61 +93,44 @@ def merge_lineage(
     """
     Use merges to update lineage information.
 
+    Every track of a merged cell takes the index of the last track of its
+    own chain of merges.
+
     Check if merging causes any buds to have multiple mothers and discard
-    these incorrect merges.
+    these incorrect merges. A discarded merge ends the chain it was part
+    of: a track is renamed only through merges that are kept, so that the
+    lineage and the merges returned describe the same cells.
 
     Return updated lineage and merge arrays.
     """
     flat_lineage = lineage.reshape(-1, 2)
     bud_mother_dict = {
-        tuple(bud): mother for bud, mother in zip(lineage[:, 1], lineage[:, 0])
+        tuple(bud): tuple(mother)
+        for bud, mother in zip(lineage[:, 1].tolist(), lineage[:, 0].tolist())
     }
-    left_tracks = merges[:, 0]
-    # find left tracks that are in lineages
-    valid_lineages = index_isin(flat_lineage, left_tracks).flatten()
-    # group into multi- and then single merges
-    grouped_merges = group_merges(merges)
-    # perform merges
-    if valid_lineages.any():
-        # indices of each left track -> indices of rightmost right track
-        replacement_dict = {
-            tuple(contig_pair[0]): merge[-1][1]
-            for merge in grouped_merges
-            for contig_pair in merge
-        }
-        # if both key and value are buds, they must have the same mother
-        buds = lineage[:, 1]
-        incorrect_merges = [
-            key
-            for key in replacement_dict
-            if np.any(index_isin(buds, replacement_dict[key]).flatten())
-            and np.any(index_isin(buds, key).flatten())
-            and not np.array_equal(
-                bud_mother_dict[key],
-                bud_mother_dict[tuple(replacement_dict[key])],
-            )
+    new_merges = merges
+    # discarding a merge of mothers can make another merge incorrect
+    while len(new_merges):
+        incorrect_merges = find_incorrect_merges(new_merges, bud_mother_dict)
+        if not incorrect_merges:
+            break
+        new_merges = new_merges[
+            ~index_isin(
+                new_merges[:, 0], np.array(incorrect_merges)
+            ).flatten(),
+            ...,
         ]
-        if incorrect_merges:
-            # reassign incorrect merges so that they have no affect
-            for key in incorrect_merges:
-                replacement_dict[key] = key
-            # find only correct merges
-            new_merges = merges[
-                ~index_isin(
-                    merges[:, 0], np.array(incorrect_merges)
-                ).flatten(),
-                ...,
+    if len(new_merges):
+        # indices of each left track -> indices of last track of its chain
+        replacement_dict = chain_ends(new_merges)
+        # find left tracks that are in lineages
+        valid_lineages = index_isin(flat_lineage, new_merges[:, 0]).flatten()
+        if valid_lineages.any():
+            # replace mother or bud index with index of last track
+            flat_lineage[valid_lineages] = [
+                replacement_dict[tuple(index)]
+                for index in flat_lineage[valid_lineages].tolist()
             ]
-        else:
-            new_merges = merges
-        # correct lineage information
-        # replace mother or bud index with index of rightmost track
-        flat_lineage[valid_lineages] = [
-            replacement_dict[tuple(index)]
-            for index in flat_lineage[valid_lineages]
-        ]
-    else:
-        new_merges = merges
     # reverse flattening
     new_lineage = flat_lineage.reshape(-1, 2, 2)
     # remove any duplicates
