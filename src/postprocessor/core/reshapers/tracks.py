@@ -248,7 +248,9 @@ def find_best_from_scores(
             else 1
         )
         best_scores = scores[ids] / norm
-        ids = ids if len(pre_value) < len(post_value) else ids[::-1]
+        # the scores have the right tracks as rows only if there are more
+        # left tracks than right; with as many of each, the left are rows
+        ids = ids[::-1] if len(pre_value) > len(post_value) else ids
         # keep only indices with best_score less than the tolerance
         indices = [
             idx for idx, score in zip(zip(*ids), best_scores) if score <= tol

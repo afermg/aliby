@@ -72,6 +72,7 @@ def validate_lineage(
     >>> print(valid_indices)
      array([ True, False, True])
     """
+    invert_lineage = False
     if lineage.ndim == 2:
         # [trap, mother, daughter] becomes [[trap, mother], [trap, daughter]]
         lineage = assoc_indices_to_3d(lineage)

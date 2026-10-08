@@ -230,25 +230,6 @@ class Signal(BridgeH5):
         """Run merging."""
         return self.apply_merging_picking(dataset, picks=False)
 
-    @cached_property
-    def merges(self) -> np.ndarray:
-        """Get merges."""
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_merges)
-        return dsets
-
-    @cached_property
-    def n_merges(self):
-        """Get number of merges."""
-        return len(self.merges)
-
-    @cached_property
-    def picks(self) -> np.ndarray:
-        """Get picks."""
-        with h5py.File(self.filename, "r") as f:
-            dsets = f.visititems(self._if_picks)
-        return dsets
-
     def get_raw(
         self,
         dataset: str or t.List[str],
@@ -398,18 +379,6 @@ class Signal(BridgeH5):
                     self._available.append(name.split("_i_table")[0][:-1])
                 else:
                     self._available.append(name)
-
-    @staticmethod
-    def _if_merges(name: str, obj):
-        if isinstance(obj, h5py.Dataset) and name.startswith(
-            "modifiers/merges"
-        ):
-            return obj[()]
-
-    @staticmethod
-    def _if_picks(name: str, obj):
-        if isinstance(obj, h5py.Group) and name.endswith("picks"):
-            return obj[()]
 
     @property
     def ntps(self) -> int:

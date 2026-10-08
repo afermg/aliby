@@ -44,7 +44,7 @@ class buddings(LineageProcess):
         their first non-NaN value.
         """
         # lineage is (trap, mother, daughter)
-        lineage = lineage or self.lineage
+        lineage = self.lineage if lineage is None else lineage
         # select traps and mothers in the signal that have lineage data
         traps_mothers: t.Dict[tuple, list] = {
             tuple(trap_mo): []

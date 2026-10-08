@@ -90,27 +90,26 @@ class Picker(LineageProcess):
         if len(lineage):
             self.mothers = lineage[:, [0, 1]]
             self.daughters = lineage[:, [0, 2]]
-            for method, *params in self.picker_sequence:
-                if indices:
-                    if method == "lineage":
-                        # pick by lineage
-                        param1 = params[0]
-                        new_indices = self.pick_by_lineage(
-                            signal.loc[list(indices)], param1
-                        )
-                    else:
-                        # pick by condition
-                        param1, *param2 = params
-                        new_indices = self.pick_by_condition(
-                            signal.loc[list(indices)], param1, param2
-                        )
-                else:
-                    new_indices = tuple()
-                # number of indices reduces for each iteration of the loop
-                indices = indices.intersection(new_indices)
         else:
             self.log("No lineage assignment")
-            indices = np.array([])
+        for method, *params in self.picker_sequence:
+            if indices and method == "lineage" and len(lineage):
+                # pick by lineage
+                param1 = params[0]
+                new_indices = self.pick_by_lineage(
+                    signal.loc[list(indices)], param1
+                )
+            elif indices and method != "lineage":
+                # pick by condition, which needs no lineage
+                param1, *param2 = params
+                new_indices = self.pick_by_condition(
+                    signal.loc[list(indices)], param1, param2
+                )
+            else:
+                # no cells left, or no lineage for any cell to be in
+                new_indices = tuple()
+            # number of indices reduces for each iteration of the loop
+            indices = indices.intersection(new_indices)
         # return as list
         indices_arr = [tuple(x) for x in indices]
         return indices_arr

@@ -130,6 +130,12 @@ class PostProcessor(ProcessABC):
         Run merger, get lineages, and then run picker.
 
         Necessary before any processes can run.
+
+        Cells are picked from the Signal as this run merges it and with
+        the lineage this run finds. Signal.get applies the merges and
+        picks in the h5 file instead, which are a previous run's or, in
+        a new file, none: the picks then depended on how many times the
+        file had been processed and could only ever lose cells.
         """
         # run merger
         record = self.signal.get_raw(self.targets["merging_picking"]["merger"])
@@ -143,13 +149,30 @@ class PostProcessor(ProcessABC):
             new_lineage = lineage
             new_merges = merges
         new_lineage = assoc_indices_to_2d(new_lineage)
-        # run picker
-        picked_indices = np.array(
-            self.picker.run(
-                self.signal.get(self.targets["merging_picking"]["picker"])
-            )
+        # run picker on the merged Signal, with the merged lineage
+        self.picker.lineage = new_lineage
+        merged_record = self.signal.apply_merging_picking(
+            self.signal.get_raw(self.targets["merging_picking"]["picker"]),
+            merges=new_merges,
+            picks=False,
         )
+        picked_indices = np.array(self.picker.run(merged_record))
         return new_merges, new_lineage, picked_indices
+
+    def get_signal(self, dataset: str):
+        """
+        Get a Signal with this run's merges and picks applied.
+
+        Time is not in minutes because this data is rewritten to the h5
+        file.
+        """
+        record = self.signal.get_raw(dataset, in_minutes=False)
+        if record is None:
+            return None
+        picked_merged = self.signal.apply_merging_picking(
+            record, merges=self.merges, picks=self.picks
+        )
+        return self.signal.add_name(picked_merged, dataset)
 
     def run(self):
         """
@@ -159,6 +182,9 @@ class PostProcessor(ProcessABC):
         """
         # run merger, picker, and find lineages
         merges, lineage, picked_indices = self.run_merging_picking()
+        # the bud processes use these, not those in the h5 file
+        self.merges = merges
+        self.picks = set(map(tuple, picked_indices.tolist()))
         # store result using their h5 dataset names
         res = {
             "merges": merges,
@@ -196,11 +222,10 @@ class PostProcessor(ProcessABC):
     def run_bud_process(self, dataset, bud_process, loaded_bud_process):
         """Run processes to obtain single data sets and write the results."""
         # get pre-processed data
-        # time not in minutes because this data is rewritten to the h5 file
         if isinstance(dataset, list):
-            signal = [self.signal.get(d, in_minutes=False) for d in dataset]
+            signal = [self.get_signal(d) for d in dataset]
         elif isinstance(dataset, str):
-            signal = self.signal.get(dataset, in_minutes=False)
+            signal = self.get_signal(dataset)
         else:
             raise TypeError("postprocessing: Incorrect dataset.")
         # run process on signal
