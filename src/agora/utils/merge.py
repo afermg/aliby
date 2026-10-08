@@ -27,18 +27,46 @@ def find_chains(merges: np.ndarray) -> t.List[t.List[t.Tuple]]:
     list
         The (trap, cell) indices of the tracks of each chain, from its
         first track to its last.
+
+    Raises
+    ------
+    ValueError
+        If a track is the left of two merges or the right of two, or if
+        merges form a loop: a track carries on into one track and from
+        one track, and never into itself.
     """
-    right_of = {tuple(left): tuple(right) for left, right in merges.tolist()}
-    rights = set(right_of.values())
+    # a merge listed twice is one merge
+    pairs = dict.fromkeys(
+        (tuple(left), tuple(right)) for left, right in merges.tolist()
+    )
+    right_of, left_of = {}, {}
+    for left, right in pairs:
+        if left in right_of:
+            raise ValueError(
+                f"Track {left} is merged with both {right_of[left]}"
+                f" and {right}."
+            )
+        if right in left_of:
+            raise ValueError(
+                f"Tracks {left_of[right]} and {left} are both merged"
+                f" with {right}."
+            )
+        right_of[left] = right
+        left_of[right] = left
     chains = []
     for track in right_of:
-        if track in rights:
+        if track in left_of:
             # not the first track of its chain
             continue
         chain = [track]
         while chain[-1] in right_of:
             chain.append(right_of[chain[-1]])
         chains.append(chain)
+    # a loop has no first track, so no chain reaches its merges
+    in_chains = {track for chain in chains for track in chain[:-1]}
+    in_loops = [track for track in right_of if track not in in_chains]
+    if in_loops:
+        raise ValueError(f"Merges form a loop through tracks {in_loops}.")
     return chains
 
 
@@ -116,7 +144,8 @@ def merge_lineage(
 
     Return updated lineage and merge arrays.
     """
-    flat_lineage = lineage.reshape(-1, 2)
+    # a copy, so that the lineage passed is not renamed too
+    flat_lineage = lineage.reshape(-1, 2).copy()
     bud_mother_dict = {
         tuple(bud): tuple(mother)
         for bud, mother in zip(lineage[:, 1].tolist(), lineage[:, 0].tolist())

@@ -10,9 +10,10 @@ one chain.
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from agora.utils.indexing import assoc_indices_to_2d, assoc_indices_to_3d
-from agora.utils.merge import apply_merges, merge_lineage
+from agora.utils.merge import apply_merges, find_chains, merge_lineage
 
 nan = np.nan
 
@@ -116,6 +117,14 @@ def test_a_bud_lost_with_its_mother_is_still_one_bud():
     )
     assert kept == [(0, 1, 3), (0, 2, 5)]
     assert lineage == [[0, 1, 2]]
+
+
+def test_the_lineage_passed_is_left_as_it_was():
+    """Rename a copy of the lineage."""
+    lineage = np.array([[[0, 1], [0, 3]]])
+    new_lineage, _kept = merge_lineage(lineage, merges_of((0, 2, 3)))
+    assert lineage.tolist() == [[[0, 1], [0, 3]]]
+    assert new_lineage.tolist() == [[[0, 1], [0, 2]]]
 
 
 def test_the_lineage_names_cells_the_merged_signal_holds():
@@ -222,3 +231,36 @@ def test_a_merge_of_a_track_the_signal_lacks_is_passed_over():
     """Apply only merges of tracks that are both in the data frame."""
     data = signal({(0, 2): [1, 2, nan], (0, 7): [5, 5, 5]})
     assert tracks(apply_merges(data, merges_of((0, 2, 5)))) == tracks(data)
+
+
+@pytest.mark.parametrize(
+    "merges, message",
+    [
+        # one track carries on into two
+        (merges_of((0, 2, 3), (0, 2, 4)), "both"),
+        # two tracks carry on into one
+        (merges_of((0, 2, 4), (0, 3, 4)), "both"),
+        # a loop, which once was passed over in silence
+        (merges_of((0, 2, 3), (0, 3, 2)), "loop"),
+        # a loop with a track leading into it, which once never returned
+        (merges_of((0, 1, 2), (0, 2, 3), (0, 3, 2)), "both"),
+        # a track merged with itself
+        (merges_of((0, 2, 2)), "loop"),
+        # a loop beside a sound chain
+        (merges_of((0, 5, 6), (0, 2, 3), (0, 3, 2)), "loop"),
+    ],
+)
+def test_merges_that_are_not_chains_are_refused(merges, message):
+    """Raise an error for merges that do not join tracks end to end."""
+    # the merger pairs tracks one to one and forwards in time, so these
+    # come only from merges made elsewhere
+    with pytest.raises(ValueError, match=message):
+        find_chains(merges)
+    with pytest.raises(ValueError, match=message):
+        merge_lineage(assoc_indices_to_3d(np.array([[0, 1, 2]])), merges)
+
+
+def test_a_merge_listed_twice_is_one_merge():
+    """Follow a chain whose merges are repeated."""
+    merges = merges_of((0, 2, 3), (0, 3, 4), (0, 2, 3))
+    assert find_chains(merges) == [[(0, 2), (0, 3), (0, 4)]]
