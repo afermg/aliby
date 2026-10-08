@@ -4,16 +4,17 @@ import typing as t
 
 import numpy as np
 import pandas as pd
-from agora.utils.indexing import find_1st_greater, index_isin
+from agora.utils.indexing import index_isin
 
 
-def chain_ends(merges: np.ndarray) -> t.Dict[t.Tuple, t.Tuple]:
+def find_chains(merges: np.ndarray) -> t.List[t.List[t.Tuple]]:
     """
-    Find the last track of the chain of merges that each left track begins.
+    Find the chains of tracks that merges join into single cells.
 
     A merge joins a left track to the right track that carries on from it.
     Merges chain: a cell lost twice by the segmenter is three tracks and
-    two merges. Each chain is followed to its own end, so two chains in one
+    two merges. Each chain is followed from its own first track to its own
+    last, in whatever order the merges are listed, so two chains in one
     trap stay two cells.
 
     Parameters
@@ -23,21 +24,36 @@ def chain_ends(merges: np.ndarray) -> t.Dict[t.Tuple, t.Tuple]:
 
     Returns
     -------
-    dict
-        The (trap, cell) index of the last track of its chain for each
-        left track.
+    list
+        The (trap, cell) indices of the tracks of each chain, from its
+        first track to its last.
     """
     right_of = {tuple(left): tuple(right) for left, right in merges.tolist()}
-    ends = {}
+    rights = set(right_of.values())
+    chains = []
     for track in right_of:
-        end = track
-        seen = {track}
-        # stop if a chain comes back on itself
-        while end in right_of and right_of[end] not in seen:
-            end = right_of[end]
-            seen.add(end)
-        ends[track] = end
-    return ends
+        if track in rights:
+            # not the first track of its chain
+            continue
+        chain = [track]
+        while chain[-1] in right_of:
+            chain.append(right_of[chain[-1]])
+        chains.append(chain)
+    return chains
+
+
+def chain_starts(merges: np.ndarray) -> t.Dict[t.Tuple, t.Tuple]:
+    """
+    Find the first track of its chain of merges for each right track.
+
+    A merged cell is known by the index of its first track, which is the
+    index apply_merges keeps for its merged Signal.
+    """
+    return {
+        track: chain[0]
+        for chain in find_chains(merges)
+        for track in chain[1:]
+    }
 
 
 def find_incorrect_merges(
@@ -65,25 +81,22 @@ def find_incorrect_merges(
     list
         The left track of each incorrect merge.
     """
-    ends = chain_ends(merges)
-    right_of = {tuple(left): tuple(right) for left, right in merges.tolist()}
+    starts = chain_starts(merges)
 
     def mother_of(track):
         """Return the merged mother of a track, or None if not a bud."""
         mother = bud_mother_dict.get(track)
-        return None if mother is None else ends.get(mother, mother)
+        return None if mother is None else starts.get(mother, mother)
 
     incorrect_merges = []
-    for track in set(right_of) - set(right_of.values()):
-        mother = mother_of(track)
-        while track in right_of:
-            next_track = right_of[track]
+    for chain in find_chains(merges):
+        mother = mother_of(chain[0])
+        for track, next_track in zip(chain, chain[1:]):
             next_mother = mother_of(next_track)
             if None not in (mother, next_mother) and mother != next_mother:
                 incorrect_merges.append(track)
             if next_mother is not None:
                 mother = next_mother
-            track = next_track
     return incorrect_merges
 
 
@@ -93,8 +106,8 @@ def merge_lineage(
     """
     Use merges to update lineage information.
 
-    Every track of a merged cell takes the index of the last track of its
-    own chain of merges.
+    Every track of a merged cell takes the index of the first track of its
+    own chain of merges, which is the index its merged Signal has.
 
     Check if merging causes any buds to have multiple mothers and discard
     these incorrect merges. A discarded merge ends the chain it was part
@@ -121,12 +134,12 @@ def merge_lineage(
             ...,
         ]
     if len(new_merges):
-        # indices of each left track -> indices of last track of its chain
-        replacement_dict = chain_ends(new_merges)
-        # find left tracks that are in lineages
-        valid_lineages = index_isin(flat_lineage, new_merges[:, 0]).flatten()
+        # indices of each right track -> indices of first track of its chain
+        replacement_dict = chain_starts(new_merges)
+        # find right tracks that are in lineages
+        valid_lineages = index_isin(flat_lineage, new_merges[:, 1]).flatten()
         if valid_lineages.any():
-            # replace mother or bud index with index of last track
+            # replace mother or bud index with index of first track
             flat_lineage[valid_lineages] = [
                 replacement_dict[tuple(index)]
                 for index in flat_lineage[valid_lineages].tolist()
@@ -142,49 +155,70 @@ def apply_merges(data: pd.DataFrame, merges: np.ndarray):
     """
     Generate a new data frame containing merged tracks.
 
+    The tracks of each chain of merges are joined into one, which keeps the
+    index of the chain's first track. A chain is joined whole, from its
+    first track to its last, in whatever order its merges are listed.
+
+    Only merges of tracks that are both in the data frame are applied.
+
     Parameters
     ----------
     data : pd.DataFrame
-        A Signal data frame.
+        A Signal data frame, with trap and cell_label in its index and
+        optionally mother_label.
     merges : np.ndarray
         An array of pairs of (trap, cell) indices to merge.
     """
     indices = data.index
     if "mother_label" in indices.names:
         indices = indices.droplevel("mother_label")
-    indices = np.array(list(indices))
+    # the row of each track
+    rows = {tuple(index): row for row, index in enumerate(indices)}
     # merges in the data frame's indices
-    valid_merges = index_isin(merges, indices).all(axis=1).flatten()
-    # corresponding indices for the data frame in merges
-    selected_merges = merges[valid_merges, ...]
-    valid_indices = index_isin(indices, selected_merges).flatten()
-    # data not requiring merging
-    merged = data.loc[~valid_indices]
-    # merge tracks
-    if valid_merges.any():
-        to_merge = data.loc[valid_indices].copy()
-        left_indices = merges[valid_merges, 0]
-        right_indices = merges[valid_merges, 1]
-        # join left track with right track
-        for left_index, right_index in zip(left_indices, right_indices):
-            to_merge.loc[tuple(left_index)] = join_two_tracks(
-                to_merge.loc[tuple(left_index)].values,
-                to_merge.loc[tuple(right_index)].values,
-            )
-        # drop indices for right tracks
-        to_merge.drop(map(tuple, right_indices), inplace=True)
-        # add to data not requiring merges
-        merged = pd.concat((merged, to_merge), names=data.index.names)
+    selected_merges = np.array(
+        [
+            merge
+            for merge in merges.tolist()
+            if tuple(merge[0]) in rows and tuple(merge[1]) in rows
+        ]
+    )
+    if not len(selected_merges):
+        return data.copy()
+    values = data.to_numpy(copy=True)
+    is_merged = np.zeros(len(data), dtype=bool)
+    is_right = np.zeros(len(data), dtype=bool)
+    # join each chain's tracks into its first track
+    for chain in find_chains(selected_merges):
+        first = rows[chain[0]]
+        is_merged[first] = True
+        for track in chain[1:]:
+            values[first] = join_two_tracks(values[first], values[rows[track]])
+            is_right[rows[track]] = True
+    joined = pd.DataFrame(values, index=data.index, columns=data.columns)
+    # data not requiring merging and then the merged tracks
+    in_a_merge = is_merged | is_right
+    merged = pd.concat(
+        (joined.loc[~in_a_merge], joined.loc[is_merged]),
+        names=data.index.names,
+    )
     return merged
 
 
 def join_two_tracks(
     left_track: np.ndarray, right_track: np.ndarray
 ) -> np.ndarray:
-    """Join two tracks and return the new one."""
+    """
+    Join two tracks and return the new one.
+
+    The left track is kept up to the last time point at which its cell
+    was seen, and the right track is taken from there on. A cell that was
+    not seen has NaN, so a value of zero or less is a measurement like any
+    other and is kept.
+    """
     new_track = left_track.copy()
-    # find last positive element by inverting track
-    end = find_1st_greater(left_track[::-1], 0)
+    # find the last time point at which the left track has a value
+    seen = np.flatnonzero(~pd.isna(left_track))
+    end = seen[-1] + 1 if len(seen) else 0
     # merge tracks into one
-    new_track[-end:] = right_track[-end:]
+    new_track[end:] = right_track[end:]
     return new_track
