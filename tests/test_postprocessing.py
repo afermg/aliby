@@ -20,9 +20,11 @@ from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
 )
+from postprocessor.core.reshapers.bud_metric import BudMetric
 from postprocessor.core.reshapers.buddings import buddings, buddingsParameters
 from postprocessor.core.reshapers.picker import Picker, PickerParameters
 from postprocessor.core.reshapers.tracks import get_merges
+from postprocessor.grouper import Grouper
 
 nan = np.nan
 NTPS = 10
@@ -297,3 +299,53 @@ def test_a_raw_signal_gives_each_bud_its_own_mother(position_h5):
         "extraction/general/null/eccentricity", lineage=True
     )
     assert data.index.tolist() == [(0, 1, 0), (0, 2, 0), (0, 3, 2), (0, 5, 1)]
+
+
+def test_a_bud_in_the_first_image_processed_is_not_a_budding():
+    """Know the first image by the first column, not by time point zero."""
+    # a movie processed from time point 5: the bud was there when
+    # processing began, and was counted as budding at 5
+    data = signal({(0, 1): seen(9, 0, 10), (0, 2): seen(1, 0, 10)})
+    data.columns = range(5, 5 + NTPS)
+    found = buddings(buddingsParameters.default()).run(
+        data, lineage=np.array([[0, 1, 2]])
+    )
+    assert not found.to_numpy().any()
+    # and one that appears later is
+    data = signal({(0, 1): seen(9, 0, 10), (0, 2): seen(1, 4, 10)})
+    data.columns = range(5, 5 + NTPS)
+    found = buddings(buddingsParameters.default()).run(
+        data, lineage=np.array([[0, 1, 2]])
+    )
+    assert found.columns[found.loc[(0, 1)]].tolist() == [9]
+
+
+def test_bud_metric_leaves_the_signal_as_it_was():
+    """Find the buds' data without adding mother_label to the Signal."""
+    data = signal({(0, 1): seen(9, 0, 10), (0, 2): seen(1, 4, 10)})
+    before = data.copy()
+    found = BudMetric.as_function(data, lineage=np.array([[0, 1, 2]]))
+    pd.testing.assert_frame_equal(data, before)
+    assert found.index.tolist() == [(0, 1)]
+    assert found.loc[(0, 1)].dropna().tolist() == [1] * 6
+
+
+def test_a_bud_process_takes_parameters(position_h5):
+    """Run a bud process with the parameters it is given."""
+    # they were looked for as an attribute named for the process, which
+    # there never is
+    parameters = PostProcessorParameters.default()
+    parameters.param_sets["bud_processes"] = {
+        "buddings": {"lineage_location": "elsewhere"}
+    }
+    result = PostProcessor(position_h5, parameters).run()
+    assert "/postprocessing/buddings/extraction_general_null_volume" in result
+
+
+def test_cells_are_counted_without_a_cutoff(position_h5):
+    """Count the cells of each group, keeping every picked cell."""
+    # no_cells called concat_signal without its cutoff, which raised
+    postprocess(position_h5)
+    grouper = Grouper(position_h5.parent)
+    assert grouper.no_cells() == {"posi": 2}
+

@@ -193,13 +193,12 @@ class PostProcessor(ProcessABC):
         }
         # run processes: process is a str; datasets is a list of str
         for bud_process, datasets in tqdm(self.targets["bud_processes"]):
-            if bud_process in self.parameters["param_sets"].get(
-                "bud_processes", {}
-            ):
+            assigned = self.parameters["param_sets"].get("bud_processes", {})
+            if bud_process in assigned:
                 # parameters already assigned
-                parameters = self.parameters_bud_process_funcs[bud_process](
-                    self.parameters[bud_process]
-                )
+                parameters = self.parameters_bud_process_funcs[
+                    bud_process
+                ].from_dict(assigned[bud_process])
             else:
                 # assign default parameters
                 parameters = self.parameters_bud_process_funcs[

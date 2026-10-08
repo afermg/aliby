@@ -98,7 +98,7 @@ class Grouper(ABC):
     def concat_signal(
         self,
         path: str,
-        cutoff: float,
+        cutoff: float = 0,
         mode: str = "retained",
         selected_positions: t.List[str] = None,
         **kwargs,
@@ -112,6 +112,9 @@ class Grouper(ABC):
         ----------
         path : str
            Signal location within h5 file.
+        cutoff: float
+           For "retained", the fraction of the movie for which a cell must
+            be present to be kept; zero (default) keeps every cell.
         mode: str
            If "retained" (default), return Signal with merging, picking, and lineage
             information applied but only for cells present for at least some

@@ -75,7 +75,11 @@ class buddings(LineageProcess):
             times_of_bud_appearance = fvi.loc[
                 fvi.index.intersection(trap_daughter_ids)
             ].values
-            # ignore zeros - buds in first image are not budding events
-            daughters_idx = list(set(times_of_bud_appearance).difference({0}))
+            # buds in the first image are not budding events; the first
+            # image is the first column, which is not time point zero if
+            # processing began later
+            daughters_idx = list(
+                set(times_of_bud_appearance).difference({signal.columns[0]})
+            )
             buddings.loc[trap_mother_id, daughters_idx] = True
         return buddings

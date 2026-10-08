@@ -280,7 +280,7 @@ Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleId
 ### Post-processing Components
 
 **Picker** (`postprocessor.core.reshapers.picker`)
-- Selects cells with lineage information and minimum track length (default: 3+ timepoints)
+- Selects cells with lineage information and minimum track length (default: seen at more than 3 time points, so 4 or more)
 - Identifies mother-bud relationships using Baby's lineage data
 
 **Merger** (`postprocessor.core.reshapers.merger`)

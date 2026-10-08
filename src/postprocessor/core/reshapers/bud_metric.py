@@ -91,10 +91,12 @@ def get_bud_metric(
         }
         # generate mother_label in Signal using the mother's cell_label
         # cells with no mothers have a mother_label of 0
-        signal["mother_label"] = list(
-            map(lambda x: bud_dict.get(x, [0])[-1], signal.index)
+        # in a new data frame, so the Signal passed keeps its index
+        mother_labels = pd.Index(
+            [bud_dict.get(index, [0])[-1] for index in signal.index],
+            name="mother_label",
         )
-        signal.set_index("mother_label", append=True, inplace=True)
+        signal = signal.set_index(mother_labels, append=True)
         # combine mothers and daughter indices
         mothers_index = lineage_dict.keys()
         daughters_index = [
