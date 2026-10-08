@@ -362,6 +362,7 @@ class Extractor(StepABC):
             self.params.background_channels = available_channels.intersection(
                 self.params.background_channels
             )
+        self.params.multichannel_funs = self.find_usable_multichannel_funs()
         # user-controlled flag
         if not self.params.identify_vacuoles:
             self.params.intracellular_masks = set()
@@ -379,6 +380,34 @@ class Extractor(StepABC):
         self.sought_pdms_mask = self.pdms_mask is not None
         # labels, per trap, of the cells not measured at this time point
         self.obscured = {}
+
+    def find_usable_multichannel_funs(self) -> dict:
+        """
+        Find the multichannel functions whose channels are all extracted.
+
+        A multichannel function is given the images of the channels in
+        the extraction tree and of brightfield. Warn of any that asks for
+        another channel, which would otherwise be passed over in silence
+        at every time point.
+
+        Returns
+        -------
+        usable: dict
+            The multichannel functions that can be extracted.
+        """
+        extracted = set(self.params.tree) - {"general"} | {"Brightfield"}
+        usable = {}
+        for label, spec in self.params.multichannel_funs.items():
+            missing = [ch for ch in spec[0] if ch not in extracted]
+            if missing:
+                logging.getLogger("aliby").warning(
+                    f"Extractor: {label} will not be extracted because "
+                    f"{', '.join(missing)} is not among the channels "
+                    f"extracted: {', '.join(sorted(extracted))}."
+                )
+            else:
+                usable[label] = spec
+        return usable
 
     @classmethod
     def from_tiler(
@@ -679,8 +708,10 @@ class Extractor(StepABC):
 
     def get_outlines(self, tp, cell_labels, cells):
         """Get cell outlines with individual labels as a dict with trap_ids as keys."""
+        # read once: at_time reads every trap's masks from the h5 file
+        edgemasks_at_tp = cells.at_time(tp, kind="edgemask")
         cell_mask_dict = {
-            trap_id: cells.at_time(tp, kind="edgemask").get(trap_id, [])
+            trap_id: edgemasks_at_tp.get(trap_id, [])
             for trap_id in range(cells.ntraps)
         }
         cell_labels = self.get_cell_labels(tp, cell_labels, cells)
@@ -866,7 +897,11 @@ class Extractor(StepABC):
             channels=[ch],
         )
         d = {ch: d}
-        if ch != "general" and ch not in background_chs:
+        if (
+            ch != "general"
+            and ch not in background_chs
+            and ch in self.params.subtract_background
+        ):
             bgsub_results, bgsub_replacements = self.reduce_extract(
                 tiles=img_bgsub[ch + "_bgsub"],
                 masks=masks,
@@ -979,19 +1014,22 @@ class Extractor(StepABC):
             {"multichannel"} : [channels, reduction function,
                                 multichannel function name]
 
-        For example, for the ratio multichannel function
+        For example, for the ratio_1_over_2 multichannel function
 
-            {"multichannel": [["CFP", "YFP"], "max", "ratio"]}
+            {"multichannel": [["CFP", "YFP"], "max", "ratio_1_over_2"]}
 
-        If params is an instance of PipelineParameters, use
+        Pass these to PipelineParameters.default as
 
-            params.to_dict()["extraction"]["multichannel_funs"].update(
-            {"multichannel": [["CFP", YFP"], "max", "ratio"]}
-            )
+            extraction={"multichannel_funs": {
+                "multichannel": [["CFP", "YFP"], "max", "ratio_1_over_2"]
+            }}
 
-        which will create a Signal called
+        which will create Signals called
 
-            '/extraction/multichannel/max/ratio'
+            '/extraction/multichannel/max/ratio_1_over_2'
+            '/extraction/multichannel/max/ratio_1_over_2_bgsub'
+
+        See examples/run_custom_function.py.
         """
         available_channels = set(list(img.keys()) + list(img_bgsub.keys()))
         d = {}
@@ -1005,15 +1043,18 @@ class Extractor(StepABC):
             # all required channels should be available
             if len(common_channels) == len(channels):
                 for images, suffix in zip([img, img_bgsub], ["", "_bgsub"]):
+                    if suffix and "Brightfield" in channels:
+                        # brightfield has no background to subtract, and
+                        # the function needs an image for every channel
+                        continue
                     # channels
-                    channels_stack = np.stack(
-                        [
-                            images[ch + suffix]
-                            for ch in channels
-                            if ch + suffix != "Brightfield_bgsub"
-                        ],
-                        axis=-1,
-                    )
+                    channel_images = [
+                        images.get(ch + suffix) for ch in channels
+                    ]
+                    if any(image is None for image in channel_images):
+                        # a channel whose background is not subtracted
+                        continue
+                    channels_stack = np.stack(channel_images, axis=-1)
                     # reduce in Z
                     tiles = REDUCTION_FUNS[reduction](channels_stack, axis=1)
                     # set up dict

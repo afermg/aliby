@@ -17,7 +17,9 @@ def div0(array, fill=0, axis=-1):
     **kwargs: kwargs
     """
     assert array.shape[axis] == 2, f"Array has the wrong shape in axis {axis}"
-    slices_0, slices_1 = [[slice(None)] * len(array.shape)] * 2
+    # two lists, not one list named twice
+    slices_0 = [slice(None)] * array.ndim
+    slices_1 = [slice(None)] * array.ndim
     slices_0[axis] = 0
     slices_1[axis] = 1
     with np.errstate(divide="ignore", invalid="ignore"):

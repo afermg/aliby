@@ -150,6 +150,11 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 **Cell Functions** (`extraction.core.functions.cell_functions`)
 - Standard cell measurements: area, median fluorescence, eccentricity
+- `centroid_x` and `centroid_y` count pixels from zero, as sooth and the
+  curation GUI do, so that a centroid plus its tile's origin is the cell's
+  pixel in the image. They counted from one until October 2026: in an h5
+  extracted before then, `centroid_x`, `centroid_y`, `image_x`, `image_y`,
+  `absolute_x` and `absolute_y` are each one pixel too large
 - Multi-channel fluorescence functions
 
 **Background Functions** (`extraction.core.functions.background_functions`)

@@ -8,9 +8,15 @@ from aliby.pipeline import Pipeline, PipelineParameters
 global_settings.fluorescence_functions.append("max5px_median")
 
 # add calculation of a pixel-by-pixel ratio of two fluorescence channels
-global_settings.fluorescence_functions.extend(
-    ["ratio_1_over_2", "ratio_2_over_1"]
-)
+# a function of two channels is given the channels, how to reduce their
+# z-sections, and its name; each is stored under its key, here as
+# extraction/GFP_over_mCherry/max/ratio_1_over_2 and, with the background
+# subtracted, extraction/GFP_over_mCherry/max/ratio_1_over_2_bgsub
+# the channels must be named as the experiment names them
+multichannel_funs = {
+    "GFP_over_mCherry": [["GFP", "mCherry"], "max", "ratio_1_over_2"],
+    "mCherry_over_GFP": [["GFP", "mCherry"], "max", "ratio_2_over_1"],
+}
 
 
 # guard the entry point so that, under the spawn start method on macOS,
@@ -24,7 +30,8 @@ if __name__ == "__main__":
             "host": "staffa.bio.ed.ac.uk",
             "username": "pass",
             "password": "pass",
-        }
+        },
+        extraction={"multichannel_funs": multichannel_funs},
     )
     p = Pipeline(params)
     p.run()

@@ -78,7 +78,9 @@ def volume(cell_mask):
     cell_mask: 2D array
         Segmentation mask for the cell
     """
-    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    padded = np.pad(
+        crop_to_cell(cell_mask), 1, mode="constant", constant_values=0
+    )
     nearest_neighbor = (
         ndimage.distance_transform_edt(padded == 1) * padded
     )
@@ -103,13 +105,21 @@ def spherical_volume(cell_mask):
 
 
 def centroid(cell_mask):
-    """Find the cell's centroid."""
-    weights_c = np.arange(1, cell_mask.shape[1] + 1, 1).reshape(
-        1, cell_mask.shape[1]
-    )
-    weights_v = np.arange(1, cell_mask.shape[0] + 1, 1).reshape(
-        cell_mask.shape[0], 1
-    )
+    """
+    Find the cell's centroid as (x, y).
+
+    A pixel is where its indices say: the centroid of a cell that is the
+    one pixel in the first row and first column of its tile is (0, 0), so
+    that a centroid added to the origin of its tile is a place in the
+    image. sooth and skimage count in the same way.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    """
+    weights_c = np.arange(cell_mask.shape[1]).reshape(1, cell_mask.shape[1])
+    weights_v = np.arange(cell_mask.shape[0]).reshape(cell_mask.shape[0], 1)
     # moments
     M00 = np.sum(cell_mask)
     M10 = np.sum(np.multiply(cell_mask, weights_c))
@@ -130,29 +140,66 @@ def centroid_y(cell_mask):
     return centroid(cell_mask)[1]
 
 
-def min_maj_approximation(cell_mask) -> t.Tuple[int]:
+def crop_to_cell(cell_mask):
     """
-    Find the lengths of the minor and major axes of an ellipse from a cell mask.
+    Return the part of a mask that holds its cell.
+
+    A cell is a small part of its tile, and a distance within the cell
+    is the same in the cell's own box as in the whole tile.
 
     Parameters
     ----------
-    cell_mask: 3d array
-        Segmentation masks for cells
+    cell_mask: 2d array
+        Segmentation mask for the cell.
     """
-    # pad outside with zeros so that the distance transforms have no edge artifacts
-    padded = np.pad(cell_mask, 1, mode="constant", constant_values=0)
+    rows = np.flatnonzero(cell_mask.any(axis=1))
+    if not len(rows):
+        # no cell to crop to
+        return cell_mask
+    columns = np.flatnonzero(cell_mask.any(axis=0))
+    return cell_mask[
+        rows[0] : rows[-1] + 1, columns[0] : columns[-1] + 1
+    ]
+
+
+def min_maj_approximation(cell_mask) -> t.Tuple[int]:
+    """
+    Find the minor and major axes of an ellipse from a cell mask.
+
+    The distance of each pixel from the cell's edge makes a cone. The
+    minor axis is the height of the cone, and the major axis is the
+    greatest distance from the top of the cone plus half the size of the
+    top, and is never less than the minor axis.
+
+    A cell with no interior, all of whose pixels are at its edge, is all
+    top: its major axis is half its area.
+
+    Parameters
+    ----------
+    cell_mask: 2d array
+        Segmentation mask for the cell.
+    """
+    # pad outside with zeros so that the distance transforms have no edge
+    # artifacts
+    padded = (
+        np.pad(crop_to_cell(cell_mask), 1, mode="constant", constant_values=0)
+        == 1
+    )
     # get the distance from the edge, masked
-    nn = ndimage.distance_transform_edt(padded == 1) * padded
+    nn = ndimage.distance_transform_edt(padded)
     # get the distance from the top of the cone, masked
     dn = ndimage.distance_transform_edt(nn - nn.max()) * padded
     # get the size of the top of the cone (points that are equally maximal)
-    cone_top = ndimage.distance_transform_edt(dn == 0) * padded
+    # from the top alone: a transform of an array with no zeros, which is
+    # what a cell that is all top gives if the pixels outside it are kept,
+    # is not defined
+    cone_top = ndimage.distance_transform_edt(padded & (dn == 0))
     # minor axis = largest distance from the edge of the ellipse
     min_ax = np.round(np.max(nn))
     # major axis = largest distance from the cone top
     # + distance from the center of cone top to edge of cone top
     maj_ax = np.round(np.max(dn) + np.sum(cone_top) / 2)
-    return min_ax, maj_ax
+    return min_ax, max(min_ax, maj_ax)
 
 
 ###
@@ -209,7 +256,8 @@ def total_squared(cell_mask, trap_image) -> float:
     pixels = trap_image[cell_mask]
     if pixels.size == 0:
         return np.nan
-    return np.nansum(trap_image[cell_mask] ** 2)
+    # as floats, because the square of an integer pixel overflows
+    return np.nansum(pixels.astype(float) ** 2)
 
 
 def median(cell_mask, trap_image) -> int:
@@ -303,9 +351,9 @@ def moment_of_inertia(cell_mask, trap_image):
     From iopscience.iop.org/article/10.1088/1742-6596/1962/1/012028
     which cites ieeexplore.ieee.org/document/1057692.
     """
-    # set pixels not in cell to zero
-    trap_image[~cell_mask] = 0
-    x = trap_image
+    # set pixels not in cell to zero, in a copy: the image is the tile's
+    # and is measured again for the next cell and by the next function
+    x = np.where(cell_mask, trap_image, 0)
     if np.any(x):
         # x-axis : column=x-axis
         columnvec = np.arange(1, x.shape[1] + 1, 1)[:, None].T
@@ -348,7 +396,9 @@ def membrane_fluorescence(
     shells of intracellular pixels assuming a given membrane thickness.
     """
     membrane_mask = np.array([])
-    if channels not in ["cy5", "Brightfield"]:
+    if not {"cy5", "brightfield"}.intersection(
+        channel.lower() for channel in np.atleast_1d(channels)
+    ):
         cell_pixels = trap_image[cell_mask].reshape(-1, 1)
         if cell_pixels.size > 10:
             # use GMM to separate into two classes of dark and bright pixels
@@ -400,13 +450,13 @@ def membrane_fluorescence(
 def ratio_1_over_2(cell_mask, trap_image, channels):
     """Find the median ratio between the first and second channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
-        img = {}
-        for i, ch in enumerate(channels):
-            img[ch] = trap_image[..., i][cell_mask]
-        if np.any(img["mCherry"] == 0):
+        first = trap_image[..., 0][cell_mask]
+        second = trap_image[..., 1][cell_mask]
+        # no ratio for a cell with a pixel of zero to divide by
+        if not second.size or np.any(second == 0):
             div = np.nan
         else:
-            div = np.median(img[channels[1]] / img[channels[2]])
+            div = np.median(first / second)
     else:
         div = np.nan
     return div
@@ -415,13 +465,13 @@ def ratio_1_over_2(cell_mask, trap_image, channels):
 def ratio_2_over_1(cell_mask, trap_image, channels):
     """Find the median ratio between the second and first channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
-        img = {}
-        for i, ch in enumerate(channels):
-            img[ch] = trap_image[..., i][cell_mask]
-        if np.any(img["mCherry"] == 0):
+        first = trap_image[..., 0][cell_mask]
+        second = trap_image[..., 1][cell_mask]
+        # no ratio for a cell with a pixel of zero to divide by
+        if not first.size or np.any(first == 0):
             div = np.nan
         else:
-            div = np.median(img[channels[2]] / img[channels[1]])
+            div = np.median(second / first)
     else:
         div = np.nan
     return div
