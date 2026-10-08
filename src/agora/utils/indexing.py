@@ -47,6 +47,10 @@ def validate_lineage(
         Any bud already having a mother that is assigned to another has that
         second assignment discarded.
 
+    The two masks are not matched row to row: valid_lineage is in the
+    order of lineage and valid_indices in the order of indices, so
+    lineage[valid_lineage] does not line up with indices[valid_indices].
+
     Examples
     --------
     >>> import numpy as np
@@ -72,15 +76,21 @@ def validate_lineage(
     >>> print(valid_indices)
      array([ True, False, True])
     """
+    if how not in ("mothers", "daughters", "families"):
+        raise ValueError(f"how is {how}, not mothers, daughters or families.")
+    if not len(lineage):
+        # no mother-bud pairs, so no cell is in one
+        return (
+            np.zeros(0, dtype=bool),
+            np.zeros(len(indices), dtype=bool),
+            lineage,
+        )
     invert_lineage = False
     if lineage.ndim == 2:
         # [trap, mother, daughter] becomes [[trap, mother], [trap, daughter]]
         lineage = assoc_indices_to_3d(lineage)
         invert_lineage = True
-    if how == "mothers":
-        c_index = 0
-    elif how == "daughters":
-        c_index = 1
+    c_index = 1 if how == "daughters" else 0
     # if buds have two mothers, pick the first one
     lineage = lineage[
         ~pd.DataFrame(lineage[:, 1, :]).duplicated().values, :, :
@@ -116,10 +126,7 @@ def index_isin(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
     x = np.ascontiguousarray(x, dtype=np.int64)
     y = np.ascontiguousarray(y, dtype=np.int64)
-    xv = x.view(i_dtype)
-    inboth = np.intersect1d(xv, y.view(i_dtype))
-    x_bool = np.isin(xv, inboth)
-    return x_bool
+    return np.isin(x.view(i_dtype), y.view(i_dtype))
 
 
 def assoc_indices_to_3d(ndarray: np.ndarray):

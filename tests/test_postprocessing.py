@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from agora.io.cells import Cells
+from agora.io.signal import Signal
 from agora.io.writers import PostProcessorWriter
 from agora.utils.indexing import validate_lineage
 from postprocessor.core.postprocessing import (
@@ -159,6 +160,25 @@ def test_validate_lineage_takes_the_lineage_its_docstring_shows():
     assert returned.shape == (4, 2, 2)
 
 
+def test_validate_lineage_finds_no_cells_in_an_empty_lineage():
+    """Match nothing when there are no mother-bud pairs."""
+    # a position with no buds raised an IndexError, which wela caught
+    # and reported as an error in the lineage
+    indices = np.array([[0, 1], [0, 2]])
+    for lineage in (np.array([]), np.empty((0, 3), dtype=int)):
+        valid_lineage, valid_indices, _returned = validate_lineage(
+            lineage, indices, "daughters"
+        )
+        assert valid_lineage.tolist() == []
+        assert valid_indices.tolist() == [False, False]
+
+
+def test_validate_lineage_refuses_a_how_it_does_not_know():
+    """Raise an error that names the mistake."""
+    with pytest.raises(ValueError, match="mother"):
+        validate_lineage(np.array([[0, 1, 2]]), np.array([[0, 1]]), "mother")
+
+
 def test_buddings_takes_a_lineage():
     """Find buddings from a lineage passed as an array."""
     data = signal({(0, 1): seen(9, 0, 10), (0, 2): seen(1, 4, 10)})
@@ -257,3 +277,23 @@ def test_the_unmerged_lineage_of_a_file_is_read_when_asked_for(position_h5):
     )
     assert picker.get_lineage_information().tolist() == [[0, 1, 2]]
     assert picker.get_lineage_information(merged=False).tolist() == [[0, 1, 3]]
+
+
+def test_a_raw_signal_gives_each_bud_its_own_mother(position_h5):
+    """Find a bud's mother by the bud, not by its place in the lineage."""
+    # a merged lineage is sorted by mother and a Signal by cell: given
+    # out in order, the mothers of a third of real buds went to other
+    # buds of their trap
+    index = [(0, 1), (0, 2), (0, 3), (0, 5)]
+    PostProcessorWriter(position_h5).add_df(
+        "/extraction/general/null/eccentricity",
+        signal({cell: seen(1, 0, 10) for cell in index}),
+    )
+    with h5py.File(position_h5, "a") as f:
+        f.create_group("modifiers").create_dataset(
+            "lineage_merged", data=np.array([[0, 1, 5], [0, 2, 3]])
+        )
+    data = Signal(position_h5).get_raw(
+        "extraction/general/null/eccentricity", lineage=True
+    )
+    assert data.index.tolist() == [(0, 1, 0), (0, 2, 0), (0, 3, 2), (0, 5, 1)]

@@ -11,7 +11,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from agora.io.bridge import BridgeH5
-from agora.utils.indexing import validate_lineage
 from agora.utils.merge import apply_merges
 from agora.utils.multiindex_utils import add_index_levels
 from tables import HDF5ExtError
@@ -264,18 +263,17 @@ class Signal(BridgeH5):
                 if lineage:
                     if "mother_label" in df.index.names:
                         df = df.droplevel("mother_label")
-                    mother_label = np.zeros(len(df), dtype=int)
-                    lineage = self.lineage()
-                    (
-                        valid_lineage,
-                        valid_indices,
-                        lineage,
-                    ) = validate_lineage(
-                        lineage,
-                        indices=np.array(df.index.to_list()),
-                        how="daughters",
+                    # find each cell's mother by the cell's own index: the
+                    # lineage is not in the order of the data frame. A bud
+                    # with two mothers keeps the first
+                    mother_of = {
+                        (trap, bud): mother
+                        for trap, mother, bud in self.lineage().tolist()[::-1]
+                    }
+                    mother_label = np.array(
+                        [mother_of.get(index, 0) for index in df.index],
+                        dtype=int,
                     )
-                    mother_label[valid_indices] = lineage[valid_lineage, 1]
                     df = add_index_levels(df, {"mother_label": mother_label})
                 return df
         elif isinstance(dataset, list):
