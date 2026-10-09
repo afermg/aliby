@@ -292,6 +292,72 @@ Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleId
 **Merger** (`postprocessor.core.reshapers.merger`)
 - Combines fragmented tracks that should represent the same cell
 
+### The merger looks only at adjacent tracks, and by area alone
+
+**Not changed, by decision (October 2026):** bairn is to replace the tracking,
+and the curation GUI is being used to make its training data, so the merger
+is left as it is. What follows is what was measured, for whoever returns to it.
+
+`tracks.get_merges` pairs a track that ends at time point t with one that
+starts at t + 1 in the same trap (`get_contiguous_pairs`), scores the pair by
+area alone, and accepts a relative difference of up to `tolerance` (0.2).
+
+Measured on the 18 stored positions with centroids (experiments 2813 and
+4002, and the two test files), on tracks seen more than twice, comparing a
+left track's last area and centroid with a right track's first.
+
+*Lost cells mostly come back four or more time points later.* Pairs in one
+trap whose right track starts within 8 px of where the left ended and within
+30% of its area, against the rate for cells that were there when the left
+track ended and so cannot be it:
+
+| time points from end to start | pairs | near and alike | expected by chance |
+| --- | --- | --- | --- |
+| 1 (adjacent) | 9932 | 542 | 18 |
+| 2 | 3607 | 61 | 9 |
+| 3 | 3315 | 43 | 13 |
+| 4 | 3698 | 558 | 22 |
+| 5 | 3678 | 409 | 36 |
+| 6 | 3302 | 275 | 48 |
+| 7 | 3348 | 222 | 65 |
+| 8 | 3277 | 218 | 78 |
+| 10 | 3317 | 187 | 103 |
+| 15 | 3038 | 157 | 115 |
+
+The jump at 4 is BABY's tracker, which looks back three time points
+(`nstepsback = 3` in `baby/tracker/core.py`) and rejoins shorter losses
+itself. The excess over chance is about 520 pairs at 1 and about 1600 summed
+over 4 to 10, so the merger can reach roughly a quarter of the lost cells that
+place and size identify. Beyond about 10, under half of what passes is more
+than chance.
+
+*Position discriminates and area hardly does.* One cell, one time point on,
+has an area within 20% in 94% of cases, and so do 16% of pairs of different
+cells in a trap. One cell moves under 2.4 px in 95% of cases (4.1 px over two
+time points, 5.5 over three, 6.6 over four, 7.5 over five, 8.4 over six), and
+two different cells are within 2.4 px 0.2% of the time (median 25 px apart).
+
+*The stored merges are doubtful.* All 2032 in these files are adjacent, and
+the left track's end and the right track's start are a median 15.6 px apart
+(quartiles 10 and 23); 15% are within 8 px, and a median cell's radius is
+11.7 px. The trap has not shifted: cells that carry on through the same time
+point move a median 0.9 px. For 81% of the merges over 8 px, another track in
+the trap ends or starts at that moment, against 59% of the nearer ones.
+Whether these are cells that were shoved or neighbours of a similar size
+cannot be told from the numbers: it needs a look at the images.
+
+*What a new merger should do*, if one is written: look at a sample of the
+distant merges first; score on position as well as area, letting the distance
+allowed grow with the gap; allow gaps of up to about 10 time points, keeping
+the one-to-one pairing and the lineage check; and fall back to area and
+adjacent tracks for a file with no centroids (44 of the 62 stored). The
+distributions above for one cell and for two are what a posterior odds of a
+pair being one cell would be built from.
+
+Also left as it is: `get_predicted_edge_values` fits a line to the last
+`window` values of the left track and evaluates it at `len(y) + 1`, two time
+points past the track's end, not one.
+
 **Process Functions**
 - `buddings`: Analyzes cell division events
 - `bud_metric`: Calculates bud-specific measurements
