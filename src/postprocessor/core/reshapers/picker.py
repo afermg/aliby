@@ -20,8 +20,12 @@ class PickerParameters(ParametersABC):
     "families" (mother-bud pairs).
 
     "condition" is further specified by "present", "any_present", or
-    "growing" and a threshold, either a number of time points or a
-    fraction of the total duration of the experiment.
+    "growing" and a threshold. For "present" and "any_present", the
+    threshold is either a number of time points or, if a float, a
+    fraction of the total duration of the experiment. For "growing",
+    it is a net increase in the picker's Signal, in that Signal's
+    units: a cell is picked if its last value exceeds its first by
+    more than the threshold.
 
     Note that to pick most cells, particularly for short movies, use
         {"picker_sequence": [["condition", "present", 3]]}
@@ -139,15 +143,19 @@ class Picker(LineageProcess):
         threshold: t.Union[float, int, list],
     ):
         """Pick indices from signal by any_present, present, and growing."""
-        if len(threshold) == 1:
-            threshold = [as_int(*threshold, signal.shape[1])]
-            #: is this correct for "growing"?
         case_mgr = {
             "any_present": lambda s, threshold: any_present(s, threshold),
             "present": lambda s, threshold: s.notna().sum(axis=1) > threshold,
-            "growing": lambda s, threshold: s.diff(axis=1).sum(axis=1)
-            > threshold,
+            "growing": lambda s, threshold: net_increase(s) > threshold,
         }
+        if condition not in case_mgr:
+            raise ValueError(
+                f"Unknown condition {condition!r}: use one of"
+                f" {sorted(case_mgr)}."
+            )
+        if len(threshold) == 1 and condition != "growing":
+            # a fraction of the experiment's duration as time points
+            threshold = [as_int(*threshold, signal.shape[1])]
         # apply condition
         idx = set(signal.index[case_mgr[condition](signal, *threshold)])
         new_indices = [tuple(x) for x in idx]
@@ -159,6 +167,18 @@ def as_int(threshold: t.Union[float, int], ntps: int):
     if type(threshold) is float:
         threshold = ntps * threshold
     return threshold
+
+
+def net_increase(signal: pd.DataFrame) -> pd.Series:
+    """
+    Find how much each cell's last value exceeds its first.
+
+    The values are the first and last at which the cell was seen, so
+    that a time point missing between them loses none of the increase.
+    """
+    first = signal.bfill(axis=1).iloc[:, 0]
+    last = signal.ffill(axis=1).iloc[:, -1]
+    return last - first
 
 
 def any_present(signal, threshold):

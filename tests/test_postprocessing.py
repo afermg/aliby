@@ -109,6 +109,45 @@ def test_a_picker_with_no_lineage_still_picks_by_condition():
     assert picker.run(data) == [(0, 1)]
 
 
+def picker_by(condition, threshold):
+    """Return a picker of cells by one condition, with no lineage."""
+    picker = Picker(
+        PickerParameters.from_dict(
+            {"picker_sequence": [["condition", condition, threshold]]}
+        )
+    )
+    picker.lineage = np.array([])
+    return picker
+
+
+def test_a_picker_refuses_a_condition_it_does_not_know():
+    """Raise an error naming the conditions there are."""
+    data = signal({(0, 1): seen(1, 0, 10)})
+    with pytest.raises(ValueError, match="growing"):
+        picker_by("shrinking", 3).run(data)
+
+
+def test_a_growing_cell_is_picked_by_its_increase_in_the_signal():
+    """Take the threshold for growing in the units of the Signal."""
+    # a float was taken for a fraction of the movie and multiplied by
+    # its number of time points: 0.5 became 5, and no cell here grew
+    data = signal(
+        {(0, 1): [1.0] * 10, (0, 2): np.linspace(1, 3, 10).tolist()}
+    )
+    assert picker_by("growing", 0.5).run(data) == [(0, 2)]
+    assert picker_by("growing", 1).run(data) == [(0, 2)]
+    assert picker_by("growing", 2).run(data) == []
+
+
+def test_growth_is_kept_across_a_missing_time_point():
+    """Measure growth from the first value seen to the last."""
+    # summed over differences of neighbouring time points, a cell with
+    # every other time point missing had not grown at all
+    data = signal({(0, 1): [1, nan, 3, nan, 5, nan, nan]})
+    assert picker_by("growing", 3).run(data) == [(0, 1)]
+    assert picker_by("growing", 4).run(data) == []
+
+
 def test_a_picker_asked_for_a_lineage_picks_none_without_one():
     """Pick no cell by lineage when no cell is in one."""
     data = signal({(0, 1): seen(1, 0, 10), (0, 2): seen(1, 0, 10)})
