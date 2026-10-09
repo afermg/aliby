@@ -219,25 +219,6 @@ class Grouper(ABC):
                 d[pos] = f["/trap_info/trap_locations"][()]
         return d
 
-    def no_cells(
-        self,
-        path="extraction/general/null/area",
-        mode="retained",
-        **kwargs,
-    ) -> t.Dict[str, int]:
-        """Get number of cells retained per position in base channel as a dictionary."""
-        return (
-            self.concat_signal(path=path, mode=mode, **kwargs)
-            .groupby("group")
-            .apply(len)
-            .to_dict()
-        )
-
-    @property
-    def no_retained(self) -> t.Dict[str, int]:
-        """Get number of cells retained per position in base channel as a dictionary."""
-        return self.no_cells()
-
     @property
     def channels(self):
         """Get channels available over all positions as a set."""

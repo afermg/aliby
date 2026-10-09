@@ -28,6 +28,11 @@ class PickerParameters(ParametersABC):
     with no "lineage" condition specified. For short movies, lineage
     information is only available for a small fraction of the
     segmented cells.
+
+    To keep every cell, use an empty sequence
+        {"picker_sequence": []}
+    A sequence that picks no cell gives a position with no cells, not
+    one with all of them.
     """
 
     _defaults = {
@@ -109,7 +114,20 @@ class Picker(LineageProcess):
                 # no cells left, or no lineage for any cell to be in
                 new_indices = tuple()
             # number of indices reduces for each iteration of the loop
-            indices = indices.intersection(new_indices)
+            remaining = indices.intersection(new_indices)
+            if indices and not remaining:
+                message = (
+                    f"No cells picked: none of {len(indices)} cells"
+                    f" passed {[method, *params]}."
+                )
+                if method == "lineage":
+                    message += (
+                        " To pick without a lineage, use"
+                        ' {"picker_sequence": [["condition", "present",'
+                        " 3]]}."
+                    )
+                self.log(message)
+            indices = remaining
         # return as list
         indices_arr = [tuple(x) for x in indices]
         return indices_arr

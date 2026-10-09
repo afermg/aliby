@@ -282,6 +282,12 @@ Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleId
 **Picker** (`postprocessor.core.reshapers.picker`)
 - Selects cells with lineage information and minimum track length (default: seen at more than 3 time points, so 4 or more)
 - Identifies mother-bud relationships using Baby's lineage data
+- A picker that picks no cell gives a position with no cells and logs which
+  pick removed the last of them. `Signal` tells this from a file with no
+  `modifiers/picks`, which has not been postprocessed and gives every cell:
+  `read_picks` returns an empty set for the first and `None` for the second.
+  Until October 2026 both gave every cell, so a short movie with no lineage
+  came back unpicked. `picker_sequence: []` is how to ask for every cell
 
 **Merger** (`postprocessor.core.reshapers.merger`)
 - Combines fragmented tracks that should represent the same cell

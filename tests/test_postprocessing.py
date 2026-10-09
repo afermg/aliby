@@ -7,6 +7,8 @@ buds from the Signals so merged and picked. Each step must work from
 what this run found, not from what an earlier run left in the h5 file.
 """
 
+import logging
+
 import h5py
 import numpy as np
 import pandas as pd
@@ -342,10 +344,89 @@ def test_a_bud_process_takes_parameters(position_h5):
     assert "/postprocessing/buddings/extraction_general_null_volume" in result
 
 
-def test_cells_are_counted_without_a_cutoff(position_h5):
-    """Count the cells of each group, keeping every picked cell."""
-    # no_cells called concat_signal without its cutoff, which raised
+def picking(sequence):
+    """Return postprocessor parameters with a picker sequence."""
+    parameters = PostProcessorParameters.default().to_dict()
+    parameters["param_sets"]["merging_picking"]["picker_params"] = {
+        "picker_sequence": sequence
+    }
+    return PostProcessorParameters.from_dict(parameters)
+
+
+def test_a_position_with_no_cell_picked_has_no_cells(position_h5):
+    """Keep no cell when the picker picked none."""
+    # no cell is seen at more than 50 time points. Picks of no cells were
+    # read as no picking, and the file gave back every cell it held
+    result = PostProcessor(
+        position_h5, picking([["condition", "present", 50]])
+    ).run()
+    assert len(result["picks"]) == 0
+    assert all(
+        value.empty
+        for value in result.values()
+        if isinstance(value, pd.DataFrame)
+    )
+    PostProcessorWriter(position_h5).write(data=result)
+    signal = Signal(position_h5)
+    assert signal.read_picks() == set()
+    assert signal.get("/extraction/general/null/volume").empty
+    assert len(signal.get_raw("/extraction/general/null/volume")) == 3
+
+
+def test_a_file_that_was_never_picked_gives_every_cell(position_h5):
+    """Tell a file with no picks from one whose picker picked none."""
+    signal = Signal(position_h5)
+    assert signal.read_picks() is None
+    assert len(signal.get("/extraction/general/null/volume")) == 3
+
+
+def test_an_empty_picker_sequence_keeps_every_cell(position_h5):
+    """Pick every cell when asked for no picking."""
+    result = PostProcessor(position_h5, picking([])).run()
+    picks = sorted(map(tuple, np.asarray(result["picks"]).tolist()))
+    # the bud's two tracks are merged into cell 2
+    assert picks == [(0, 1), (0, 2)]
+
+
+def test_picked_cells_keep_the_order_of_the_signal():
+    """Pick rows without reordering them, whatever the index holds."""
+    picks = {(0, 2), (0, 3)}
+    data = signal({(0, 3): [1.0], (0, 1): [2.0], (0, 2): [3.0]})
+    picked = Signal.apply_merging_picking(
+        None, data, merges=False, picks=picks
+    )
+    assert picked.index.tolist() == [(0, 3), (0, 2)]
+    # picks are trap and cell, so with the mother in the index too no
+    # row matched and none was kept
+    data = with_mothers({(0, 3, 1): [1.0], (0, 1, 0): [2.0], (0, 2, 1): [3.0]})
+    picked = Signal.apply_merging_picking(
+        None, data, merges=False, picks=picks
+    )
+    assert picked.index.tolist() == [(0, 3, 1), (0, 2, 1)]
+
+
+def test_a_picker_says_which_pick_left_no_cells():
+    """Warn when a pick removes the last cells, naming the pick."""
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("aliby")
+    logger.addHandler(handler)
+    data = signal({(0, 1): seen(1, 0, 10), (0, 2): seen(1, 0, 10)})
+    picker = Picker(PickerParameters.default())
+    picker.lineage = np.array([])
+    try:
+        assert picker.run(data) == []
+    finally:
+        logger.removeHandler(handler)
+    messages = [record.getMessage() for record in records]
+    assert sum("No cells picked" in message for message in messages) == 1
+    assert any("['lineage', 'families']" in message for message in messages)
+
+
+def test_signals_are_concatenated_without_a_cutoff(position_h5):
+    """Keep every picked cell when no cutoff is given."""
     postprocess(position_h5)
     grouper = Grouper(position_h5.parent)
-    assert grouper.no_cells() == {"posi": 2}
-
+    volume = grouper.concat_signal("extraction/general/null/volume")
+    assert len(volume) == 2

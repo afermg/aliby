@@ -177,9 +177,11 @@ class Signal(BridgeH5):
         merges : t.Union[np.ndarray, bool]
             (optional) An array of pairs of (trap, cell) indices to merge.
             If True, fetch merges from file.
-        picks : t.Union[np.ndarray, bool]
-            (optional) An array of (trap, cell) indices.
-            If True, fetch picks from file.
+        picks : t.Union[t.Collection, bool, None]
+            (optional) The (trap, cell) indices of the cells to keep.
+            If True, fetch picks from file. If False or None, keep every
+            cell. An empty collection is a picker that picked no cell,
+            and no cell is kept.
         """
         if "cell_label" in data.index.names:
             # no picks or merges for per-trap background signals (cell_label=-1)
@@ -191,17 +193,15 @@ class Signal(BridgeH5):
             merged = apply_merges(data, merges)
         else:
             merged = copy(data)
-        if isinstance(picks, bool):
-            if picks is True:
-                picks = self.read_picks()
-            else:
-                return merged
-        if len(picks):
-            picked_indices = list(
-                picks.intersection([tuple(x) for x in merged.index])
-            )
-            return merged.loc[picked_indices]
-        return merged
+        if picks is True:
+            picks = self.read_picks()
+        if picks is False or picks is None:
+            # no picking asked for, or a file that has not been picked
+            return merged
+        index = merged.index
+        if "mother_label" in index.names:
+            index = index.droplevel("mother_label")
+        return merged.loc[index.isin(set(map(tuple, picks)))]
 
     @cached_property
     def print_available(self):
@@ -292,8 +292,14 @@ class Signal(BridgeH5):
                 merges = np.array([])
         return merges
 
-    def read_picks(self) -> t.Set[t.Tuple[int, str]]:
-        """Read picks from the h5 file."""
+    def read_picks(self) -> t.Set[t.Tuple[int, str]] | None:
+        """
+        Read picks from the h5 file.
+
+        Return None if the file has no picks, because it has not been
+        postprocessed, and an empty set if it has been and no cell was
+        picked.
+        """
         path = "modifiers/picks"
         with h5py.File(self.filename, "r") as f:
             if path in f:
@@ -312,7 +318,7 @@ class Signal(BridgeH5):
                         )
                     )
             else:
-                picks = set()
+                picks = None
         return picks
 
     def dataset_to_df(self, f: Path, dataset: str):
