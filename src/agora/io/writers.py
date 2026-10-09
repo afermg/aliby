@@ -100,6 +100,9 @@ class CoreWriter:
             logging.debug(f"Writer: Attributes have no length: {e}")
             n = 1
         if key in hgroup:
+            if n == 0:
+                # a time point with no cells adds nothing
+                return
             # append to existing dataset
             try:
                 dset = hgroup[key]
@@ -126,8 +129,9 @@ class CoreWriter:
                     else None
                 ),
             )
-            # write all data, signified by the empty tuple
-            hgroup[key][()] = data
+            if n:
+                # write all data, signified by the empty tuple
+                hgroup[key][()] = data
 
     def overwrite(self, data: NDArray, key: str, hgroup: str):
         """
@@ -195,11 +199,43 @@ class CoreWriter:
                         )
                         return e
 
+    def open_store(self) -> pd.HDFStore:
+        """Open the h5 file to add data frames to it."""
+        mode = "a" if Path(self.file).exists() else "w"
+        return pd.HDFStore(
+            self.file,
+            mode=mode,
+            complib=self.df_compression,
+            complevel=self.compression_opts,
+        )
+
     def add_df(
-        self, dataset: str, df: pd.DataFrame, overwrite: bool = False
+        self,
+        dataset: str,
+        df: pd.DataFrame,
+        overwrite: bool = False,
+        store: pd.HDFStore | None = None,
     ) -> None:
-        """Add data frame to h5 file."""
+        """
+        Add data frame to h5 file.
+
+        Parameters
+        ----------
+        dataset: str
+            Where in the h5 file to write.
+        df: pd.DataFrame
+            The data, with time points as columns.
+        overwrite: bool
+            If True, replace any data already there; if False, add to it.
+        store: pd.HDFStore, optional
+            The open h5 file, to write several data frames without
+            opening it for each.
+        """
         if df.empty:
+            return
+        if store is None:
+            with self.open_store() as store:
+                self.add_df(dataset, df, overwrite=overwrite, store=store)
             return
         # convert to tidy structure
         multi_index_names = df.index.names
@@ -219,21 +255,13 @@ class CoreWriter:
                 "value": np.float32,
             }
         )
-        # store
-        mode = "a" if Path(self.file).exists() else "w"
-        with pd.HDFStore(
-            self.file,
-            mode=mode,
-            complib=self.df_compression,
-            complevel=self.compression_opts,
-        ) as store:
-            if dataset in store:
-                if overwrite:
-                    store.put(dataset, df_flat, format="table")
-                else:
-                    store.append(dataset, df_flat, format="table")
-            else:
-                store.put(dataset, df_flat, format="table")
+        # store with no PyTables index: a Signal is read whole, so nothing
+        # looks rows up by it, and it took three quarters of the time to
+        # write and half the size of the file
+        if dataset in store and not overwrite:
+            store.append(dataset, df_flat, format="table", index=False)
+        else:
+            store.put(dataset, df_flat, format="table", index=False)
 
 
 class TilerWriter(CoreWriter):
@@ -337,9 +365,11 @@ class ExtractorWriter(CoreWriter):
 
     def write(self, data: dict[str, pd.DataFrame]):
         """Write the extracted data for one position."""
-        for extract_name, df in data.items():
-            dset_path = "/extraction/" + extract_name
-            self.add_df(dataset=dset_path, df=df)
+        # open the h5 file once for all of the signals
+        with self.open_store() as store:
+            for extract_name, df in data.items():
+                dset_path = "/extraction/" + extract_name
+                self.add_df(dataset=dset_path, df=df, store=store)
 
     def write_pdms_mask(self, mask: NDArray):
         """

@@ -9,12 +9,14 @@ import multiprocessing
 import os
 import re
 import typing as t
+from collections import deque
 from pathlib import Path
 from pprint import pprint
 from types import SimpleNamespace
 import baby
 import baby.errors
 import numpy as np
+import pandas as pd
 from agora.abc import ParametersABC, ProcessABC
 from agora.io.metadata import MetaData
 from agora.parallel import (
@@ -46,7 +48,11 @@ from sooth import tile_shape
 from tqdm import tqdm
 
 from aliby.global_settings import global_settings
-from aliby.baby_sitter import BabyParameters, BabyRunner
+from aliby.baby_sitter import (
+    BabyParameters,
+    BabyRunner,
+    InconsistentOutput,
+)
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
@@ -127,8 +133,8 @@ class PipelineParameters(ParametersABC):
         defaults = cls.build_general_defaults(
             expt_id, directory, meta, general
         )
-        cls.apply_ref_z(defaults)
-        defaults["tiler"] = cls.build_tiler_defaults(meta, tiler)
+        ref_z = cls.apply_ref_z(defaults)
+        defaults["tiler"] = cls.build_tiler_defaults(meta, tiler, ref_z)
         defaults["extraction"] = cls.build_extraction_defaults(
             meta, extraction
         )
@@ -286,20 +292,28 @@ class PipelineParameters(ParametersABC):
         ----------
         defaults : dict
             Defaults dict whose ``"metadata"`` key carries the full metadata.
+
+        Returns
+        -------
+        ref_z : int or None
+            The middle z section, or None if the metadata does not give
+            the number of sections.
         """
         full = defaults["metadata"]["full"]
+        ref_z = None
         if (
             "number_z_sections" in full
             and "Brightfield" in full["number_z_sections"]
         ):
             ref_z = full["number_z_sections"]["Brightfield"] // 2
-            global_settings.imaging_specifications["ref_z"] = ref_z
         elif "zsectioning/nsections" in full:
             ref_z = full["zsectioning/nsections"][0] // 2
+        if ref_z is not None:
             global_settings.imaging_specifications["ref_z"] = ref_z
+        return ref_z
 
     @staticmethod
-    def build_tiler_defaults(meta, tiler):
+    def build_tiler_defaults(meta, tiler, ref_z=None):
         """
         Build tiler parameter dict, including a backup ref channel index.
 
@@ -309,12 +323,19 @@ class PipelineParameters(ParametersABC):
             Metadata object with ``full`` attribute.
         tiler : dict
             User-supplied tiler overrides.
+        ref_z : int, optional
+            The z section to find traps and drift in, from the metadata.
+            A ``ref_z`` in ``tiler`` is used instead if there is one.
 
         Returns
         -------
         tiler_defaults : dict
             Tiler parameters with ``backup_ref_channel`` set.
         """
+        if ref_z is not None and "ref_z" not in tiler:
+            # TilerParameters took its default when aliby was imported,
+            # before any metadata was read
+            tiler = {**tiler, "ref_z": ref_z}
         tiler_defaults = TilerParameters.default(**tiler).to_dict()
         backup_ref_channel = None
         if "channels" in meta.full and isinstance(
@@ -367,9 +388,9 @@ class Pipeline(ProcessABC):
             for k in ("host", "username", "password")
         }
         self.expt_id = config["general"]["expt_id"]
-        self.setLogger(
-            config["general"]["directory"], config["general"]["expt_id"]
-        )
+        # kept because setup changes the directory in the parameters
+        self.log_folder = config["general"]["directory"]
+        self.setLogger(self.log_folder, self.expt_id)
 
     @staticmethod
     def setLogger(
@@ -377,8 +398,14 @@ class Pipeline(ProcessABC):
         expt_id: str,
         file_level: str = "INFO",
         stream_level: str = "INFO",
+        file_mode: str = "w",
     ):
-        """Initialise and format logger."""
+        """
+        Initialise and format logger.
+
+        Use a file_mode of "a" to add to a log file that another process
+        has started.
+        """
         # reset per-run warning deduplication flags so warnings are visible
         # on every pipeline run, not just the first in a Python session
         from agora.io import metadata_legacy
@@ -405,7 +432,13 @@ class Pipeline(ProcessABC):
         logger.addHandler(ch)
         # create file handler to log all messages
         logfile_name = f"aliby_{str(expt_id).split('/')[-1]}.log"
-        fh = logging.FileHandler(Path(folder) / logfile_name, "w")
+        logfile = Path(folder) / logfile_name
+        if file_mode == "w":
+            # empty the file and then append to it, as the workers do: a
+            # handler opened to write keeps its own place in the file and
+            # writes over what the workers have added since
+            logfile.write_text("")
+        fh = logging.FileHandler(logfile, "a")
         fh.setLevel(getattr(logging, file_level))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
@@ -586,6 +619,11 @@ class Pipeline(ProcessABC):
     ):
         """Run a pipeline for one position."""
         name, image_id = name_image_id
+        if not logging.getLogger("aliby").handlers:
+            # a spawned worker imports aliby afresh and so has no handlers:
+            # without them nothing reaches the log file and nothing below
+            # a warning is shown
+            self.setLogger(self.log_folder, self.expt_id, file_mode="a")
         config = self.parameters.to_dict()
         config["tiler"]["position_name"] = name.split(".")[0]
         earlystop = config["general"].get("earlystop", None)
@@ -633,6 +671,9 @@ class Pipeline(ProcessABC):
                 )
             all_tps = range(first_tp, tps)
             progress_bar = tqdm(all_tps, desc=image.name)
+            clogging_check = CloggingCheck(earlystop, tiler.tile_size)
+            # number of time points segmented and extracted
+            no_completed = 0
             # run through time points
             for i in progress_bar:
                 if (
@@ -657,9 +698,13 @@ class Pipeline(ProcessABC):
                     try:
                         seg_list, rescaling, inshape = babyrunner.segment_tp(i)
                     except baby.errors.Clogging:
+                        # there is no segmentation to track or extract
                         self.log(
-                            "WARNING: Clogging threshold exceeded in BABY."
+                            "WARNING: Clogging threshold exceeded in BABY "
+                            f"at timepoint {i}. Skipping the rest of this "
+                            "position."
                         )
+                        break
                     # track with Baby
                     try:
                         result = babyrunner.track_tp(
@@ -673,42 +718,37 @@ class Pipeline(ProcessABC):
                             "WARNING: Bud has been assigned as its own mother."
                         )
                         raise ValueError("Catastrophic Baby error!")
+                    except InconsistentOutput as error:
+                        self.log(
+                            f"WARNING: Baby failed at timepoint {i}: {error}"
+                            " Skipping the rest of this position."
+                        )
+                        break
                     # release the materialised seg list before extraction
                     # runs; otherwise it stays bound until the next
                     # timepoint's segment_tp rebinds it
                     del seg_list, rescaling, inshape
-                    # check Baby's result
-                    if np.any(
-                        [
-                            True if not value else False
-                            for key, value in result.items()
-                        ]
-                    ):
-                        self.log(
-                            f"WARNING: Baby failed at timepoint {i}."
-                            " Skipping the rest of this position."
-                        )
-                        break
-                    else:
-                        # Baby successful
-                        baby_writer.write(
-                            data=result,
-                            overwrite=["mother_assign"],
-                            tile_size=tiler.tile_size,
-                            tp=i,
-                        )
+                    if not len(result["cell_label"]):
+                        # not a failure: every trap is then all background
+                        self.log(f"No cells found at timepoint {i}.", "info")
+                    baby_writer.write(
+                        data=result,
+                        overwrite=["mother_assign"],
+                        tile_size=tiler.tile_size,
+                        tp=i,
+                    )
                     # run extraction
                     result = extractor.run_tp(i)
+                    # before writing, which changes the data frames
+                    frac_clogged_traps = clogging_check.update(
+                        result.get("general/null/area")
+                    )
                     extractor_writer.write(data=result)
+                    no_completed += 1
                     if i == first_tp and extractor.pdms_mask is not None:
                         # mask showing traps used for background correcting
                         extractor_writer.write_pdms_mask(extractor.pdms_mask)
-                    # check and report clogging
-                    frac_clogged_traps = check_earlystop(
-                        out_file,
-                        earlystop,
-                        tiler.tile_size,
-                    )
+                    # report clogging
                     if frac_clogged_traps > 0.3:
                         self.log(f"{name}: Clogged_traps:{frac_clogged_traps}")
                         frac = np.round(frac_clogged_traps * 100)
@@ -721,7 +761,7 @@ class Pipeline(ProcessABC):
                     )
                     break
             # run post-processing
-            if i == first_tp:
+            if no_completed == 0:
                 self.log(f"Position {image.name} failed.", "info")
             else:
                 result = PostProcessor(
@@ -749,19 +789,20 @@ class Pipeline(ProcessABC):
         print()
 
 
-def check_earlystop(
-    filename: str, es_parameters: dict, tile_size: int | tuple[int, int]
-):
+def clogged_fraction(
+    areas: pd.DataFrame, es_parameters: dict, tile_size: int | tuple[int, int]
+) -> float:
     """
-    Check recent time points for tiles with too many cells.
+    Find the fraction of tiles with cells that are clogged.
 
-    Returns the fraction of clogged tiles, where clogged tiles have
-    too many cells or too much of their area covered by cells.
+    A clogged tile has both too many cells and too much of its area
+    covered by cells, each averaged over the time points given.
 
     Parameters
     ----------
-    filename: str
-        Name of h5 file.
+    areas: pd.DataFrame
+        The areas of the cells, with trap and cell_label as the index and
+        the time points to evaluate as the columns.
     es_parameters: dict
         Parameters defining when early stopping should happen.
         For example:
@@ -776,21 +817,87 @@ def check_earlystop(
     # a tile's area, which is its height times its width
     height, width = tile_shape(tile_size)
     area = height * width
-    # get the area of the cells organised by trap and cell number
-    s = Signal(filename)
-    df = s.get_raw("/extraction/general/null/area")
-    # check the latest time points only
-    cells_used = df[
-        df.columns[-1 - es_parameters["ntps_to_eval"] : -1]
-    ].dropna(how="all")
+    cells_used = areas.dropna(how="all")
+    if cells_used.empty:
+        # no cells, so no tile is clogged
+        return 0.0
+    by_trap = cells_used.groupby("trap")
     # find tiles with too many cells
     traps_above_nthresh = (
-        cells_used.groupby("trap").count().apply(np.mean, axis=1)
-        > es_parameters["thresh_trap_ncells"]
+        by_trap.count().mean(axis=1) > es_parameters["thresh_trap_ncells"]
     )
     # find tiles with cells covering too great a fraction of the tiles' area
     traps_above_athresh = (
-        cells_used.groupby("trap").sum().apply(np.mean, axis=1) / area
-        > es_parameters["thresh_trap_area"]
+        by_trap.sum().mean(axis=1) / area > es_parameters["thresh_trap_area"]
     )
-    return (traps_above_nthresh & traps_above_athresh).mean()
+    return float((traps_above_nthresh & traps_above_athresh).mean())
+
+
+class CloggingCheck:
+    """
+    Follow the fraction of clogged tiles as a position is processed.
+
+    Hold the cells' areas at the latest time points, as the extractor
+    returns them, so that the h5 file is not read back at each time point.
+    """
+
+    def __init__(self, es_parameters: dict, tile_size: int | tuple[int, int]):
+        """
+        Initialise with no time points.
+
+        Parameters
+        ----------
+        es_parameters: dict
+            Parameters defining when early stopping should happen, as for
+            clogged_fraction.
+        tile_size: int or tuple of two ints
+            Size of tile.
+        """
+        self.es_parameters = es_parameters
+        self.tile_size = tile_size
+        self.latest_areas = deque(maxlen=es_parameters["ntps_to_eval"])
+
+    def update(self, areas: pd.DataFrame | None) -> float:
+        """
+        Add a time point and return the fraction of clogged tiles.
+
+        Parameters
+        ----------
+        areas: pd.DataFrame or None
+            The areas of the cells at the time point, with trap and
+            cell_label as the index, or None or empty if it has no cells.
+        """
+        has_cells = areas is not None and not areas.empty
+        # a copy, because the writer changes the extractor's data frames
+        self.latest_areas.append(areas.copy() if has_cells else None)
+        with_cells = [df for df in self.latest_areas if df is not None]
+        if not with_cells:
+            return 0.0
+        return clogged_fraction(
+            pd.concat(with_cells, axis=1), self.es_parameters, self.tile_size
+        )
+
+
+def check_earlystop(
+    filename: str, es_parameters: dict, tile_size: int | tuple[int, int]
+):
+    """
+    Check the latest time points in an h5 file for clogged tiles.
+
+    Return the fraction of clogged tiles, as clogged_fraction defines it,
+    over the last ntps_to_eval time points, the latest included.
+
+    Parameters
+    ----------
+    filename: str
+        Name of h5 file.
+    es_parameters: dict
+        Parameters defining when early stopping should happen, as for
+        clogged_fraction.
+    tile_size: int or tuple of two ints
+        Size of tile.
+    """
+    # get the area of the cells organised by trap and cell number
+    df = Signal(filename).get_raw("/extraction/general/null/area")
+    latest = df[df.columns[-es_parameters["ntps_to_eval"] :]]
+    return clogged_fraction(latest, es_parameters, tile_size)

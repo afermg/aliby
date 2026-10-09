@@ -53,7 +53,7 @@ class Signal(BridgeH5):
                 picked_merged = self.apply_merging_picking(record)
                 return self.add_name(picked_merged, dset)
         elif isinstance(dset, list):
-            return [self.get(d) for d in dset]
+            return [self.get(d, in_minutes=in_minutes) for d in dset]
         else:
             raise TypeError("Error in Signal.get.")
 
@@ -64,15 +64,35 @@ class Signal(BridgeH5):
         return df
 
     def cols_in_mins(self, df: pd.DataFrame):
-        """Convert numerical columns in a data frame to minutes."""
-        df.columns = (df.columns * np.round(self.tinterval / 60)).astype(int)
+        """
+        Convert numerical columns in a data frame to minutes.
+
+        The minutes are integers if every one is whole, as for an interval
+        of a whole number of minutes, and floats otherwise. Rounding the
+        interval to whole minutes first, as was done, made a 150 s interval
+        two minutes and a 30 s interval none.
+        """
+        minutes = df.columns * self.tinterval / 60
+        if np.all(minutes == np.round(minutes)):
+            minutes = minutes.astype(int)
+        df.columns = minutes
         return df
 
     @cached_property
     def ntimepoints(self):
         """Find the number of time points for one position, or one h5 file."""
-        with h5py.File(self.filename, "r") as f:
-            return f["extraction/general/null/area/timepoint"][-1] + 1
+        dataset = "extraction/general/null/area"
+        try:
+            with pd.HDFStore(self.filename, mode="r") as store:
+                times = store.select(dataset, columns=["time"])["time"]
+            return int(times.max()) + 1
+        except (HDF5ExtError, KeyError, TypeError):
+            # old h5 files stored the time points as their own dataset,
+            # and "None" rather than "null" in paths
+            with h5py.File(self.filename, "r") as f:
+                if dataset not in f:
+                    dataset = dataset.replace("null", "None")
+                return int(f[dataset + "/timepoint"][-1]) + 1
 
     @cached_property
     def tinterval(self) -> int:
@@ -206,19 +226,15 @@ class Signal(BridgeH5):
     @cached_property
     def print_available(self):
         """Print data sets available in h5 file."""
-        if not hasattr(self, "_available"):
-            self._available = []
-            with h5py.File(self.filename, "r") as f:
-                f.visititems(self.store_signal_path)
-        for sig in self._available:
+        for sig in self.available:
             print(sig)
 
     @cached_property
     def available(self):
         """Get data sets available in h5 file."""
+        # start afresh, or each visit to the file lists every signal again
+        self._available = []
         try:
-            if not hasattr(self, "_available"):
-                self._available = []
             with h5py.File(self.filename, "r") as f:
                 f.visititems(self.store_signal_path)
         except KeyError as e:
@@ -337,6 +353,17 @@ class Signal(BridgeH5):
                     index=["trap", "cell_label"],
                     values="value",
                 )
+                if len(df.columns):
+                    # a time point with no cells has no rows in the table
+                    # but is still a column, so that neighbouring columns
+                    # are neighbouring time points
+                    df = df.reindex(
+                        columns=pd.RangeIndex(
+                            df.columns.min(),
+                            df.columns.max() + 1,
+                            name="time",
+                        )
+                    )
         except (HDF5ExtError, KeyError, TypeError):
             # old h5 files stored "None" rather than "null" in paths
             with h5py.File(f, "r") as file:
@@ -387,4 +414,5 @@ class Signal(BridgeH5):
     @property
     def ntps(self) -> int:
         """Get number of time points from the metadata."""
-        return self.meta_h5["time_settings/ntimepoints"][0]
+        # a number in files aliby writes and a list in older ones
+        return int(np.ravel(self.meta_h5["time_settings/ntimepoints"])[0])

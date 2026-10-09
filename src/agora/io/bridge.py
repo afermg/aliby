@@ -2,7 +2,7 @@
 Tools to interact with h5 files.
 """
 
-import collections
+import collections.abc
 import logging
 import typing as t
 from itertools import chain, groupby, product
@@ -158,7 +158,7 @@ def flatten(d, parent_key="", sep="_"):
     items = []
     for k, v in d.items():
         new_key = parent_key + (k,) if parent_key else (k,)
-        if isinstance(v, collections.MutableMapping):
+        if isinstance(v, collections.abc.MutableMapping):
             items.extend(flatten(v, new_key, sep=sep).items())
         else:
             items.append((new_key, v))

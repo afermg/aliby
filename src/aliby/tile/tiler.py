@@ -146,6 +146,11 @@ class Tiler(StepABC):
         # get reference channel - used for segmentation
         self.ref_channel_index = self.channels.index(parameters.ref_channel)
         self.tile_locs = tile_locations
+        # the last z stack read for the reference channel, as (tp, stack):
+        # BABY and the extractor each ask for it at every time point
+        self.ref_stack = None
+        # the images last registered to find drift, by time point
+        self.ref_planes = {}
         # a tile's size is its height and width, one number meaning square
         if self.tile_size is not None:
             self.tile_size = tile_shape(self.tile_size)
@@ -273,9 +278,8 @@ class Tiler(StepABC):
             Detection finds square traps, so a rectangular size must come
             with its centres, from an aliby h5 or a curator.
         """
-        initial_image = self.image[
-            self.first_processed_tp, self.ref_channel_index, self.ref_z
-        ]
+        # kept, because drift is measured from this image
+        initial_image = self.get_ref_plane(self.first_processed_tp)
         if tile_size:
             height, width = tile_shape(tile_size)
             if height != width:
@@ -324,9 +328,7 @@ class Tiler(StepABC):
             Index for a time point.
         """
         _, disagrees = drift_at(
-            lambda frame: self.image[
-                frame, self.ref_channel_index, self.ref_z
-            ],
+            self.get_ref_plane,
             tp,
             self.tile_locs.drifts,
             first_tp=self.first_processed_tp,
@@ -336,6 +338,31 @@ class Tiler(StepABC):
         )
         if disagrees:
             self.drift_disagreements.append(tp)
+
+    def get_ref_plane(self, tp: int) -> np.ndarray:
+        """
+        Return the image registered to find the drift at a time point.
+
+        Keep the first image processed and the two latest, which are the
+        ones the next time point is registered to, so that each is read
+        once.
+
+        Parameters
+        ----------
+        tp: integer
+            Index for a time point.
+        """
+        if tp not in self.ref_planes:
+            self.ref_planes[tp] = np.asarray(
+                self.image[tp, self.ref_channel_index, self.ref_z]
+            )
+            keep = (self.first_processed_tp, tp - 1, tp)
+            self.ref_planes = {
+                kept: plane
+                for kept, plane in self.ref_planes.items()
+                if kept in keep
+            }
+        return self.ref_planes[tp]
 
     @property
     def drift_disagreements(self) -> list[int]:
@@ -370,11 +397,22 @@ class Tiler(StepABC):
         -------
         image_all_z: an array of z slices for the entire image
             Returns np.ndarray if lazy=False, da.Array if lazy=True
+
+        The stack last read for the reference channel is kept and given
+        again if asked for, so do not change it in place.
         """
+        is_ref = c == self.ref_channel_index
+        if not lazy and is_ref and self.ref_stack is not None:
+            cached_tp, cached_stack = self.ref_stack
+            if cached_tp == tp:
+                return cached_stack
         image_all_z = self.image[tp, c]
         if not lazy and hasattr(image_all_z, "compute"):
             # if using dask fetch images
             image_all_z = image_all_z.compute(scheduler="synchronous")
+        if not lazy and is_ref:
+            image_all_z = np.asarray(image_all_z)
+            self.ref_stack = (tp, image_all_z)
         return image_all_z
 
     def get_lazy_tile_view(self, tile_id: int, tp: int, c: int) -> da.Array:
@@ -498,20 +536,23 @@ class Tiler(StepABC):
         Array of tiles with shape (no tiles, z-sections, y, x)
         Returns np.ndarray if lazy=False, da.Array if lazy=True
         """
-        tiles = []
-        # use lazy tile views instead of loading full image
-        image_all_z = self.image[tp, c]
-        # decompose into tiles using lazy views
-        for tile in self.tile_locs:
-            # pad tile if necessary - this remains lazy until computed
-            ndtile = Tiler.get_tile_and_pad(
-                image_all_z, tile.as_range(tp), tile.size
-            )
-            tiles.append(ndtile)
-        result = da.stack(tiles)
-        if not lazy:
-            result = result.compute(scheduler="synchronous")
-        return result
+        # read the image once: every tile is cut from the same z stack
+        image_all_z = self.load_image(tp, c, lazy=lazy)
+        if lazy:
+            # wrap once, not once for each tile: dask hashes every pixel
+            # of a numpy array, which is what a zarr store gives
+            image_all_z = da.asarray(image_all_z)
+            stack = da.stack
+        else:
+            image_all_z = np.asarray(image_all_z)
+            stack = np.stack
+        # cut the tiles, padding any that leave the image
+        return stack(
+            [
+                cut_tile(image_all_z, tile.as_range(tp), tile.size)
+                for tile in self.tile_locs
+            ]
+        )
 
     def get_tiles_lazy(
         self, tp: int, c: int, tile_ids: t.List[int] = None
@@ -539,9 +580,15 @@ class Tiler(StepABC):
         """
         if tile_ids is None:
             tile_ids = list(range(len(self.tile_locs)))
-        # create lazy arrays for each tile using efficient tile views
+        # read and wrap the image once, not once for each tile
+        image_all_z = da.asarray(self.image[tp, c])
         tiles = [
-            self.get_lazy_tile_view(tile_id, tp, c) for tile_id in tile_ids
+            cut_tile(
+                image_all_z,
+                self.tile_locs.tiles[tile_id].as_range(tp),
+                self.tile_size,
+            )
+            for tile_id in tile_ids
         ]
         # stack into a single dask array with appropriate chunking
         # one tile per chunk in the first dimension for efficient processing
@@ -595,19 +642,18 @@ class Tiler(StepABC):
             )
             for channel in channels
         ]
+        # numpy arrays unless lazy: there is then no graph to build
+        xp = da if lazy else np
         # get the data as a list of length of the number of channels
         res = []
         for c in channels:
             # first dimension is number of traps
-            tiles = self.get_tp_data_for_one_channel(tp, c, lazy=True)[:, z]
+            tiles = self.get_tp_data_for_one_channel(tp, c, lazy=lazy)[:, z]
             # add back channel axis
-            tiles = da.expand_dims(tiles, axis=1)
+            tiles = xp.expand_dims(tiles, axis=1)
             res.append(tiles)
         # stack over channels
-        final = da.stack(res, axis=1)
-        if not lazy:
-            final = final.compute(scheduler="synchronous")
-        return final
+        return xp.stack(res, axis=1)
 
     def get_tiles_timepoint_lazy(
         self,
@@ -712,7 +758,8 @@ def find_channel_index(image_channels: t.List[str], channel_regex: str):
     for index, ch in enumerate(image_channels):
         found = re.match(channel_regex, ch, re.IGNORECASE)
         if found:
-            if len(found.string) - (found.endpos - found.start()):
+            # the match ends before the channel's name does
+            if found.end() < len(ch):
                 logging.getLogger("aliby").log(
                     logging.WARNING,
                     f"Channel {channel_regex} matched {ch} using regex",

@@ -8,7 +8,6 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-from agora.utils.indexing import find_1st_equal
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
 from scipy.sparse import issparse
@@ -248,29 +247,45 @@ class Cells:
         return self["timepoint"].max() + 1
 
     @cached_property
+    def cell_ids(self) -> np.ndarray:
+        """
+        Give the tile and label of every cell, sorted by tile then label.
+
+        A cell's row here is its row in cells_vs_tps. A cell is found by
+        its own tile and label and not by counting labels up from one:
+        labels are skipped when cells are lost, and a tile whose labels
+        are 1, 3 and 7 has three cells, not seven.
+        """
+        return np.unique(
+            np.stack((self["trap"], self["cell_label"]), axis=1), axis=0
+        )
+
+    @cached_property
     def cells_vs_tps(self):
         """Boolean matrix showing when cells are present for all time points."""
-        total_ncells = sum([len(x) for x in self.labels])
-        cells_vs_tps = np.zeros((total_ncells, self.ntimepoints), dtype=bool)
-        cells_vs_tps[
-            self.cell_cumlsum[self["trap"]] + self["cell_label"] - 1,
-            self["timepoint"],
-        ] = True
+        cell_ids, rows = np.unique(
+            np.stack((self["trap"], self["cell_label"]), axis=1),
+            axis=0,
+            return_inverse=True,
+        )
+        cells_vs_tps = np.zeros((len(cell_ids), self.ntimepoints), dtype=bool)
+        cells_vs_tps[rows.ravel(), self["timepoint"]] = True
         return cells_vs_tps
 
     @cached_property
     def cell_cumlsum(self):
-        """Find cumulative sum over tiles of the number of cells present."""
-        ncells_per_tile = [len(x) for x in self.labels]
+        """Find the number of cells in the tiles before each tile."""
+        ncells_per_tile = np.bincount(
+            self.cell_ids[:, 0], minlength=self.ntraps
+        )
         cumsum = np.roll(np.cumsum(ncells_per_tile), shift=1)
         cumsum[0] = 0
         return cumsum
 
     def index_to_tile_and_cell(self, idx: int) -> t.Tuple[int, int]:
-        """Convert an index to the equivalent pair of tile and cell IDs."""
-        tile_id = int(np.where(idx + 1 > self.cell_cumlsum)[0][-1])
-        cell_label = idx - self.cell_cumlsum[tile_id] + 1
-        return tile_id, cell_label
+        """Convert a row of cells_vs_tps to its tile and cell label."""
+        tile_id, cell_label = self.cell_ids[idx]
+        return int(tile_id), int(cell_label)
 
     @property
     def tiles_vs_cells_vs_tps(self):
@@ -455,18 +470,14 @@ class Cells:
         List[List[int]]
             A list giving the mothers for each cell at each trap.
         """
-        ids = np.unique(list(zip(trap, cell_label)), axis=0)
-        # find when each cell last appeared at its trap
-        last_lin_preds = [
-            find_1st_equal(
-                (
-                    (cell_label[::-1] == cell_label_id)
-                    & (trap[::-1] == trap_id)
-                ),
-                True,
-            )
-            for trap_id, cell_label_id in ids
-        ]
+        # find when each cell last appeared at its trap: its first row
+        # with the rows reversed, which np.unique gives for every cell at
+        # once
+        ids, last_lin_preds = np.unique(
+            np.stack((trap, cell_label), axis=1)[::-1],
+            axis=0,
+            return_index=True,
+        )
         # find the cell's mother using the latest prediction from Baby
         mother_assign_sorted = ma[::-1][last_lin_preds]
         # rearrange as a list of mother IDs for each cell in each tile

@@ -99,7 +99,7 @@ def add_to_meta(search_word: str, line: str, meta: t.Dict, key: str) -> None:
     if values:
         value = int(values[0])
         if key in meta and meta[key] != value:
-            print("Warning - metadata: {key} has different values.")
+            print(f"Warning - metadata: {key} has different values.")
         else:
             meta[key] = value
 

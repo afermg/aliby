@@ -11,6 +11,10 @@ from baby import BabyCrawler, modelsets
 from agora.abc import ParametersABC, StepABC
 
 
+class InconsistentOutput(Exception):
+    """Raise when BABY's results for the cells differ in number."""
+
+
 class BabyParameters(ParametersABC):
     """Parameters used for running BABY."""
 
@@ -265,9 +269,14 @@ def format_segmentation(segmentation, tp):
     }
     # remove mother_assign
     merged.pop("mother_assign", None)
-    # ensure that each value is a list of the same length
-    no_cells = min([len(v) for v in merged.values()])
-    merged = {k: v[:no_cells] for k, v in merged.items()}
+    # each value should have one entry for each cell; no entries at all
+    # is a time point with no cells
+    lengths = {output: len(value) for output, value in merged.items()}
+    if len(set(lengths.values())) > 1:
+        raise InconsistentOutput(
+            f"BABY's outputs at time point {tp} differ in length: {lengths}."
+        )
+    no_cells = len(merged["cell_label"])
     # define time point key
     merged["timepoint"] = [tp] * no_cells
     return merged

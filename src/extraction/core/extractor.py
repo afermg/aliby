@@ -2,6 +2,7 @@
 
 import copy
 import logging
+import re
 import typing as t
 import warnings
 from pathlib import Path
@@ -15,7 +16,7 @@ from agora.abc import ParametersABC, StepABC
 from agora.io.cells import Cells
 from agora.io.writers import pdms_mask_path
 from aliby.global_settings import global_settings
-from aliby.tile.tiler import Tiler, find_channel_name
+from aliby.tile.tiler import Tiler
 from sooth import half_size, is_obscured, tile_shape
 from tiler import shown_in_tile
 from extraction.core.functions.cell_functions import (
@@ -67,10 +68,15 @@ def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
     }
     extant_fluorescence_ch = []
     for av_channel in candidate_channels:
-        # find matching channels in metadata
-        found_channel = find_channel_name(meta.get("channels", []), av_channel)
-        if found_channel is not None:
-            extant_fluorescence_ch.append(found_channel)
+        # find every matching channel in the metadata, not only the first:
+        # GFP matches GFPFast too, and stopping there left a GFP channel
+        # listed after it unextracted
+        for channel in meta.get("channels", []):
+            if (
+                re.match(av_channel, channel, re.IGNORECASE)
+                and channel not in extant_fluorescence_ch
+            ):
+                extant_fluorescence_ch.append(channel)
     background_channels = {
         ch for ch in extant_fluorescence_ch if ch.lower() == "cy5"
     }

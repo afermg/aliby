@@ -65,6 +65,13 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 2. **run_one_position()**: Processes all time points for a position
 3. **_run_tp()**: Each step processes one time point (wrapped by StepABC as run_tp with timing)
 
+### Stopping early and empty time points
+
+- `CloggingCheck` in `pipeline.py` holds the areas of the last `ntps_to_eval` time points as the extractor returns them, the latest included, and gives the fraction of tiles with cells that are clogged. `check_earlystop` gives the same from an h5 file. Until October 2026 the h5 file was read back at every time point and the latest time point was left out
+- A time point with no cells in any trap is not a failure: nothing is added to `cell_info`, the backgrounds are extracted, and the position carries on. `format_segmentation` raises `InconsistentOutput` when BABY's outputs differ in length, which is a failure and ends the position
+- A position has failed only if no time point was segmented and extracted; a run of one time point is post-processed
+- With `distributed` over 1, each spawned worker sets up the aliby logger for itself and appends to the one log file
+
 ### Main Entry Points
 - `aliby.pipeline.Pipeline`: Main orchestration class that runs the complete pipeline
 - `examples/run_local.py`: Example script showing local pipeline execution
@@ -91,6 +98,9 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
     found in, because `max_size` is alibylite's own default of 1200 and not
     a measurement: a reader that sized a position by it drew a map of the
     wrong shape for any other camera
+  - Traps are found and drift is measured in the middle z section, `ref_z`, which `PipelineParameters.default` takes from the metadata's number of brightfield sections unless `tiler={"ref_z": k}` gives one. Until October 2026 the tiler always used z 0: its default was read when aliby was imported, before any metadata. On `test26643` the middle section finds 94 traps where z 0 found 82, all 82 among them within 5 px, with the same drifts. With no metadata of z sections (a metadata dict, or TIFFs with no log) `ref_z` stays 0
+  - The Tiler keeps the last z stack read for the reference channel and the images it registers for drift (`load_image`, `get_ref_plane`), so brightfield is read once at a time point, not once each for BABY and the extractor: 6 planes for a 5-section stack where 13 were read. Do not change in place an array `load_image` returns
+  - Tiles are cut with numpy unless `lazy=True`. Wrapping a numpy image in dask once for each tile hashed every pixel each time, which was 40% of a run on zarr data
   - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises
 - `aliby.baby_sitter.BabyRunner`: Interfaces with Baby-seg to return cell masks, mother-bud pairs, and tracking data
 - `extraction.core.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)
@@ -99,14 +109,21 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 **Data Access Classes**
 - `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading). `Cells.at_time` returns **one mask per cell the file records**, an empty edge mask included: its masks are matched to traps by position, and the extractor (`get_outlines`) matches them to `labels_at_time` by position again, so dropping a cell from one list and keeping it in the other — as it did until `tests/test_cells.py` was written — gave every later cell in that time point the trap and the label of the cell before it
 - `agora.signal`: Gets extracted properties for all cells/timepoints from HDF5 (used in postprocessing)
+  - Columns in minutes are the time point times the interval over 60: integers when every one is whole, as for 300 s, and floats otherwise (0, 2.5, 5 for 150 s). `Grouper.tinterval_minutes`, which wela's DataLoader takes as `dt`, is not rounded either. The interval used to be rounded to whole minutes first, making 150 s two minutes and 30 s none
+  - A time point with no cells has no rows in a Signal's table but is still a column, of NaN, so neighbouring columns are neighbouring time points
 - `agora.bridge`: Interface layer for HDF5 file operations
 - `aliby.io.image` and `aliby.io.omero` read pixels through tiler's sources
   (`ZarrSource`, `TiffFolderSource`, `TiffSource`, `OmeroSource`), shared
   with wela, bairn and the curation GUI; aliby adds only the microscope's
   log files. `dispatch_image` and the Image classes keep their API. Change
   how a format is read in tiler, not here. `tests/test_image_golden.py` pins
-  the readers, and running the regression pipeline on `test26643_tiff`
-  reproduces `golden_df.pkl` exactly
+  the readers. `golden_df.pkl` is from the zarr of `test26643` with traps
+  found in the middle z section, which its log gives. Running the regression
+  pipeline on `test26643_tiff` reproduced the golden file exactly while both
+  used z 0; a run from TIFFs with a metadata dict still uses z 0, because
+  the dict gives no number of z sections, and so finds other traps unless
+  it is given `tiler={"ref_z": 2}`, which has not been checked against the
+  new golden file
   - `ImageDir` passes the log's channels to `TiffFolderSource`, which reads
     each channel from the files that name it. It used to stack the files in
     sorted order and name them in the log's, swapping channels whose order
@@ -145,6 +162,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - Writers in `agora.io.writers` handle structured data output
 - Cell properties stored as nested dictionaries: `{'general': {'None': ['area', 'volume', 'eccentricity']}}`
 - Picker and merger choices are written to HDF5 for reproducibility
+- Signals are pandas tables written with no PyTables index (`index=False` in `CoreWriter.add_df`), so a signal's group holds only `table`. A Signal is read whole and nothing looks rows up by the index, which took three quarters of the time to write and half the file. Files written before October 2026 have an `_i_table` group beside each `table`; `Signal` reads both
 
 ### Extraction Functions
 

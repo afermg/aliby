@@ -212,9 +212,16 @@ class PostProcessor(ProcessABC):
                 loaded_bud_process.lineage = lineage
             # apply bud process to each data set
             for dataset in datasets:
-                bud_outpath, bud_result = self.run_bud_process(
+                outpath_result = self.run_bud_process(
                     dataset, bud_process, loaded_bud_process
                 )
+                if outpath_result is None:
+                    self.log(
+                        f"{bud_process} skipped: no Signal {dataset} in"
+                        " the h5 file."
+                    )
+                    continue
+                bud_outpath, bud_result = outpath_result
                 res[bud_outpath] = bud_result
         return res
 
