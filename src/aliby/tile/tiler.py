@@ -56,6 +56,9 @@ class TilerParameters(ParametersABC):
         "ref_z": 0,
         "track_drift": False,
         "fallback_to_center": True,
+        # Explicit, ordered subset of initially detected ROIs. No automatic
+        # censoring: the caller must retain its selection policy and ID map.
+        "roi_indices": None,
     }
 
 
@@ -440,6 +443,25 @@ class Tiler(StepABC):
                 )
             else:
                 self.tile_locs = get_center(self.pixels.shape)
+            indices = getattr(self, "roi_indices", None)
+            if indices is not None:
+                if (
+                    not isinstance(indices, (list, tuple))
+                    or not indices
+                    or any(type(i) is not int for i in indices)
+                    or list(indices) != sorted(set(indices))
+                    or min(indices) < 0
+                    or max(indices) >= len(self.tile_locs)
+                ):
+                    raise ValueError(
+                        "roi_indices must be a nonempty, sorted, unique in-range integer list"
+                    )
+                self.tile_locs = TileLocations.from_tiler_init(
+                    np.asarray(self.tile_locs.initial_location)[list(indices)],
+                    self.tile_locs.tile_size,
+                    self.tile_locs.max_size,
+                    roi_source=self.tile_locs.roi_source,
+                )
 
         if hasattr(self.tile_locs, "drifts"):
             drift_len = len(self.tile_locs.drifts)
