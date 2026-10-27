@@ -186,6 +186,19 @@ steps remain sequential. The executor currently has no task-span event API, so
 publication benchmarks need external instrumentation for ready/start/end and
 overlap attribution.
 
+## Assay decisions and the async migration boundary
+
+The opt-in `aliby.assay` planner separates channel-specific acquisition/pixel
+evidence, explicit channel/Z selections, model capabilities, and measurement
+inputs from scheduling. Acquisition sidecars are optional; ambiguous or
+incompatible inputs require review rather than an automatic fallback.
+`aliby.execution_contract` derives a **non-executable target contract** from the
+existing graph, preserving ordered stateful sessions and validation-before-release.
+Neither module changes the current runners or launches processing.
+
+See [Assay decisions before async orchestration](docs/ASSAY_DECISIONS.md) for the
+API, assay test matrix, limitations, and staged replacement plan.
+
 ## Core Concepts & Glossary
 
 Microscopy terminology can vary. Here’s how ALIBY defines these concepts:
