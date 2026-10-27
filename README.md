@@ -194,10 +194,19 @@ inputs from scheduling. Acquisition sidecars are optional; ambiguous or
 incompatible inputs require review rather than an automatic fallback.
 `aliby.execution_contract` derives a **non-executable target contract** from the
 existing graph, preserving ordered stateful sessions and validation-before-release.
-Neither module changes the current runners or launches processing.
+Neither planning module launches processing.
 
-See [Assay decisions before async orchestration](docs/ASSAY_DECISIONS.md) for the
-API, assay test matrix, limitations, and staged replacement plan.
+Experimental runtime bindings now connect accepted decisions to BABY/local
+Cellpose and independent measurement inputs. The opt-in `backend="async"` and
+native async APIs reuse the existing DAG, preserve frame/session ordering, and
+drain blocking work before releasing ownership. A separate staged release API
+requires explicit preflight and output validators before atomic publication.
+Sequential remains the default; no production batch is automatically admitted.
+
+Start with [the async runtime test guide](docs/ASSAY_ASYNC_RUNTIME.md), including
+the guarded-client requirement and cancellation limitations. See also
+[Assay decisions before async orchestration](docs/ASSAY_DECISIONS.md) for the
+policy API and migration plan.
 
 ## Core Concepts & Glossary
 

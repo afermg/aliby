@@ -22,6 +22,10 @@ def _to_uint16_labels(labels: np.ndarray) -> np.ndarray:
 def dispatch_segmenter(
     kind: str, channel_to_segment: int, address: str = None, **kwargs
 ) -> callable:
+    if kwargs.pop("assay_bound", False):
+        from aliby.assay_runtime import init_bound_segmenter
+
+        return init_bound_segmenter(kind, channel_to_segment, address, **kwargs)
     match kind:
         case "nahual_baby":
             # TODO update this with setup_process_dispatch

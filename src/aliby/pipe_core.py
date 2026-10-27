@@ -7,8 +7,10 @@ own ``init_step`` dispatcher and binding ``run_pipeline_and_post`` with a
 pipeline-specific ``post_state_hook``.
 """
 
+from copy import deepcopy
 from functools import partial
 from itertools import cycle
+import inspect
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -76,6 +78,7 @@ def _init_tile(step_name: str, parameters: dict) -> Callable:
 def _init_extract(step_name: str, parameters: dict, *, overlap: bool) -> Callable:
     if "tree" not in parameters:
         raise ValueError(f"Step '{step_name}' is missing required 'tree'.")
+    overlap = parameters.get("assay_overlap", overlap)
     process = process_tree_masks
     measure_fn = extract_tree
     if overlap:
@@ -180,11 +183,25 @@ def _initialise_timepoint_step(
     state: dict,
     step_name: str,
     init_step_fn: Callable,
-) -> None:
+    *,
+    allow_async: bool = False,
+):
     if step_name not in state["fn"]:
-        state["fn"][step_name] = init_step_fn(
-            step_name, pipeline["steps"][step_name], state["fn"]
-        )
+        parameters = pipeline["steps"][step_name]
+        if "assay_binding" in pipeline:
+            parameters = deepcopy(parameters)
+        initialized = init_step_fn(step_name, parameters, state["fn"])
+        if inspect.isawaitable(initialized):
+            if not allow_async:
+                if inspect.iscoroutine(initialized):
+                    initialized.close()
+                raise ValueError("Native async initializers require backend='async'")
+
+            async def remember():
+                state["fn"][step_name] = await initialized
+
+            return remember()
+        state["fn"][step_name] = initialized
 
 
 def _run_timepoint_step(
@@ -222,7 +239,23 @@ def _run_timepoint_step(
         source_step, method = method_spec
         args = (getattr(state["fn"][source_step], method)(tp),)
 
-    return run_step(step, *args, tp=tp, **passed_data)
+    if step_name in pipeline.get("assay_binding", {}).get("inputs", {}):
+        from aliby.assay_runtime import prepare_bound_pixels
+
+        if args:
+            args = (prepare_bound_pixels(pipeline, step_name, args[0]),)
+        elif "pixels" in passed_data:
+            passed_data["pixels"] = prepare_bound_pixels(
+                pipeline, step_name, passed_data["pixels"]
+            )
+        else:
+            raise ValueError(f"Bound step {step_name} has no explicit pixel input")
+    result = run_step(step, *args, tp=tp, **passed_data)
+    if "assay_binding" in pipeline:
+        from aliby.assay_runtime import finish_bound_result
+
+        result = finish_bound_result(pipeline, step_name, result)
+    return result
 
 
 def _publish_timepoint_step(
@@ -452,6 +485,67 @@ def validate_pipeline(pipeline: dict) -> None:
     # fail before any step initialiser or callable runs.
     graph = compile_pipeline_graph(pipeline)
     compile_resource_requirements(pipeline, graph)
+    from aliby.assay_runtime import validate_assay_binding
+
+    validate_assay_binding(pipeline)
+
+
+async def run_pipeline_return_state_async(
+    pipeline,
+    steps_dir,
+    init_step_fn,
+    *,
+    max_workers=None,
+    resource_limits=None,
+    step_timeout=None,
+):
+    """Await an isolated, no-retry run; timepoints remain strictly sequential."""
+    from aliby.async_executor import (
+        run_async_dag,
+        validate_timeout,
+        resolve_async_resources,
+    )
+
+    validate_timeout(step_timeout)
+    validate_pipeline(pipeline)
+    for name, parameters in pipeline["steps"].items():
+        if (
+            name.startswith("segment")
+            and parameters.get("segmenter_kwargs", {}).get("kind") == "nahual_baby"
+        ):
+            from aliby.assay_runtime import require_guarded_baby_client
+
+            require_guarded_baby_client()
+    ntps = pipeline.get("ntps", 1)
+    if type(ntps) is not int or ntps < 1:
+        raise ValueError("ntps must be a positive integer")
+    pipeline = deepcopy(pipeline)
+    graph = compile_pipeline_graph(pipeline)
+    workers, limits, requirements = resolve_async_resources(
+        pipeline, graph, max_workers, resource_limits
+    )
+    state = _initial_state(pipeline["steps"])
+    for tp in range(ntps):
+        await run_async_dag(
+            graph,
+            lambda name, _tp=tp: _run_timepoint_step(pipeline, state, name, _tp),
+            lambda name, result, _tp=tp: _publish_timepoint_step(
+                state, name, _tp, result
+            ),
+            lambda name, result, _tp=tp: _write_timepoint_step(
+                pipeline, steps_dir, name, _tp, result
+            ),
+            prepare_node=lambda name: _initialise_timepoint_step(
+                pipeline, state, name, init_step_fn, allow_async=True
+            ),
+            max_workers=workers,
+            resource_limits=limits,
+            requirements=requirements,
+            tp=tp,
+            step_timeout=step_timeout,
+        )
+        _finish_timepoint(pipeline, state)
+    return state
 
 
 def run_pipeline_return_state(
@@ -462,13 +556,28 @@ def run_pipeline_return_state(
     backend: str = "sequential",
     max_workers: int | None = None,
     resource_limits: dict[str, int] | None = None,
+    step_timeout: float | None = None,
 ) -> dict:
-    """Run all timepoints with the sequential or concurrent local backend."""
+    """Run all timepoints; async is opt-in and sequential stays the default."""
+    if backend == "async":
+        from aliby.async_executor import run_sync
+
+        return run_sync(
+            run_pipeline_return_state_async,
+            pipeline,
+            steps_dir,
+            init_step_fn,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+            step_timeout=step_timeout,
+        )
+    if step_timeout is not None:
+        raise ValueError("step_timeout is supported only by the async backend")
     validate_pipeline(pipeline)
     graph = compile_pipeline_graph(pipeline)
     if backend not in {"sequential", "concurrent"}:
         raise ValueError(
-            f"Unknown pipeline backend {backend!r}; expected 'sequential' or 'concurrent'."
+            f"Unknown pipeline backend {backend!r}; expected 'sequential', 'concurrent', or 'async'."
         )
 
     concurrent_config = None
@@ -508,6 +617,7 @@ def _run_pipeline_and_post_impl(
     backend: str = "sequential",
     max_workers: int | None = None,
     resource_limits: dict[str, int] | None = None,
+    step_timeout: float | None = None,
 ) -> tuple[pyarrow.Table, dict | None]:
     """Run a step-based pipeline and any post-processing global steps.
 
@@ -526,6 +636,23 @@ def _run_pipeline_and_post_impl(
         Bounds for the concurrent backend. Per-step requirements are read from
         ``pipeline["step_resources"]``; every step uses one CPU slot by default.
     """
+    if backend == "async":
+        from aliby.async_executor import run_sync
+
+        return run_sync(
+            _run_pipeline_and_post_async_impl,
+            pipeline,
+            pipeline_name,
+            output_path,
+            overwrite,
+            init_step_fn=init_step_fn,
+            post_state_hook=post_state_hook,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+            step_timeout=step_timeout,
+        )
+    if step_timeout is not None:
+        raise ValueError("step_timeout is supported only by the async backend")
     output_path = Path(output_path)
     steps_dir = output_path / "steps" / pipeline_name
     profiles_file = output_path / "profiles" / f"{pipeline_name}.parquet"
@@ -581,6 +708,78 @@ def _run_pipeline_and_post_impl(
     return profiles, post_results
 
 
+async def _run_pipeline_and_post_async_impl(
+    pipeline,
+    pipeline_name,
+    output_path,
+    overwrite=True,
+    *,
+    init_step_fn,
+    post_state_hook=None,
+    max_workers=None,
+    resource_limits=None,
+    step_timeout=None,
+):
+    """Async counterpart of the legacy artifact writer, not a release gate.
+
+    Use run_assay_release_async for fresh staged, validation-gated publication.
+    Direct calls retain partial artifacts on failure just like the legacy API.
+    """
+    from aliby.async_executor import AsyncCalls
+
+    output_path = Path(output_path)
+    steps_dir = output_path / "steps" / pipeline_name
+    profiles_file = output_path / "profiles" / f"{pipeline_name}.parquet"
+    if not overwrite and profiles_file.exists():
+        return None, None
+    validate_pipeline(pipeline)
+    pipeline = deepcopy(pipeline)
+    state = await run_pipeline_return_state_async(
+        pipeline,
+        steps_dir,
+        init_step_fn,
+        max_workers=max_workers,
+        resource_limits=resource_limits,
+        step_timeout=step_timeout,
+    )
+    calls = AsyncCalls(1)
+    invoke = partial(calls.timed_call, step_timeout)
+    try:
+        profiles = await invoke(get_profiles_from_state, state, pipeline)
+        profiles_file.parent.mkdir(parents=True, exist_ok=True)
+        await invoke(
+            pyarrow.parquet.write_table, profiles, profiles_file, compression="zstd"
+        )
+        if post_state_hook is not None:
+            await invoke(post_state_hook, state, pipeline, output_path, pipeline_name)
+        post_results = {}
+        graph = compile_pipeline_graph(pipeline)
+        for name, parameters in pipeline.get("global_steps", {}).items():
+            for output_name in graph.global_outputs[name]:
+                step = await invoke(init_step_fn, name, deepcopy(parameters))
+                data = await invoke(
+                    get_step_output,
+                    state["data"],
+                    pipeline["global_passed_data"][output_name],
+                    steps_dir=steps_dir,
+                    expected_ntps=pipeline.get("ntps", 1),
+                )
+                post_results[output_name] = await invoke(step, input_data=data)
+            if name in (pipeline.get("save") or ()):
+                writer = dispatch_write_fn(name)
+                for output_name in graph.global_outputs[name]:
+                    await invoke(
+                        writer,
+                        post_results[output_name],
+                        output_path,
+                        subpath=output_name,
+                        filename=pipeline_name,
+                    )
+        return profiles, post_results
+    finally:
+        await calls.close()
+
+
 def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     profiles = pyarrow.Table.from_pylist(
         [],
@@ -633,7 +832,12 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
     all_wide_tables = []
     for k, wide_tables in data.items():
         if len(wide_tables):
-            all_wide_tables.append(pyarrow.concat_tables(wide_tables))
+            if "assay_binding" in pipeline:
+                all_wide_tables.append(
+                    pyarrow.concat_tables(wide_tables, promote_options="default")
+                )
+            else:
+                all_wide_tables.append(pyarrow.concat_tables(wide_tables))
 
     if all_wide_tables:
         profiles = all_wide_tables[0]

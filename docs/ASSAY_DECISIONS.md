@@ -2,11 +2,12 @@
 
 ## Status and architecture decision
 
-**Opt-in planning foundation, not a replacement executor.** Existing pipeline
-builders, segmentation clients, sequential/concurrent runners, and production
-outputs are unchanged. The current concurrent runner already compiles a local
-threaded DAG; we should reuse that graph rather than invent another workflow
-language.
+**Planning foundation with an opt-in runtime implementation in this worktree.**
+The planning records remain separate from execution. Sequential stays the
+reference/default, and production outputs are unchanged. The experimental
+runtime bindings and asyncio backend reuse the existing graph; see
+[Assay bindings and async execution](ASSAY_ASYNC_RUNTIME.md) for testing, explicit
+validators, limitations, and real-data admission requirements.
 
 Separate four responsibilities:
 
@@ -23,7 +24,10 @@ Separate four responsibilities:
 helper. `aliby.execution_contract` derives a **non-executable target contract**
 for the fourth layer from the existing pipeline dictionary. Neither module does
 network I/O, starts a service, discovers files, installs models, or launches a
-reconstruction. The first and third layers remain integration work.
+reconstruction. `aliby.assay_runtime` now supplies explicit BABY/local-Cellpose
+and measurement bindings, and `aliby.assay_release` provides fresh staged
+publication with mandatory supplied preflight/output validators. Raw-format
+adapters and real model/domain validation still need site-specific integration.
 
 This deliberately prevents replacing a nested loop with asyncio while leaving
 assay choices and hidden mutable state embedded inside the scheduler.
@@ -145,7 +149,9 @@ client would be wrong. Extraction must still receive its own selection of the
 original raw pixels.
 
 Do **not** add an unrecognized selection keyword to an existing segmenter and
-assume it is honored. The legacy dispatcher has not been changed by this work.
+assume it is honored. Use the fingerprinted `bind_assay_pipeline` path described
+in [the runtime guide](ASSAY_ASYNC_RUNTIME.md). Unbound legacy behavior remains
+unchanged.
 
 ## Target execution contract
 

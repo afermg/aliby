@@ -19,6 +19,7 @@ from aliby.pipe_core import (
     _init_nahual_track,
     _init_tile,
     _run_pipeline_and_post_impl,
+    _run_pipeline_and_post_async_impl,
 )
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.track.dispatch import dispatch_tracker
@@ -74,4 +75,7 @@ def init_step(
 
 run_pipeline_and_post = partial(
     _run_pipeline_and_post_impl, init_step_fn=init_step, post_state_hook=None
+)
+run_pipeline_and_post_async = partial(
+    _run_pipeline_and_post_async_impl, init_step_fn=init_step, post_state_hook=None
 )

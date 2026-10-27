@@ -30,6 +30,7 @@ from aliby.pipe_core import (
     _init_nahual_track,
     _init_tile,
     _run_pipeline_and_post_impl,
+    _run_pipeline_and_post_async_impl,
 )
 from aliby.segment.dispatch import dispatch_segmenter
 from aliby.track.dispatch import dispatch_tracker
@@ -196,8 +197,24 @@ def run_pipeline_and_post(
     backend: str = "sequential",
     max_workers: int | None = None,
     resource_limits: dict[str, int] | None = None,
+    step_timeout: float | None = None,
 ) -> tuple[pyarrow.Table, dict | None]:
     """Run BABY with opt-in ROI provenance preflighted before any output write."""
+    if backend == "async":
+        from aliby.async_executor import run_sync
+
+        return run_sync(
+            run_pipeline_and_post_async,
+            pipeline,
+            pipeline_name,
+            output_path,
+            overwrite,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+            step_timeout=step_timeout,
+        )
+    if step_timeout is not None:
+        raise ValueError("step_timeout is supported only by the async backend")
     publish = provenance_enabled(pipeline)
     validate_provenance_preflight(pipeline, output_path, pipeline_name)
     lock_context = None
@@ -237,3 +254,62 @@ def run_pipeline_and_post(
     finally:
         if lock_context is not None:
             lock_context.release()
+
+
+async def run_pipeline_and_post_async(
+    pipeline,
+    pipeline_name,
+    output_path,
+    overwrite=True,
+    *,
+    max_workers=None,
+    resource_limits=None,
+    step_timeout=None,
+):
+    """Native async entry point; ownership lasts until blocking workers drain."""
+    from aliby.async_executor import AsyncCalls, validate_timeout
+    from aliby.pipe_core import validate_pipeline
+
+    validate_timeout(step_timeout)
+    validate_pipeline(pipeline)
+    calls = AsyncCalls(1)
+    holder = {}
+
+    def prepare():
+        validate_provenance_preflight(pipeline, output_path, pipeline_name)
+        hook = _save_baby_tracking_lineage
+        path = output_path
+        if provenance_enabled(pipeline):
+            lock = acquire_provenance_run_lock(output_path)
+            # Store ownership before any subsequent operation can fail/cancel.
+            holder["lock"] = lock
+            validate_provenance_preflight(
+                pipeline, lock.lexical_output_path, pipeline_name
+            )
+            lock.verify()
+            hook = partial(_save_baby_tracking_lineage, provenance_lock=lock)
+            path = lock.descriptor_output_path
+        return path, hook
+
+    try:
+        path, hook = await calls.call(prepare)
+        result = await _run_pipeline_and_post_async_impl(
+            pipeline,
+            pipeline_name,
+            path,
+            overwrite,
+            init_step_fn=init_step,
+            post_state_hook=hook,
+            max_workers=max_workers,
+            resource_limits=resource_limits,
+            step_timeout=step_timeout,
+        )
+        if "lock" in holder:
+            holder["lock"].verify()
+        return result
+    finally:
+        try:
+            await calls.close()
+        finally:
+            if "lock" in holder:
+                holder["lock"].release()
