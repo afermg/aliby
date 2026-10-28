@@ -44,6 +44,31 @@ def _stamp(details):
     )
 
 
+def _snapshot_processed(root):
+    """Freeze existing artifacts before a validator may add separate evidence."""
+    stamps = {}
+    for path in root.rglob("*"):
+        details = path.lstat()
+        name = str(path.relative_to(root))
+        if not (stat.S_ISDIR(details.st_mode) or stat.S_ISREG(details.st_mode)):
+            raise ValueError(f"Nonregular artifact in release: {name}")
+        stamps[name] = _stamp(details)
+    return stamps
+
+
+def _verify_processed(root, stamps):
+    # New root-level reports/directories are allowed, but existing files and
+    # directories are immutable. Never silently hash a validator's corrections
+    # as though they were the originally computed scientific outputs.
+    for name, expected in stamps.items():
+        try:
+            observed = _stamp((root / name).lstat())
+        except FileNotFoundError as error:
+            raise RuntimeError(f"Artifact removed during validation: {name}") from error
+        if observed != expected:
+            raise RuntimeError(f"Artifact changed during validation: {name}")
+
+
 def _inventory(root):
     hashes, stamps = {}, {}
     for path in sorted(root.rglob("*")):
@@ -248,9 +273,11 @@ async def run_assay_release_async(
             raise ValueError(
                 "Empty profiles require review; they are not a biological negative"
             )
+        processed = await calls.call(_snapshot_processed, stage)
         receipt = await calls.timed_call(
             step_timeout, validator, stage, deepcopy(binding)
         )
+        await calls.call(_verify_processed, stage, processed)
         _write_json(stage / "validation.json", receipt)
         _accept(receipt, required_checks, "Release")
         _write_json(stage / "runtime-identity.json", _runtime_identity())
@@ -281,6 +308,7 @@ async def run_assay_release_async(
         )
         os.fsync(stage_fd)
         _verify_inventory(stage, stamps)
+        _verify_processed(stage, processed)
         _rename_noreplace(parent_fd, stage_name, parent_fd, destination.name)
         published = True
         os.fsync(parent_fd)
@@ -292,19 +320,27 @@ async def run_assay_release_async(
             await calls.close()
         finally:
             if stage is not None and not published:
-                marker = stage / "completion.json"
-                if marker.exists():
-                    marker.unlink()
-                _write_json(
-                    stage / "failure.json",
-                    {
-                        "schema": "aliby.assay-attempt-failure.v1",
-                        "error_type": type(error).__name__,
-                        "error": str(error),
-                        "restart": "new_attempt_from_frame_zero",
-                        "published": False,
-                    },
-                )
+                try:
+                    marker = stage / "completion.json"
+                    if marker.exists():
+                        marker.unlink()
+                    _write_json(
+                        stage / "failure.json",
+                        {
+                            "schema": "aliby.assay-attempt-failure.v1",
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                            "restart": "new_attempt_from_frame_zero",
+                            "published": False,
+                        },
+                    )
+                except Exception as evidence_error:
+                    # Preserve both the primary error and any pre-existing
+                    # evidence when disk/permissions/reserved names prevent IO.
+                    error.add_note(
+                        f"Could not record failure evidence in {lexical_stage}: "
+                        f"{type(evidence_error).__name__}: {evidence_error}"
+                    )
         raise
     finally:
         try:

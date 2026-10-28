@@ -8,12 +8,31 @@ with real ALIBY extraction, Parquet/NPZ writing, and provenance code.
 
 ## Validation checkpoint
 
-On 2026-10-27, **267 targeted tests passed in each of two existing runtimes**
-(the project environment and the retained guarded pipeline environment),
-including **70 new runtime/backend/release cases**. Ruff and whitespace checks
-passed. This was not a full repository test run. Existing fork deprecation
-warnings remain; the guarded environment additionally reports upstream
-scikit-image/NumPy reshape deprecations. No dependencies were installed/upgraded.
+On 2026-10-28, **290 targeted tests passed in each of two existing runtimes**
+(the project environment and the retained guarded pipeline environment).
+This adds **23 integrity regression cases** to the 267-test checkpoint from
+2026-10-27. Ruff and whitespace checks passed. This was not a full repository
+test run. Four existing fork deprecation warnings remain; the guarded environment
+reports 1,208 warnings in total, mostly upstream scikit-image/NumPy reshape
+deprecations. No dependencies were installed/upgraded.
+
+The additional regressions cover four repaired defects:
+
+- Bound feature histories cannot be truncated and silently renumbered from
+  timepoint zero. Explicit retention must cover all requested frames; bounded
+  pixel/mask history remains supported where dependencies permit it.
+- Optional feature groups use a full outer join on the semantic keys for bound
+  pipelines. Objects without colocalization measurements remain present with
+  nulls, regardless of step insertion order. Unbound legacy behavior is unchanged.
+- Existing computed artifacts and audit records are snapshotted before output
+  validation and rechecked both afterwards and immediately before publication.
+  Validators may add separate reports, not modify, replace, or delete outputs.
+- Failure-evidence IO errors cannot mask the original failure or cancellation.
+  Existing evidence is not overwritten; a recording error is attached as an
+  exception note instead.
+
+Reproductions, both runtime logs, source identities, and preservation checks are
+retained in `/work/users/amunoz/aliby_baby/analyses/assay-async-regression-20261028`.
 
 The worktree is isolated from the original checkout. Real neural inference,
 live HTTP/server cancellation, and biological segmentation quality remain
@@ -27,7 +46,8 @@ From this worktree (not the original checkout):
 ```sh
 cd /work/users/amunoz/worktrees/aliby-assay-async-20261027
 PYTHONPATH="$PWD/src" /work/users/amunoz/projects/aliby/.venv/bin/python -m pytest -q \
-  tests/test_async_backend.py tests/test_assay_runtime.py tests/test_assay_release.py
+  tests/test_async_backend.py tests/test_assay_runtime.py tests/test_assay_release.py \
+  tests/test_assay_integrity_edges.py
 ```
 
 For the full targeted regression set, add:
@@ -55,7 +75,8 @@ The retained repaired runtime has the guarded client (SHA256
 ```sh
 PYTHONPATH="$PWD/src" \
   /work/users/amunoz/aliby_baby/analyses/gcd2-repair-20261021/runtime/pipeline-venv/bin/python \
-  -m pytest -q tests/test_async_backend.py tests/test_assay_runtime.py tests/test_assay_release.py
+  -m pytest -q tests/test_async_backend.py tests/test_assay_runtime.py tests/test_assay_release.py \
+  tests/test_assay_integrity_edges.py
 ```
 
 Using `PYTHONPATH` here deliberately tests this worktree without modifying either
@@ -218,13 +239,20 @@ must be literal `True` and all required check names must be present.
   fsyncs files, records runtime/source identities, and rechecks artifact and
   directory identities before publishing. Validation receipt and manifest are
   included in the staged evidence, along with effective execution/resource options.
+  All pre-existing files and directories are immutable during output validation.
+  Write any additional reports into a new root-level directory such as
+  `stage / "validation-artifacts"`, not inside existing output directories.
+  Service logs must likewise not keep modifying pre-existing staged files.
 - Output parent must exist. A private fresh sibling attempt directory is used.
   An existing destination, including a symlink, is never replaced. Atomic
   publication uses Linux `renameat2(RENAME_NOREPLACE)` and fails closed if that
   operation is unavailable. Private staging is owned by this run; external
   writers must not write into it.
-- Failure/cancellation retains `.name.attempt-<uuid>/failure.json` and partial
-  evidence; it does not create a final release. Do not resume the attempt. If
+- Failure/cancellation retains the hidden attempt and writes
+  `.name.attempt-<uuid>/failure.json` when possible; it does not create a final
+  release. If evidence recording fails, the original exception carries a note
+  identifying that failure and the attempt path; inspect the retained directory.
+  Do not resume the attempt. If
   an OS error occurs after the rename, inspect the destination/manifest before
   taking any action; do not retry into or overwrite it.
 - `completion.json` says `computationally_validated`,

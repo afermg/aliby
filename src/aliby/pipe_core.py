@@ -450,6 +450,16 @@ def validate_pipeline(pipeline: dict) -> None:
             raise ValueError(
                 f"'retain[{step_name}]' must be a non-negative int or 'all', got {keep!r}."
             )
+        if (
+            "assay_binding" in pipeline
+            and step_name.startswith(("extract", "nahual_embed"))
+            and isinstance(keep, int)
+            and keep < pipeline.get("ntps", 1)
+        ):
+            raise ValueError(
+                f"'retain[{step_name}]' must retain all profile timepoints; "
+                "truncated feature histories have no original timepoint offsets."
+            )
         track_reads_segment = any(
             from_step == step_name
             for target, deps in passed_data.items()
@@ -845,6 +855,9 @@ def get_profiles_from_state(state: dict, pipeline: dict) -> pyarrow.Table:
             profiles = profiles.join(
                 table,
                 keys=[f"metadata_{k}" for k in ("tp", "tile", "object", "label")],
+                # Optional feature groups must not filter observations according
+                # to configuration insertion order. Unbound legacy behavior stays.
+                join_type="full outer" if "assay_binding" in pipeline else "left outer",
             )
 
     return profiles
