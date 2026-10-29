@@ -6,6 +6,13 @@ a production batch, approves a held dataset, installs a model, or removes the
 forecasting quarantine. Test results use synthetic images and stub neural models
 with real ALIBY extraction, Parquet/NPZ writing, and provenance code.
 
+## Real-data follow-up
+
+After explicit staged-processing authorization, paired real BABY trials passed
+on three experiment19307 representatives. See [ASSAY_REAL_TRIAL.md](ASSAY_REAL_TRIAL.md)
+for exact scope, parity results, limitations, and the live expansion status path.
+The historical synthetic checkpoint below is retained as such.
+
 ## Validation checkpoint
 
 On 2026-10-28, **290 targeted tests passed in each of two existing runtimes**
