@@ -8,6 +8,7 @@ held for diagnosis, not blindly retried. This watcher performs no inference.
 
 from copy import deepcopy
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -197,7 +198,31 @@ def prepare_continuation(root, parent):
     return plan
 
 
+def verify_pending(root):
+    expected = os.environ.get("ALIBY_HANDOFF_SEAL_SHA256")
+    data = trial._evidence_value(
+        root, "pending-seal.json", lambda handle: handle.read()
+    )
+    if not expected or hashlib.sha256(data).hexdigest() != expected:
+        raise ValueError("Pending handoff seal is missing or changed")
+    inventory = json.loads(data)
+    required = {
+        "handoff-config.json",
+        "metadata.json",
+        "source-identity.json",
+        "scripts/assay_real_trial.py",
+        "scripts/corpus_assay_trial.py",
+        "scripts/corpus_assay_expansion.py",
+        "scripts/corpus_assay_handoff.py",
+    }
+    required.update(f"evidence/{model}.json" for model in trial.MODELS.values())
+    if not required.issubset(inventory):
+        raise ValueError("Incomplete pending handoff seal")
+    trial.verify_files(root, inventory)
+
+
 def main(root):
+    verify_pending(root)
     config = trial.load(root / "handoff-config.json")
     parent = Path(config["parent_root"])
     watched = Path(config["watched_attempt"])
@@ -239,6 +264,7 @@ def main(root):
 
         try:
             while True:
+                verify_pending(root)
                 if (root / "STOP").exists():
                     raise RuntimeError("Operator cancelled pending handoff")
                 if (parent / "STOP").exists():
@@ -296,6 +322,7 @@ def main(root):
                 time.sleep(2)
             phase = "reconciling_published_outputs"
             status()
+            verify_pending(root)
             plan = prepare_continuation(root, parent)
             if not plan["jobs"]:
                 phase = "nothing_eligible_to_launch"

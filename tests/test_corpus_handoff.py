@@ -172,6 +172,41 @@ def test_short_single_plane_representative_is_first(continuation):
     assert result["families"][0]["representative"] == "c"
 
 
+def test_pending_seal_pins_scripts_while_waiting(tmp_path, monkeypatch):
+    names = [
+        "handoff-config.json",
+        "metadata.json",
+        "source-identity.json",
+        "scripts/assay_real_trial.py",
+        "scripts/corpus_assay_trial.py",
+        "scripts/corpus_assay_expansion.py",
+        "scripts/corpus_assay_handoff.py",
+    ]
+    names.extend(f"evidence/{model}.json" for model in trial.MODELS.values())
+    for name in names:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("pinned")
+    trial.save(
+        tmp_path / "pending-seal.json",
+        {name: trial.sha(tmp_path / name) for name in names},
+    )
+    monkeypatch.setenv(
+        "ALIBY_HANDOFF_SEAL_SHA256", trial.sha(tmp_path / "pending-seal.json")
+    )
+    handoff.verify_pending(tmp_path)
+    (tmp_path / "scripts/corpus_assay_expansion.py").write_text("changed")
+    with pytest.raises(ValueError, match="changed"):
+        handoff.verify_pending(tmp_path)
+
+
+def test_pending_seal_cannot_self_authorize_replacement(tmp_path, monkeypatch):
+    trial.save(tmp_path / "pending-seal.json", {})
+    monkeypatch.setenv("ALIBY_HANDOFF_SEAL_SHA256", "original")
+    with pytest.raises(ValueError, match="Pending handoff seal"):
+        handoff.verify_pending(tmp_path)
+
+
 @pytest.mark.parametrize("shut_down", [False, True])
 @pytest.mark.parametrize("operator_stop", [False, True])
 def test_watcher_never_stops_running_attempt_or_launches_competing_controller(
@@ -201,6 +236,7 @@ def test_watcher_never_stops_running_attempt_or_launches_competing_controller(
     if operator_stop:
         (parent / "STOP").write_text("operator pause; do not override")
     monkeypatch.setattr(trial, "source_identity", lambda: {})
+    monkeypatch.setattr(handoff, "verify_pending", lambda root: None)
 
     class StopObservation(Exception):
         pass
