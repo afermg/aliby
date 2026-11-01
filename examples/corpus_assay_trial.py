@@ -52,6 +52,11 @@ def verify_seal(root):
     if not isinstance(inventory, dict) or not required.issubset(inventory):
         raise ValueError("Incomplete execution seal")
     verify_files(root, inventory)
+    if (
+        load(root / "plan.json").get("schema") == "aliby.corpus-continuation.v1"
+        and "continuation.json" not in inventory
+    ):
+        raise ValueError("Incomplete continuation seal")
     return inventory
 
 
@@ -59,7 +64,11 @@ def check_scope(root, *, require_seal=True):
     if require_seal:
         verify_seal(root)
     plan = load(root / "plan.json")
-    if plan["schema"] != "aliby.corpus-expansion.v1" or plan["authorized_sites"] != 282:
+    if (
+        plan["schema"]
+        not in ("aliby.corpus-expansion.v1", "aliby.corpus-continuation.v1")
+        or plan["authorized_sites"] != 282
+    ):
         raise ValueError("Invalid authorized scope")
     if sha(root / "metadata.json") != plan["metadata_sha256"]:
         raise ValueError("Metadata changed")
@@ -82,8 +91,15 @@ def check_scope(root, *, require_seal=True):
         for r in load(manifest)
         if r["key"].endswith(".zip")
     }
+    expected = universe - protected
+    if plan["schema"] == "aliby.corpus-continuation.v1":
+        expected = continuation_remaining(root, expected)
     keys = [j["key"] for j in plan["jobs"]]
-    if len(keys) != 282 or len(set(keys)) != 282 or set(keys) != universe - protected:
+    if (
+        len(keys) != len(expected)
+        or len(set(keys)) != len(expected)
+        or set(keys) != expected
+    ):
         raise ValueError(
             "Not exactly the authorized complement; protected site or duplicate"
         )
@@ -97,6 +113,69 @@ def check_scope(root, *, require_seal=True):
     ):
         raise ValueError("Unsafe resource limits")
     return plan
+
+
+def continuation_remaining(root, authorized):
+    receipt = load(root / "continuation.json")
+    parent = Path(receipt["parent_root"])
+    if parent.resolve() == root.resolve():
+        raise ValueError("Continuation cannot reference itself")
+    for name, expected in receipt["parent_files"].items():
+        if evidence_sha(parent, name) != expected:
+            raise ValueError("Predecessor evidence changed: " + name)
+    required = {
+        "plan.json",
+        "sealed-inputs.json",
+        "source-identity.json",
+        "campaign/terminal.json",
+    }
+    if not required.issubset(receipt["parent_files"]):
+        raise ValueError("Incomplete predecessor identity")
+    terminal = load(parent / "campaign/terminal.json")
+    if terminal["status"] not in ("completed", "stopped") or terminal.get("current"):
+        raise ValueError("Predecessor is not terminal")
+    parent_plan = load(parent / "plan.json")
+    if (
+        parent_plan["schema"] != "aliby.corpus-expansion.v1"
+        or {j["key"] for j in parent_plan["jobs"]} != authorized
+    ):
+        raise ValueError("Predecessor scope differs from authorized complement")
+    done = [row["key"] for row in receipt["completed"]]
+    deferred = [row["key"] for row in receipt["deferred"]]
+    if (
+        len(set(done)) != len(done)
+        or len(set(deferred)) != len(deferred)
+        or set(done) & set(deferred)
+        or not (set(done) | set(deferred)) <= authorized
+    ):
+        raise ValueError("Invalid continuation partition")
+    if not {row["key"] for row in terminal["completed"]} <= set(done):
+        raise ValueError("Continuation omitted a predecessor completion")
+    failed = {row["key"] for row in terminal["failed"]}
+    if not set(deferred) <= failed - set(done):
+        raise ValueError("Deferred positions lack predecessor failure evidence")
+    jobs = {job["key"]: job for job in parent_plan["jobs"]}
+    for row in receipt["completed"]:
+        attempt = Path(row["attempt"])
+        owned = parent / "jobs" / jobs[row["key"]]["id"] / "attempts"
+        if (
+            attempt.parent != owned
+            or Path(row["completion"]) != attempt / "release/completion.json"
+        ):
+            raise ValueError("Predecessor completion is not owned by its site")
+        if (
+            sha(row["completion"]) != row["completion_sha256"]
+            or sha(attempt / "result.json") != row["result_sha256"]
+        ):
+            raise ValueError("Predecessor completion changed")
+        result = load(attempt / "result.json")
+        if (
+            result["key"] != row["key"]
+            or result["ntps"] != jobs[row["key"]]["ntps"]
+            or result["backend"] != "async"
+        ):
+            raise ValueError("Predecessor result identity mismatch")
+    return authorized - set(done) - set(deferred)
 
 
 def config(root, key):

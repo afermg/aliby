@@ -85,6 +85,9 @@ def test_complete_seal_rejects_later_change(tmp_path):
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("initial")
+    (tmp_path / "plan.json").write_text(
+        json.dumps({"schema": "aliby.corpus-expansion.v1"})
+    )
     trial.save(
         tmp_path / "sealed-inputs.json",
         {name: trial.sha(tmp_path / name) for name in names},
@@ -146,6 +149,7 @@ def test_campaign_closes_admission_before_cleanup_and_handles_sigint(
     monkeypatch.setattr(trial, "source_identity", lambda: source)
     monkeypatch.setattr(trial, "reserve", lambda root: None)
     monkeypatch.setattr(driver, "batches", lambda plan: [["one"]])
+    monkeypatch.setattr(driver, "OWNER_LOCK", tmp_path / "global-owner.lock")
     registrations = {}
     monkeypatch.setattr(
         driver.signal, "signal", lambda number, fn: registrations.update({number: fn})

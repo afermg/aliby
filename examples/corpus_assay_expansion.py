@@ -18,6 +18,8 @@ import traceback
 
 import corpus_assay_trial as trial
 
+OWNER_LOCK = Path("/work/users/amunoz/aliby_baby/analyses/.corpus-assay-owner.lock")
+
 
 class AdmissionStopped(RuntimeError):
     pass
@@ -28,7 +30,9 @@ def batches(plan):
     representatives = [f["representative"] for f in plan["families"]]
     members = [key for f in plan["families"] for key in f["jobs"]]
     if (
-        len(members) != 282
+        not jobs
+        or len(jobs) != len(plan["jobs"])
+        or len(members) != len(jobs)
         or set(members) != set(jobs)
         or len(set(representatives)) != len(representatives)
     ):
@@ -83,6 +87,16 @@ def checkpoint_counts(state):
 def main(root):
     plan = trial.check_scope(root)
     trial.reserve(root)
+    # New controllers share a campaign-independent ownership lock. The legacy
+    # controller predates it, so continuations also require OS-level quiescence.
+    owner = os.fdopen(
+        os.open(OWNER_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), "a+"
+    )
+    fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if plan.get("schema") == "aliby.corpus-continuation.v1":
+        from corpus_assay_handoff import assert_quiescent
+
+        assert_quiescent(Path(trial.load(root / "continuation.json")["parent_root"]))
     source = trial.source_identity()
     if source != trial.load(root / "source-identity.json"):
         raise ValueError("Source changed before launch")
@@ -116,6 +130,8 @@ def main(root):
         "current": {},
         "family_gates": {},
         "prepared_checkpoints": {},
+        "predecessor_completed": plan.get("predecessor_completed", []),
+        "deferred": plan.get("deferred", []),
         "resumable": False,
         "checkpoint_semantics": "Observational progress only; never a resumable tracker/session checkpoint.",
         "limits": plan["limits"],
