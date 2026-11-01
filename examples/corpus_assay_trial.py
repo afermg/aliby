@@ -5,6 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import stat
+import sys
+import importlib.metadata
+import importlib.util
 from pathlib import Path
 import shutil
 import signal
@@ -16,7 +21,12 @@ import uuid
 
 import assay_real_trial as common
 
-WORKTREE = Path("/work/users/amunoz/worktrees/aliby-corpus-expansion-20261101")
+WORKTREE = Path(
+    os.environ.get(
+        "ALIBY_SOURCE_WORKTREE",
+        "/work/users/amunoz/worktrees/aliby-corpus-expansion-20261101",
+    )
+)
 ANALYSIS = common.ANALYSIS
 PIPE_PY = common.PIPE_PY
 BABY_PY = common.BABY_PY
@@ -25,13 +35,30 @@ save, load, sha, digest = common.save, common.load, common.sha, common.digest
 MODELS = {n: f"yeast-alcatras-brightfield-sCMOS-60x-{n}z" for n in (1, 5)}
 
 
-def check_scope(root):
-    plan = load(root / "plan.json")
+def verify_seal(root):
     seal = root / "sealed-inputs.json"
-    if seal.exists():
-        for name, expected in load(seal).items():
-            if sha(root / name) != expected:
-                raise ValueError("Sealed campaign input changed: " + name)
+    if not seal.is_file() or seal.is_symlink():
+        raise ValueError("Missing or unsafe execution seal")
+    inventory = load(seal)
+    required = {
+        "plan.json",
+        "metadata.json",
+        "source-identity.json",
+        "scripts/corpus_assay_trial.py",
+        "scripts/corpus_assay_expansion.py",
+        "scripts/assay_real_trial.py",
+    }
+    required.update(f"evidence/{model}.json" for model in MODELS.values())
+    if not isinstance(inventory, dict) or not required.issubset(inventory):
+        raise ValueError("Incomplete execution seal")
+    verify_files(root, inventory)
+    return inventory
+
+
+def check_scope(root, *, require_seal=True):
+    if require_seal:
+        verify_seal(root)
+    plan = load(root / "plan.json")
     if plan["schema"] != "aliby.corpus-expansion.v1" or plan["authorized_sites"] != 282:
         raise ValueError("Invalid authorized scope")
     if sha(root / "metadata.json") != plan["metadata_sha256"]:
@@ -100,12 +127,69 @@ def source_identity():
     result = common.source_identity()
     for path in (Path(__file__), Path(common.__file__)):
         result[path.name] = {"sha256": sha(path)}
-    # Pin all core modules, not merely imported front-end dispatch functions.
-    result["core-tree"] = {
-        str(p.relative_to(WORKTREE / "src")): sha(p)
-        for p in sorted((WORKTREE / "src").rglob("*.py"))
+    # Identify the code actually imported, never an unrelated hardcoded tree.
+    core = Path(result["aliby.pipe_core"]["path"]).resolve().parents[1]
+    analysis = Path(result["aliby_analyses.output_validation"]["path"]).resolve().parent
+    nahual = Path(result["nahual.client.baby"]["path"]).resolve().parents[1]
+    measure = importlib.util.find_spec("cp_measure")
+    if measure is None or not measure.submodule_search_locations:
+        raise ValueError("Cannot identify measurement source")
+    roots = {
+        "core-tree": core,
+        "analysis-tree": analysis,
+        "nahual-tree": nahual,
+        "measurement-tree": Path(next(iter(measure.submodule_search_locations))),
+    }
+    for name, path in roots.items():
+        result[name] = python_tree_identity(path)
+    result["runtime"] = {
+        "python": sys.version,
+        "executable": str(Path(sys.executable).resolve()),
+        "executable_sha256": sha(Path(sys.executable)),
+        "versions": {
+            name: importlib.metadata.version(name)
+            for name in (
+                "numpy",
+                "scipy",
+                "scikit-image",
+                "pandas",
+                "pyarrow",
+                "dask",
+                "zarr",
+            )
+        },
     }
     return result
+
+
+def python_tree_identity(directory):
+    files = sorted(directory.rglob("*.py"))
+    if not files:
+        raise ValueError("Empty runtime source tree")
+    return {
+        "path": str(directory.resolve()),
+        "files": {
+            str(path.relative_to(directory)): evidence_sha(
+                directory, str(path.relative_to(directory))
+            )
+            for path in files
+        },
+    }
+
+
+def checked_prepared(directory, key):
+    expected = os.environ.get("ALIBY_PREPARED_SHA256")
+    if not expected:
+        raise ValueError("Prepared checkpoint lacks controller admission receipt")
+    data = _evidence_value(directory, "prepared.json", lambda handle: handle.read())
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise ValueError(
+            "Prepared checkpoint differs from controller admission receipt"
+        )
+    raw = json.loads(data)
+    if raw.get("key") != key:
+        raise ValueError("Prepared checkpoint site mismatch")
+    return raw
 
 
 def environment(source):
@@ -280,7 +364,7 @@ def run(root, key, ntps, backend, address, attempt):
     if ntps not in (3, 12, job["ntps"]) or ntps > job["ntps"]:
         raise ValueError("Unapproved prefix")
     prepared = root / "jobs" / job["id"] / "prepared"
-    raw = load(prepared / "prepared.json")
+    raw = checked_prepared(prepared, key)
     for filename, hashkey in [
         ("roi-selection.json", "roi_sha256"),
         ("channel-evidence.json", "channels_sha256"),
@@ -424,13 +508,19 @@ def run(root, key, ntps, backend, address, attempt):
     save(attempt / "binding.json", bound["assay_binding"])
     audit = attempt / "baby-http.jsonl"
 
+    def verify_runtime():
+        if checked_prepared(prepared, key) != raw or source_identity() != sources:
+            raise ValueError("Prepared checkpoint/runtime changed during attempt")
+        verify_seal(root)
+
     def preflight(stage, binding):
+        verify_runtime()
         ReadOnlyArchive(Path(raw["archive"]), record, ntps).fetch(
             f"{record.record_id}/{record.archive.key}"
         )
-        for name, expected in load(prepared / "extracted-inventory.json").items():
-            if sha(Path(raw["zarr"]) / name) != expected:
-                raise ValueError("Extracted raw changed: " + name)
+        if sha(prepared / "extracted-inventory.json") != raw["inventory_sha256"]:
+            raise ValueError("Prepared inventory changed")
+        verify_files(Path(raw["zarr"]), load(prepared / "extracted-inventory.json"))
         validate_selection(selection, record, ntps)
         save(stage / "roi-selection.json", selection)
         save(stage / "channel-evidence.json", channel_records)
@@ -446,6 +536,7 @@ def run(root, key, ntps, backend, address, attempt):
         }
 
     def validator(stage, binding):
+        verify_runtime()
         stage = stage.resolve(strict=True)
         verify_executed_selection(stage, record.site, selection, ntps)
         write_run_metadata(stage, expectation=expectation, software_stack=software)
@@ -528,6 +619,16 @@ def run(root, key, ntps, backend, address, attempt):
             save(output / "preflight.json", preflight(output, bound["assay_binding"]))
             run_pipeline_and_post(bound, record.site, output, backend="sequential")
             save(output / "validation.json", validator(output, bound["assay_binding"]))
+            save(
+                output / "diagnostic-completion.json",
+                {
+                    "schema": "aliby.assay-diagnostic.v1",
+                    "status": "computationally_validated",
+                    "decision_sha256": decision.fingerprint,
+                    "biological_approval": False,
+                    "artifacts_sha256": snapshot_files(output),
+                },
+            )
     save(
         attempt / "result.json",
         {
@@ -549,6 +650,7 @@ def launch(root, key, ntps, backend):
 
     reserve(root)
     _, job, record = config(root, key)
+    checked_prepared(root / "jobs" / job["id"] / "prepared", key)
     if ntps not in (3, 12, job["ntps"]):
         raise ValueError("Unapproved prefix")
     attempt = (
@@ -656,7 +758,8 @@ def launch(root, key, ntps, backend):
         )
         print(json.dumps({"attempt": str(attempt), "status": "passed"}), flush=True)
     except BaseException as error:
-        save(
+        save_failure(
+            error,
             attempt / "driver-failure.json",
             {
                 "error": str(error),
@@ -666,18 +769,46 @@ def launch(root, key, ntps, backend):
         )
         raise
     finally:
-        if worker is not None:
-            common.stop(worker)
-        if proc is not None:
-            common.stop(proc)
+        cleanup_owned(worker, proc, sock, attempt, primary=sys.exception())
+
+
+def save_failure(primary, path, payload):
+    try:
+        save(path, payload)
+    except Exception as error:
+        primary.add_note(f"Could not record failure evidence at {path}: {error!r}")
+
+
+def cleanup_owned(worker, service_process, sock, attempt, *, primary=None):
+    errors = []
+    receipt = {}
+    for name, process in (("pipeline", worker), ("service", service_process)):
+        try:
+            if process is not None:
+                common.stop(process)
+        except Exception as error:
+            errors.append(error)
+        try:
+            receipt[f"owned_{name}_stopped"] = (
+                process is None or process.poll() is not None
+            )
+        except Exception as error:
+            receipt[f"owned_{name}_stopped"] = False
+            errors.append(error)
+    try:
         sock.close()
-        save(
-            attempt / "shutdown.json",
-            {
-                "owned_service_stopped": proc is None or proc.poll() is not None,
-                "owned_pipeline_stopped": worker is None or worker.poll() is not None,
-            },
-        )
+    except Exception as error:
+        errors.append(error)
+    try:
+        save(attempt / "shutdown.json", receipt)
+    except Exception as error:
+        errors.append(error)
+    if errors:
+        cause = primary if primary is not None else errors[0]
+        for error in errors:
+            cause.add_note(f"Owned cleanup/evidence failure: {error!r}")
+        if primary is None:
+            raise cause
 
 
 def snapshot_files(directory):
@@ -690,13 +821,76 @@ def snapshot_files(directory):
     return result
 
 
-def verify_files(directory, inventory):
+def evidence_sha(directory, name):
+    return _evidence_value(
+        directory,
+        name,
+        lambda handle: hashlib.file_digest(handle, "sha256").hexdigest(),
+    )
+
+
+def _evidence_value(directory, name, read_value):
+    if not isinstance(name, str):
+        raise ValueError("Unsafe evidence path")
+    path = Path(name)
+    if (
+        path.is_absolute()
+        or not path.parts
+        or ".." in path.parts
+        or path.as_posix() != name
+    ):
+        raise ValueError("Unsafe evidence path")
+    descriptors = []
+    try:
+        descriptors.append(
+            os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        )
+        for part in path.parts[:-1]:
+            descriptors.append(
+                os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=descriptors[-1],
+                )
+            )
+        fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=descriptors[-1],
+        )
+        with os.fdopen(fd, "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Unsafe nonregular evidence file")
+            value = read_value(handle)
+            after = os.fstat(handle.fileno())
+            if (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            ):
+                raise ValueError("Evidence changed while hashing")
+            return value
+    except OSError as error:
+        raise ValueError("Unsafe or missing evidence path: " + name) from error
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
+def verify_files(directory, inventory, *, allowed_extra=None):
+    if not isinstance(inventory, dict):
+        raise ValueError("Invalid evidence inventory")
     for name, expected in inventory.items():
-        path = Path(name)
-        if path.is_absolute() or ".." in path.parts or (directory / path).is_symlink():
-            raise ValueError("Unsafe evidence path")
-        if sha(directory / path) != expected:
+        if evidence_sha(directory, name) != expected:
             raise ValueError("Evidence changed: " + name)
+    if allowed_extra is not None:
+        paths = list(directory.rglob("*"))
+        if any(p.is_symlink() for p in paths):
+            raise ValueError("Unsafe evidence symlink")
+        actual = {str(p.relative_to(directory)) for p in paths if p.is_file()}
+        if actual != set(inventory) | set(allowed_extra):
+            raise ValueError("Output inventory does not match directory")
 
 
 def verify_attempt(attempt):
@@ -719,17 +913,28 @@ def verify_attempt(attempt):
         or any(v is not True for v in receipt["checks"].values())
     ):
         raise ValueError("Unvalidated attempt")
-    if result["backend"] == "async":
-        release = Path(result["output"])
-        manifest = load(release / "completion.json")
-        if (
-            manifest["status"] != "computationally_validated"
-            or manifest["biological_approval"] is not False
-        ):
-            raise ValueError("Invalid completion")
-        if not manifest["artifacts_sha256"]:
-            raise ValueError("Empty completion inventory")
-        verify_files(release, manifest["artifacts_sha256"])
+    backend = result["backend"]
+    if backend not in ("async", "sequential"):
+        raise ValueError("Unknown attempt backend")
+    release = Path(result["output"])
+    owned = attempt / ("release" if backend == "async" else "sequential-diagnostic")
+    if release.absolute() != owned.absolute() or owned.is_symlink():
+        raise ValueError("Attempt output is not owned by this attempt")
+    manifest_name = (
+        "completion.json" if backend == "async" else "diagnostic-completion.json"
+    )
+    evidence_sha(release, manifest_name)
+    manifest = load(release / manifest_name)
+    if (
+        manifest["status"] != "computationally_validated"
+        or manifest["biological_approval"] is not False
+        or manifest.get("decision_sha256") != result.get("decision_sha256")
+        or not result.get("decision_sha256")
+    ):
+        raise ValueError("Invalid completion identity")
+    if not manifest["artifacts_sha256"]:
+        raise ValueError("Empty completion inventory")
+    verify_files(release, manifest["artifacts_sha256"], allowed_extra={manifest_name})
     shutdown = load(attempt / "shutdown.json")
     if (
         shutdown.get("owned_service_stopped") is not True
@@ -776,7 +981,8 @@ def main():
                 args.root, args.key, args.ntps, args.backend, args.address, args.attempt
             )
         except BaseException as error:
-            save(
+            save_failure(
+                error,
                 args.attempt / "worker-failure.json",
                 {
                     "type": type(error).__name__,

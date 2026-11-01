@@ -61,7 +61,7 @@ def scoped(tmp_path, monkeypatch):
 
 def test_exact_complement(scoped):
     root, plan, _ = scoped
-    assert len(trial.check_scope(root)["jobs"]) == 282
+    assert len(trial.check_scope(root, require_seal=False)["jobs"]) == 282
     groups = driver.batches(plan)
     assert len(groups[0]) == 1
     assert max(map(len, groups)) <= 4
@@ -76,7 +76,7 @@ def test_protected_and_duplicate_jobs_rejected(scoped, bad_key):
     root, plan, _ = scoped
     plan["jobs"][-1]["key"] = bad_key
     with pytest.raises(ValueError, match="authorized complement"):
-        trial.check_scope(root)
+        trial.check_scope(root, require_seal=False)
 
 
 @pytest.mark.parametrize(
@@ -86,7 +86,7 @@ def test_changed_source_inputs_rejected(scoped, name):
     root, _, hashes = scoped
     hashes[name] = "changed"
     with pytest.raises(ValueError, match="changed"):
-        trial.check_scope(root)
+        trial.check_scope(root, require_seal=False)
 
 
 @pytest.mark.parametrize(
@@ -104,7 +104,7 @@ def test_resource_ceilings(scoped, name, value):
     root, plan, _ = scoped
     plan["limits"][name] = value
     with pytest.raises(ValueError, match="resource"):
-        trial.check_scope(root)
+        trial.check_scope(root, require_seal=False)
 
 
 def test_family_cannot_borrow_a_completed_or_other_representative(scoped):
@@ -161,6 +161,7 @@ def attempt(tmp_path):
             "status": "computationally_validated",
             "backend": "async",
             "output": str(release),
+            "decision_sha256": "decision-test",
             "biological_approval": False,
         },
     )
@@ -191,6 +192,7 @@ def attempt(tmp_path):
         {
             "status": "computationally_validated",
             "biological_approval": False,
+            "decision_sha256": "decision-test",
             "artifacts_sha256": {"payload": trial.sha(release / "payload")},
         },
     )
@@ -231,6 +233,68 @@ def test_empty_release_inventory_rejected(attempt):
         attempt / "release/completion.json", lambda v: v.update(artifacts_sha256={})
     )
     with pytest.raises(ValueError, match="Empty"):
+        trial.verify_attempt(attempt)
+
+
+def test_inventory_rejects_symlinked_parent(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "payload").write_text("unchanged")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "nested").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="Unsafe"):
+        trial.verify_files(root, {"nested/payload": trial.sha(outside / "payload")})
+
+
+def test_unknown_backend_cannot_skip_completion(attempt):
+    rewrite(attempt / "result.json", lambda v: v.update(backend="typo"))
+    with pytest.raises(ValueError, match="backend"):
+        trial.verify_attempt(attempt)
+
+
+def test_attempt_cannot_borrow_another_release(attempt, tmp_path):
+    import shutil
+
+    other = tmp_path / "borrowed"
+    shutil.copytree(attempt / "release", other)
+    rewrite(attempt / "result.json", lambda v: v.update(output=str(other)))
+    with pytest.raises(ValueError, match="owned"):
+        trial.verify_attempt(attempt)
+
+
+def test_uninventoried_release_file_rejected(attempt):
+    (attempt / "release" / "unexpected.npz").write_bytes(b"extra")
+    with pytest.raises(ValueError, match="inventory"):
+        trial.verify_attempt(attempt)
+
+
+def test_missing_seal_blocks_execution(scoped):
+    root, _, _ = scoped
+    with pytest.raises(ValueError, match="seal"):
+        trial.check_scope(root)
+
+
+def test_sequential_diagnostic_has_checked_inventory(attempt):
+    output = attempt / "sequential-diagnostic"
+    (attempt / "release").rename(output)
+    (output / "completion.json").rename(output / "diagnostic-completion.json")
+    rewrite(
+        attempt / "result.json",
+        lambda v: v.update(backend="sequential", output=str(output)),
+    )
+    trial.verify_attempt(attempt)
+    (output / "payload").write_text("changed")
+    with pytest.raises(ValueError, match="changed"):
+        trial.verify_attempt(attempt)
+
+
+def test_decision_identity_must_match_completion(attempt):
+    rewrite(
+        attempt / "release/completion.json",
+        lambda v: v.update(decision_sha256="different"),
+    )
+    with pytest.raises(ValueError, match="identity"):
         trial.verify_attempt(attempt)
 
 

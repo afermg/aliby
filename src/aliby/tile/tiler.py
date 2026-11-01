@@ -354,7 +354,7 @@ class Tiler(StepABC):
         channels = []
         nch = range(self.pixels.shape[-4])
         for ch in nch:
-            tiles = self.get_tp_channel(tp, ch)
+            tiles = self.get_tp_channel(tp, ch, drift=drift)
             channels.append(tiles)
 
         cfzyx = np.array(channels)
@@ -384,10 +384,15 @@ class Tiler(StepABC):
         full = self.load_image(tp, c)
         for tile in self.tile_locs:
             if drift:
-                # pad tile if necessary
-                tiled_pixels = if_out_of_bounds_pad(full, tile.as_range(tp))
-
-            tiles.append(tiled_pixels)
+                ranges = tile.as_range(tp)
+            else:
+                # Use initial geometry, without mutating registration history.
+                origin = np.asarray(tile.centre, dtype=int) - tile.half_size
+                ranges = tuple(
+                    slice(int(start), int(start + size))
+                    for start, size in zip(origin, tile.size)
+                )
+            tiles.append(if_out_of_bounds_pad(full, ranges))
 
         stack_5d = np.stack(tiles)
 

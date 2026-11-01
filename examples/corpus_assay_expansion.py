@@ -54,12 +54,45 @@ def batches(plan):
     return groups
 
 
+def check_deadline(deadline):
+    if time.monotonic() >= deadline:
+        raise TimeoutError("Four-hour site/48-hour batch wall limit exhausted")
+
+
+def checkpoint_counts(state):
+    completed = {v["key"] for v in state["completed"]}
+    failed = {v["key"] for v in state["failed"]}
+    interrupted = {v["key"] for v in state["interrupted"]}
+    pending = set(state["held"])
+    current = set(state["current"])
+    groups = (completed, failed, interrupted, pending)
+    if (
+        any(a & b for i, a in enumerate(groups) for b in groups[i + 1 :])
+        or not current <= pending
+    ):
+        raise ValueError("Overlapping or inconsistent checkpoint states")
+    return {
+        "completed": len(completed),
+        "running": len(current),
+        "failed": len(failed),
+        "interrupted": len(interrupted),
+        "unstarted": len(pending - current),
+    }
+
+
 def main(root):
     plan = trial.check_scope(root)
     trial.reserve(root)
-    if trial.source_identity() != trial.load(root / "source-identity.json"):
+    source = trial.source_identity()
+    if source != trial.load(root / "source-identity.json"):
         raise ValueError("Source changed before launch")
-    sealed = trial.load(root / "sealed-inputs.json")
+    if (
+        Path(source["core-tree"]["path"]).resolve()
+        != (trial.WORKTREE / "src").resolve()
+    ):
+        raise ValueError("Loaded runtime differs from configured worker source")
+    sealed_checksum = trial.sha(root / "sealed-inputs.json")
+    sealed = trial.verify_seal(root)
     for name, expected in sealed.items():
         if trial.sha(root / name) != expected:
             raise ValueError("Sealed input changed: " + name)
@@ -82,6 +115,9 @@ def main(root):
         "held": list(jobs),
         "current": {},
         "family_gates": {},
+        "prepared_checkpoints": {},
+        "resumable": False,
+        "checkpoint_semantics": "Observational progress only; never a resumable tracker/session checkpoint.",
         "limits": plan["limits"],
         "biological_approval": False,
         "review_policy": "Human/biological review deferred until computational completion; not an execution gate.",
@@ -90,9 +126,15 @@ def main(root):
         "batches": batches(plan),
     }
 
+    last_checkpoint = started
+
     def status():
+        nonlocal last_checkpoint
         with mutex:
-            state["elapsed_seconds"] = time.monotonic() - started
+            last_checkpoint = time.monotonic()
+            state["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            state["counts"] = checkpoint_counts(state)
+            state["elapsed_seconds"] = last_checkpoint - started
             temporary = directory / "status.tmp"
             temporary.write_text(json.dumps(state, indent=2) + "\n")
             temporary.replace(directory / "status.json")
@@ -117,12 +159,28 @@ def main(root):
                 "Campaign admission stopped after another failure or cancellation"
             )
         trial.reserve(root)
+        if trial.sha(root / "sealed-inputs.json") != sealed_checksum:
+            raise ValueError("Execution seal changed during campaign")
+        with mutex:
+            if time.monotonic() - last_checkpoint >= 15:
+                status()
         for name, expected in sealed.items():
             if trial.sha(root / name) != expected:
                 raise ValueError("Sealed campaign input changed: " + name)
 
     def stage(key, name, args, deadline):
         check()
+        check_deadline(deadline)
+        env = trial.environment(f"{trial.WORKTREE / 'src'}:{trial.ANALYSIS}")
+        env["ALIBY_SOURCE_WORKTREE"] = str(trial.WORKTREE)
+        # Bind child attempts to the parent's observed preparation, not a
+        # mutable receipt that can endorse its own replacement.
+        with mutex:
+            prepared_digest = state["prepared_checkpoints"].get(key)
+        if prepared_digest is not None:
+            env["ALIBY_PREPARED_SHA256"] = prepared_digest
+        else:
+            env.pop("ALIBY_PREPARED_SHA256", None)
         proc = None
         with mutex:
             state["current"][key] = name
@@ -135,7 +193,7 @@ def main(root):
                         str(root),
                         *args,
                     ],
-                    env=trial.environment(f"{trial.WORKTREE / 'src'}:{trial.ANALYSIS}"),
+                    env=env,
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
@@ -143,15 +201,18 @@ def main(root):
                 event({"key": key, "stage": name, "state": "started", "pid": proc.pid})
                 while proc.poll() is None:
                     check()
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError(
-                            "Four-hour site/48-hour batch wall limit exhausted"
-                        )
+                    check_deadline(deadline)
                     time.sleep(1)
                 if proc.returncode:
                     raise RuntimeError(
                         f"{key} {name} exited {proc.returncode}; inspect preserved stage log"
                     )
+                check_deadline(deadline)
+            except BaseException:
+                # Close admission before cleanup; peers must not start another
+                # stage during the potentially 45-second shutdown wait.
+                cancel.set()
+                raise
             finally:
                 if proc is not None:
                     try:
@@ -189,6 +250,16 @@ def main(root):
         )
         try:
             stage(key, "prepare", ["prepare", "--key", key], deadline)
+            prepared = root / "jobs" / jobs[key]["id"] / "prepared"
+            checksum = trial.evidence_sha(prepared, "prepared.json")
+            if trial.load(prepared / "prepared.json").get("key") != key:
+                raise ValueError("Prepared checkpoint site mismatch")
+            trial.save(
+                directory / f"{jobs[key]['id']}-prepared-checkpoint.json",
+                {"key": key, "sha256": checksum, "resumable": False},
+            )
+            with mutex:
+                state["prepared_checkpoints"][key] = checksum
             if key in representatives:
                 for n in (3, 12):
                     pair = []
@@ -331,6 +402,7 @@ def main(root):
         raise KeyboardInterrupt(f"Termination signal {signum}")
 
     signal.signal(signal.SIGTERM, terminate)
+    signal.signal(signal.SIGINT, terminate)
     status()
     try:
         for index, group in enumerate(state["batches"]):
