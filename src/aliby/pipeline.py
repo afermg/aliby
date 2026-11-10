@@ -56,6 +56,7 @@ from aliby.baby_sitter import (
 from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
+from aliby.version import __version__
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -447,7 +448,7 @@ class Pipeline(ProcessABC):
         """Copy logfile and identify each position."""
         config = self.parameters.to_dict()
         # print configuration
-        self.log("Using alibylite.", "info")
+        self.log(f"Using alibylite {__version__}.", "info")
         try:
             self.log(f"Using Baby {baby.__version__}.", "info")
         except AttributeError:
