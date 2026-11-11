@@ -5,7 +5,9 @@ def non_uniform_savgol(x, y, window: int, polynom: int):
     """
     Apply a Savitzky-Golay filter with non-uniform spacing in x.
 
-    This is based on https://dsp.stackexchange.com/questions/1676/savitzky-golay-smoothing-filter-for-not-equally-spaced-data
+    This is based on
+    https://dsp.stackexchange.com/questions/1676/
+    savitzky-golay-smoothing-filter-for-not-equally-spaced-data
     The borders are interpolated like scipy.signal.savgol_filter would do
 
     source: https://dsp.stackexchange.com/a/64313
@@ -42,7 +44,10 @@ def non_uniform_savgol(x, y, window: int, polynom: int):
         '"window" must be an integer',
         TypeError,
     )
-    raiseif(window % 2, 'The "window" must be an odd integer', ValueError)
+    # an odd window was refused and an even one let through
+    raiseif(
+        window % 2 == 0, 'The "window" must be an odd integer', ValueError
+    )
     raiseif(
         not isinstance(polynom, int),
         '"polynom" must be an integer',
@@ -111,5 +116,6 @@ def non_uniform_savgol(x, y, window: int, polynom: int):
 
 
 def raiseif(cond, msg="", exc=AssertionError):
+    """Raise an exception if a condition holds."""
     if cond:
         raise exc(msg)

@@ -368,9 +368,11 @@ class Signal(BridgeH5):
             # old h5 files stored "None" rather than "null" in paths
             with h5py.File(f, "r") as file:
                 if dataset not in file:
+                    asked_for = dataset
                     dataset = dataset.replace("null", "None")
                     if dataset not in file:
-                        raise KeyError(dataset)
+                        # name what was asked for, not the old spelling
+                        raise KeyError(asked_for)
                 dset = file[dataset]
                 values, index, columns = [], [], []
                 index_names = copy(self.index_names)

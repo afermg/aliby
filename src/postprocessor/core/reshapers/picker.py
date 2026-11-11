@@ -68,7 +68,6 @@ class Picker(LineageProcess):
         self,
         signal: pd.DataFrame,
         how: str,
-        mothers_daughters: t.Optional[np.ndarray] = None,
     ) -> pd.MultiIndex:
         """
         Return rows of a signal using lineage information.
@@ -153,6 +152,11 @@ class Picker(LineageProcess):
                 f"Unknown condition {condition!r}: use one of"
                 f" {sorted(case_mgr)}."
             )
+        if not len(threshold):
+            raise ValueError(
+                f"The pick ['condition', {condition!r}] needs a threshold,"
+                f" such as ['condition', {condition!r}, 3]."
+            )
         if len(threshold) == 1 and condition != "growing":
             # a fraction of the experiment's duration as time points
             threshold = [as_int(*threshold, signal.shape[1])]
@@ -163,7 +167,7 @@ class Picker(LineageProcess):
 
 
 def as_int(threshold: t.Union[float, int], ntps: int):
-    """Convert a fraction of the total experiment duration into a number of time points."""
+    """Convert a fraction of the experiment into a number of time points."""
     if type(threshold) is float:
         threshold = ntps * threshold
     return threshold
@@ -182,7 +186,7 @@ def net_increase(signal: pd.DataFrame) -> pd.Series:
 
 
 def any_present(signal, threshold):
-    """Find traps where at least one cell stays for more than threshold time points."""
+    """Find traps where one cell stays for more than threshold time points."""
     # all_traps contains repeated traps, which have more than one cell
     all_traps = [x[0] for x in signal.index]
     # full_traps contains only traps that have at least one cell
@@ -200,14 +204,3 @@ def any_present(signal, threshold):
         np.sum(trap_array, axis=0).astype(bool), index=signal.index
     )
     return any_present
-
-
-def str_to_int(x: str or None):
-    """Cast string as int if possible."""
-    if x is None:
-        return x
-    else:
-        try:
-            return int(x)
-        except ValueError:
-            return x

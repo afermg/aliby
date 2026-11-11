@@ -154,6 +154,9 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   - omero is imported only when OMERO data is opened, so local data and the
     pipeline need no omero-py
 - `postprocessor.grouper`: Concatenates signals across positions to generate experiment-wide dataframes
+  - Its properties are found anew at each access. Until November 2026 they
+    were cached, so those that print printed once and `groups` and
+    `channels` kept positions wela had since filtered out
 
 ### Dependencies and Integration
 - **Baby-seg**: Neural network segmentation (tensorflow backend)
@@ -187,6 +190,13 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   extracted before then, `centroid_x`, `centroid_y`, `image_x`, `image_y`,
   `absolute_x` and `absolute_y` are each one pixel too large
 - Multi-channel fluorescence functions
+- A function is a cell function only if marked `@cell_function`; the helpers
+  beside them (`centroid`, `crop_to_cell`, `identify_vacuole`) cannot be
+  named in a tree. Until November 2026 every function in the module could
+- A function that needs only a cell's pixels (mean, median, std, total,
+  total_squared, max2p5pc, max5px_median) is also in `PIXEL_FUNCTIONS` as a
+  function of the pixels. `Extractor.apply_pixel_functions` picks a cell's
+  pixels out of its tile once for all of them
 
 **Background Functions** (`extraction.core.functions.background_functions`)
 - Per-tile background statistics (median, mean, std of pixels outside all cells)
@@ -291,7 +301,26 @@ Both call `reduce_extract` → `apply_extraction_functions` → `apply_extractio
 per cell `(trap_id, cell_label)` or per trap `trap_id` (for background functions).
 
 Background channels (Cy5) skip `_bgsub` extraction entirely — subtracting the background
-from itself would produce near-zero signals.
+from itself would produce near-zero signals. Until November 2026 they did not skip it:
+the background channels were looked for in `tree_dict`, which never held them, so an h5
+from before then has a `cy5_bgsub` group. Cy5's image less background is now made only
+if a multichannel function names Cy5.
+
+`reduce_extract` reduces all tiles over z at once and, given `reduced_as`, keeps the
+result until the next time point, so a channel is reduced once for a cell, its vacuole
+and its cytoplasm. A function that returns a dict (`membrane_fluorescence`) becomes one
+signal for each of its values, and keeps those names at a time point with no cells.
+
+Measured on `test26643` (94 traps, about 108 cells a time point, two fluorescence
+channels, no vacuoles): extraction is 0.28 s of a 2.45 s time point, BABY 1.6 s, the
+tiler 0.29 s and the extractor's writer 0.22 s. Within extraction the medians for
+background subtraction are the largest part, 0.06 s; finding them for all z sections
+or all tiles at once is no faster.
+
+A channel is extracted only if its name begins with one in
+`global_settings.possible_imaging_channels`; `build_extraction_tree_from_meta` warns of
+any other. In `extraction={...}`, dicts merge and sets join but a list replaces the
+default list (`recursive_merge_extractor`).
 
 ### Vacuole Identification
 
@@ -309,6 +338,13 @@ Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleId
 - Cells with no detected vacuole receive empty sub-masks so extraction still runs
 
 ### Post-processing Components
+
+- `PipelineParameters.default(postprocessing={...})` takes `picker`,
+  `merger`, `bud_processes`, `targets` and `outpaths`, the keywords of
+  `PostProcessorParameters.default`, which took none until November 2026
+- A position with no cell at any time point has no Signals; the
+  postprocessor writes empty merges, lineage and picks for it and runs no
+  bud process
 
 **Picker** (`postprocessor.core.reshapers.picker`)
 - Selects cells with lineage information and minimum track length (default: seen at more than 3 time points, so 4 or more)
@@ -385,6 +421,12 @@ adjacent tracks for a file with no centroids (44 of the 62 stored). The
 distributions above for one cell and for two are what a posterior odds of a
 pair being one cell would be built from.
 
+The merges found with the default parameters are unchanged by the faster
+`get_contiguous_pairs` (November 2026). `smooth=True` had never run: the
+check for an odd window was the wrong way round. It now smooths each
+track's valid values, still only for growing tracks longer than the
+window (`clean_tracks`), and has not been tried on real data.
+
 Also left as it is: `get_predicted_edge_values` fits a line to the last
 `window` values of the left track and evaluates it at `len(y) + 1`, two time
 points past the track's end, not one.
@@ -393,6 +435,12 @@ points past the track's end, not one.
 - `buddings`: Analyzes cell division events
 - `bud_metric`: Calculates bud-specific measurements
 - Applied to signals like volume to generate derived measurements
+- A bud with no value at any time point, as in a fluorescence Signal, is
+  no budding and adds nothing to its mother's buds. `buddings` gives its
+  mothers in the Signal's order; they were in the order of a set
+- Measured on a position of 7093 cells and 192 time points, under the
+  profiler: postprocessing takes 0.77 s where it took 2.5 s, the merger
+  0.26 s, the two bud metrics 0.26 s and buddings under 0.1 s
 
 ### Logging
 

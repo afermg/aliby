@@ -1,4 +1,4 @@
-"""LineageProcess subclass of PostProcessABC that supplies lineage information."""
+"""LineageProcess, a PostProcessABC that supplies lineage information."""
 
 import typing as t
 from abc import abstractmethod

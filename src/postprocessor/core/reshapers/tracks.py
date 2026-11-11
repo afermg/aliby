@@ -48,6 +48,10 @@ def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> NDArray:
     """
     # only consider time series with more than two non-NaN data points
     tracks = tracks.loc[tracks.notna().sum(axis=1) > 2]
+    if not len(tracks):
+        # no track long enough to merge: grouping no tracks gives an
+        # empty data frame, which the steps below cannot take
+        return np.array([], dtype=int)
     # get contiguous tracks
     if smooth:
         # specialise to tracks with growing cells and of long duration
@@ -55,6 +59,9 @@ def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> NDArray:
         contigs = clean.groupby(["trap"]).apply(get_contiguous_pairs)
     else:
         contigs = tracks.groupby(["trap"]).apply(get_contiguous_pairs)
+    if not len(contigs):
+        # smoothing kept no track
+        return np.array([], dtype=int)
     # remove traps with no contiguous tracks
     contigs = contigs.loc[contigs.apply(len) > 0]
     # flatten to (trap, cell_id) pairs
@@ -64,8 +71,7 @@ def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> NDArray:
     # make a data frame of contiguous tracks with the tracks as arrays
     if smooth:
         smoothed_tracks = clean.loc[flat].apply(
-            lambda x: non_uniform_savgol(x.index, x.values, window, degree),
-            axis=1,
+            lambda x: smooth_track(x, window, degree), axis=1
         )
     else:
         smoothed_tracks = tracks.loc[flat].apply(
@@ -108,6 +114,36 @@ def get_merges(tracks, smooth=False, tol=0.2, window=5, degree=3) -> NDArray:
     return merges
 
 
+def smooth_track(track: pd.Series, window: int, degree: int) -> np.ndarray:
+    """
+    Smooth a track's values with a savgol filter, leaving its NaNs.
+
+    Smooth only the time points at which the cell was seen: a window
+    holding a NaN gives NaN, so smoothing the whole row of a track that
+    does not span the movie left nothing of it. A track seen at fewer
+    time points than the window is returned as it is.
+
+    Parameters
+    ----------
+    track: pd.Series
+        A track's values, with time points as the index.
+    window: int
+        The size of the window of the savgol filter, which must be odd.
+    degree: int
+        The degree of the polynomial used by the savgol filter.
+    """
+    values = np.array(track.values, dtype=float)
+    seen = ~np.isnan(values)
+    if seen.sum() >= window:
+        values[seen] = non_uniform_savgol(
+            np.asarray(track.index, dtype=float)[seen],
+            values[seen],
+            window,
+            degree,
+        )
+    return values
+
+
 def clean_tracks(
     tracks, min_duration: int = 15, min_gr: float = 1.0
 ) -> pd.DataFrame:
@@ -137,19 +173,26 @@ def get_contiguous_pairs(tracks: pd.DataFrame) -> list:
         points.
     """
     # TODO add support for skipping time points
-    # find time points bounding tracks of non-NaN values
-    mins, maxs = [
-        tracks.notna().apply(np.where, axis=1).apply(fn)
-        for fn in (np.min, np.max)
-    ]
-    # flip so that time points become the index
-    mins_d = mins.groupby(mins).apply(lambda x: x.index.tolist())
-    maxs_d = maxs.groupby(maxs).apply(lambda x: x.index.tolist())
-    # reduce minimal time point to make a right track overlap with a left track
-    mins_d.index = mins_d.index - 1
+    # find the columns bounding each track's non-NaN values, for all
+    # tracks at once: finding them a row at a time was two thirds of the
+    # merger's time
+    seen = tracks.notna().to_numpy()
+    if not seen.size:
+        return []
+    mins = seen.argmax(axis=1)
+    maxs = seen.shape[1] - 1 - seen[:, ::-1].argmax(axis=1)
+    # the tracks that end at each column, and those that start one after
+    # it, in the order of the data frame
+    ending, starting = {}, {}
+    for track_id, first, last, any_seen in zip(
+        tracks.index.tolist(), mins, maxs, seen.any(axis=1)
+    ):
+        if any_seen:
+            ending.setdefault(int(last), []).append(track_id)
+            starting.setdefault(int(first) - 1, []).append(track_id)
     # find common end points
-    common = sorted(set(mins_d.index).intersection(maxs_d.index), reverse=True)
-    contigs = [(maxs_d[t], mins_d[t]) for t in common]
+    common = sorted(set(starting).intersection(ending), reverse=True)
+    contigs = [(ending[t], starting[t]) for t in common]
     return contigs
 
 
@@ -237,7 +280,7 @@ def find_best_from_scores_wrap(dMetric: List, edges: List, **kwargs):
 def find_best_from_scores(
     scores: np.ndarray, actual_edge_values: List, tol: Union[float, int] = 1
 ):
-    """Find indices for left and right contiguous tracks with scores below a tolerance."""
+    """Find left and right contiguous tracks with scores below a tolerance."""
     ids = find_best_indices(scores)
     if len(ids[0]):
         pre_value, post_value = actual_edge_values
@@ -261,7 +304,7 @@ def find_best_from_scores(
 
 
 def find_best_indices(dMetric):
-    """Find indices for left and right contiguous tracks with minimal scores."""
+    """Find indices for left and right contiguous tracks with least scores."""
     glob_is = []
     glob_js = []
     if (~np.isnan(dMetric)).any():
@@ -290,7 +333,7 @@ def get_value(x, n):
 
 
 def get_mean_value_i(x, i):
-    """Get track's mean Signal value from values either from or up to an index."""
+    """Get a track's mean Signal value either from or up to an index."""
     if not len(x[~np.isnan(x)]):
         return np.nan
     else:

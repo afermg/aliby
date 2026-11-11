@@ -11,19 +11,21 @@ class MergerParameters(ParametersABC):
     """
     Define the parameters for merger from a dict.
 
-    There are five parameters expected in the dict:
+    There are four parameters expected in the dict:
 
     smooth: boolean
         Whether or not to smooth with a savgol_filter.
-    tol: float or int
-        The threshold of average prediction error/std necessary to
-        consider two tracks to be the same.
-        If float, the threshold is the fraction of the first track;
-        if int, the threshold is in absolute units.
+    tolerance: float or int
+        The greatest difference between two tracks' values where they
+        meet for the tracks to be joined. If less than one, a fraction
+        of the left track's last value; otherwise, in the units of the
+        Signal.
     window: int
-        The size of the window of the savgol_filter.
-    degree: int v
-        The order of the polynomial used by the savgol_filter
+        The number of values used to predict where a track is going,
+        and the size of the window of the savgol_filter, which must be
+        odd.
+    degree: int
+        The order of the polynomial used by the savgol_filter.
     """
 
     _defaults = {
@@ -31,7 +33,6 @@ class MergerParameters(ParametersABC):
         "tolerance": 0.2,
         "window": 5,
         "degree": 3,
-        "min_avg_delta": 0.5,
     }
 
 

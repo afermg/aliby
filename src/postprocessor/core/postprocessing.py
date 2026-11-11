@@ -34,22 +34,84 @@ class PostProcessorParameters(ParametersABC):
 
     def __init__(
         self,
-        targets: t.Dict = {},
-        param_sets: t.Dict = {},
-        outpaths: t.Dict = {},
+        targets: dict | None = None,
+        param_sets: dict | None = None,
+        outpaths: dict | None = None,
     ):
         """Initialise, with no defaults."""
-        self.targets = targets
-        self.param_sets = param_sets
-        self.outpaths = outpaths
+        self.targets = {} if targets is None else targets
+        self.param_sets = {} if param_sets is None else param_sets
+        self.outpaths = {} if outpaths is None else outpaths
 
     def __getitem__(self, item):
         """Access attributes, like dict keys."""
         return getattr(self, item)
 
     @classmethod
-    def default(cls):
-        """Include buddings and bud volumes."""
+    def default(
+        cls,
+        picker: dict | None = None,
+        merger: dict | None = None,
+        bud_processes: dict | None = None,
+        targets: dict | None = None,
+        outpaths: dict | None = None,
+    ):
+        """
+        Include buddings and bud volumes.
+
+        Parameters
+        ----------
+        picker: dict, optional
+            Parameters of the picker to use in place of its defaults,
+            such as {"picker_sequence": [["condition", "present", 3]]}.
+        merger: dict, optional
+            Parameters of the merger to use in place of its defaults,
+            such as {"tolerance": 0.1}.
+        bud_processes: dict, optional
+            Parameters for bud processes, by the name of the process.
+        targets: dict, optional
+            Targets to use in place of the defaults, by their keys:
+            "merging_picking", a dict of the Signals the merger and the
+            picker use, and "bud_processes", a list of each process with
+            the Signals it is applied to.
+        outpaths: dict, optional
+            Where in the h5 file to write a bud process's result, by the
+            name of the process.
+
+        Examples
+        --------
+        Pass these to PipelineParameters.default as
+
+            postprocessing={
+                "picker": {"picker_sequence": [["condition", "present", 3]]}
+            }
+        """
+        default_targets = cls.default_targets()
+        if targets is not None:
+            unknown = set(targets) - set(default_targets)
+            if unknown:
+                raise ValueError(
+                    f"Unknown targets {sorted(unknown)}: use"
+                    f" {sorted(default_targets)}."
+                )
+            default_targets.update(targets)
+        param_sets = {
+            "merging_picking": {
+                "merger_params": MergerParameters.default(**(merger or {})),
+                "picker_params": PickerParameters.default(**(picker or {})),
+            }
+        }
+        if bud_processes:
+            param_sets["bud_processes"] = dict(bud_processes)
+        return cls(
+            targets=default_targets,
+            param_sets=param_sets,
+            outpaths=dict(outpaths or {}),
+        )
+
+    @staticmethod
+    def default_targets() -> dict:
+        """Return the Signals that are merged, picked and found for buds."""
         # each subitem specifies the function to be called
         # and the h5-file location for the results
         targets = {
@@ -69,14 +131,7 @@ class PostProcessorParameters(ParametersABC):
                 ],
             ],
         }
-        param_sets = {
-            "merging_picking": {
-                "merger_params": MergerParameters.default(),
-                "picker_params": PickerParameters.default(),
-            }
-        }
-        outpaths = {}
-        return cls(targets=targets, param_sets=param_sets, outpaths=outpaths)
+        return targets
 
 
 class PostProcessor(ProcessABC):
@@ -138,7 +193,11 @@ class PostProcessor(ProcessABC):
         file had been processed and could only ever lose cells.
         """
         # run merger
-        record = self.signal.get_raw(self.targets["merging_picking"]["merger"])
+        record = self.get_raw(self.targets["merging_picking"]["merger"])
+        self.no_cells = record is None
+        if self.no_cells:
+            # no cell at any time point: nothing to merge, relate or pick
+            return np.array([]), np.empty((0, 3), dtype=int), np.array([])
         merges = self.merger.run(record)
         # get lineages from cells object attached to picker
         lineage = assoc_indices_to_3d(self.picker.cells.mothers_daughters)
@@ -159,6 +218,18 @@ class PostProcessor(ProcessABC):
         picked_indices = np.array(self.picker.run(merged_record))
         return new_merges, new_lineage, picked_indices
 
+    def get_raw(self, dataset: str, **kwargs) -> pd.DataFrame | None:
+        """
+        Get a raw Signal, or None if the h5 file does not hold it.
+
+        A Signal with no value at any time point is not written, so the
+        file of a position with no cells has no area and no volume.
+        """
+        try:
+            return self.signal.get_raw(dataset, **kwargs)
+        except KeyError:
+            return None
+
     def get_signal(self, dataset: str):
         """
         Get a Signal with this run's merges and picks applied.
@@ -166,7 +237,7 @@ class PostProcessor(ProcessABC):
         Time is not in minutes because this data is rewritten to the h5
         file.
         """
-        record = self.signal.get_raw(dataset, in_minutes=False)
+        record = self.get_raw(dataset, in_minutes=False)
         if record is None:
             return None
         picked_merged = self.signal.apply_merging_picking(
@@ -191,6 +262,11 @@ class PostProcessor(ProcessABC):
             "lineage_merged": lineage,
             "picks": picked_indices,
         }
+        if self.no_cells:
+            self.log(
+                "No cells at any time point: nothing to postprocess.", "info"
+            )
+            return res
         # run processes: process is a str; datasets is a list of str
         for bud_process, datasets in tqdm(self.targets["bud_processes"]):
             assigned = self.parameters["param_sets"].get("bud_processes", {})
@@ -271,15 +347,3 @@ class PostProcessor(ProcessABC):
         if bud_process not in self.parameters["outpaths"]:
             outpath = "/postprocessing/" + bud_process + "/" + outpath
         return outpath, result
-
-    @staticmethod
-    def pick_mother(a, b):
-        """
-        Update the mother id.
-
-        Ensure the mother has a lower id.
-        """
-        x = max(a, b)
-        if min([a, b]):
-            x = [a, b][np.argmin([a, b])]
-        return x

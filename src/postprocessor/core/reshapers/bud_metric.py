@@ -8,13 +8,12 @@ from postprocessor.core.lineageprocess import (
     LineageProcess,
     LineageProcessParameters,
 )
-import logging
 
 
 class BudMetricParameters(LineageProcessParameters):
-    """Give default location of lineage information."""
+    """No parameters required: the lineage is given to the process."""
 
-    _defaults = {"lineage_location": "postprocessing/lineage_merged"}
+    _defaults = {}
 
 
 class BudMetric(LineageProcess):
@@ -116,6 +115,15 @@ def get_bud_metric(
     # restrict to daughters: cells with a mother
     mother_labels = md_signal.index.get_level_values("mother_label")
     daughter_df = md_signal.loc[mother_labels > 0]
+    if not len(daughter_df):
+        # no buds: a Signal with no cells, not None
+        return pd.DataFrame(
+            columns=signal.columns,
+            index=pd.MultiIndex.from_arrays(
+                [[], []], names=("trap", "cell_label")
+            ),
+            dtype=float,
+        )
     # join data for daughters with the same mother
     bud_signal = daughter_df.groupby(["trap", "mother_label"]).apply(
         combine_daughter_tracks
@@ -124,43 +132,39 @@ def get_bud_metric(
     # daughter data is indexed by mothers, which themselves have no mothers
     bud_signal["temp_mother_label"] = 0
     bud_signal.set_index("temp_mother_label", append=True, inplace=True)
-    if len(bud_signal):
-        bud_signal.index.names = md_signal.index.names
-        bud_signal = bud_signal.droplevel("mother_label")
-        return bud_signal
+    bud_signal.index.names = md_signal.index.names
+    bud_signal = bud_signal.droplevel("mother_label")
+    return bud_signal
 
 
 def combine_daughter_tracks(tracks: pd.DataFrame):
     """
     Combine multiple time series of daughter cells into one time series.
 
-    Concatenate daughter values into one time series starting with the first
-    daughter and replacing later values with the values from the next daughter,
-    and so on.
+    Concatenate daughter values into one time series starting with the
+    first daughter and replacing later values with the values from the
+    next daughter, and so on.
 
     Parameters
     ----------
     tracks: a Signal
-        Data for all daughters, which are distinguished by different cell_labels,
-        for a particular trap and mother_label.
+        Data for all daughters, which are distinguished by different
+        cell_labels, for a particular trap and mother_label.
     """
     # sort by daughter IDs
-    bud_df = tracks.sort_index(level="cell_label")
-    # remove multi-index
-    no_rows = len(bud_df)
-    bud_df.index = range(no_rows)
-    # find time point of first non-NaN data point of each row
-    init_tps = [
-        bud_df.iloc[irow].first_valid_index() for irow in range(no_rows)
-    ]
-    # sort so that earliest daughter is first
-    sorted_rows = np.argsort(init_tps)
-    init_tps = np.sort(init_tps)
+    values = tracks.sort_index(level="cell_label").to_numpy(dtype=float)
+    seen = ~np.isnan(values)
+    # find the column of the first non-NaN data point of each row
+    first = seen.argmax(axis=1)
+    # a daughter with no value at any time point has nothing to add: it
+    # had no first time point, which could not be sorted
+    with_values = np.flatnonzero(seen.any(axis=1))
+    # sort so that earliest daughter is first, and of two that start
+    # together the one with the higher ID is last
+    sorted_rows = with_values[np.argsort(first[with_values], kind="stable")]
     # combine data for all daughters
-    combined_tracks = np.nan * np.ones(tracks.columns.size)
-    for j, jrow in enumerate(sorted_rows):
+    combined_tracks = np.full(tracks.columns.size, np.nan)
+    for row in sorted_rows:
         # over-write with next earliest daughter
-        combined_tracks[bud_df.columns.get_loc(init_tps[j]) :] = (
-            bud_df.iloc[jrow].loc[init_tps[j] :].values
-        )
+        combined_tracks[first[row] :] = values[row, first[row] :]
     return pd.Series(combined_tracks, index=tracks.columns)

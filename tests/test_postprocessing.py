@@ -25,7 +25,11 @@ from postprocessor.core.postprocessing import (
 from postprocessor.core.reshapers.bud_metric import BudMetric
 from postprocessor.core.reshapers.buddings import buddings, buddingsParameters
 from postprocessor.core.reshapers.picker import Picker, PickerParameters
-from postprocessor.core.reshapers.tracks import get_merges
+from postprocessor.core.reshapers.merger import MergerParameters
+from postprocessor.core.reshapers.tracks import (
+    get_contiguous_pairs,
+    get_merges,
+)
 from postprocessor.grouper import Grouper
 
 nan = np.nan
@@ -469,3 +473,243 @@ def test_signals_are_concatenated_without_a_cutoff(position_h5):
     grouper = Grouper(position_h5.parent)
     volume = grouper.concat_signal("extraction/general/null/volume")
     assert len(volume) == 2
+
+
+def test_postprocessing_parameters_are_taken_by_name():
+    """Change the picker, the merger and the targets through default."""
+    # PipelineParameters.default passes postprocessing={...} on as
+    # keywords, of which default took none: any of them raised TypeError
+    parameters = PostProcessorParameters.default(
+        picker={"picker_sequence": [["condition", "present", 7]]},
+        merger={"tolerance": 0.1},
+        bud_processes={"buddings": {}},
+        targets={"bud_processes": [["buddings", ["/extraction/a/b/c"]]]},
+        outpaths={"buddings": "/postprocessing/elsewhere"},
+    )
+    sets = parameters.param_sets["merging_picking"]
+    assert sets["picker_params"].picker_sequence == [
+        ["condition", "present", 7]
+    ]
+    assert sets["merger_params"].tolerance == 0.1
+    assert parameters.param_sets["bud_processes"] == {"buddings": {}}
+    assert parameters.targets["bud_processes"] == [
+        ["buddings", ["/extraction/a/b/c"]]
+    ]
+    # a target not given keeps its default
+    assert parameters.targets["merging_picking"] == {
+        "merger": "/extraction/general/null/area",
+        "picker": "/extraction/general/null/area",
+    }
+    assert parameters.outpaths == {"buddings": "/postprocessing/elsewhere"}
+    with pytest.raises(ValueError, match="Unknown targets"):
+        PostProcessorParameters.default(targets={"merging": {}})
+
+
+def test_default_parameters_do_not_share_their_dicts():
+    """Give each set of parameters dicts of its own."""
+    first = PostProcessorParameters()
+    first.outpaths["buddings"] = "/somewhere"
+    assert PostProcessorParameters().outpaths == {}
+
+
+@pytest.fixture
+def empty_h5(tmp_path):
+    """Write the h5 of a position where no cell was ever segmented."""
+    path = tmp_path / "empty.h5"
+    with h5py.File(path, "a") as f:
+        f.attrs["time_settings/timeinterval"] = 300
+        f.create_group("trap_info").create_dataset(
+            "trap_locations", data=np.array([[10.0, 10.0]])
+        )
+        cell_info = f.create_group("cell_info")
+        for name in (
+            "trap",
+            "cell_label",
+            "timepoint",
+            "mother_assign_dynamic",
+        ):
+            cell_info.create_dataset(name, data=np.array([], "uint16"))
+    return path
+
+
+def test_a_position_with_no_cells_is_postprocessed(empty_h5):
+    """Find no merges, lineage or picks where there were never cells."""
+    # the extractor writes no Signal for such a position, and the
+    # merger's raised KeyError, ending the position as a failure
+    result = PostProcessor(empty_h5, PostProcessorParameters.default()).run()
+    assert len(result["merges"]) == 0
+    assert np.asarray(result["lineage_merged"]).shape == (0, 3)
+    assert len(result["picks"]) == 0
+    PostProcessorWriter(empty_h5).write(data=result)
+    # the picks are written, so the file is known to be postprocessed
+    assert len(Signal(empty_h5).read_picks()) == 0
+
+
+def test_a_missing_signal_is_named_as_it_was_asked_for(empty_h5):
+    """Name the dataset asked for, not the one tried in its place."""
+    with pytest.raises(KeyError, match="general/null/area"):
+        Signal(empty_h5).get_raw("extraction/general/null/area")
+
+
+def test_a_bud_never_measured_adds_nothing_to_its_mothers_buds():
+    """Combine the buds that have values and pass over one with none."""
+    # a fluorescence Signal can be all NaN for a bud; it had no first
+    # time point, and sorting None with the others' raised TypeError
+    data = signal(
+        {
+            (0, 1): seen(9, 0, 10),
+            (0, 2): seen(1, 2, 6),
+            (0, 3): seen(nan, 0, 10),
+            (0, 4): seen(2, 5, 10),
+        }
+    )
+    lineage = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4]])
+    found = BudMetric.as_function(data, lineage=lineage)
+    assert found.index.tolist() == [(0, 1)]
+    wanted = [nan, nan, 1, 1, 1, 2, 2, 2, 2, 2]
+    np.testing.assert_array_equal(found.loc[(0, 1)].to_numpy(), wanted)
+
+
+def test_bud_metric_with_no_buds_is_a_signal_of_no_cells():
+    """Return an empty data frame, not None, when no cell is a bud."""
+    data = signal({(0, 1): seen(9, 0, 10), (0, 2): seen(1, 4, 10)})
+    found = BudMetric.as_function(data, lineage=np.array([[1, 1, 2]]))
+    assert isinstance(found, pd.DataFrame)
+    assert len(found) == 0
+    assert found.columns.tolist() == data.columns.tolist()
+
+
+def test_a_bud_never_measured_is_no_budding():
+    """Mark buddings in the Signal's columns only."""
+    # a bud with no values has no first time point, and its mother was
+    # given a budding in a new column named None
+    data = signal(
+        {
+            (0, 1): seen(9, 0, 10),
+            (0, 2): seen(1, 4, 10),
+            (0, 3): seen(nan, 0, 10),
+        }
+    )
+    found = buddings(buddingsParameters.default()).run(
+        data, lineage=np.array([[0, 1, 2], [0, 1, 3]])
+    )
+    assert found.columns.tolist() == data.columns.tolist()
+    assert found.loc[(0, 1)].tolist() == [tp == 4 for tp in range(NTPS)]
+
+
+def test_mothers_of_buddings_keep_the_order_of_the_signal():
+    """Give the mothers in the Signal's order, the same at every run."""
+    data = signal(
+        {
+            (3, 1): seen(9, 0, 10),
+            (3, 2): seen(1, 4, 10),
+            (0, 5): seen(9, 0, 10),
+            (0, 6): seen(1, 7, 10),
+            (1, 1): seen(9, 0, 10),
+        }
+    )
+    found = buddings(buddingsParameters.default()).run(
+        data, lineage=np.array([[0, 5, 6], [3, 1, 2], [2, 1, 2]])
+    )
+    assert found.index.tolist() == [(3, 1), (0, 5)]
+    assert found.index.names == ["trap", "cell_label"]
+    assert found.columns[found.loc[(0, 5)]].tolist() == [7]
+    assert found.columns[found.loc[(3, 1)]].tolist() == [4]
+
+
+def test_buddings_with_no_lineage_has_no_mothers():
+    """Return an empty data frame for an empty lineage."""
+    data = signal({(0, 1): seen(9, 0, 10)})
+    found = buddings(buddingsParameters.default()).run(
+        data, lineage=np.empty((0, 3), dtype=int)
+    )
+    assert found.shape == (0, NTPS)
+
+
+def test_tracks_are_merged_after_smoothing():
+    """Smooth the tracks when asked, and still find the merge."""
+    # the check that the window is odd was the wrong way round, so the
+    # default window of five was refused; and a track not seen for the
+    # whole movie was smoothed to NaN
+    # smoothing is for growing tracks at least a window long: one cell
+    # that grows by two a time point, lost at time point 10, and another
+    times = np.arange(20.0)
+    growing = 100 + 2 * times
+    rng = np.random.default_rng(0)
+    data = signal(
+        {
+            (0, 1): np.where(times < 10, growing, nan),
+            (0, 2): np.where(times >= 10, growing, nan),
+            (0, 3): 3 * growing,
+        }
+    )
+    data += rng.normal(0, 0.2, data.shape)
+    assert merged_pairs(data) == [(1, 2)]
+    merges = get_merges(data, smooth=True, window=5, degree=3)
+    assert sorted((m[0][1], m[1][1]) for m in merges.tolist()) == [(1, 2)]
+    with pytest.raises(ValueError, match="odd"):
+        get_merges(data, smooth=True, window=4, degree=3)
+
+
+def test_tracks_too_short_to_merge_give_no_merges():
+    """Find no merges, and raise nothing, when every track is short."""
+    # as in a movie of two time points: no track is seen more than
+    # twice, and the empty table of pairs raised ValueError
+    data = signal({(0, 1): seen(100, 0, 2), (0, 2): seen(100, 2, 4)})
+    assert len(get_merges(data)) == 0
+    assert len(get_merges(data, smooth=True)) == 0
+
+
+def test_the_merger_has_only_the_parameters_it_uses():
+    """Offer no parameter that does nothing."""
+    assert set(MergerParameters.default().to_dict()) == {
+        "smooth",
+        "tolerance",
+        "window",
+        "degree",
+    }
+
+
+def test_contiguous_pairs_are_tracks_that_end_and_start_together():
+    """Pair the tracks ending at a time point with those starting next."""
+    data = signal(
+        {
+            (0, 1): seen(1, 0, 5),
+            (0, 2): seen(1, 5, 10),
+            (0, 3): seen(1, 0, 5),
+            (0, 4): seen(1, 2, 8),
+            (0, 5): seen(1, 8, 10),
+            (0, 6): seen(nan, 0, 10),
+        }
+    )
+    # latest first, and a track never seen is in no pair
+    assert get_contiguous_pairs(data) == [
+        ([(0, 4)], [(0, 5)]),
+        ([(0, 1), (0, 3)], [(0, 2)]),
+    ]
+    assert get_contiguous_pairs(data.iloc[:0]) == []
+
+
+def test_a_condition_needs_a_threshold():
+    """Say that a threshold is missing from a pick."""
+    # it was a TypeError from deep in the picker
+    data = signal({(0, 1): seen(9, 0, 10)})
+    with pytest.raises(ValueError, match="needs a threshold"):
+        picker_by("present", None).pick_by_condition(data, "present", [])
+
+
+def test_a_groupers_properties_follow_its_positions(position_h5, capsys):
+    """Find groups and channels anew, and print each time asked."""
+    # the properties were cached: one that prints printed once, and the
+    # groups stayed those of positions since removed, as wela removes
+    # them
+    postprocess(position_h5)
+    grouper = Grouper(position_h5.parent)
+    assert grouper.groups == ["posi"]
+    grouper.available_grouped
+    first = capsys.readouterr().out
+    grouper.available_grouped
+    assert first and capsys.readouterr().out == first
+    grouper.positions_groups = {"position": "wild type"}
+    assert grouper.groups == ["wild type"]
+    assert grouper.no_members == {"wild type": 1}

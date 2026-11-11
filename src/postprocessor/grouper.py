@@ -1,9 +1,9 @@
 """Class to concatenate signals across different microscope positions."""
 
+import logging
 import typing as t
 from abc import ABC
 from collections import Counter
-from functools import cached_property as property
 from pathlib import Path
 from typing import Union
 
@@ -15,7 +15,14 @@ from tqdm import tqdm
 
 
 class Grouper(ABC):
-    """Base grouper class."""
+    """
+    Concatenate signals from the h5 files of an experiment's positions.
+
+    The properties are found anew at each access, so they follow a
+    change to `positions` or `positions_groups` and those that print do
+    so every time. They were once cached, and so printed once and kept
+    the groups and channels of positions since filtered out.
+    """
 
     def __init__(self, dir: Union[str, Path], name_inds=(0, -4)):
         """Find h5 files and load each one."""
@@ -78,12 +85,11 @@ class Grouper(ABC):
 
     @property
     def available_grouped(self) -> None:
-        """Display available signals and the number of positions with these signals."""
-        if not hasattr(self, "_available_grouped"):
-            self._available_grouped = Counter(
-                [x for s in self.positions.values() for x in s.available]
-            )
-        for s, n in self._available_grouped.items():
+        """Print each available signal and the number of positions with it."""
+        available_grouped = Counter(
+            [x for s in self.positions.values() for x in s.available]
+        )
+        for s, n in available_grouped.items():
             print(f"{s} - {n}")
 
     @property
@@ -115,15 +121,17 @@ class Grouper(ABC):
            For "retained", the fraction of the movie for which a cell must
             be present to be kept; zero (default) keeps every cell.
         mode: str
-           If "retained" (default), return Signal with merging, picking, and lineage
-            information applied but only for cells present for at least some
-            cutoff fraction of the movie.
-           If "raw", return Signal without merging, picking, lineage information,
-            or a cutoff applied. Each of the first three options can be
-            re-selected. A raw Signal with all three selected is the same as a
-            retained Signal with a 0 cutoff.
-           If "daughters", return Signal with only daughters - cells with an
-            identified mother.
+           If "retained" (default), return Signal with merging, picking,
+            and lineage information applied but only for cells present
+            for at least some cutoff fraction of the movie.
+           If "raw", return Signal without merging, picking, lineage
+            information, or a cutoff applied. Each of the first three
+            options can be re-selected. A raw Signal with all three
+            selected is the same as a retained Signal with a 0 cutoff.
+           If "raw_daughters", return a raw Signal with only daughters:
+            cells with an identified mother.
+           If "raw_mothers", return a raw Signal with only the cells
+            with no identified mother, and no mother_label.
            If "families", get Signal with merging, picking, and lineage
             information applied.
         selected_positions: list[str] (optional)
@@ -167,7 +175,9 @@ class Grouper(ABC):
             ]
             records = [record for record in records if record is not None]
             if len(errors):
-                print(f"Warning: Positions ({errors}) contain errors.")
+                logging.getLogger("aliby").warning(
+                    f"Grouper: positions ({errors}) contain errors."
+                )
             if len(records):
                 # combine into one data frame
                 concat = pd.concat(records, axis=0)
@@ -185,9 +195,14 @@ class Grouper(ABC):
                     )
                 concat_sorted = concat.sort_index()
                 return concat_sorted
-            print(f"All data sets are missing or contain errors for {path}.")
+            logging.getLogger("aliby").warning(
+                "Grouper: all data sets are missing or contain errors for"
+                f" {path}."
+            )
         else:
-            print("No data found.")
+            logging.getLogger("aliby").warning(
+                f"Grouper: no data found for {path}."
+            )
 
     def filter_positions(self, path: str) -> t.Dict[str, Signal]:
         """Filter positions to those whose data is available in the h5 file."""
@@ -196,8 +211,8 @@ class Grouper(ABC):
         }
         no_positions_dif = len(self.positions) - len(good_positions)
         if no_positions_dif:
-            print(
-                f"Grouper:Warning: some positions ({no_positions_dif}) do not"
+            logging.getLogger("aliby").warning(
+                f"Grouper: some positions ({no_positions_dif}) do not"
                 f" contain {path}."
             )
         return good_positions
