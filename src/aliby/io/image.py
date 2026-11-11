@@ -25,13 +25,13 @@ from agora.io.metadata import parse_microscopy_logs
 from tiler import TiffFolderSource, TiffSource, ZarrSource, as_dask
 
 
-def instantiate_image(source: str | int | dict[str, str] | Path, **kwargs):
+def instantiate_image(source: str | int | Path, **kwargs):
     """
     Instantiate the image.
 
     Parameters
     ----------
-    source : str, int, dict or Path
+    source : str, int or Path
         Image identifier
 
     Examples
@@ -43,16 +43,14 @@ def instantiate_image(source: str | int | dict[str, str] | Path, **kwargs):
     return dispatch_image(source)(source, **kwargs)
 
 
-def dispatch_image(source: str | int | dict[str, str] | Path):
+def dispatch_image(source: str | int | Path):
     """Pick the appropriate Image class for the source of data."""
     if isinstance(source, (int, np.int64)):
         # omero is optional, so import it only for OMERO data
         from aliby.io.omero import Image
 
         instantiator = Image
-    elif isinstance(source, dict) or (
-        isinstance(source, (str, Path)) and Path(source).is_dir()
-    ):
+    elif isinstance(source, (str, Path)) and Path(source).is_dir():
         if Path(source).suffix == ".zarr":
             instantiator = ImageZarr
         else:

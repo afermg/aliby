@@ -70,6 +70,8 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - `CloggingCheck` in `pipeline.py` holds the areas of the last `ntps_to_eval` time points as the extractor returns them, the latest included, and gives the fraction of tiles with cells that are clogged. `check_earlystop` gives the same from an h5 file. Until October 2026 the h5 file was read back at every time point and the latest time point was left out
 - A time point with no cells in any trap is not a failure: nothing is added to `cell_info`, the backgrounds are extracted, and the position carries on. `format_segmentation` raises `InconsistentOutput` when BABY's outputs differ in length, which is a failure and ends the position
 - A position has failed only if no time point was segmented and extracted; a run of one time point is post-processed
+- An error raised by one position is logged with its traceback and the other positions run (`run_one_position_safely`); `Pipeline.run` raises only if every position raised. Until November 2026 one error ended the run with one processor, and with several lost the report of the h5 files
+- A position's image is opened once: `generate_h5file` takes the image's name. The logs are cached once for a folder in one process (`cache_logs_once`), by `PipelineParameters.default`, and `Pipeline.setup` caches them only for another folder, such as `store`. A local data set's logs are looked for in its folder and one folder down, never in a zarr store
 - With `distributed` over 1, each spawned worker sets up the aliby logger for itself and appends to the one log file
 
 ### Main Entry Points
@@ -101,6 +103,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   - Traps are found and drift is measured in the middle z section, `ref_z`, which `PipelineParameters.default` takes from the metadata's number of brightfield sections unless `tiler={"ref_z": k}` gives one. Until October 2026 the tiler always used z 0: its default was read when aliby was imported, before any metadata. On `test26643` the middle section finds 94 traps where z 0 found 82, all 82 among them within 5 px, with the same drifts. With no metadata of z sections (a metadata dict, or TIFFs with no log) `ref_z` stays 0
   - The Tiler keeps the last z stack read for the reference channel and the images it registers for drift (`load_image`, `get_ref_plane`), so brightfield is read once at a time point, not once each for BABY and the extractor: 6 planes for a 5-section stack where 13 were read. Do not change in place an array `load_image` returns
   - Tiles are cut with numpy unless `lazy=True`. Wrapping a numpy image in dask once for each tile hashed every pixel each time, which was 40% of a run on zarr data
+  - One lazy tile (`get_lazy_tile_view`, which wela's torch dataset calls for each tile, and `get_tile_data`) is read from a zarr array as its own region, in one request for all z sections, through `StackView` and `cut_tile`: 5 ms a tile where reading and hashing the whole stack took 10. One request for each z section is slower than either, 13 ms, with zarr 3
   - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises
 - `aliby.baby_sitter.BabyRunner`: Interfaces with Baby-seg to return cell masks, mother-bud pairs, and tracking data
 - `extraction.core.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)
@@ -138,6 +141,16 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
     it is loaded
   - A local image's with block closes nothing, because wela builds a Tiler
     inside one and reads from it afterwards
+  - OMERO and TIFF images reach the Tiler through `tiler.as_dask`, whose
+    graph has two layers whatever the movie's length. Until November 2026
+    it stacked a delayed read for each plane, and every read walked the
+    whole graph: 0.3 s for one z stack of a 300-frame, 4-channel,
+    5-section movie and 1.4 s for 1000 frames, now a few milliseconds.
+    `image.data` builds the array anew at each access, so take it once
+- `find_channel_index` returns a channel the name matches whole, ignoring
+  case, before one it only begins: GFP finds GFP although GFPFast is listed
+  first. Until November 2026 it returned the first channel the name began,
+  so the extractor could store GFPFast's pixels as GFP
   - omero is imported only when OMERO data is opened, so local data and the
     pipeline need no omero-py
 - `postprocessor.grouper`: Concatenates signals across positions to generate experiment-wide dataframes

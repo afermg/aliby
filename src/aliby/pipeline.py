@@ -59,6 +59,32 @@ from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.version import __version__
 
 
+# the experiments and folders whose logs have been cached by this process:
+# PipelineParameters.default and Pipeline.setup each want them, one after
+# the other
+logs_cached = set()
+
+
+def cache_logs_once(conn, expt_id, directory: Path):
+    """
+    Save an experiment's log files to a folder unless already saved there.
+
+    Parameters
+    ----------
+    conn: a Dataset
+        The data set, connected if it is on OMERO.
+    expt_id: str or int
+        What identifies the experiment.
+    directory: Path
+        The folder to save the logs in.
+    """
+    key = (str(expt_id), str(Path(directory).resolve()))
+    # an emptied folder is filled again
+    if key not in logs_cached or not any(Path(directory).iterdir()):
+        conn.cache_logs(directory)
+        logs_cached.add(key)
+
+
 class TqdmHandler(logging.StreamHandler):
     """Route log output through tqdm.write to not disrupt progress bars."""
 
@@ -198,7 +224,9 @@ class PipelineParameters(ParametersABC):
             directory = directory / conn.unique_name
             if not directory.exists():
                 directory.mkdir(parents=True)
-            conn.cache_logs(directory)
+            # afresh, because this is where a run begins
+            logs_cached.discard((str(expt_id), str(directory.resolve())))
+            cache_logs_once(conn, expt_id, directory)
             if "channels" in general:
                 omero_channels = general["channels"]
             elif hasattr(conn, "get_channels"):
@@ -268,7 +296,8 @@ class PipelineParameters(ParametersABC):
                 tps=tps,
                 directory=str(directory.parent),
                 filter="",
-                earlystop=global_settings.earlystop,
+                # a copy, because the user's choices are written into it
+                earlystop=dict(global_settings.earlystop),
                 logfile_level="INFO",
                 use_explog=True,
             ),
@@ -391,7 +420,10 @@ class Pipeline(ProcessABC):
         self.expt_id = config["general"]["expt_id"]
         # kept because setup changes the directory in the parameters
         self.log_folder = config["general"]["directory"]
-        self.setLogger(self.log_folder, self.expt_id)
+        self.logfile_level = config["general"].get("logfile_level", "INFO")
+        self.setLogger(
+            self.log_folder, self.expt_id, file_level=self.logfile_level
+        )
 
     @staticmethod
     def setLogger(
@@ -421,7 +453,10 @@ class Pipeline(ProcessABC):
         logger = logging.getLogger("aliby")
         logger.handlers.clear()
         logger.propagate = False
-        logger.setLevel(getattr(logging, file_level))
+        # let through whatever either handler wants
+        logger.setLevel(
+            min(getattr(logging, file_level), getattr(logging, stream_level))
+        )
         formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S%z",
@@ -472,7 +507,8 @@ class Pipeline(ProcessABC):
                 directory = self.store or root_dir / conn.unique_name
                 if not directory.exists():
                     directory.mkdir(parents=True)
-                conn.cache_logs(directory)
+                # usually cached already, by PipelineParameters.default
+                cache_logs_once(conn, self.expt_id, directory)
                 if isinstance(self.expt_id, int):
                     channels = conn.get_channels()
                     first_img = next(iter(conn.ome_class.listChildren()))
@@ -487,7 +523,8 @@ class Pipeline(ProcessABC):
         except ConnectionError as e:
             self.log(f"Cannot connect to OMERO: {e}", "error")
             raise
-        except AssertionError as e:
+        except LookupError as e:
+            # what ome_class raises for an id that OMERO does not have
             self.log(f"OMERO dataset {self.expt_id} not found: {e}", "error")
             raise
         self.log("Positions available:", "info")
@@ -563,20 +600,66 @@ class Pipeline(ProcessABC):
             with make_process_executor(
                 no_processors, start_method="spawn"
             ) as executor:
-                results = list(
+                errors = list(
                     executor.map(
-                        self.run_one_position,
+                        self.run_one_position_safely,
                         list(position_ids.items()),
                     )
                 )
         else:
             # single core
-            results = [
-                self.run_one_position(position_id)
+            errors = [
+                self.run_one_position_safely(position_id)
                 for position_id in position_ids.items()
             ]
         self.report_h5_sizes()
-        return results
+        failed = {
+            name: error
+            for name, error in zip(position_ids, errors)
+            if error is not None
+        }
+        for name, error in failed.items():
+            self.log(f"{name} raised an error: {error}", "error")
+        if len(failed) == len(position_ids):
+            # nothing ran, so the fault is likely in the set up
+            raise RuntimeError(
+                "Every position raised an error: "
+                + "; ".join(f"{name}: {e}" for name, e in failed.items())
+            )
+        return [None] * len(position_ids)
+
+    def run_one_position_safely(
+        self, name_image_id: tuple[str, str | Path | int]
+    ) -> str | None:
+        """
+        Run a pipeline for one position, catching any error it raises.
+
+        One position's error then leaves the others to run. The traceback
+        is logged where the error is raised, which with several processors
+        is in the worker.
+
+        Returns
+        -------
+        error: str or None
+            The error raised, as text so that it can always be returned
+            from a worker, or None if there was none.
+        """
+        try:
+            self.run_one_position(name_image_id)
+        except Exception as error:
+            if not logging.getLogger("aliby").handlers:
+                # the error came before the worker set up its logger
+                self.setLogger(
+                    self.log_folder,
+                    self.expt_id,
+                    file_level=self.logfile_level,
+                    file_mode="a",
+                )
+            logging.getLogger("aliby").exception(
+                f"Pipeline: {name_image_id[0]} raised an error."
+            )
+            return f"{type(error).__name__}: {error}"
+        return None
 
     def report_h5_sizes(self):
         """
@@ -601,12 +684,20 @@ class Pipeline(ProcessABC):
             self.log(f"\t{name}: {size:.1f} M", "info")
         return sizes
 
-    def generate_h5file(self, image_id):
-        """Delete any existing and then create h5file for one position."""
+    def generate_h5file(self, image_name: str):
+        """
+        Delete any existing and then create h5file for one position.
+
+        Parameters
+        ----------
+        image_name: str
+            The name of the position's image, which names the file. The
+            image is not opened here: for OMERO that was a second login
+            for each position.
+        """
         config = self.parameters.to_dict()
         out_dir = config["general"]["directory"]
-        with dispatch_image(image_id)(image_id, **self.server_info) as image:
-            out_file = Path(f"{out_dir}/{image.name}.h5")
+        out_file = Path(f"{out_dir}/{image_name}.h5")
         # remove existing h5 file
         if out_file.exists():
             os.remove(out_file)
@@ -624,20 +715,25 @@ class Pipeline(ProcessABC):
             # a spawned worker imports aliby afresh and so has no handlers:
             # without them nothing reaches the log file and nothing below
             # a warning is shown
-            self.setLogger(self.log_folder, self.expt_id, file_mode="a")
+            self.setLogger(
+                self.log_folder,
+                self.expt_id,
+                file_level=self.logfile_level,
+                file_mode="a",
+            )
         config = self.parameters.to_dict()
         config["tiler"]["position_name"] = name.split(".")[0]
         earlystop = config["general"].get("earlystop", None)
-        out_file = self.generate_h5file(image_id)
-        # instantiate writers
-        tiler_writer = TilerWriter(out_file)
-        baby_writer = BabyWriter(out_file)
-        extractor_writer = ExtractorWriter(out_file)
-        postprocessor_writer = PostProcessorWriter(out_file)
         # start pipeline
         frac_clogged_traps = 0.0
         # image here is the connection to OMERO
         with dispatch_image(image_id)(image_id, **self.server_info) as image:
+            out_file = self.generate_h5file(image.name)
+            # instantiate writers
+            tiler_writer = TilerWriter(out_file)
+            baby_writer = BabyWriter(out_file)
+            extractor_writer = ExtractorWriter(out_file)
+            postprocessor_writer = PostProcessorWriter(out_file)
             # initialise tiler
             tiler = Tiler.from_image(
                 image,
@@ -673,8 +769,9 @@ class Pipeline(ProcessABC):
             all_tps = range(first_tp, tps)
             progress_bar = tqdm(all_tps, desc=image.name)
             clogging_check = CloggingCheck(earlystop, tiler.tile_size)
-            # number of time points segmented and extracted
+            # number of time points segmented and extracted, and the last
             no_completed = 0
+            last_completed = None
             # run through time points
             for i in progress_bar:
                 if (
@@ -746,6 +843,7 @@ class Pipeline(ProcessABC):
                     )
                     extractor_writer.write(data=result)
                     no_completed += 1
+                    last_completed = i
                     if i == first_tp and extractor.pdms_mask is not None:
                         # mask showing traps used for background correcting
                         extractor_writer.write_pdms_mask(extractor.pdms_mask)
@@ -774,9 +872,8 @@ class Pipeline(ProcessABC):
                 postprocessor_writer.write(data=result)
                 self.log(
                     f"{config['tiler']['position_name']}: Analysis finished"
-                    f" at time point {i} - "
-                    f"{(i - first_tp) / max(1, len(all_tps) - 1) * 100:.0f}%"
-                    " complete.",
+                    f" at time point {last_completed} - "
+                    f"{no_completed / len(all_tps) * 100:.0f}% complete.",
                     "info",
                 )
 

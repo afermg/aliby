@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 from baby import BabyCrawler, modelsets
+from baby.brain import BabyBrain
 
 from agora.abc import ParametersABC, StepABC
 
@@ -75,15 +76,18 @@ class BabyRunner(StepABC):
             else parameters.modelset_name
         )
         tiler_z = self.tiler.shape[-3]
-        if f"{tiler_z}z" not in modelset_name:
+        # a model set given as files does not name its z sections
+        if isinstance(modelset_name, str) and (
+            f"{tiler_z}z" not in modelset_name
+        ):
             raise KeyError(
                 f"Tiler z-stack ({tiler_z}) and model"
                 f" ({modelset_name}) do not match."
             )
         if parameters is None:
-            brain = modelsets.get(modelset_name)
+            brain = get_brain(modelset_name)
         else:
-            brain = modelsets.get(
+            brain = get_brain(
                 modelset_name,
                 clogging_thresh=parameters.clogging_thresh,
                 min_bud_tps=parameters.min_bud_tps,
@@ -201,6 +205,24 @@ class BabyRunner(StepABC):
         )
 
 
+def get_brain(modelset: str | dict, **kwargs) -> BabyBrain:
+    """
+    Return BABY's brain for a model set.
+
+    Parameters
+    ----------
+    modelset: str or dict
+        The name of one of BABY's model sets, or the files of one of our
+        own, as update_baby_modelset gives them: BabyBrain's arguments
+        such as morph_model_file and flattener_file, with their paths.
+    kwargs
+        Passed to BabyBrain, such as clogging_thresh.
+    """
+    if isinstance(modelset, dict):
+        return BabyBrain(**modelset, **kwargs)
+    return modelsets.get(modelset, **kwargs)
+
+
 def get_modelset_name_from_params(
     imaging_device="alcatras",
     channel="brightfield",
@@ -253,10 +275,12 @@ def format_segmentation(segmentation, tp):
     for i, tile_dict in enumerate(segmentation):
         # assign the trap ID to each cell identified
         tile_dict["trap"] = [i] * len(tile_dict["cell_label"])
-        # record mothers for each labelled cell
-        tile_dict["mother_assign_dynamic"] = np.array(
-            tile_dict["mother_assign"]
-        )[np.array(tile_dict["cell_label"], dtype=int) - 1]
+        if "mother_assign" in tile_dict:
+            # record mothers for each labelled cell; BABY gives none if
+            # it was not asked to assign mothers
+            tile_dict["mother_assign_dynamic"] = np.array(
+                tile_dict["mother_assign"]
+            )[np.array(tile_dict["cell_label"], dtype=int) - 1]
     # merge into a dict with BABY's outputs as keys and
     # lists of results for all cells as values
     merged = {

@@ -9,6 +9,7 @@ Includes
     independent images with or without metadata
 """
 
+import logging
 import os
 import shutil
 import time
@@ -84,22 +85,51 @@ class DatasetLocalABC(ABC):
 
     @property
     def files(self):
-        """Return a dictionary with any available metadata files."""
+        """
+        Return a dictionary with any available metadata files.
+
+        A metadata file is a file, not a folder, whose suffix is one of
+        the valid ones. Look in the data set's folder and in each folder
+        within it, where a position's logs may be, but no deeper and never
+        in a zarr store: walking every folder listed every chunk of every
+        store.
+        """
         if not hasattr(self, "_files"):
-            self._files = {
-                f: f
-                for f in self.path.rglob("*")
-                if any(
-                    str(f).endswith(suffix)
-                    for suffix in self._valid_meta_suffixes
-                )
-            }
+            found = self.metadata_files_in(self.path)
+            for entry in os.scandir(self.path):
+                if entry.is_dir() and not entry.name.endswith(".zarr"):
+                    found += self.metadata_files_in(entry.path)
+            self._files = {f: f for f in sorted(found)}
         return self._files
 
+    def metadata_files_in(self, folder: str | Path) -> list[Path]:
+        """Return the metadata files that lie directly in a folder."""
+        return [
+            Path(entry.path)
+            for entry in os.scandir(folder)
+            if Path(entry.name).suffix[1:] in self._valid_meta_suffixes
+            and entry.is_file()
+        ]
+
     def cache_logs(self, root_dir):
-        """Copy metadata files to results folder."""
-        for name, annotation in self.files.items():
-            shutil.copy(annotation, root_dir / name.name)
+        """
+        Copy metadata files to results folder.
+
+        The copies share one folder. Of files with one name, copy the one
+        nearest the top of the data set, which is where the microscope's
+        logs are looked for, and log a warning.
+        """
+        chosen = {}
+        for file in sorted(self.files, key=lambda f: (len(f.parts), f)):
+            if file.name in chosen:
+                logging.getLogger("aliby").warning(
+                    f"More than one metadata file is called {file.name}; "
+                    f"keeping {chosen[file.name]} and not {file}."
+                )
+            else:
+                chosen[file.name] = file
+        for name, file in chosen.items():
+            shutil.copy(file, root_dir / name)
         return True
 
     @abstractproperty
@@ -130,9 +160,11 @@ class DatasetLocalDir(DatasetLocalABC):
 
         FUTURE 3.12 use pathlib is_junction to pick Dir or File
         """
+        # sorted, so that a position's number does not depend on the
+        # order the file system lists folders in
         position_ids_dict = {
             item.name: item
-            for item in self.path.glob("*/")
+            for item in sorted(self.path.glob("*/"))
             if item.is_dir()
             and any(
                 path
@@ -160,8 +192,9 @@ class DatasetLocalOME(DatasetLocalABC):
 
     def get_position_ids(self):
         """Return a dictionary with the names of the image files."""
-        return {
-            f.name: str(f)
+        files = sorted(
+            f
             for suffix in self._valid_suffixes
             for f in self.path.glob(f"*.{suffix}")
-        }
+        )
+        return {f.name: str(f) for f in files}

@@ -54,9 +54,19 @@ class BridgeOmero:
             Used to fetch specific objects.
         """
         if host is None or username is None or password is None:
+            # say which is missing, never the password itself
+            missing = [
+                name
+                for name, value in (
+                    ("host", host),
+                    ("username", username),
+                    ("password", password),
+                )
+                if value is None
+            ]
             raise ValueError(
-                f"Invalid credentials. host: {host}, user: {username},"
-                f" pwd: {password}"
+                f"Invalid credentials: no {', '.join(missing)} given "
+                f"(host: {host}, user: {username})."
             )
         self.conn = None
         self.host = host
@@ -267,18 +277,30 @@ class Dataset(BridgeOmero):
     def files(self):
         """Get a dict of FileAnnotationWrappers, typically for log files."""
         if not hasattr(self, "_files"):
-            self._files = {
-                x.getFileName(): x
-                for x in self.ome_class.listAnnotations()
-                if isinstance(x, omero.gateway.FileAnnotationWrapper)
-            }
+            # in the order they were attached, so that of two files with
+            # one name the later is kept
+            annotations = sorted(
+                (
+                    x
+                    for x in self.ome_class.listAnnotations()
+                    if isinstance(x, omero.gateway.FileAnnotationWrapper)
+                ),
+                key=lambda x: x.getId(),
+            )
+            self._files = {x.getFileName(): x for x in annotations}
+            if len(self._files) < len(annotations):
+                names = [x.getFileName() for x in annotations]
+                repeated = sorted(
+                    {name for name in names if names.count(name) > 1}
+                )
+                logging.getLogger("aliby").warning(
+                    f"OMERO dataset {self.ome_id} has more than one file "
+                    f"called {', '.join(repeated)}; using the latest "
+                    "attached."
+                )
         if not self._files:
             raise FileNotFoundError(
                 "exception:metadata: experiment has no annotation files."
-            )
-        if len(self.file_annotations) != len(self._files):
-            raise FileNotFoundError(
-                "Number of files and annotations do not match"
             )
         return self._files
 

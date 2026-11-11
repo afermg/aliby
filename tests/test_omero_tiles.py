@@ -235,3 +235,44 @@ def test_an_image_is_read_through_one_login():
             tile.compute(), image.data[1, 0, 1, :32, :32]
         )
     assert len(gateways) == 1 and gateways[0].closed
+
+
+def test_a_missing_login_is_reported_without_the_password():
+    from aliby.io.omero import BridgeOmero
+
+    with pytest.raises(ValueError) as error:
+        BridgeOmero(host=None, username="swain", password="open-sesame")
+    assert "no host given" in str(error.value)
+    assert "open-sesame" not in str(error.value)
+
+
+class FakeFile:
+    """Stand in for one of OMERO's file annotations."""
+
+    def __init__(self, annotation_id, name):
+        self.annotation_id = annotation_id
+        self.name = name
+
+    def getId(self):
+        return self.annotation_id
+
+    def getFileName(self):
+        return self.name
+
+
+def test_of_attached_files_with_one_name_the_latest_is_used(monkeypatch):
+    import aliby.io.omero as aliby_omero
+
+    monkeypatch.setattr(
+        aliby_omero.omero.gateway, "FileAnnotationWrapper", FakeFile
+    )
+    attached = [
+        FakeFile(9, "expt.log"),
+        FakeFile(3, "expt.log"),
+        FakeFile(5, "acq.txt"),
+    ]
+    dataset = aliby_omero.Dataset(1, host="h", username="u", password="p")
+    dataset._ome_class = SimpleNamespace(listAnnotations=lambda: attached)
+    files = dataset.files
+    assert set(files) == {"expt.log", "acq.txt"}
+    assert files["expt.log"].getId() == 9

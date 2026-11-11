@@ -8,6 +8,8 @@ read at each time point.
 """
 
 import logging
+from pathlib import Path
+from types import SimpleNamespace
 
 import dask.array as da
 import h5py
@@ -18,6 +20,7 @@ import pytest
 from agora.io.cells import Cells
 from agora.io.signal import Signal
 from agora.io.writers import BabyWriter, ExtractorWriter, write_meta_to_h5
+from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, TilerParameters, find_channel_index
 from aliby.tile.tiles import TileLocations
 from extraction.core.extractor import build_extraction_tree_from_meta
@@ -130,6 +133,32 @@ def test_a_channel_matched_in_part_is_warned_of():
         assert len(messages) == 1
     finally:
         logger.removeHandler(handler)
+
+
+@pytest.mark.parametrize(
+    "channels, channel, index",
+    [
+        (["Brightfield", "GFPFast", "GFP"], "GFP", 2),
+        (["Brightfield", "GFPFast", "GFP"], "GFPFast", 1),
+        (["Brightfield", "GFPFast", "GFP"], "gfp", 2),
+        (["Brightfield", "Cy5"], "cy5", 1),
+    ],
+)
+def test_a_channel_named_in_full_is_found_before_one_that_begins_alike(
+    channels, channel, index
+):
+    assert find_channel_index(channels, channel) == index
+
+
+def test_choosing_when_to_stop_early_leaves_the_global_settings_alone():
+    pipeline = pytest.importorskip("aliby.pipeline")
+    before = dict(global_settings.earlystop)
+    meta = SimpleNamespace(minimal={"time_settings/ntimepoints": 5}, full={})
+    defaults = pipeline.PipelineParameters.build_general_defaults(
+        "expt", Path("results/expt"), meta, {"earlystop": {"min_tp": 7}}
+    )
+    assert defaults["general"]["earlystop"]["min_tp"] == 7
+    assert global_settings.earlystop == before
 
 
 ###
@@ -431,3 +460,266 @@ def test_tiles_are_the_same_from_numpy_and_from_dask():
     assert isinstance(lazy, da.Array)
     np.testing.assert_array_equal(from_numpy, lazy.compute())
     assert from_numpy.shape == (2, 3, 16, 16)
+
+
+###
+# faults that ended a run, or would have
+###
+
+
+def test_cells_with_no_mothers_assigned_are_formatted():
+    baby_sitter = pytest.importorskip("aliby.baby_sitter")
+    tiles = [tile_result([1, 2]), tile_result([3])]
+    for tile in tiles:
+        del tile["mother_assign"]
+    result = baby_sitter.format_segmentation(tiles, tp=3)
+    assert result["cell_label"] == [1, 2, 3]
+    assert "mother_assign_dynamic" not in result
+
+
+def test_a_model_set_of_our_own_files_is_given_to_the_brain(monkeypatch):
+    baby_sitter = pytest.importorskip("aliby.baby_sitter")
+    made = []
+    monkeypatch.setattr(
+        baby_sitter, "BabyBrain", lambda **kwargs: made.append(kwargs)
+    )
+    files = {
+        "flattener_file": Path("retrained/flattener.json"),
+        "morph_model_file": Path("retrained/weights/weights.h5"),
+    }
+    baby_sitter.get_brain(files, clogging_thresh=1)
+    assert made == [{**files, "clogging_thresh": 1}]
+
+
+def test_a_dict_is_not_a_source_of_images():
+    from aliby.io.image import dispatch_image
+
+    with pytest.raises(ValueError, match="Invalid data source"):
+        dispatch_image({"Brightfield": "pos001"})
+
+
+def local_dataset(folder: Path, positions: list[str]) -> Path:
+    """Write a data set of TIFF folders, each with a log of its own."""
+    for position in positions:
+        (folder / position).mkdir()
+        (folder / position / "pos_t0001_Brightfield_z01.tif").write_bytes(b"")
+        (folder / position / "notes.txt").write_text(position)
+    return folder
+
+
+def test_a_folder_is_not_a_metadata_file(tmp_path):
+    from aliby.io.dataset import DatasetLocalDir
+
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "catalog").mkdir()
+    (data / "weblog").write_text("not a log")
+    (data / "expt.log").write_text("a log")
+    out = tmp_path / "out"
+    out.mkdir()
+    dataset = DatasetLocalDir(data)
+    assert [file.name for file in dataset.files] == ["expt.log"]
+    dataset.cache_logs(out)
+    assert [file.name for file in out.iterdir()] == ["expt.log"]
+
+
+def test_of_logs_with_one_name_the_one_nearest_the_top_is_kept(tmp_path):
+    from aliby.io.dataset import DatasetLocalDir
+
+    data = tmp_path / "data"
+    data.mkdir()
+    local_dataset(data, ["pos002", "pos001"])
+    (data / "notes.txt").write_text("top")
+    out = tmp_path / "out"
+    out.mkdir()
+    DatasetLocalDir(data).cache_logs(out)
+    assert (out / "notes.txt").read_text() == "top"
+
+
+def test_local_positions_are_in_order(tmp_path):
+    from aliby.io.dataset import DatasetLocalDir
+
+    names = ["pos010", "pos002", "pos001", "pos003"]
+    local_dataset(tmp_path, names)
+    assert list(DatasetLocalDir(tmp_path).get_position_ids()) == sorted(names)
+
+
+def bare_pipeline(tmp_path, **general):
+    """Make a Pipeline with only its general parameters."""
+    pipeline = pytest.importorskip("aliby.pipeline")
+    parameters = pipeline.PipelineParameters(
+        general={"expt_id": "expt", "directory": str(tmp_path), **general},
+        tiler={},
+        baby={},
+        extraction={},
+        postprocessing={},
+    )
+    return pipeline.Pipeline(parameters)
+
+
+@pytest.fixture
+def aliby_logger():
+    """Give the aliby logger and put its handlers back afterwards."""
+    logger = logging.getLogger("aliby")
+    handlers, level, propagate = (
+        list(logger.handlers),
+        logger.level,
+        logger.propagate,
+    )
+    yield logger
+    for handler in logger.handlers:
+        handler.close()
+    logger.handlers[:] = handlers
+    logger.setLevel(level)
+    logger.propagate = propagate
+
+
+def test_the_log_file_takes_the_level_asked_for(tmp_path, aliby_logger):
+    bare_pipeline(tmp_path, logfile_level="DEBUG")
+    (file_handler,) = [
+        handler
+        for handler in aliby_logger.handlers
+        if isinstance(handler, logging.FileHandler)
+    ]
+    assert file_handler.level == logging.DEBUG
+    aliby_logger.debug("a detail")
+    file_handler.flush()
+    assert "a detail" in (tmp_path / "aliby_expt.log").read_text()
+
+
+def test_one_position_s_error_leaves_the_others_to_run(
+    tmp_path, aliby_logger, monkeypatch
+):
+    pipe = bare_pipeline(tmp_path)
+    ran = []
+
+    def run_one_position(name_image_id):
+        ran.append(name_image_id[0])
+        if name_image_id[0] == "pos002":
+            raise ValueError("Catastrophic Baby error!")
+
+    positions = {"pos001": 1, "pos002": 2, "pos003": 3}
+    monkeypatch.setattr(pipe, "run_one_position", run_one_position)
+    monkeypatch.setattr(pipe, "setup", lambda: positions)
+    monkeypatch.setattr(pipe, "report_h5_sizes", lambda: {})
+    pipe.parameters.general.update(filter=None, distributed=0)
+    pipe.parameters.metadata = {"minimal": {}}
+    pipe.parameters.extraction = {"tree": {}}
+    pipe.run()
+    assert ran == list(positions)
+    log = (tmp_path / "aliby_expt.log").read_text()
+    assert "pos002 raised an error" in log
+    assert "Traceback" in log and "Catastrophic Baby error!" in log
+
+
+def test_an_error_at_every_position_is_raised(
+    tmp_path, aliby_logger, monkeypatch
+):
+    pipe = bare_pipeline(tmp_path)
+
+    def run_one_position(name_image_id):
+        raise KeyError("no Brightfield")
+
+    monkeypatch.setattr(pipe, "run_one_position", run_one_position)
+    monkeypatch.setattr(pipe, "setup", lambda: {"pos001": 1, "pos002": 2})
+    monkeypatch.setattr(pipe, "report_h5_sizes", lambda: {})
+    pipe.parameters.general.update(filter=None, distributed=0)
+    pipe.parameters.metadata = {"minimal": {}}
+    pipe.parameters.extraction = {"tree": {}}
+    with pytest.raises(RuntimeError, match="Every position raised"):
+        pipe.run()
+
+
+###
+# work done once
+###
+
+
+def test_a_lazy_tile_reads_only_its_own_pixels():
+    tiler, data = counting_tiler()
+    image = tiler.image
+    image.dtype, image.ndim = data.dtype, data.ndim
+    for get_tile in (tiler.get_lazy_tile_view, tiler.get_tile_data):
+        image.reads.clear()
+        tile = np.asarray(get_tile(1, tp=2, c=1))
+        np.testing.assert_array_equal(tile, data[2, 1, :, 32:48, 32:48])
+        # the tile's three sections, not the stack they were cut from
+        assert sum(data[key].size for key in image.reads) == 3 * 16 * 16
+
+
+def test_lazy_tiles_are_the_same_from_an_array_and_from_dask():
+    tiler, data = counting_tiler()
+    tiler.image.dtype, tiler.image.ndim = data.dtype, data.ndim
+    from_array = np.asarray(tiler.get_tiles_lazy(1, 0))
+    tiler.image = da.from_array(data)
+    np.testing.assert_array_equal(
+        from_array, np.asarray(tiler.get_tiles_lazy(1, 0))
+    )
+
+
+def test_a_zarr_store_is_not_searched_for_logs(tmp_path, monkeypatch):
+    import os
+
+    from aliby.io.dataset import DatasetLocalDir
+
+    data = tmp_path / "data"
+    chunks = data / "pos001.zarr" / "0" / "0"
+    chunks.mkdir(parents=True)
+    (chunks / "chunk.txt").write_text("pixels")
+    (data / "pos001.zarr" / "notes.txt").write_text("in the store")
+    local_dataset(data, ["pos002"])
+    (data / "expt.log").write_text("a log")
+    scanned = []
+    scandir = os.scandir
+    monkeypatch.setattr(
+        os, "scandir", lambda path: scanned.append(str(path)) or scandir(path)
+    )
+    files = DatasetLocalDir(data).files
+    assert sorted(str(file.relative_to(data)) for file in files) == [
+        "expt.log",
+        "pos002/notes.txt",
+    ]
+    assert not any(".zarr" in path for path in scanned)
+
+
+class CountingDataset:
+    """Stand in for a data set and count how often its logs are cached."""
+
+    def __init__(self):
+        self.cached = 0
+
+    def cache_logs(self, directory):
+        self.cached += 1
+        (directory / "expt.log").write_text("a log")
+
+
+def test_logs_are_cached_once_for_a_folder(tmp_path):
+    pipeline = pytest.importorskip("aliby.pipeline")
+    dataset = CountingDataset()
+    pipeline.cache_logs_once(dataset, "expt", tmp_path)
+    pipeline.cache_logs_once(dataset, "expt", tmp_path)
+    assert dataset.cached == 1
+    # another folder, and a folder since emptied, are cached afresh
+    other = tmp_path / "other"
+    other.mkdir()
+    pipeline.cache_logs_once(dataset, "expt", other)
+    assert dataset.cached == 2
+    (other / "expt.log").unlink()
+    pipeline.cache_logs_once(dataset, "expt", other)
+    assert dataset.cached == 3
+
+
+def test_an_h5_file_is_named_without_opening_the_image(
+    tmp_path, aliby_logger, monkeypatch
+):
+    pipeline = pytest.importorskip("aliby.pipeline")
+    pipe = bare_pipeline(tmp_path, use_explog=False)
+
+    def no_image(image_id):
+        raise AssertionError("the image was opened")
+
+    monkeypatch.setattr(pipeline, "dispatch_image", no_image)
+    stale = tmp_path / "pos001.h5"
+    stale.write_text("from an earlier run")
+    assert pipe.generate_h5file("pos001") == stale
+    assert not stale.exists()

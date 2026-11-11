@@ -39,7 +39,8 @@ from agora.io.bridge import BridgeH5
 from aliby.global_settings import global_settings
 from aliby.tile.tiles import TileLocations
 from sooth import tile_shape
-from tiler.crop import cut_tile
+from dask import delayed
+from tiler.crop import cut_tile, tile_in_image, too_far_outside
 from tiler.detect import keep_away_from_edges, segment_traps, whole_image
 from tiler.drift import drift_at
 
@@ -365,6 +366,25 @@ class Tiler(StepABC):
         return self.ref_planes[tp]
 
     @property
+    def lazy_image(self) -> da.Array:
+        """
+        Return the whole image as a dask array, made once.
+
+        An image that is not a dask array, such as a zarr array, is
+        wrapped without being read. Taking a z stack from it first read
+        the stack there and then, and wrapping that in dask hashed its
+        every pixel.
+        """
+        if isinstance(self.image, da.Array):
+            return self.image
+        cached = getattr(self, "_lazy_image", None)
+        if cached is None or cached[0] is not self.image:
+            # a name of its own, so that dask does not hash the image
+            cached = (self.image, da.from_array(self.image, name=False))
+            self._lazy_image = cached
+        return cached[1]
+
+    @property
     def drift_disagreements(self) -> list[int]:
         """Return time points whose drift registrations disagreed."""
         if not hasattr(self, "_drift_disagreements"):
@@ -438,9 +458,41 @@ class Tiler(StepABC):
             Guaranteed to have consistent tile_size dimensions.
         """
         tile = self.tile_locs.tiles[tile_id]
-        tile_range = tile.as_range(tp)
-        image_all_z = self.image[tp, c]
-        return self.get_tile_and_pad(image_all_z, tile_range, self.tile_size)
+        return self.lazy_tile(tile.as_range(tp), tp, c)
+
+    def lazy_tile(
+        self, slices: tuple[slice, slice], tp: int, c: int
+    ) -> da.Array:
+        """
+        Return one tile's z stack as a dask array that reads only the tile.
+
+        From an image that is not a dask array, such as a zarr array, read
+        the tile's own region when computed, in one request for all its z
+        sections, and let cut_tile pad it. Cutting it from a z stack read
+        the whole stack and hashed its every pixel, for each tile. A dask
+        image's chunks are whole planes, so there the tile is cut from its
+        stack.
+
+        Parameters
+        ----------
+        slices: tuple of two slices
+            The tile's rows and columns.
+        tp: integer
+            Index of time point.
+        c: integer
+            Index of channel.
+        """
+        if isinstance(self.image, da.Array):
+            return cut_tile(self.image[tp, c], slices, self.tile_size)
+        stack = StackView(self.image, tp, c)
+        _, padding = tile_in_image(slices, stack.shape[-2:])
+        # a tile mostly outside the image is NaN, and so floats
+        is_nan = padding.any() and too_far_outside(padding, self.tile_size)
+        return da.from_delayed(
+            delayed(cut_tile)(stack, slices, self.tile_size),
+            shape=(stack.shape[0], *tile_shape(self.tile_size)),
+            dtype=np.float64 if is_nan else self.image.dtype,
+        )
 
     def get_tile_data(
         self, tile_id: int, tp: int, c: int, lazy: bool = True
@@ -466,11 +518,8 @@ class Tiler(StepABC):
             An array of (z, y, x) arrays, one for each z stack
         """
         # use lazy loading by default to avoid memory issues
-        image_all_z = self.image[tp, c]
         tile = self.tile_locs.tiles[tile_id]
-        ndtile = self.get_tile_and_pad(
-            image_all_z, tile.as_range(tp), self.tile_size
-        )
+        ndtile = self.lazy_tile(tile.as_range(tp), tp, c)
         # only compute if explicitly requested
         if not lazy:
             ndtile = ndtile.compute(scheduler="synchronous")
@@ -580,8 +629,8 @@ class Tiler(StepABC):
         """
         if tile_ids is None:
             tile_ids = list(range(len(self.tile_locs)))
-        # read and wrap the image once, not once for each tile
-        image_all_z = da.asarray(self.image[tp, c])
+        # wrap the image once, not once for each tile
+        image_all_z = self.lazy_image[tp, c]
         tiles = [
             cut_tile(
                 image_all_z,
@@ -753,17 +802,58 @@ class Tiler(StepABC):
         return cut_tile(da.asarray(image_array), slices, tile_size)
 
 
+class StackView:
+    """
+    Show one time point and channel of an image as its z stack.
+
+    Nothing is read until the view is indexed, and then only what the
+    index picks, in one request: cut_tile, given a view, reads a tile's
+    own region.
+    """
+
+    def __init__(self, image, tp: int, c: int):
+        """
+        Take the image without reading it.
+
+        Parameters
+        ----------
+        image: array-like
+            An image as (t, c, z, y, x) that reads what it is indexed by,
+            such as a zarr array.
+        tp: integer
+            Index of time point.
+        c: integer
+            Index of channel.
+        """
+        self.image = image
+        self.index = (tp, c)
+        self.shape = tuple(image.shape[-3:])
+
+    def __getitem__(self, key) -> np.ndarray:
+        """Return the pixels of the z stack that an index picks."""
+        if not isinstance(key, tuple):
+            key = (key,)
+        return np.asarray(self.image[self.index + key])
+
+
 def find_channel_index(image_channels: t.List[str], channel_regex: str):
-    """Use a regex to find the index of a channel."""
+    """
+    Use a regex to find the index of a channel.
+
+    Prefer a channel the regex matches whole, ignoring case, so that GFP
+    finds GFP and not a GFPFast listed before it. Otherwise, return the
+    first channel whose name the regex starts and log a warning.
+    """
     for index, ch in enumerate(image_channels):
-        found = re.match(channel_regex, ch, re.IGNORECASE)
-        if found:
+        if re.fullmatch(channel_regex, ch, re.IGNORECASE):
+            return index
+    for index, ch in enumerate(image_channels):
+        if re.match(channel_regex, ch, re.IGNORECASE):
             # the match ends before the channel's name does
-            if found.end() < len(ch):
-                logging.getLogger("aliby").log(
-                    logging.WARNING,
-                    f"Channel {channel_regex} matched {ch} using regex",
-                )
+            logging.getLogger("aliby").log(
+                logging.WARNING,
+                f"Channel {channel_regex} matched {ch} using regex",
+            )
             return index
 
 
