@@ -8,12 +8,13 @@ from inspect import getfullargspec, getmembers, isfunction
 from types import FunctionType
 
 import bottleneck as bn
-from extraction.core.functions import background_functions, cell_functions
+from extraction.core.functions import background_functions
 from extraction.core.functions.cell_functions import (
     _FUNCTION_TO_MODEL,
+    CELL_FUNCTIONS,
+    PIXEL_FUNCTIONS,
     is_model_available,
 )
-from extraction.core.functions.math_utils import div0
 
 
 def load_all_functions():
@@ -25,33 +26,36 @@ def load_all_functions():
 
 
 def load_cell_functions():
-    """Create a dict of functions for use on cell_masks."""
-    cell_funs_raw = {
-        f[0]: f[1]
-        for f in getmembers(cell_functions)
-        if isfunction(f[1])
-        and f[1].__module__.startswith("extraction.core.functions")
-    }
+    """
+    Create a dict of functions for use on cell_masks.
+
+    Take the functions marked with cell_function, and not the helpers
+    beside them. Each is wrapped to take a tile's masks, its image and
+    the channels' names, whichever of those it uses, and to return a list
+    with a result for each cell. The wrapper of a function that needs
+    only a cell's pixels carries that function of the pixels as
+    ``of_pixels``.
+    """
     cell_funs = {}
-    for f_name, f in cell_funs_raw.items():
-        # cell functions have different inputs
-        if isfunction(f):
+    for f_name, f in CELL_FUNCTIONS.items():
 
-            def tmp(f):
-                args = getfullargspec(f).args
-                if len(args) == 1:
-                    # function with input m, an array of masks
-                    return lambda m, _, __: call_cell_fun(f, m)
-                elif len(args) == 2:
-                    # function with inputs m and img, the fluorescence images
-                    return lambda m, img, _: call_cell_fun(f, m, img)
-                else:
-                    # multichannel function with inputs m, img, and channels
-                    return lambda m, img, channels: call_cell_fun(
-                        f, m, img, channels
-                    )
+        def tmp(f):
+            args = getfullargspec(f).args
+            if len(args) == 1:
+                # function with input m, an array of masks
+                return lambda m, _, __: call_cell_fun(f, m)
+            elif len(args) == 2:
+                # function with inputs m and img, the fluorescence images
+                return lambda m, img, _: call_cell_fun(f, m, img)
+            else:
+                # multichannel function with inputs m, img, and channels
+                return lambda m, img, channels: call_cell_fun(
+                    f, m, img, channels
+                )
 
-            cell_funs[f_name] = tmp(f)
+        cell_funs[f_name] = tmp(f)
+        if f_name in PIXEL_FUNCTIONS:
+            cell_funs[f_name].of_pixels = PIXEL_FUNCTIONS[f_name]
     cell_funs = {
         name: fn
         for name, fn in cell_funs.items()
@@ -108,7 +112,8 @@ def load_reduction_functions(
         "max": bn.nanmax,
         "mean": bn.nanmean,
         "median": bn.nanmedian,
-        "div0": div0,
+        # div0 was here but could reduce nothing: it divides one half of
+        # an axis of length two by the other, and the axis reduced is z
         "add": bn.nansum,
         "null": None,
     }

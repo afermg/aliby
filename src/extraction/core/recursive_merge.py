@@ -2,7 +2,15 @@
 
 
 def recursive_merge_extractor(dict1, dict2):
-    """Merge two extractor trees."""
+    """
+    Merge the second extractor tree into the first and return the first.
+
+    Dicts are merged and sets are joined, but a list in the second
+    replaces the list in the first: to give the functions for a channel
+    and a reduction is to give all of them. To add a function to every
+    channel, append it to global_settings.fluorescence_functions
+    instead, as examples/run_custom_function.py does.
+    """
     for key, value in dict2.items():
         if (
             key in dict1

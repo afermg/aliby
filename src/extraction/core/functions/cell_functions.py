@@ -1,9 +1,15 @@
 """
 Functions to extract information from a single cell.
 
-These functions are automatically read by extractor.py. They
-must return only one value and assume that there are no NaNs
-in the image.
+A function marked with cell_function can be named in an extraction tree.
+It takes a cell's mask, or the mask and its tile's image, or the mask, the
+image and the channels' names, and returns one value or a dict of values.
+Helpers here that are not marked cannot be asked for.
+
+A function that needs only the values of the cell's pixels is written
+twice: once of the pixels, in PIXEL_FUNCTIONS, and once of the mask and
+image. The Extractor picks out a cell's pixels once and gives them to
+every such function asked for.
 """
 
 import logging
@@ -16,11 +22,22 @@ from skimage.measure import regionprops_table
 from skimage.morphology import closing, disk
 from sklearn.mixture import GaussianMixture
 
+# the functions that an extraction tree can name, by name
+CELL_FUNCTIONS: dict[str, t.Callable] = {}
+
+
+def cell_function(fun: t.Callable) -> t.Callable:
+    """Mark a function as one that an extraction tree can name."""
+    CELL_FUNCTIONS[fun.__name__] = fun
+    return fun
+
+
 ###
 # Morphological functions
 ###
 
 
+@cell_function
 def area(cell_mask) -> int:
     """
     Find the area of a cell mask.
@@ -33,6 +50,7 @@ def area(cell_mask) -> int:
     return np.sum(cell_mask)
 
 
+@cell_function
 def eccentricity(cell_mask) -> float:
     """
     Find the eccentricity using the approximate major and minor axes.
@@ -46,6 +64,7 @@ def eccentricity(cell_mask) -> float:
     return np.sqrt(maj_ax**2 - min_ax**2) / maj_ax
 
 
+@cell_function
 def ellipsoidal_volume(cell_mask) -> float:
     """
     Estimate the volume of the cell.
@@ -63,6 +82,7 @@ def ellipsoidal_volume(cell_mask) -> float:
     return (4 * np.pi * min_ax**2 * maj_ax) / 3
 
 
+@cell_function
 def volume(cell_mask):
     """
     Estimate the volume of the cell.
@@ -87,6 +107,7 @@ def volume(cell_mask):
     return 4 * np.sum(nearest_neighbor)
 
 
+@cell_function
 def spherical_volume(cell_mask):
     """
     Estimate the volume of the cell.
@@ -130,11 +151,13 @@ def centroid(cell_mask):
     return (Xm, Ym)
 
 
+@cell_function
 def centroid_x(cell_mask):
     """Return x coordinate of a cell's centroid."""
     return centroid(cell_mask)[0]
 
 
+@cell_function
 def centroid_y(cell_mask):
     """Return y coordinate of a cell's centroid."""
     return centroid(cell_mask)[1]
@@ -207,6 +230,7 @@ def min_maj_approximation(cell_mask) -> t.Tuple[int]:
 ###
 
 
+@cell_function
 def mean(cell_mask, trap_image) -> float:
     """
     Find the mean of the pixels in the cell.
@@ -217,12 +241,17 @@ def mean(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    pixels = trap_image[cell_mask]
+    return mean_of_pixels(trap_image[cell_mask])
+
+
+def mean_of_pixels(pixels) -> float:
+    """Find the mean of a cell's pixels."""
     if pixels.size == 0:
         return np.nan
     return np.nanmean(pixels)
 
 
+@cell_function
 def total(cell_mask, trap_image) -> float:
     """
     Find the sum of the pixels in the cell.
@@ -233,12 +262,17 @@ def total(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    pixels = trap_image[cell_mask]
+    return total_of_pixels(trap_image[cell_mask])
+
+
+def total_of_pixels(pixels) -> float:
+    """Find the sum of a cell's pixels."""
     if pixels.size == 0:
         return np.nan
-    return np.nansum(trap_image[cell_mask])
+    return np.nansum(pixels)
 
 
+@cell_function
 def total_squared(cell_mask, trap_image) -> float:
     """
     Find the sum of the square of the pixels in the cell.
@@ -253,13 +287,18 @@ def total_squared(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    pixels = trap_image[cell_mask]
+    return total_squared_of_pixels(trap_image[cell_mask])
+
+
+def total_squared_of_pixels(pixels) -> float:
+    """Find the sum of the squares of a cell's pixels."""
     if pixels.size == 0:
         return np.nan
     # as floats, because the square of an integer pixel overflows
     return np.nansum(pixels.astype(float) ** 2)
 
 
+@cell_function
 def median(cell_mask, trap_image) -> int:
     """
     Find the median of the pixels in the cell.
@@ -270,12 +309,17 @@ def median(cell_mask, trap_image) -> int:
          Segmentation mask for the cell.
     trap_image: 2d array
     """
-    pixels = trap_image[cell_mask]
+    return median_of_pixels(trap_image[cell_mask])
+
+
+def median_of_pixels(pixels) -> float:
+    """Find the median of a cell's pixels."""
     if pixels.size == 0:
         return np.nan
-    return np.nanmedian(trap_image[cell_mask])
+    return np.nanmedian(pixels)
 
 
+@cell_function
 def max2p5pc(cell_mask, trap_image) -> float:
     """
     Find the mean of the brightest 2.5% of pixels in the cell.
@@ -286,8 +330,12 @@ def max2p5pc(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
+    return max2p5pc_of_pixels(trap_image[cell_mask])
+
+
+def max2p5pc_of_pixels(pixels) -> float:
+    """Find the mean of the brightest 2.5% of a cell's pixels."""
     # drop any NaN pixels so partition orders correctly
-    pixels = trap_image[cell_mask]
     pixels = pixels[~np.isnan(pixels)]
     if pixels.size == 0:
         return np.nan
@@ -299,6 +347,7 @@ def max2p5pc(cell_mask, trap_image) -> float:
     return np.mean(top_values)
 
 
+@cell_function
 def max5px_median(cell_mask, trap_image) -> float:
     """
     Estimate the degree of localisation.
@@ -312,8 +361,12 @@ def max5px_median(cell_mask, trap_image) -> float:
         Segmentation mask for the cell.
     trap_image: 2d array
     """
+    return max5px_median_of_pixels(trap_image[cell_mask])
+
+
+def max5px_median_of_pixels(pixels) -> float:
+    """Divide the mean of a cell's five brightest pixels by its median."""
     # drop any NaN pixels so partition orders correctly
-    pixels = trap_image[cell_mask]
     pixels = pixels[~np.isnan(pixels)]
     if len(pixels) > 5:
         top_values = bn.partition(pixels, len(pixels) - 5)[-5:]
@@ -328,6 +381,7 @@ def max5px_median(cell_mask, trap_image) -> float:
         return np.nan
 
 
+@cell_function
 def std(cell_mask, trap_image):
     """
     Find the standard deviation of the values of the pixels in the cell.
@@ -338,12 +392,30 @@ def std(cell_mask, trap_image):
         Segmentation mask for the cell.
     trap_image: 2d array
     """
-    pixels = trap_image[cell_mask]
+    return std_of_pixels(trap_image[cell_mask])
+
+
+def std_of_pixels(pixels) -> float:
+    """Find the standard deviation of a cell's pixels."""
     if pixels.size == 0:
         return np.nan
     return np.nanstd(pixels)
 
 
+# the cell functions that need only the cell's pixels, each as a function
+# of those pixels
+PIXEL_FUNCTIONS: dict[str, t.Callable] = {
+    "mean": mean_of_pixels,
+    "total": total_of_pixels,
+    "total_squared": total_squared_of_pixels,
+    "median": median_of_pixels,
+    "max2p5pc": max2p5pc_of_pixels,
+    "max5px_median": max5px_median_of_pixels,
+    "std": std_of_pixels,
+}
+
+
+@cell_function
 def moment_of_inertia(cell_mask, trap_image):
     """
     Find moment of inertia - a measure of homogeneity.
@@ -380,6 +452,7 @@ def moment_of_inertia(cell_mask, trap_image):
         return np.nan
 
 
+@cell_function
 def membrane_fluorescence(
     cell_mask,
     trap_image,
@@ -447,6 +520,7 @@ def membrane_fluorescence(
 ###
 
 
+@cell_function
 def ratio_1_over_2(cell_mask, trap_image, channels):
     """Find the median ratio between the first and second channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
@@ -462,6 +536,7 @@ def ratio_1_over_2(cell_mask, trap_image, channels):
     return div
 
 
+@cell_function
 def ratio_2_over_1(cell_mask, trap_image, channels):
     """Find the median ratio between the second and first channels."""
     if trap_image.ndim == 3 and trap_image.shape[-1] == 2:
@@ -550,6 +625,7 @@ def warn_about_missing_models(extraction: dict) -> None:
             )
 
 
+@cell_function
 def nucloc(cell_mask, trap_image, channels):
     """Predict nuclear localisation using a CNN."""
     nl = _get_model("nl_classifier")

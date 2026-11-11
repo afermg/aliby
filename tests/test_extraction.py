@@ -14,9 +14,16 @@ import pandas as pd
 import pytest
 import sooth
 
-from extraction.core.extractor import Extractor, ExtractorParameters
+from extraction.core.extractor import (
+    Extractor,
+    ExtractorParameters,
+    build_extraction_tree_from_meta,
+)
 from extraction.core.functions import cell_functions
-from extraction.core.functions.loaders import load_all_functions
+from extraction.core.functions.loaders import (
+    load_all_functions,
+    load_reduction_functions,
+)
 from extraction.core.functions.math_utils import div0
 
 CENTROIDS_YX = [(10.5, 3.25), (30.0, 12.0)]
@@ -310,7 +317,7 @@ def test_a_channel_with_no_background_to_subtract_has_no_bgsub():
 
     def reduce_extract(tiles, **kwargs):
         asked.append(tiles)
-        return {}, {}
+        return {}
 
     fake = SimpleNamespace(
         params=SimpleNamespace(subtract_background={"GFP"}),
@@ -319,7 +326,7 @@ def test_a_channel_with_no_background_to_subtract_has_no_bgsub():
     img = {"GFP": "gfp", "mCherry": "mcherry"}
     img_bgsub = {"GFP_bgsub": "gfp_bgsub", "mCherry_bgsub": None}
     for channel in ("GFP", "mCherry"):
-        found, _replacements = Extractor._extract_channel(
+        found = Extractor._extract_channel(
             fake, channel, {}, img, img_bgsub, [], {}, set()
         )
         assert (channel + "_bgsub" in found) == (channel == "GFP")
@@ -522,3 +529,273 @@ def test_a_cell_is_placed_at_its_own_pixel_of_the_image():
     assert result["general/null/image_x"][0].iloc[0] == origin_x + 31
     assert result["general/null/image_y"][0].iloc[0] == origin_y + 20
 
+
+
+###
+# what is extracted, and what is asked of the images
+###
+
+
+def warnings_from(action):
+    """Return the messages the aliby logger is given while action runs."""
+    messages = []
+    handler = logging.Handler()
+    handler.emit = lambda record: messages.append(record.getMessage())
+    logger = logging.getLogger("aliby")
+    logger.addHandler(handler)
+    try:
+        action()
+    finally:
+        logger.removeHandler(handler)
+    return messages
+
+
+def test_a_channel_that_is_not_extracted_is_warned_of():
+    """Say which channels are left out for want of a name in the list."""
+    # YFP and CFP were passed over and nothing said so
+    channels = ["Brightfield", "YFP", "GFP", "CFP"]
+    messages = warnings_from(
+        lambda: build_extraction_tree_from_meta({"channels": channels})
+    )
+    assert len(messages) == 1
+    assert "YFP, CFP" in messages[0] and "GFP," not in messages[0]
+    assert not warnings_from(
+        lambda: build_extraction_tree_from_meta(
+            {"channels": ["Brightfield", "GFP", "cy5"]}
+        )
+    )
+
+
+def test_cells_are_not_placed_without_their_centroids():
+    """Extract from a tree with no centroids, placing no cell."""
+    # the centroids were looked up whether or not they were asked for
+    result = {"general/null/area": pd.DataFrame({0: [50]})}
+    Extractor.add_spatial_locations_of_cells(extractor_with(117), result)
+    assert list(result) == ["general/null/area"]
+
+
+def real_extractor(obscured=None):
+    """Return something that applies the real functions to cells."""
+    cell_funs, all_funs = load_all_functions()
+    fake = SimpleNamespace(
+        cell_fun_names=cell_funs,
+        all_funs=all_funs,
+        obscured=obscured or {},
+        pdms_mask=None,
+        dict_fun_keys={},
+        reduced_tiles={},
+    )
+    for method in (
+        "apply_extraction_function",
+        "apply_extraction_functions",
+        "apply_pixel_functions",
+    ):
+        setattr(
+            fake,
+            method,
+            lambda *args, method=method, **kwargs: getattr(Extractor, method)(
+                fake, *args, **kwargs
+            ),
+        )
+    return fake
+
+
+def test_a_function_of_several_values_is_named_alike_with_no_cells():
+    """Name a dict's values the same at a time point with no cells."""
+    # with no cells there was one empty entry under the function's name
+    fake = real_extractor()
+    tiles = np.random.default_rng(0).random((1, 40, 40)) * 100
+    funs = ["membrane_fluorescence", "mean"]
+    with_cells = fake.apply_extraction_functions(
+        tiles, [two_cells()], funs, ["GFP"], {0: [1, 2]}
+    )
+    no_cells = fake.apply_extraction_functions(
+        tiles, [np.array([])], funs, ["GFP"], {0: []}
+    )
+    assert "membrane_fluorescence_fl" in with_cells
+    assert set(no_cells) == set(with_cells)
+    assert all(found == ((), ()) for found in no_cells.values())
+
+
+def test_only_cell_functions_can_be_asked_for():
+    """Load the functions that measure a cell, and not their helpers."""
+    cell_funs, _all_funs = load_all_functions()
+    for helper in (
+        "centroid",
+        "crop_to_cell",
+        "min_maj_approximation",
+        "identify_vacuole",
+        "is_model_available",
+        "warn_about_missing_models",
+        "_get_model",
+    ):
+        assert helper not in cell_funs
+    assert {"area", "volume", "mean", "ratio_1_over_2"} <= set(cell_funs)
+
+
+def test_div0_is_not_a_reduction():
+    """Offer no reduction that cannot reduce z."""
+    assert "div0" not in load_reduction_functions()
+
+
+def test_functions_of_pixels_give_what_each_gives_alone():
+    """Measure a cell's pixels once for every function that needs them."""
+    fake = real_extractor(obscured={0: {2}})
+    rng = np.random.default_rng(1)
+    tiles = rng.integers(0, 4000, (2, 40, 40)).astype(np.uint16)
+    masks = [two_cells(), two_cells()[:1]]
+    labels = {0: [1, 2], 1: [5]}
+    funs = list(cell_functions.PIXEL_FUNCTIONS) + ["moment_of_inertia"]
+    found = fake.apply_extraction_functions(
+        tiles, masks, funs, ["GFP"], labels
+    )
+    assert list(found) == funs
+    for fun in funs:
+        alone = fake.apply_extraction_function(
+            tiles, masks, fun, labels, ["GFP"]
+        )
+        assert found[fun] == alone
+        # the cell its tile cuts off is not measured
+        assert found[fun][1] == ((0, 1), (1, 5))
+    mask = two_cells()[0]
+    for fun, of_pixels in cell_functions.PIXEL_FUNCTIONS.items():
+        assert getattr(cell_functions, fun)(mask, tiles[0]) == of_pixels(
+            tiles[0][mask]
+        )
+
+
+def test_images_are_reduced_once_for_a_cell_and_its_parts(monkeypatch):
+    """Reduce a channel's z sections once for the cell and its parts."""
+    import extraction.core.extractor as extractor_module
+
+    fake = real_extractor()
+    fake.reduce_extract = lambda **kwargs: Extractor.reduce_extract(
+        fake, **kwargs
+    )
+    reduced = []
+    reduce_z = extractor_module.reduce_z
+    monkeypatch.setattr(
+        extractor_module,
+        "reduce_z",
+        lambda *args, **kwargs: reduced.append(1) or reduce_z(*args, **kwargs),
+    )
+    tiles = np.random.default_rng(2).random((1, 3, 40, 40))
+    asked = dict(
+        tiles=tiles,
+        reduction_funs={"max": ["mean"], "mean": ["mean"]},
+        channels=["GFP"],
+        cell_labels={0: [1, 2]},
+    )
+    whole = fake.reduce_extract(masks=[two_cells()], reduced_as="GFP", **asked)
+    part = fake.reduce_extract(masks=[two_cells()], reduced_as="GFP", **asked)
+    assert len(reduced) == 2
+    assert whole == part
+    assert whole["max"]["mean"][0] == tuple(
+        tiles[0].max(axis=0)[mask].mean() for mask in two_cells()
+    )
+    # with no name, nothing is kept
+    fake.reduce_extract(masks=[two_cells()], **asked)
+    assert len(reduced) == 4
+
+
+def test_a_background_channel_is_not_extracted_less_its_background():
+    """Extract no _bgsub for a channel such as Cy5."""
+    # the background channels were looked for where they never were, so
+    # the background of an image less its background was extracted
+    asked = []
+    fake = SimpleNamespace(
+        params=SimpleNamespace(
+            subtract_background={"GFP", "cy5"},
+            background_channels={"cy5"},
+            intracellular_masks=set(),
+        ),
+        reduce_extract=lambda tiles, **kwargs: asked.append(tiles) or {},
+    )
+    fake._extract_channel = lambda *args: Extractor._extract_channel(
+        fake, *args
+    )
+    tree = {"tree": {"GFP": {}, "cy5": {}}}
+    img = {"GFP": "gfp", "cy5": "cy5"}
+    img_bgsub = {"GFP_bgsub": "gfp_bgsub", "cy5_bgsub": None}
+    found = Extractor.extract_single_channel_functions(
+        fake, tree, {}, img, img_bgsub, []
+    )
+    assert list(found) == ["GFP", "GFP_bgsub", "cy5"]
+    assert asked == ["gfp", "gfp_bgsub", "cy5"]
+
+
+def background_subtracter(multichannel_funs):
+    """Return something that subtracts backgrounds as an Extractor does."""
+    return SimpleNamespace(
+        params=SimpleNamespace(
+            subtract_background={"GFP", "cy5"},
+            background_channels={"cy5"},
+            multichannel_funs=multichannel_funs,
+        )
+    )
+
+
+def test_a_background_channel_has_no_image_less_background_unless_used():
+    """Subtract a background channel's background only for a ratio."""
+    tiles = np.random.default_rng(3).random((2, 2, 1, 3, 20, 20))
+    bgs = np.ones((2, 20, 20), dtype=bool)
+    tree_dict = {
+        "channels_tree": {"GFP": {}, "cy5": {}},
+        "channels": ("GFP", "cy5"),
+    }
+    _img, img_bgsub = Extractor.get_imgs_background_subtract(
+        background_subtracter({}), tree_dict, tiles, bgs
+    )
+    assert img_bgsub["cy5_bgsub"] is None
+    assert img_bgsub["GFP_bgsub"] is not None
+    ratio = {"ratio": [["GFP", "cy5"], "max", "ratio_1_over_2"]}
+    _img, img_bgsub = Extractor.get_imgs_background_subtract(
+        background_subtracter(ratio), tree_dict, tiles, bgs
+    )
+    assert img_bgsub["cy5_bgsub"] is not None
+
+
+def test_brightfield_is_the_reference_channel_whatever_its_name(
+    monkeypatch,
+):
+    """Read brightfield by the Tiler's channel, and outlines if needed."""
+    import extraction.core.extractor as extractor_module
+
+    monkeypatch.setattr(extractor_module, "Cells", lambda store: None)
+    asked = []
+
+    def get_tiles_timepoint(tp, channels, z, lazy):
+        asked.append((channels, z, lazy))
+        return np.zeros((1, 1, 1, 3, 20, 20))
+
+    fake = SimpleNamespace(
+        store=None,
+        params=SimpleNamespace(intracellular_masks=set()),
+        tiler=SimpleNamespace(
+            ref_channel_index=2,
+            shape=(4, 3, 3, 100, 100),
+            get_tiles_timepoint=get_tiles_timepoint,
+        ),
+        get_cell_labels=lambda tp, cell_labels, cells: {0: []},
+        get_masks=lambda tp, masks, cells: [np.array([])],
+        get_outlines=lambda *args: pytest.fail("the outlines were read"),
+        get_tiles=lambda tp, channels, lazy: None,
+        set_pdms_mask=lambda brightfield, masks: None,
+        get_background_masks=lambda masks, tile_size: np.array([]),
+        get_imgs_background_subtract=lambda tree_dict, tiles, bgs: ({}, {}),
+    )
+    _labels, _masks, outlines, img, _img_bgsub = Extractor.load_tp_data(
+        fake, 1, 20, {"channels": ()}
+    )
+    assert asked == [([2], [0, 1, 2], False)]
+    assert img["Brightfield"].shape == (1, 3, 20, 20)
+    assert outlines is None
+
+
+def test_an_extractor_has_its_parameters(tmp_path):
+    """Give the parameters as every step of the pipeline does."""
+    parameters = ExtractorParameters(
+        tree={"general": {"null": ["area"]}}, identify_vacuoles=False
+    )
+    extractor = Extractor(parameters, store=tmp_path / "none.h5")
+    assert extractor.parameters is parameters
