@@ -37,6 +37,11 @@ class MetaData:
             self.full["channels_by_position"] = (
                 metadata_legacy.find_channels_by_position_legacy(self.full)
             )
+        elif "channels_by_position" in self.full:
+            # a current log gives them, in its own order of channels
+            self.full["channels_by_position"] = in_order_of(
+                self.full["channels"], self.full["channels_by_position"]
+            )
 
     @property
     def minimal(self) -> t.Dict:
@@ -44,6 +49,22 @@ class MetaData:
         if not hasattr(self, "_minimal_meta"):
             self._minimal_meta = get_minimal_meta_swainlab(self.full)
         return self._minimal_meta
+
+
+def in_order_of(channels: list[str], channels_by_position: dict) -> dict:
+    """
+    Put each position's channels in the order of all the channels.
+
+    A position whose channels are not all among them is left as it is.
+    """
+    return {
+        position: (
+            [channel for channel in channels if channel in imaged]
+            if set(imaged) <= set(channels)
+            else imaged
+        )
+        for position, imaged in channels_by_position.items()
+    }
 
 
 def parse_microscopy_logs(filedir: t.Union[str, Path]) -> t.Dict:

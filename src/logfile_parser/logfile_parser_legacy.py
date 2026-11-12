@@ -62,7 +62,7 @@ class Parser(object):
                 for k, v in self.grammar.items()
                 if f"trigger_{trigger_type}" in v
             ]
-            for trigger_type in ("startswith", "endswith", "contains", "re")
+            for trigger_type in ("startswith", "re")
         }
 
     def _set_section(self, k=None):
@@ -104,8 +104,6 @@ class Parser(object):
                     self._triggers.keys(),
                     (
                         lambda x, t: x.startswith(t),
-                        lambda x, t: x.endswith(t),
-                        lambda x, t: x.find(t),
                         lambda x, re: re.findall(x),
                     ),
                 )
@@ -129,10 +127,8 @@ class Parser(object):
                 for k, _ in trigger_matches
             }
 
-            # if len(section_match) > 1:
-            assert len(section_match) <= 1, ParseError(
-                "conflicting sections triggered"
-            )
+            if len(section_match) > 1:
+                raise ParseError("conflicting sections triggered")
 
             if len(section_match) == 1:
                 # Update the active section
@@ -236,6 +232,10 @@ class Parser(object):
             elif section_type == "stop":
                 break
 
+            elif section_type == "ignore":
+                # ends the section before and keeps nothing itself
+                continue
+
             else:
                 # By default, just append additional lines as text
                 new_str = (
@@ -257,16 +257,6 @@ class Parser(object):
             line_unmatched = [
                 line[len(t) :] for line in line_pp if line.startswith(t)
             ][0]
-        elif matches["endswith"]:
-            _, t = matches["endwith"][0]
-            line_unmatched = [
-                line[: -(len(t) + 1)] for line in line_pp if line.endswith(t)
-            ][0]
-        elif matches["contains"]:
-            _, t = matches["contains"][0]
-            lpp = [line for line in line_pp if line.find(t) >= 0][0]
-            i = lpp.find(t)
-            line_unmatched = lpp[:i] + lpp[(i + len(t)) :]
         elif matches["re"]:
             _, r = matches["re"][0]
             line_unmatched = [
@@ -277,9 +267,7 @@ class Parser(object):
     def _terminate_after_first_match(self, active_section, section_type):
         # Terminate after finding the first match
         if section_type == "regex":
-            next_section = active_section.get("next_section")
-            self._set_section(next_section)
-        return next_section
+            self._set_section(active_section.get("next_section"))
 
     @staticmethod
     def _parse_table(active_section, row):
@@ -336,8 +324,25 @@ def _map_to_type(val, map_type):
             return None
     else:
         try:
-            return {"str": str, "int": int, "float": float, "bool": bool}.get(
-                map_type, str
-            )(val)
-        except ValueError or TypeError:
+            return {
+                "str": str,
+                "int": int,
+                "float": float,
+                "bool": _to_bool,
+            }.get(map_type, str)(val)
+        except (ValueError, TypeError):
             return {"float": float("nan")}.get(map_type)
+
+
+def _to_bool(val: str) -> bool:
+    """
+    Map a flag in a log, such as 0 or 1, to a bool.
+
+    bool itself makes any text True, 0 and false included.
+    """
+    text = val.strip().lower()
+    if text in ("true", "yes", "y", "on"):
+        return True
+    if text in ("false", "no", "n", "off", ""):
+        return False
+    return bool(float(text))

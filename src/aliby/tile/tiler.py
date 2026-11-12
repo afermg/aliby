@@ -121,10 +121,7 @@ class Tiler(StepABC):
         if "channels" in image_metadata and isinstance(image, da.Array):
             # information for a particular image
             self.channels = image_metadata["channels"]
-        elif (
-            microscopy_metadata is not None
-            and "channels_by_position" in microscopy_metadata["full"]
-        ):
+        elif self.has_channels_of_its_own(image, microscopy_metadata):
             # likely zarr array
             self.channels = microscopy_metadata["full"][
                 "channels_by_position"
@@ -173,6 +170,27 @@ class Tiler(StepABC):
             self.tile_size = tile_shape(
                 [int(side * scale) for side in self.tile_size]
             )
+
+    def has_channels_of_its_own(self, image, microscopy_metadata) -> bool:
+        """
+        Find if the log lists as many channels for the position as it has.
+
+        An image with every channel of the experiment, though the
+        position was not imaged in them all, is indexed by them all.
+        """
+        if microscopy_metadata is None:
+            return False
+        by_position = microscopy_metadata["full"].get(
+            "channels_by_position", {}
+        )
+        if self.position_name not in by_position:
+            return False
+        shape = getattr(image, "shape", None)
+        return (
+            shape is None
+            or len(shape) < 5
+            or len(by_position[self.position_name]) == shape[-4]
+        )
 
     @classmethod
     def from_image(

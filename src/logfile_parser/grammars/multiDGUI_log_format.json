@@ -39,7 +39,8 @@
         "type": "list"
     },
     "omero_tags_stop": {
-        "trigger_startswith": "PFS is locked"
+        "trigger_startswith": "PFS is locked",
+        "type": "ignore"
     },
     "omero_tag_descriptions": {
         "trigger_startswith": "Omero tag descriptions:",

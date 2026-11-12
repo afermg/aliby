@@ -215,7 +215,8 @@ class ImageDir(BaseLocalImage):
 
     We assume that the images are shaped Y times X.
     The data is put in the order of TCZYX. The channels follow the
-    microscope's log, if there is one, and each channel is read from the
+    microscope's log, if there is one, and are those the log gives the
+    position's group, if it gives any. Each channel is read from the
     files that name it.
     """
 
@@ -224,6 +225,12 @@ class ImageDir(BaseLocalImage):
         super().__init__(path)
         log_meta = parse_microscopy_logs(self.path)
         channels = None if log_meta is None else log_meta.get("channels")
+        if channels is not None:
+            # the channels the position's own group was imaged in
+            channels = log_meta.get("channels_by_position", {}).get(
+                self.path.name, channels
+            )
+            log_meta = {**log_meta, "channels": channels}
         self.source = TiffFolderSource(self.path, channels=channels)
         self.meta = log_meta
         if self.meta is None:

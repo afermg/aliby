@@ -167,6 +167,30 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
     were cached, so those that print printed once and `groups` and
     `channels` kept positions wela had since filtered out
 
+### Microscope logs
+
+- `logfile_parser.swainlab_parser` reads a current log (`.log`) up to the
+  start of the experiment; its tables begin with a header and end with a
+  blank line. A channel is named by its image config, such as `GFP_Z`,
+  the name the images and OMERO use. Until November 2026 a config was
+  kept only if its name and its channel were both exactly in
+  `possible_imaging_channels`, so `GFP_Z`, `mCherry_Z` and `NADH10ms` were
+  dropped: 17 of 19 stored logs lost a channel. OMERO runs took their
+  channels from OMERO and were unaffected; a local run did not extract
+  the dropped channels, or failed to open a TIFF position
+- `channels_by_position` comes from each group's `field: config` block,
+  whose hexadecimal number has a bit for each time point: a channel with
+  none set is not the group's. A group given twice counts as given last.
+  `MetaData` puts each position's channels in OMERO's order. `ImageDir`
+  reads a TIFF position with its own channels, and the `Tiler` uses them
+  only for an image with that many channels (`has_channels_of_its_own`)
+- A line of general information is split at its first colon only, so
+  details and tags keep their own colons
+- The legacy parser (`Parser`, for `log.txt` and `Acq.txt`) has triggers
+  `startswith` and `re` only, reads a flag of 0 as False (`bool("0")` is
+  True), and has a section type `ignore`, which ends the section before
+  it and keeps nothing. wela's `get_exp_conditions` uses it too
+
 ### Dependencies and Integration
 - **Baby-seg**: Neural network segmentation (tensorflow backend)
 - **OMERO**: Optional integration for microscopy server access
