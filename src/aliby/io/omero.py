@@ -91,8 +91,11 @@ class BridgeOmero:
         )
         connected = self.conn.connect()
         if not connected:
+            # the gateway keeps why, such as a refused password
+            reason = self.conn.getLastError()
             raise ConnectionError(
-                f"Failed to connect to OMERO server at {self.host}."
+                f"Failed to connect to OMERO server at {self.host} as"
+                f" {self.username}: {type(reason).__name__}: {reason}"
             )
 
     def destroy_gate(self) -> bool:
