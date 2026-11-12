@@ -37,6 +37,8 @@ black src/
 python -m pytest tests/
 # include the slow integration tests
 python -m pytest tests/ --run-slow
+# include the run from the OMERO server, which needs its password
+OMERO=password python -m pytest tests/test_omero_run.py --run-slow
 ```
 
 ## Architecture Overview
