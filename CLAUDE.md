@@ -303,7 +303,7 @@ experiment and the masking is worth having. `median_background` stays protected
 because the PDMS is well under half the non-cell pixels, which is why `median_cy5`
 tracks a dye ramp cleanly over a 2.8x range.
 
-- `compute_pdms_mask()` in `extractor.py` finds the trap from the **brightfield**
+- `compute_pdms_mask()` in `extraction/pdms.py` finds the trap from the **brightfield**
   tiles, which are always imaged, so the masking works for experiments with no Cy5
 - Tiles are drift-corrected and centred on traps, so the trap lies at the same place
   in every tile; the median over tiles reinforces it
@@ -360,6 +360,18 @@ exactly the rows that were missing, so this remains an extrapolation.
 
 ### Extractor internals
 
+`extraction` has four modules beside `functions`. Until November 2026 all
+were in `extractor.py`, within a folder `core`:
+- `extractor.py`: the `Extractor`, which reads a time point's data and
+  applies the functions
+- `tree.py`: the extraction tree (`build_extraction_tree_from_meta`,
+  `recursive_merge_extractor`), `ExtractorParameters` and
+  `flatten_nesteddict`
+- `pdms.py`: `compute_pdms_mask`
+- `masks.py`: the cells' masks, labels and outlines, the vacuole and
+  cytoplasm masks, `get_background_masks` and
+  `get_imgs_background_subtract`, as functions and not methods
+
 `Extractor.extract_single_channel_functions` drives per-channel extraction and delegates to two private helpers:
 - `_extract_channel`: raw image + optional `_bgsub` variant for one channel
 - `_extract_intracellular`: vacuole/cytoplasm sub-mask extraction for one channel
@@ -397,7 +409,9 @@ default list (`recursive_merge_extractor`).
 Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleIdentifier` from the optional `maby` package) applied to brightfield images. Detection splits cell masks into vacuole and cytoplasm sub-regions, enabling separate extraction of fluorescence metrics for each compartment (e.g. `GFP_vacuole`, `GFP_cytoplasm`).
 
 **Key files:**
-- `extraction/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_single_channel_functions()` runs extraction on full-cell, vacuole, and cytoplasm masks
+- `extraction/tree.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`)
+- `extraction/masks.py`: `compute_intracellular_masks()` generates sub-masks per trap
+- `extraction/extractor.py`: `extract_single_channel_functions()` runs extraction on full-cell, vacuole, and cytoplasm masks
 - `extraction/functions/cell_functions.py`: `identify_vacuole()` calls the CNN; `_get_model()` lazy-loads and caches models; `is_model_available()` checks for optional dependencies
 - `extraction/functions/loaders.py`: filters out functions whose model package is not installed
 

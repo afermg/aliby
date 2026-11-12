@@ -23,7 +23,7 @@ from agora.io.writers import BabyWriter, ExtractorWriter, write_meta_to_h5
 from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler, TilerParameters, find_channel_index
 from aliby.tile.tiles import TileLocations
-from extraction.extractor import build_extraction_tree_from_meta
+from extraction.tree import build_extraction_tree_from_meta
 
 AREA = "general/null/area"
 # as a Signal is asked for

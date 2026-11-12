@@ -2,9 +2,7 @@
 
 import copy
 import logging
-import re
 import typing as t
-import warnings
 from pathlib import Path
 
 import bottleneck as bn
@@ -12,218 +10,38 @@ import dask.array as da
 import h5py
 import numpy as np
 import pandas as pd
-from agora.abc import ParametersABC, StepABC
+from agora.abc import StepABC
 from agora.io.cells import Cells
 from agora.io.writers import pdms_mask_path
-from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler
-from sooth import half_size, is_obscured, tile_shape
+from sooth import half_size, is_obscured
 from tiler import shown_in_tile
 from extraction.functions.cell_functions import (
     _MODEL_TO_PARAM,
-    identify_vacuole,
     is_model_available,
 )
 from extraction.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
-from scipy.ndimage import (
-    binary_closing,
-    binary_dilation,
-    binary_fill_holes,
-    label as label_regions,
+from extraction.masks import (
+    compute_intracellular_masks,
+    get_background_masks,
+    get_cell_labels,
+    get_imgs_background_subtract,
+    get_masks,
+    get_outlines,
 )
-from skimage.filters import threshold_otsu
-from skimage.morphology import disk
-
-# define types
-reduction_method = t.Union[t.Callable, str]
-extraction_tree = t.Dict[
-    str, t.Dict[reduction_method, t.Dict[str, t.Collection]]
-]
-extraction_result = t.Dict[
-    str, t.Dict[reduction_method, t.Dict[str, t.Dict[str, pd.Series]]]
-]
+from extraction.pdms import compute_pdms_mask
+from extraction.tree import (
+    ExtractorParameters,
+    extraction_tree,
+    flatten_nesteddict,
+    reduction_method,
+)
 
 # global reduction functions
 REDUCTION_FUNS = load_reduction_functions()
-
-
-def build_extraction_tree_from_meta(meta: t.Union[dict, Path, str]):
-    """Build extraction-tree dict from microscopy metadata."""
-    if not isinstance(meta, dict):
-        # load meta data
-        with h5py.File(meta, "r") as f:
-            meta = dict(f["/"].attrs.items())
-    tree_dict = {
-        "tree": {"general": {"null": global_settings.outline_functions}},
-        "multichannel_funs": {},
-    }
-    candidate_channels = global_settings.possible_imaging_channels
-    default_reductions = {"max", "mean"}
-    default_fluorescence_metrics = global_settings.fluorescence_functions
-    default_reduction_and_fluorescence_metrics = {
-        r: default_fluorescence_metrics for r in default_reductions
-    }
-    extant_fluorescence_ch = []
-    for av_channel in candidate_channels:
-        # find every matching channel in the metadata, not only the first:
-        # GFP matches GFPFast too, and stopping there left a GFP channel
-        # listed after it unextracted
-        for channel in meta.get("channels", []):
-            if (
-                re.match(av_channel, channel, re.IGNORECASE)
-                and channel not in extant_fluorescence_ch
-            ):
-                extant_fluorescence_ch.append(channel)
-    not_extracted = [
-        channel
-        for channel in meta.get("channels", [])
-        if channel not in extant_fluorescence_ch
-        and str(channel).lower() != "brightfield"
-    ]
-    if not_extracted:
-        logging.getLogger("aliby").warning(
-            f"Extractor: no fluorescence will be extracted from "
-            f"{', '.join(map(str, not_extracted))}, which begins with none "
-            "of global_settings.possible_imaging_channels. Add the name "
-            "there, or give the channel in the extraction tree."
-        )
-    background_channels = {
-        ch for ch in extant_fluorescence_ch if ch.lower() == "cy5"
-    }
-    for ch in extant_fluorescence_ch:
-        if ch in background_channels:
-            # background channels get only outside-cell metrics
-            tree_dict["tree"][ch] = {
-                "mean": [
-                    "median_background",
-                    "mean_background",
-                    "std_background",
-                ]
-            }
-        else:
-            tree_dict["tree"][ch] = copy.deepcopy(
-                default_reduction_and_fluorescence_metrics
-            )
-    # subtract background from all fluorescence channels
-    tree_dict["subtract_background"] = set(extant_fluorescence_ch)
-    # extract intracellular masks for non-background channels only
-    tree_dict["intracellular_masks"] = {
-        ch for ch in extant_fluorescence_ch if ch not in background_channels
-    }
-    tree_dict["identify_vacuoles"] = True
-    tree_dict["background_channels"] = background_channels
-    tree_dict["mask_pdms"] = True
-    tree_dict["exclude_obscured"] = True
-    return tree_dict
-
-
-def remove_small_regions(mask: np.ndarray, min_size: int) -> np.ndarray:
-    """
-    Remove connected regions comprising fewer than min_size pixels.
-
-    Parameters
-    ----------
-    mask: array
-        A boolean array.
-    min_size: int
-        Smallest number of pixels a region may have.
-    """
-    labelled, no_regions = label_regions(mask)
-    if no_regions:
-        sizes = np.bincount(labelled.ravel())
-        small = np.flatnonzero(sizes < min_size)
-        mask = mask & ~np.isin(labelled, small)
-    return mask
-
-
-def compute_pdms_mask(
-    brightfield: np.ndarray,
-    masks: t.List[np.ndarray],
-    min_no_tiles: int = 10,
-) -> t.Optional[np.ndarray]:
-    """
-    Find the PDMS trap within a tile from the brightfield images.
-
-    The PDMS is autofluorescent and so is not background, but it lies
-    outside the cells and is therefore included in any estimate of the
-    background unless it is explicitly excluded.
-
-    Tiles are corrected for drift and are centred on the traps, and so
-    the trap lies at the same place in every tile both over time and
-    from one tile to the next. Taking the median over tiles therefore
-    reinforces the trap. Cells are blanked rather than averaged away
-    because cells are held in the trap's pocket and so lie in similar
-    places in different tiles.
-
-    Parameters
-    ----------
-    brightfield: array
-        Brightfield images for all tiles, shape (no_tiles, Y, X).
-    masks: list of arrays
-        Segmentation masks per tile, each (no_cells, Y, X).
-    min_no_tiles: int (optional)
-        Minimum number of usable tiles needed to find the trap.
-
-    Returns
-    -------
-    mask: array or None
-        A boolean array, shape (Y, X), that is True for the pixels of
-        the PDMS trap, or None if the trap cannot be found reliably.
-    """
-    logger = logging.getLogger("aliby")
-    if brightfield is None or not len(brightfield):
-        return None
-    stack = np.array(brightfield, dtype=float)
-    # blank the cells
-    for tile_id, mask_set in enumerate(masks):
-        if len(mask_set):
-            stack[tile_id][np.any(mask_set, axis=0)] = np.nan
-    # ignore tiles that are padded or wholly covered by cells
-    stack = stack[~np.all(np.isnan(stack), axis=(1, 2))]
-    if len(stack) < min_no_tiles:
-        logger.warning(
-            f"Extractor: only {len(stack)} tiles are available, and so "
-            "the PDMS trap will not be masked."
-        )
-        return None
-    with warnings.catch_warnings():
-        # some pixels may be covered by cells in every tile
-        warnings.simplefilter("ignore", RuntimeWarning)
-        static = np.nanmedian(stack, axis=0)
-    level = np.nanmedian(static)
-    static = np.where(np.isnan(static), level, static)
-    # the trap both absorbs and refracts and so appears either darker
-    # or brighter than the medium
-    deviation = np.abs(static - level)
-    mask = deviation > threshold_otsu(deviation)
-    # the trap's interior may match the medium, lying between its edges;
-    # treat pixels beyond a tile as trap so that a trap running into a
-    # tile's edge is not eroded, erring towards masking too much
-    mask = binary_closing(mask, disk(3), border_value=1)
-    mask = binary_fill_holes(mask)
-    mask = remove_small_regions(mask, max(9, mask.size // 1000))
-    # allow for drift and for tiles being imperfectly centred on traps
-    mask = binary_dilation(mask, disk(2))
-    fraction = mask.mean()
-    if fraction > 0.6:
-        logger.warning(
-            f"Extractor: the PDMS trap appears to cover {fraction:.0%} of "
-            "a tile, which is implausible, and so it will not be masked."
-        )
-        return None
-    elif fraction > 0.4:
-        logger.warning(
-            f"Extractor: the PDMS trap covers {fraction:.0%} of a tile. "
-            "Background estimates may be unreliable."
-        )
-    else:
-        logger.info(
-            f"Extractor: the PDMS trap covers {fraction:.0%} of a tile."
-        )
-    return mask
 
 
 def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
@@ -247,79 +65,6 @@ def reduce_z(trap_image: np.ndarray, fun: t.Callable, axis: int = 0):
         return fun.reduce(trap_image, axis=axis)
     # WARNING: Very slow, only use when no alternatives exist
     return np.apply_along_axis(fun, axis, trap_image)
-
-
-class ExtractorParameters(ParametersABC):
-    """Base class to define parameters for extraction."""
-
-    def __init__(
-        self,
-        tree: extraction_tree,
-        subtract_background: set = set(),
-        multichannel_funs: t.Dict = {},
-        intracellular_masks: set = set(),
-        identify_vacuoles: bool = True,
-        background_channels: set = set(),
-        mask_pdms: bool = True,
-        exclude_obscured: bool = True,
-    ):
-        """
-        Initialise.
-
-        Parameters
-        ----------
-        tree: dict
-            Nested dictionary indicating channels, reduction functions
-            and metrics to be used.
-            str channel -> str reduction -> str metric
-            The "null" reduction indicates no z-reduction is needed.
-            If not of depth three, tree will be filled with "null".
-        subtract_background: set
-            A set of strings of the channels to correct for
-            background.
-        multichannel_funs: dict
-            Dict of multichannel functions.
-        intracellular_masks: set
-            A set of strings of the channels for which to extract
-            vacuole and cytoplasm metrics.
-        identify_vacuoles: bool
-            If True (default), compute vacuole and cytoplasm sub-masks
-            when maby is installed. Set to False to skip vacuole
-            detection regardless of package availability.
-        background_channels: set
-            A set of strings of the channels for which to extract
-            the median background signal (pixels outside all cells).
-            Defaults to Cy5 channels when built from metadata.
-        mask_pdms: bool
-            If True (default), find the PDMS trap in the brightfield
-            images and exclude it from all background estimates. The
-            PDMS is autofluorescent and so is not background.
-        exclude_obscured: bool
-            If True (default), measure no cell that reaches the edge of
-            its tile, or the edge of the image where a tile hangs off
-            it: such a cell is cut off, and its area, volume and
-            fluorescence are those of the visible part. It is still
-            segmented, tracked and stored, and its pixels are still
-            kept out of every background estimate.
-        """
-        self.tree = tree
-        self.subtract_background = subtract_background
-        self.multichannel_funs = multichannel_funs
-        self.intracellular_masks = intracellular_masks
-        self.identify_vacuoles = identify_vacuoles
-        self.background_channels = background_channels
-        self.mask_pdms = mask_pdms
-        self.exclude_obscured = exclude_obscured
-
-    @classmethod
-    def default(cls):
-        """Override ParametersABC default class method."""
-        return cls({})
-
-    @classmethod
-    def from_meta(cls, meta):
-        """Instantiate from the meta data; used by Pipeline."""
-        return cls(**build_extraction_tree_from_meta(meta))
 
 
 class Extractor(StepABC):
@@ -790,96 +535,6 @@ class Extractor(StepABC):
             )
         return d
 
-    def get_masks(self, tp, masks, cells):
-        """Get masks as a list with an array of masks per trap."""
-        if masks is None:
-            raw_masks = cells.at_time(tp, kind="mask")
-            masks = {trap_id: [] for trap_id in range(cells.ntraps)}
-            for trap_id, trap_cells in raw_masks.items():
-                if len(trap_cells):
-                    masks[trap_id] = np.stack(np.array(trap_cells)).astype(
-                        bool
-                    )
-        # one array of shape (n_cells, Y, X) per trap
-        masks = [np.array(v) for v in masks.values()]
-        return masks
-
-    def get_cell_labels(self, tp, cell_labels, cells):
-        """Get cell labels per trap as a dict with trap_ids as keys."""
-        if cell_labels is None:
-            raw_cell_labels = cells.labels_at_time(tp)
-            cell_labels = {
-                trap_id: raw_cell_labels.get(trap_id, [])
-                for trap_id in range(cells.ntraps)
-            }
-        return cell_labels
-
-    def get_outlines(self, tp, cell_labels, cells):
-        """Get cell outlines with individual labels as a dict with trap_ids as keys."""
-        # read once: at_time reads every trap's masks from the h5 file
-        edgemasks_at_tp = cells.at_time(tp, kind="edgemask")
-        cell_mask_dict = {
-            trap_id: edgemasks_at_tp.get(trap_id, [])
-            for trap_id in range(cells.ntraps)
-        }
-        cell_labels = self.get_cell_labels(tp, cell_labels, cells)
-        outlines_dict = {}
-        for trap_id in range(cells.ntraps):
-            edgemasks = cell_mask_dict[trap_id]
-            labels = cell_labels[trap_id]
-            if edgemasks and labels:
-                outlines_dict[trap_id] = np.stack(
-                    [
-                        cell_mask * label
-                        for cell_mask, label in zip(edgemasks, labels)
-                    ]
-                ).max(axis=0)
-            else:
-                outlines_dict[trap_id] = np.array([])
-        return outlines_dict
-
-    def get_background_masks(self, masks, tile_size):
-        """
-        Generate boolean background masks for pre-reduction subtraction.
-
-        Combine cell masks per trap and take the logical inverse to
-        identify background pixels. These masks are used in
-        ``get_imgs_background_subtract`` to compute and subtract the
-        median background independently for each z-slice, before the
-        z-reduction step.
-
-        Parameters
-        ----------
-        masks: list of arrays
-            Segmentation masks per trap, each (N_traps, Y, X).
-        tile_size: int
-            Size of each tile in pixels.
-
-        Returns
-        -------
-        bgs: array
-            Boolean background masks with shape (N_traps, Y, X), or
-            an empty array if background subtraction is disabled.
-        """
-        if self.params.subtract_background:
-            combined = np.array(
-                [
-                    (
-                        np.any(m, axis=0)
-                        if len(m)
-                        else np.zeros(tile_shape(tile_size), dtype=bool)
-                    )
-                    for m in masks
-                ]
-            )
-            bgs = ~combined
-            if self.pdms_mask is not None:
-                # the PDMS trap is autofluorescent and is not background
-                bgs = bgs & ~self.pdms_mask
-        else:
-            bgs = np.array([])
-        return bgs
-
     def load_pdms_mask(self):
         """
         Read any PDMS mask already found for this position.
@@ -926,53 +581,6 @@ class Extractor(StepABC):
             # project over z, as the vacuole CNN also does, because
             # the trap is in focus at no single z
             self.pdms_mask = compute_pdms_mask(brightfield.mean(axis=1), masks)
-
-    def compute_intracellular_masks(self, outlines, masks, img):
-        """
-        Compute vacuole and cytoplasm sub-masks from brightfield.
-
-        Parameters
-        ----------
-        outlines: list of arrays
-            Labelled-outline images per trap, each (Y, X) with
-            integer cell labels.
-        masks: list of arrays
-            Cell masks per trap, each (ncells, Y, X).
-        img: dict
-            Image dict containing "Brightfield" key with shape
-            (ntraps, Z, Y, X); the vacuole CNN projects over z.
-
-        Returns
-        -------
-        vac_masks: list of arrays
-            Vacuole masks per trap with same structure as masks.
-        cyt_masks: list of arrays
-            Cytoplasm masks per trap with same structure as masks.
-        """
-        bf = img["Brightfield"]
-        vac_masks = []
-        cyt_masks = []
-        for trap_outline, trap_masks, bf_trap in zip(outlines, masks, bf):
-            if len(trap_masks):
-                # single binary vacuole image for the whole trap
-                trap_vac = identify_vacuole(trap_outline, bf_trap)
-                # split into per-cell masks
-                vac_list, cyt_list = [], []
-                for cell_mask in trap_masks:
-                    cell_vac = cell_mask & trap_vac
-                    if cell_vac.any():
-                        vac_list.append(cell_vac)
-                        cyt_list.append(cell_mask & ~trap_vac)
-                    else:
-                        # no vacuole found; cytoplasm is also undefined
-                        vac_list.append(np.zeros_like(cell_mask))
-                        cyt_list.append(np.zeros_like(cell_mask))
-                vac_masks.append(np.stack(vac_list))
-                cyt_masks.append(np.stack(cyt_list))
-            else:
-                vac_masks.append(np.array([]))
-                cyt_masks.append(np.array([]))
-        return vac_masks, cyt_masks
 
     def _extract_channel(
         self,
@@ -1242,11 +850,11 @@ class Extractor(StepABC):
         # create a fresh Cells object each time because the h5 file
         # grows between time points and Cells has cached_property
         cells = Cells(self.store)
-        cell_labels = self.get_cell_labels(tp, cell_labels, cells)
-        masks = self.get_masks(tp, masks, cells)
+        cell_labels = get_cell_labels(tp, cell_labels, cells)
+        masks = get_masks(tp, masks, cells)
         outlines = None
         if self.params.intracellular_masks:
-            outlines_dict = self.get_outlines(tp, cell_labels, cells)
+            outlines_dict = get_outlines(tp, cell_labels, cells)
             outlines = [outlines_dict[tid] for tid in range(cells.ntraps)]
         # fluorescence data for all traps at the time point
         # stored as an array arranged as (traps, channels, 1, Z, Y, X)
@@ -1261,9 +869,12 @@ class Extractor(StepABC):
         )[:, 0, 0, ...]
         # find the PDMS trap before any background is estimated
         self.set_pdms_mask(brightfield, masks)
-        bgs = self.get_background_masks(masks, tile_size)
-        img, img_bgsub = self.get_imgs_background_subtract(
-            tree_dict, tiles, bgs
+        if self.params.subtract_background:
+            bgs = get_background_masks(masks, tile_size, self.pdms_mask)
+        else:
+            bgs = np.array([])
+        img, img_bgsub = get_imgs_background_subtract(
+            self.params, tree_dict, tiles, bgs
         )
         img["Brightfield"] = brightfield
         return cell_labels, masks, outlines, img, img_bgsub
@@ -1329,7 +940,7 @@ class Extractor(StepABC):
         # compute intracellular sub-masks if requested
         vac_masks, cyt_masks = None, None
         if self.params.intracellular_masks:
-            vac_masks, cyt_masks = self.compute_intracellular_masks(
+            vac_masks, cyt_masks = compute_intracellular_masks(
                 outlines, masks, img
             )
         # extract for functions requiring one channel
@@ -1396,77 +1007,6 @@ class Extractor(StepABC):
             if hidden:
                 obscured[trap_id] = hidden
         return obscured
-
-    def get_imgs_background_subtract(self, tree_dict, tiles, bgs):
-        """
-        Get raw and background-subtracted fluorescence images.
-
-        Subtract the median background per trap per z-slice before
-        z-reduction, so each slice has its own background level
-        removed. This differs from the ``imBackground`` trap function,
-        which reports the background of an already z-reduced image.
-
-        Parameters
-        ----------
-        tree_dict: dict
-            Extraction tree specifying channels and functions.
-        tiles: array
-            Tile images with shape (traps, channels, 1, Z, Y, X).
-        bgs: array
-            Boolean background masks with shape (traps, Y, X) from
-            ``get_background_masks``.
-
-        Returns
-        -------
-        img: dict
-            Raw images keyed by channel name.
-        img_bgsub: dict
-            Background-subtracted images keyed by channel + '_bgsub',
-            or None for channels without background subtraction.
-        """
-        img = {}
-        img_bgsub = {}
-        # a background channel, such as Cy5, is not extracted less its
-        # background, so its image less background is made only for a
-        # function of several channels that names it
-        unwanted = set(self.params.background_channels) - {
-            ch
-            for spec in self.params.multichannel_funs.values()
-            for ch in spec[0]
-        }
-        for ch in tree_dict["channels_tree"]:
-            if tiles is not None and len(tiles):
-                # image data for all traps for a particular channel
-                # and time point arranged as (traps, Z, Y, X)
-                ch_idx = tree_dict["channels"].index(ch)
-                img[ch] = tiles[:, ch_idx, 0, ...]
-                if (
-                    bgs.any()
-                    and ch in self.params.subtract_background
-                    and ch not in unwanted
-                    and img[ch] is not None
-                ):
-                    # subtract median background per trap per z
-                    # img[ch] has shape (traps, Z, Y, X)
-                    # bgs has shape (traps, Y, X)
-                    ch_img = img[ch]
-                    n_traps, n_z = ch_img.shape[:2]
-                    bg_medians = np.empty((n_traps, n_z))
-                    for i in range(n_traps):
-                        for j in range(n_z):
-                            bg_medians[i, j] = bn.nanmedian(
-                                ch_img[i, j][bgs[i]]
-                            )
-                    # subtract: broadcast (traps, Z) over (Y, X)
-                    img_bgsub[ch + "_bgsub"] = (
-                        ch_img - bg_medians[:, :, np.newaxis, np.newaxis]
-                    )
-                else:
-                    img_bgsub[ch + "_bgsub"] = None
-            else:
-                img[ch] = None
-                img_bgsub[ch + "_bgsub"] = None
-        return img, img_bgsub
 
     def _run_tp(self, tps: t.List[int] = None, tree=None) -> dict:
         """
@@ -1580,36 +1120,3 @@ class Extractor(StepABC):
                 extract_dict["general/null/image_y"].copy()
                 + self.tiler.spatial_location[1]
             )
-
-
-def flatten_nesteddict(
-    nest: dict, to="series", tp: int = None
-) -> t.Dict[str, pd.Series]:
-    """
-    Convert a nested extraction dict into a dict of pd.Series.
-
-    Parameters
-    ----------
-    nest: dict of dicts
-        Contains the nested results of extraction.
-    to: str (optional)
-        Specifies the format of the output, either pd.Series
-        (default) or a list.
-    tp: int
-        Time point used to name the pd.Series.
-
-    Returns
-    -------
-    d: dict
-        A dict with a concatenated string of channel, reduction
-        metric, and cell metric as keys and either a pd.Series or
-        a list of the corresponding extracted data as values.
-    """
-    d = {}
-    for k0, v0 in nest.items():
-        for k1, v1 in v0.items():
-            for k2, v2 in v1.items():
-                d["/".join((k0, k1, k2))] = (
-                    pd.Series(*v2, name=tp) if to == "series" else v2
-                )
-    return d

@@ -14,17 +14,18 @@ import pandas as pd
 import pytest
 import sooth
 
-from extraction.extractor import (
-    Extractor,
-    ExtractorParameters,
-    build_extraction_tree_from_meta,
-)
+from extraction.extractor import Extractor
 from extraction.functions import cell_functions
 from extraction.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
 from extraction.functions.math_utils import div0
+from extraction.masks import get_imgs_background_subtract, get_outlines
+from extraction.tree import (
+    ExtractorParameters,
+    build_extraction_tree_from_meta,
+)
 
 CENTROIDS_YX = [(10.5, 3.25), (30.0, 12.0)]
 CENTRES_YX = [[100, 60], [140, 200]]
@@ -294,12 +295,7 @@ def test_outlines_read_the_masks_once():
 
     cells = FakeCells()
     labels = {0: [4], 1: [], 2: [1, 7]}
-    outlines = Extractor.get_outlines(
-        SimpleNamespace(get_cell_labels=lambda tp, cell_labels, cells: labels),
-        0,
-        labels,
-        cells,
-    )
+    outlines = get_outlines(0, labels, cells)
     assert cells.reads == 1
     assert np.unique(outlines[0]).tolist() == [0, 4]
     assert outlines[1].size == 0
@@ -725,14 +721,12 @@ def test_a_background_channel_is_not_extracted_less_its_background():
     assert asked == ["gfp", "gfp_bgsub", "cy5"]
 
 
-def background_subtracter(multichannel_funs):
-    """Return something that subtracts backgrounds as an Extractor does."""
+def background_parameters(multichannel_funs):
+    """Return the parameters that subtracting backgrounds reads."""
     return SimpleNamespace(
-        params=SimpleNamespace(
-            subtract_background={"GFP", "cy5"},
-            background_channels={"cy5"},
-            multichannel_funs=multichannel_funs,
-        )
+        subtract_background={"GFP", "cy5"},
+        background_channels={"cy5"},
+        multichannel_funs=multichannel_funs,
     )
 
 
@@ -744,14 +738,14 @@ def test_a_background_channel_has_no_image_less_background_unless_used():
         "channels_tree": {"GFP": {}, "cy5": {}},
         "channels": ("GFP", "cy5"),
     }
-    _img, img_bgsub = Extractor.get_imgs_background_subtract(
-        background_subtracter({}), tree_dict, tiles, bgs
+    _img, img_bgsub = get_imgs_background_subtract(
+        background_parameters({}), tree_dict, tiles, bgs
     )
     assert img_bgsub["cy5_bgsub"] is None
     assert img_bgsub["GFP_bgsub"] is not None
     ratio = {"ratio": [["GFP", "cy5"], "max", "ratio_1_over_2"]}
-    _img, img_bgsub = Extractor.get_imgs_background_subtract(
-        background_subtracter(ratio), tree_dict, tiles, bgs
+    _img, img_bgsub = get_imgs_background_subtract(
+        background_parameters(ratio), tree_dict, tiles, bgs
     )
     assert img_bgsub["cy5_bgsub"] is not None
 
@@ -763,6 +757,24 @@ def test_brightfield_is_the_reference_channel_whatever_its_name(
     import extraction.extractor as extractor_module
 
     monkeypatch.setattr(extractor_module, "Cells", lambda store: None)
+    monkeypatch.setattr(
+        extractor_module,
+        "get_cell_labels",
+        lambda tp, cell_labels, cells: {0: []},
+    )
+    monkeypatch.setattr(
+        extractor_module, "get_masks", lambda tp, masks, cells: [np.array([])]
+    )
+    monkeypatch.setattr(
+        extractor_module,
+        "get_outlines",
+        lambda *args: pytest.fail("the outlines were read"),
+    )
+    monkeypatch.setattr(
+        extractor_module,
+        "get_imgs_background_subtract",
+        lambda params, tree_dict, tiles, bgs: ({}, {}),
+    )
     asked = []
 
     def get_tiles_timepoint(tp, channels, z, lazy):
@@ -771,19 +783,17 @@ def test_brightfield_is_the_reference_channel_whatever_its_name(
 
     fake = SimpleNamespace(
         store=None,
-        params=SimpleNamespace(intracellular_masks=set()),
+        params=SimpleNamespace(
+            intracellular_masks=set(), subtract_background=set()
+        ),
         tiler=SimpleNamespace(
             ref_channel_index=2,
             shape=(4, 3, 3, 100, 100),
             get_tiles_timepoint=get_tiles_timepoint,
         ),
-        get_cell_labels=lambda tp, cell_labels, cells: {0: []},
-        get_masks=lambda tp, masks, cells: [np.array([])],
-        get_outlines=lambda *args: pytest.fail("the outlines were read"),
+        pdms_mask=None,
         get_tiles=lambda tp, channels, lazy: None,
         set_pdms_mask=lambda brightfield, masks: None,
-        get_background_masks=lambda masks, tile_size: np.array([]),
-        get_imgs_background_subtract=lambda tree_dict, tiles, bgs: ({}, {}),
     )
     _labels, _masks, outlines, img, _img_bgsub = Extractor.load_tp_data(
         fake, 1, 20, {"channels": ()}

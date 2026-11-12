@@ -32,15 +32,15 @@ from agora.io.writers import (
     TilerWriter,
     write_meta_to_h5,
 )
-from extraction.extractor import (
-    Extractor,
-    ExtractorParameters,
-    build_extraction_tree_from_meta,
-)
+from extraction.extractor import Extractor
 from extraction.functions.cell_functions import (
     warn_about_missing_models,
 )
-from extraction.recursive_merge import recursive_merge_extractor
+from extraction.tree import (
+    ExtractorParameters,
+    build_extraction_tree_from_meta,
+    recursive_merge_extractor,
+)
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
