@@ -14,17 +14,17 @@ import pandas as pd
 import pytest
 import sooth
 
-from extraction.core.extractor import (
+from extraction.extractor import (
     Extractor,
     ExtractorParameters,
     build_extraction_tree_from_meta,
 )
-from extraction.core.functions import cell_functions
-from extraction.core.functions.loaders import (
+from extraction.functions import cell_functions
+from extraction.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
-from extraction.core.functions.math_utils import div0
+from extraction.functions.math_utils import div0
 
 CENTROIDS_YX = [(10.5, 3.25), (30.0, 12.0)]
 CENTRES_YX = [[100, 60], [140, 200]]
@@ -80,9 +80,7 @@ def test_a_cell_is_placed_where_its_tile_was_cut(tile_size):
     the two agree exactly.
     """
     result = extract_dict()
-    Extractor.add_spatial_locations_of_cells(
-        extractor_with(tile_size), result
-    )
+    Extractor.add_spatial_locations_of_cells(extractor_with(tile_size), result)
 
     for row, (centroid, centre) in enumerate(zip(CENTROIDS_YX, CENTRES_YX)):
         wanted_y, wanted_x = sooth.tile_to_image_yx(
@@ -102,9 +100,7 @@ def test_a_position_whose_only_trap_is_trap_zero_is_placed_too():
     their tile-local centroids, silently. A normal run has traps 0..N, so
     some name is non-zero and the question happened to answer correctly.
     """
-    index = pd.MultiIndex.from_arrays(
-        [[0], [1]], names=["trap", "cell_label"]
-    )
+    index = pd.MultiIndex.from_arrays([[0], [1]], names=["trap", "cell_label"])
     result = {
         "general/null/centroid_x": pd.DataFrame({0: [3.25]}, index=index),
         "general/null/centroid_y": pd.DataFrame({0: [10.5]}, index=index),
@@ -512,9 +508,7 @@ def test_a_cell_is_placed_at_its_own_pixel_of_the_image():
     origin_y, origin_x = sooth.tile_origin_yx(centre_yx, tile_size)
     mask = np.zeros((tile_size, tile_size), dtype=bool)
     mask[20, 31] = True
-    index = pd.MultiIndex.from_arrays(
-        [[0], [1]], names=["trap", "cell_label"]
-    )
+    index = pd.MultiIndex.from_arrays([[0], [1]], names=["trap", "cell_label"])
     result = {
         "general/null/centroid_x": pd.DataFrame(
             {0: [cell_functions.centroid_x(mask)]}, index=index
@@ -523,12 +517,9 @@ def test_a_cell_is_placed_at_its_own_pixel_of_the_image():
             {0: [cell_functions.centroid_y(mask)]}, index=index
         ),
     }
-    Extractor.add_spatial_locations_of_cells(
-        extractor_with(tile_size), result
-    )
+    Extractor.add_spatial_locations_of_cells(extractor_with(tile_size), result)
     assert result["general/null/image_x"][0].iloc[0] == origin_x + 31
     assert result["general/null/image_y"][0].iloc[0] == origin_y + 20
-
 
 
 ###
@@ -630,6 +621,16 @@ def test_only_cell_functions_can_be_asked_for():
         "_get_model",
     ):
         assert helper not in cell_funs
+
+
+def test_only_background_functions_can_be_asked_for():
+    """Load the functions that measure a background, and not their helper."""
+    cell_funs, all_funs = load_all_functions()
+    assert set(all_funs) - set(cell_funs) == {
+        "median_background",
+        "mean_background",
+        "std_background",
+    }
     assert {"area", "volume", "mean", "ratio_1_over_2"} <= set(cell_funs)
 
 
@@ -666,7 +667,7 @@ def test_functions_of_pixels_give_what_each_gives_alone():
 
 def test_images_are_reduced_once_for_a_cell_and_its_parts(monkeypatch):
     """Reduce a channel's z sections once for the cell and its parts."""
-    import extraction.core.extractor as extractor_module
+    import extraction.extractor as extractor_module
 
     fake = real_extractor()
     fake.reduce_extract = lambda **kwargs: Extractor.reduce_extract(
@@ -759,7 +760,7 @@ def test_brightfield_is_the_reference_channel_whatever_its_name(
     monkeypatch,
 ):
     """Read brightfield by the Tiler's channel, and outlines if needed."""
-    import extraction.core.extractor as extractor_module
+    import extraction.extractor as extractor_module
 
     monkeypatch.setattr(extractor_module, "Cells", lambda store: None)
     asked = []

@@ -101,9 +101,7 @@ def volume(cell_mask):
     padded = np.pad(
         crop_to_cell(cell_mask), 1, mode="constant", constant_values=0
     )
-    nearest_neighbor = (
-        ndimage.distance_transform_edt(padded == 1) * padded
-    )
+    nearest_neighbor = ndimage.distance_transform_edt(padded == 1) * padded
     return 4 * np.sum(nearest_neighbor)
 
 
@@ -180,9 +178,7 @@ def crop_to_cell(cell_mask):
         # no cell to crop to
         return cell_mask
     columns = np.flatnonzero(cell_mask.any(axis=0))
-    return cell_mask[
-        rows[0] : rows[-1] + 1, columns[0] : columns[-1] + 1
-    ]
+    return cell_mask[rows[0] : rows[-1] + 1, columns[0] : columns[-1] + 1]
 
 
 def min_maj_approximation(cell_mask) -> t.Tuple[int]:

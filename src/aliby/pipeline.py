@@ -32,15 +32,15 @@ from agora.io.writers import (
     TilerWriter,
     write_meta_to_h5,
 )
-from extraction.core.extractor import (
+from extraction.extractor import (
     Extractor,
     ExtractorParameters,
     build_extraction_tree_from_meta,
 )
-from extraction.core.functions.cell_functions import (
+from extraction.functions.cell_functions import (
     warn_about_missing_models,
 )
-from extraction.core.recursive_merge import recursive_merge_extractor
+from extraction.recursive_merge import recursive_merge_extractor
 from postprocessor.core.postprocessing import (
     PostProcessor,
     PostProcessorParameters,
@@ -58,7 +58,6 @@ from aliby.io.dataset import dispatch_dataset
 from aliby.io.image import dispatch_image
 from aliby.tile.tiler import Tiler, TilerParameters
 from aliby.version import __version__
-
 
 # the experiments and folders whose logs have been cached by this process:
 # PipelineParameters.default and Pipeline.setup each want them, one after
@@ -449,7 +448,7 @@ class Pipeline(ProcessABC):
         # reset per-run warning deduplication flags so warnings are visible
         # on every pipeline run, not just the first in a Python session
         from agora.io import metadata_legacy
-        from extraction.core.functions import cell_functions
+        from extraction.functions import cell_functions
 
         metadata_legacy._warned_multiple_files = False
         cell_functions._model_cache = {

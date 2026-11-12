@@ -4,7 +4,7 @@ from aliby.global_settings import global_settings
 from aliby.pipeline import Pipeline, PipelineParameters
 
 # add max5px_median
-# all functions are in extraction/core/functions/cell_functions.py
+# all functions are in extraction/functions/cell_functions.py
 global_settings.fluorescence_functions.append("max5px_median")
 
 # add calculation of a pixel-by-pixel ratio of two fluorescence channels

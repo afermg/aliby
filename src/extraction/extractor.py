@@ -19,12 +19,12 @@ from aliby.global_settings import global_settings
 from aliby.tile.tiler import Tiler
 from sooth import half_size, is_obscured, tile_shape
 from tiler import shown_in_tile
-from extraction.core.functions.cell_functions import (
+from extraction.functions.cell_functions import (
     _MODEL_TO_PARAM,
     identify_vacuole,
     is_model_available,
 )
-from extraction.core.functions.loaders import (
+from extraction.functions.loaders import (
     load_all_functions,
     load_reduction_functions,
 )
@@ -925,9 +925,7 @@ class Extractor(StepABC):
                 return
             # project over z, as the vacuole CNN also does, because
             # the trap is in focus at no single z
-            self.pdms_mask = compute_pdms_mask(
-                brightfield.mean(axis=1), masks
-            )
+            self.pdms_mask = compute_pdms_mask(brightfield.mean(axis=1), masks)
 
     def compute_intracellular_masks(self, outlines, masks, img):
         """
@@ -1087,15 +1085,26 @@ class Extractor(StepABC):
         for ch, reduction_funs in tree_dict["tree"].items():
             d.update(
                 self._extract_channel(
-                    ch, reduction_funs, img, img_bgsub,
-                    masks, cell_labels, background_chs,
+                    ch,
+                    reduction_funs,
+                    img,
+                    img_bgsub,
+                    masks,
+                    cell_labels,
+                    background_chs,
                 )
             )
             if ch in self.params.intracellular_masks and vac_masks is not None:
                 d.update(
                     self._extract_intracellular(
-                        ch, reduction_funs, img, img_bgsub,
-                        masks, cell_labels, vac_masks, cyt_masks,
+                        ch,
+                        reduction_funs,
+                        img,
+                        img_bgsub,
+                        masks,
+                        cell_labels,
+                        vac_masks,
+                        cyt_masks,
                     )
                 )
         return d
@@ -1554,9 +1563,7 @@ class Extractor(StepABC):
                     (x_df[tp].values, y_df[tp].values)
                 )
                 coords_in_image = (
-                    centroid_coords
-                    + tile_locs[traps][:, ::-1]
-                    - half_extent
+                    centroid_coords + tile_locs[traps][:, ::-1] - half_extent
                 )
                 extract_dict["general/null/image_x"][tp] = coords_in_image[
                     :, 0

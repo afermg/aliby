@@ -1,6 +1,22 @@
-"""Functions to compute background signals from a tile."""
+"""
+Functions to compute background signals from a tile.
+
+A function marked with background_function can be named in an extraction
+tree. The helpers beside them are not marked and cannot.
+"""
+
+from collections.abc import Callable
 
 import numpy as np
+
+# the functions that an extraction tree can name, by name
+BACKGROUND_FUNCTIONS: dict[str, Callable] = {}
+
+
+def background_function(fun: Callable) -> Callable:
+    """Mark a function as one that an extraction tree can name."""
+    BACKGROUND_FUNCTIONS[fun.__name__] = fun
+    return fun
 
 
 def _background_pixels(cell_masks, trap_image, exclude_mask=None):
@@ -29,6 +45,7 @@ def _background_pixels(cell_masks, trap_image, exclude_mask=None):
     return trap_image[background]
 
 
+@background_function
 def median_background(
     cell_masks, trap_image, channels=None, exclude_mask=None
 ):
@@ -51,6 +68,7 @@ def median_background(
     return np.nanmedian(pixels) if pixels.size else np.nan
 
 
+@background_function
 def mean_background(cell_masks, trap_image, channels=None, exclude_mask=None):
     """
     Find the mean of background pixels (outside all cells) in trap_image.
@@ -71,6 +89,7 @@ def mean_background(cell_masks, trap_image, channels=None, exclude_mask=None):
     return np.nanmean(pixels) if pixels.size else np.nan
 
 
+@background_function
 def std_background(cell_masks, trap_image, channels=None, exclude_mask=None):
     """
     Find the standard deviation of background pixels in trap_image.

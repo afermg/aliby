@@ -47,7 +47,7 @@ The codebase follows a modular pipeline architecture with main processing steps 
 
 1. **Tiling** (`aliby.tile`): Extracts individual cell traps from microscopy images
 2. **Segmentation** (`aliby.baby_sitter`): Uses Baby-seg neural networks to segment cells
-3. **Extraction** (`extraction.core`): Extracts quantitative features from segmented cells
+3. **Extraction** (`extraction`): Extracts quantitative features from segmented cells
 4. **Post-processing** (`postprocessor.core`): Applies lineage tracking, merging, and quality control
 5. **I/O and Data Management** (`agora.io`, `aliby.io`): Handles data input/output, metadata, and storage
 
@@ -108,7 +108,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   - One lazy tile (`get_lazy_tile_view`, which wela's torch dataset calls for each tile, and `get_tile_data`) is read from a zarr array as its own region, in one request for all z sections, through `StackView` and `cut_tile`: 5 ms a tile where reading and hashing the whole stack took 10. One request for each z section is slower than either, 13 ms, with zarr 3
   - Time points are always the images' own indices: `initial_processing_tp` only says where to start, and the images before it get zero drift. It replaced `initial_tp`, which renumbered time points, and passing `initial_tp` raises
 - `aliby.baby_sitter.BabyRunner`: Interfaces with Baby-seg to return cell masks, mother-bud pairs, and tracking data
-- `extraction.core.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)
+- `extraction.extractor.Extractor`: Extracts areas, volumes, and fluorescence data using cell masks (writes directly to HDF5)
 - `postprocessor.core.postprocessing.PostProcessor`: Applies cell picking, track merging, and runs processes like budding analysis
 
 **Data Access Classes**
@@ -248,7 +248,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 ### Extraction Functions
 
-**Cell Functions** (`extraction.core.functions.cell_functions`)
+**Cell Functions** (`extraction.functions.cell_functions`)
 - Standard cell measurements: area, median fluorescence, eccentricity
 - `centroid_x` and `centroid_y` count pixels from zero, as sooth and the
   curation GUI do, so that a centroid plus its tile's origin is the cell's
@@ -264,10 +264,12 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
   function of the pixels. `Extractor.apply_pixel_functions` picks a cell's
   pixels out of its tile once for all of them
 
-**Background Functions** (`extraction.core.functions.background_functions`)
+**Background Functions** (`extraction.functions.background_functions`)
 - Per-tile background statistics (median, mean, std of pixels outside all cells)
 - Used for background channels such as Cy5; results are stored with `cell_label = -1`
-- Loaded by `load_background_functions()` in `loaders.py`
+- Loaded by `load_background_functions()` in `loaders.py`, which takes only
+  those marked `@background_function`. Until November 2026 it took every
+  function in the module, the helper `_background_pixels` included
 - Tiles with no cells are *not* skipped: a tile with no cells is entirely background.
   Skipping them left gaps that became NaN in `Signal.dataset_to_df`'s pivot
 - All three take an optional `exclude_mask` for the PDMS trap (see below)
@@ -348,11 +350,13 @@ cells should read about 3% *higher* when empty, at high dye. Genuinely empty
 traps cannot be measured from data extracted before that fix, because they are
 exactly the rows that were missing, so this remains an extrapolation.
 
-**Distributors** (`extraction.core.functions.distributors`)
-- Collapse multiple z-sections to 2D images
+**Reduction functions** (`load_reduction_functions()` in `loaders.py`)
+- Collapse the z sections of a tile to one image: `max`, `mean`, `median`,
+  `add`, or `null` for none
 
-**Defaults** (`extraction.core.functions.defaults`)
-- Standard fluorescence signals and metrics via `aliby.global_settings`
+**Defaults** (`aliby.global_settings`)
+- `fluorescence_functions` lists the functions applied to each fluorescence
+  channel: mean, median, std and total
 
 ### Extractor internals
 
@@ -393,9 +397,9 @@ default list (`recursive_merge_extractor`).
 Vacuoles (liquid-filled compartments) are detected using a U-net CNN (`VacuoleIdentifier` from the optional `maby` package) applied to brightfield images. Detection splits cell masks into vacuole and cytoplasm sub-regions, enabling separate extraction of fluorescence metrics for each compartment (e.g. `GFP_vacuole`, `GFP_cytoplasm`).
 
 **Key files:**
-- `extraction/core/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_single_channel_functions()` runs extraction on full-cell, vacuole, and cytoplasm masks
-- `extraction/core/functions/cell_functions.py`: `identify_vacuole()` calls the CNN; `_get_model()` lazy-loads and caches models; `is_model_available()` checks for optional dependencies
-- `extraction/core/functions/loaders.py`: filters out functions whose model package is not installed
+- `extraction/extractor.py`: `ExtractorParameters.identify_vacuoles` flag (default `True`); `compute_intracellular_masks()` generates sub-masks per trap; `extract_single_channel_functions()` runs extraction on full-cell, vacuole, and cytoplasm masks
+- `extraction/functions/cell_functions.py`: `identify_vacuole()` calls the CNN; `_get_model()` lazy-loads and caches models; `is_model_available()` checks for optional dependencies
+- `extraction/functions/loaders.py`: filters out functions whose model package is not installed
 
 **Integration:**
 - Enabled by default for all fluorescence channels except Cy5

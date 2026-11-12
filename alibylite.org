@@ -18,19 +18,19 @@ Tiles image into smaller regions of interest or tiles, one per trap, for faster 
 * aliby/baby_sitter
 Interfaces with Baby through the *BabyRunner* class, which returns a dict of Baby's results.
 
-* extraction/core/extractor
+* extraction/extractor
 Extracts areas and volumes and the fluorescence data from the images for the cells in one position, via the image tiles, using the cell masks found by Baby.
 
 We save the cell properties we wish to extract as a nested dictionary, such as
         {'general': {'None': ['area', 'volume', 'eccentricity']}}.
 *extract_tp* extracts data for one time point.
 
-** extraction/core/functions/cell.py
-Defines the standard functions, such as area and median, that we apply to pixels from individual cells. We define multichannel functions here too.
-** extraction/core/functions/trap.py
-Determines properties of a tile's background.
-** extraction/core/functions/distributors.py
-Collapses multiple z-sections to a 2D image.
+** extraction/functions/cell_functions.py
+Defines the standard functions, such as area and median, that we apply to pixels from individual cells. We define multichannel functions here too. A function can be named in an extraction tree only if marked with *cell_function*.
+** extraction/functions/background_functions.py
+Determines properties of a tile's background. A function can be named in an extraction tree only if marked with *background_function*.
+** extraction/functions/loaders.py
+Loads the cell and background functions and the functions, such as max and mean, that collapse multiple z-sections to a 2D image.
 
 * agora/bridge
 Interfaces with h5 files.

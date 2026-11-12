@@ -2,14 +2,13 @@
 
 import typing as t
 
-# inspect.getmembers returns a list of function names and functions
 # inspect.getfullargspec returns a function's arguments
-from inspect import getfullargspec, getmembers, isfunction
+from inspect import getfullargspec
 from types import FunctionType
 
 import bottleneck as bn
-from extraction.core.functions import background_functions
-from extraction.core.functions.cell_functions import (
+from extraction.functions.background_functions import BACKGROUND_FUNCTIONS
+from extraction.functions.cell_functions import (
     _FUNCTION_TO_MODEL,
     CELL_FUNCTIONS,
     PIXEL_FUNCTIONS,
@@ -85,14 +84,13 @@ def call_cell_fun(cell_fun, cell_masks, *args, **kwargs):
 
 
 def load_background_functions():
-    """Load functions that compute background signals from a tile."""
-    trap_funs = {
-        f[0]: f[1]
-        for f in getmembers(background_functions)
-        if isfunction(f[1])
-        and f[1].__module__.startswith("extraction.core.functions")
-    }
-    return trap_funs
+    """
+    Load functions that compute background signals from a tile.
+
+    Take the functions marked with background_function, and not the
+    helpers beside them.
+    """
+    return dict(BACKGROUND_FUNCTIONS)
 
 
 def load_reduction_functions(

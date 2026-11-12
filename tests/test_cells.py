@@ -3,7 +3,7 @@ Check that a time point's masks, traps and labels stay in step.
 
 Cells.at_time matches masks to traps by position, and the extractor
 matches those masks to Cells.labels_at_time by position again
-(extraction/core/extractor.py, get_outlines). A cell dropped from one
+(extraction/extractor.py, get_outlines). A cell dropped from one
 list and kept in the other therefore hands every later cell in the time
 point the trap and the label of the cell before it.
 """
