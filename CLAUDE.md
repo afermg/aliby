@@ -111,7 +111,16 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 **Data Access Classes**
 - `agora.cells`: Accesses cell information and masks from HDF5 files (lazy loading). `Cells.at_time` returns **one mask per cell the file records**, an empty edge mask included: its masks are matched to traps by position, and the extractor (`get_outlines`) matches them to `labels_at_time` by position again, so dropping a cell from one list and keeping it in the other — as it did until `tests/test_cells.py` was written — gave every later cell in that time point the trap and the label of the cell before it
+  - A mask is its outline filled within the outline's bounding box
+    (`fill_outline`): the same mask as filling the whole tile, in a quarter
+    of the time, which was 122 ms a time point for 557 cells
 - `agora.signal`: Gets extracted properties for all cells/timepoints from HDF5 (used in postprocessing)
+  - `available` and `ntimepoints` are found again when the file's
+    modification time changes (`find_once_for_file`), and `lineage` reads
+    the file at each call. Until November 2026 all three were cached for
+    the life of the Signal and went stale when a file was postprocessed
+    again. `lineage(location)` raises `KeyError` if the location is missing;
+    only with no location does it fall back to `postprocessing/lineage`
   - Columns in minutes are the time point times the interval over 60: integers when every one is whole, as for 300 s, and floats otherwise (0, 2.5, 5 for 150 s). `Grouper.tinterval_minutes`, which wela's DataLoader takes as `dt`, is not rounded either. The interval used to be rounded to whole minutes first, making 150 s two minutes and 30 s none
   - A time point with no cells has no rows in a Signal's table but is still a column, of NaN, so neighbouring columns are neighbouring time points
 - `agora.bridge`: Interface layer for HDF5 file operations
@@ -168,6 +177,7 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 
 ### Configuration Patterns
 - All processing steps inherit from `agora.abc.ProcessABC` and use corresponding `ParametersABC` classes
+- `ParametersABC.default` copies `_defaults` in depth, so a list among them, such as the picker's sequence, is not shared between instances
 - Configuration uses nested dictionaries that can be recursively merged
 - Global settings are defined in `aliby.global_settings` and include imaging specifications and default functions
 
@@ -176,6 +186,36 @@ The main pipeline (`aliby.pipeline.Pipeline`) orchestrates processing through:
 - Metadata from microscopy logs is preserved
 - Signal extraction results are organized by channel and processing function
 - Writers in `agora.io.writers` handle structured data output
+  - A write that fails puts the datasets it had added to back to their
+    lengths and raises, ending the position. Until November 2026 it logged
+    a warning and went on, leaving `trap`, `cell_label` and `timepoint` of
+    unequal lengths, which no reader can take
+  - Datasets whose rows are a few numbers have chunks of 1024 rows
+    (`chunk_rows`). Left to h5py a chunk was the number of cells at the
+    first time point: for a position beginning with three cells, reading
+    three lists took 111 ms, not 1.4 ms, and they are read at every time
+    point. Edge masks have chunks of 16 whole tiles (`image_chunk_rows`).
+    With h5py's chunks, of part of a tile, a position beginning with three
+    cells had masks taking 8.0 MB where 16 tiles take 3.0 MB; they are
+    also written in 13 ms a time point, not 18, and one cell's masks
+    through 80 time points are read in 44 ms, not 80
+  - Compression is at level 4. Level 9 took 66 ms a time point to write
+    400 cells' edge masks where 4 takes 19 ms, and 377 ms for 100 signals
+    where 4 takes 299 ms, for files 17% and 2% smaller
+  - The pipeline's `ExtractorWriter` keeps the signals of 16 time points
+    (`signals_written_every` in `pipeline.py`) and writes them together,
+    and what is waiting is written before postprocessing and when an error
+    ends the position. Each append costs PyTables about 2 ms whatever its
+    size: for 100 signals and 400 cells, one time point at a time took
+    299 ms a time point at level 4, and 16 together take 19 ms. A killed
+    process loses the signals of up to 15 time points, but a position is
+    always run from its start, so nothing more is lost than before. The
+    tables hold the same rows; pandas stores their columns in another
+    order of blocks, which it reads and appends to all the same. An
+    `ExtractorWriter` made with no `flush_every` writes each time point
+    as it is given
+  - `tidy` makes a signal's long table from numpy arrays; resetting the
+    index and melting was 80 ms of a time point for 100 signals
 - Cell properties stored as nested dictionaries: `{'general': {'None': ['area', 'volume', 'eccentricity']}}`
 - Picker and merger choices are written to HDF5 for reproducibility
 - Signals are pandas tables written with no PyTables index (`index=False` in `CoreWriter.add_df`), so a signal's group holds only `table`. A Signal is read whole and nothing looks rows up by the index, which took three quarters of the time to write and half the file. Files written before October 2026 have an `_i_table` group beside each `table`; `Signal` reads both

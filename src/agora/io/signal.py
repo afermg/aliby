@@ -3,7 +3,7 @@
 import logging
 import typing as t
 from copy import copy
-from functools import cached_property, lru_cache
+from functools import cached_property
 from pathlib import Path
 
 from aliby.global_settings import global_settings
@@ -35,7 +35,28 @@ class Signal(BridgeH5):
             "cell_label",
             "mother_label",
         )
-        self.candidate_channels = global_settings.possible_imaging_channels
+        # what was found in the h5 file, with the time the file had
+        # last changed
+        self.found_in_file = {}
+
+    def find_once_for_file(self, name: str, find: t.Callable):
+        """
+        Return what find returns, calling it again only if the file changed.
+
+        A value kept for the life of the Signal went stale when the file
+        was postprocessed again, or was given new signals.
+
+        Parameters
+        ----------
+        name: str
+            The name to keep the value by.
+        find: callable
+            A function of no arguments that reads the value from the file.
+        """
+        changed = Path(self.filename).stat().st_mtime_ns
+        if self.found_in_file.get(name, (None,))[0] != changed:
+            self.found_in_file[name] = (changed, find())
+        return self.found_in_file[name][1]
 
     def get(
         self,
@@ -78,9 +99,13 @@ class Signal(BridgeH5):
         df.columns = minutes
         return df
 
-    @cached_property
+    @property
     def ntimepoints(self):
         """Find the number of time points for one position, or one h5 file."""
+        return self.find_once_for_file("ntimepoints", self.find_ntimepoints)
+
+    def find_ntimepoints(self) -> int:
+        """Read the number of time points from the areas in the h5 file."""
         dataset = "extraction/general/null/area"
         try:
             with pd.HDFStore(self.filename, mode="r") as store:
@@ -107,11 +132,12 @@ class Signal(BridgeH5):
                     tint = res
                 return tint
             else:
-                logging.getLogger("aliby").warn(
-                    f"{str(self.filename).split('/')[-1]}: using default time "
-                    f"interval of {global_settings.default_time_interval} seconds."
+                default = global_settings.default_time_interval
+                logging.getLogger("aliby").warning(
+                    f"{Path(self.filename).name}: using default time "
+                    f"interval of {default} seconds."
                 )
-                return global_settings.default_time_interval
+                return default
 
     def retained(self, signal, cutoff: float):
         """Get retained cells for a Signal or list of Signals."""
@@ -148,27 +174,45 @@ class Signal(BridgeH5):
             else:
                 raise KeyError(f"Channels missing in the {self.filename}.")
 
-    @lru_cache(2)
-    def lineage(
-        self, lineage_location: t.Optional[str] = None, merged: bool = False
-    ) -> np.ndarray:
+    def lineage(self, lineage_location: str | None = None) -> np.ndarray:
         """
         Get lineage data from the h5 file.
 
         Return an array with three columns: the tile id, the mother label,
         and the daughter label.
+
+        Read the file at each call: the lineage was cached, for two
+        Signals at most, and so was still the old one after the file was
+        postprocessed again.
+
+        Parameters
+        ----------
+        lineage_location: str, optional
+            Where the lineage is in the h5 file. If None, read the merged
+            lineage or, in an old file, postprocessing/lineage.
+
+        Raises
+        ------
+        KeyError
+            If the file has no lineage at the location given, or at
+            neither default.
         """
-        if lineage_location is None:
-            lineage_location = "modifiers/lineage_merged"
         with h5py.File(self.filename, "r") as f:
-            if lineage_location not in f:
-                lineage_location = "postprocessing/lineage"
-            if lineage_location not in f:
+            if lineage_location is None:
+                lineage_location = "modifiers/lineage_merged"
+                if lineage_location not in f:
+                    lineage_location = "postprocessing/lineage"
+                if lineage_location not in f:
+                    raise KeyError(
+                        "Neither modifiers/lineage_merged nor"
+                        f" postprocessing/lineage in {self.filename}."
+                    )
+            elif lineage_location not in f:
+                # the default was read in its place, with no word of it
                 raise KeyError(
-                    f"Neither modifiers nor postprocessing in {self.filename}"
+                    f"No {lineage_location} in {self.filename}."
                 )
-            else:
-                traps_mothers_daughters = f[lineage_location]
+            traps_mothers_daughters = f[lineage_location]
             if isinstance(traps_mothers_daughters, h5py.Dataset):
                 lineage = traps_mothers_daughters[()]
             else:
@@ -203,8 +247,11 @@ class Signal(BridgeH5):
             cell. An empty collection is a picker that picked no cell,
             and no cell is kept.
         """
+        if isinstance(data, str):
+            data = self.get_raw(data)
         if "cell_label" in data.index.names:
-            # no picks or merges for per-trap background signals (cell_label=-1)
+            # no picks or merges for per-trap background signals, which
+            # have a cell_label of -1
             if (data.index.get_level_values("cell_label") == -1).all():
                 return data
         if isinstance(merges, bool):
@@ -223,15 +270,20 @@ class Signal(BridgeH5):
             index = index.droplevel("mother_label")
         return merged.loc[index.isin(set(map(tuple, picks)))]
 
-    @cached_property
-    def print_available(self):
-        """Print data sets available in h5 file."""
-        for sig in self.available:
-            print(sig)
-
-    @cached_property
+    @property
     def available(self):
-        """Get data sets available in h5 file."""
+        """
+        Get data sets available in h5 file.
+
+        Found again if the file has changed, as when bud metrics are
+        added to it.
+        """
+        return list(
+            self.find_once_for_file("available", self.find_available)
+        )
+
+    def find_available(self) -> list[str]:
+        """List the signals in the h5 file."""
         # start afresh, or each visit to the file lists every signal again
         self._available = []
         try:
@@ -241,16 +293,11 @@ class Signal(BridgeH5):
             self.log(f"Exception when visiting h5: {e}")
         return self._available
 
-    def get_merged(self, dataset):
-        """Run merging."""
-        return self.apply_merging_picking(dataset, picks=False)
-
     def get_raw(
         self,
         dataset: str or t.List[str],
         in_minutes: bool = True,
         lineage: bool = False,
-        **kwargs,
     ) -> pd.DataFrame or t.List[pd.DataFrame]:
         """
         Get raw Signal without merging, picking, and lineage information.
@@ -260,13 +307,11 @@ class Signal(BridgeH5):
         Parameters
         ----------
         dataset: str or list of strs
-            The name of the h5 file or a list of h5 file names.
+            Where the signal is in the h5 file, or a list of such places.
         in_minutes: boolean
             If True, convert column headings to times in minutes.
         lineage: boolean
             If True, add mother_label to index.
-        run_lineage_check: boolean
-            If True, raise exception if a likely error in the lineage assignment.
         """
         if isinstance(dataset, str):
             # load from h5 file
@@ -412,9 +457,3 @@ class Signal(BridgeH5):
                     self._available.append(name.split("_i_table")[0][:-1])
                 else:
                     self._available.append(name)
-
-    @property
-    def ntps(self) -> int:
-        """Get number of time points from the metadata."""
-        # a number in files aliby writes and a list in older ones
-        return int(np.ravel(self.meta_h5["time_settings/ntimepoints"])[0])

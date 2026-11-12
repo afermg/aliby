@@ -39,21 +39,43 @@ def write_meta_to_h5(
                     # fallback to string representation
                     root.attrs[att] = str(data).encode("utf-8")
             except (TypeError, ValueError) as e:
-                print(f"Warning: Could not store attribute '{att}': {e}")
+                logging.getLogger("aliby").warning(
+                    f"Could not store attribute '{att}': {e}"
+                )
 
 
-def read_meta_from_h5(file: str | Path) -> dict:
+def tidy(df: pd.DataFrame) -> dict[str, np.ndarray]:
     """
-    Read the minimal metadata from an h5 file as a dict.
+    Return a Signal's data as the columns of a long table.
+
+    The table has a row for each cell at each time point, the first time
+    point's cells first, with the levels of the index, the time and the
+    value as its columns, in the data types of the h5 file. It is what
+    resetting the index and melting gives, which was a quarter of the
+    time taken to write a time point's signals.
 
     Parameters
     ----------
-    file: str
-        Name of the h5 file
+    df: pd.DataFrame
+        The data, with time points as columns and trap, and for cells
+        cell_label, as the index.
     """
-    with h5py.File(file, "r") as f:
-        meta = dict(f.attrs.items())
-    return meta
+    values = df.to_numpy(dtype=np.float32)
+    no_rows, no_times = values.shape
+    columns = {}
+    for level, name in enumerate(df.index.names):
+        level_values = np.asarray(df.index.get_level_values(level))
+        if name in ("trap", "cell_label"):
+            level_values = level_values.astype(np.int16)
+        columns[name] = np.tile(level_values, no_times)
+    columns["time"] = np.repeat(
+        np.asarray(df.columns).astype(np.int32), no_rows
+    )
+    columns["value"] = values.ravel(order="F")
+    if "cell_label" not in columns:
+        # a background signal is of a trap, not of a cell
+        columns["cell_label"] = np.full(no_rows * no_times, -1, np.int16)
+    return columns
 
 
 class CoreWriter:
@@ -67,16 +89,25 @@ class CoreWriter:
     # compression info
     compression = "gzip"
     df_compression = "zlib"
-    compression_opts = 9
+    # level 9 took four times as long as level 4 to write edge masks,
+    # and a quarter longer to write signals, for files 17% and 2% smaller
+    compression_opts = 4
+    # rows in a chunk of a dataset whose rows are a few numbers: left to
+    # h5py, a chunk is the number of cells at the first time point, and
+    # a position that begins with three cells took 111 ms to read three
+    # lists that take 1.4 ms
+    chunk_rows = 1024
+    # rows in a chunk of a dataset whose rows are images, the edge masks,
+    # with a whole tile in each chunk. With h5py's chunks, of part of a
+    # tile, a position beginning with three cells had a file of masks 2.5
+    # times the size; 16 whole tiles are also quicker to write and read
+    image_chunk_rows = 16
 
     def __init__(self, file: str):
-        """Initialise by reading metadata."""
+        """Initialise with the name of the h5 file."""
         self.file = file
-        # load metadata from the h5 file
-        if Path(file).exists() and h5py.is_hdf5(file):
-            self.metadata = read_meta_from_h5(file)
 
-    def log(self, message: str, level: str = "warn"):
+    def log(self, message: str, level: str = "warning"):
         """Log message."""
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
@@ -103,25 +134,24 @@ class CoreWriter:
             if n == 0:
                 # a time point with no cells adds nothing
                 return
-            # append to existing dataset
-            try:
-                dset = hgroup[key]
-                dset.resize(dset.shape[0] + n, axis=0)
-                dset[-n:] = data
-            except ValueError as e:
-                logging.debug(
-                    "Writer: Inconsistency between dataset shape and "
-                    f"new empty data: {e}."
-                )
+            # append to existing dataset; an error is for write to undo
+            dset = hgroup[key]
+            dset.resize(dset.shape[0] + n, axis=0)
+            dset[-n:] = data
         else:
             # create new dataset
             max_shape, dtype = self.datatypes[key]
             shape = (n,) + max_shape[1:]
+            small_rows = int(np.prod(max_shape[1:], dtype=int)) <= 4
+            chunk_rows = (
+                self.chunk_rows if small_rows else self.image_chunk_rows
+            )
             hgroup.create_dataset(
                 key,
                 shape=shape,
                 maxshape=max_shape,
                 dtype=dtype,
+                chunks=(chunk_rows,) + max_shape[1:],
                 compression=self.compression,
                 compression_opts=(
                     self.compression_opts
@@ -175,29 +205,43 @@ class CoreWriter:
         with h5py.File(self.file, "a") as store:
             # open group, creating if necessary
             hgroup = store.require_group(self.group)
-            # write data
-            for key, value in data.items():
-                # only save data with a pre-defined data-type
+            # only save data with a pre-defined data-type
+            for key in data:
                 if key not in self.datatypes:
                     raise KeyError(f"No defined data type for key {key}.")
-                else:
-                    try:
-                        if key.startswith("attrs/"):
-                            # global parameters
-                            key = key.split("/")[1]
-                            hgroup.attrs[key] = value
-                        elif key in overwrite:
-                            # delete and replace existing dataset
-                            self.overwrite(value, key, hgroup)
-                        else:
-                            # append or create new dataset
-                            self.append(value, key, hgroup)
-                    except Exception as e:
-                        self.log(
-                            f"{key}:{value} could not be written: {e}.",
-                            "error",
-                        )
-                        return e
+            # the lengths of the datasets added to, to undo a failure
+            lengths = {
+                key: hgroup[key].shape[0] if key in hgroup else None
+                for key in data
+                if not key.startswith("attrs/") and key not in overwrite
+            }
+            # write data
+            for key, value in data.items():
+                try:
+                    if key.startswith("attrs/"):
+                        # global parameters
+                        hgroup.attrs[key.split("/")[1]] = value
+                    elif key in overwrite:
+                        # delete and replace existing dataset
+                        self.overwrite(value, key, hgroup)
+                    else:
+                        # append or create new dataset
+                        self.append(value, key, hgroup)
+                except Exception as e:
+                    # leave the datasets as they were: lists of unequal
+                    # length, such as trap and cell_label, cannot be read
+                    for name, length in lengths.items():
+                        if name in hgroup:
+                            if length is None:
+                                del hgroup[name]
+                            else:
+                                hgroup[name].resize(length, axis=0)
+                    self.log(
+                        f"{key}, of shape {np.shape(value)}, could not be"
+                        f" written: {e}.",
+                        "error",
+                    )
+                    raise
 
     def open_store(self) -> pd.HDFStore:
         """Open the h5 file to add data frames to it."""
@@ -233,28 +277,45 @@ class CoreWriter:
         """
         if df.empty:
             return
+        self.add_columns(dataset, tidy(df), overwrite=overwrite, store=store)
+
+    def add_columns(
+        self,
+        dataset: str,
+        columns: dict[str, np.ndarray],
+        overwrite: bool = False,
+        store: pd.HDFStore | None = None,
+        row_numbers: np.ndarray | None = None,
+    ) -> None:
+        """
+        Add a long table, as tidy returns, to the h5 file.
+
+        Parameters
+        ----------
+        dataset: str
+            Where in the h5 file to write.
+        columns: dict
+            The columns of the table.
+        overwrite: bool
+            If True, replace any data already there; if False, add to it.
+        store: pd.HDFStore, optional
+            The open h5 file, to write several tables without opening it
+            for each.
+        row_numbers: array, optional
+            The table's index, which is stored with it. If None, the rows
+            are numbered from zero.
+        """
         if store is None:
             with self.open_store() as store:
-                self.add_df(dataset, df, overwrite=overwrite, store=store)
+                self.add_columns(
+                    dataset,
+                    columns,
+                    overwrite=overwrite,
+                    store=store,
+                    row_numbers=row_numbers,
+                )
             return
-        # convert to tidy structure
-        multi_index_names = df.index.names
-        df.reset_index(inplace=True)
-        df_flat = df.melt(
-            id_vars=multi_index_names, var_name="time", value_name="value"
-        )
-        # first time point has no cell labels
-        if "cell_label" not in df_flat.columns:
-            df_flat["cell_label"] = -1
-        # convert to fixed data types for h5 file
-        df_flat = df_flat.astype(
-            {
-                "trap": np.int16,
-                "cell_label": np.int16,
-                "time": np.int32,
-                "value": np.float32,
-            }
-        )
+        df_flat = pd.DataFrame(columns, index=row_numbers)
         # store with no PyTables index: a Signal is read whole, so nothing
         # looks rows up by it, and it took three quarters of the time to
         # write and half the size of the file
@@ -301,7 +362,7 @@ class TilerWriter(CoreWriter):
             nprev = hgroup.get("drifts", None)
             if nprev and tp < nprev.shape[0]:
                 # data already exists
-                print(f"Tiler: Skipping timepoint {tp}")
+                self.log(f"Skipping timepoint {tp}", "info")
             else:
                 super().write(data=data, overwrite=overwrite)
 
@@ -352,24 +413,76 @@ class BabyWriter(CoreWriter):
             available_tps = hgroup.get("timepoint", None)
             # write data
             if not available_tps or tp not in np.unique(available_tps[()]):
-                error = super().write(data=data, overwrite=overwrite)
-                if error is not None:
-                    self.log(f"Baby failed to write at timepoint {tp}.")
+                super().write(data=data, overwrite=overwrite)
             else:
                 # data already exists
-                self.log(f"BabyWriter: Skipping timepoint {tp}")
+                self.log(f"Skipping timepoint {tp}", "info")
 
 
 class ExtractorWriter(CoreWriter):
-    """Write data frames generated by Extractor at each time point."""
+    """
+    Write data frames generated by Extractor at each time point.
+
+    With flush_every over one, keep the time points' signals and write
+    them together every flush_every time points. Each append to a table
+    costs PyTables about 2 ms whatever its size, which for 100 signals
+    was most of the time taken to write a time point. What is kept is
+    lost if the process dies, so call flush when the time points end,
+    and when an error ends them.
+    """
+
+    def __init__(self, file: str, flush_every: int = 1):
+        """
+        Initialise with the name of the h5 file.
+
+        Parameters
+        ----------
+        file: str
+            The name of the h5 file.
+        flush_every: int
+            The number of time points to keep before writing them. One,
+            the default, writes each time point as it is given.
+        """
+        super().__init__(file)
+        self.flush_every = flush_every
+        # the long tables of each signal that are yet to be written
+        self.waiting = {}
+        self.no_waiting = 0
 
     def write(self, data: dict[str, pd.DataFrame]):
-        """Write the extracted data for one position."""
+        """Take the extracted data for one time point."""
+        # tidy now, so that what is written is the data as it was given
+        for extract_name, df in data.items():
+            if not df.empty:
+                self.waiting.setdefault(extract_name, []).append(tidy(df))
+        self.no_waiting += 1
+        if self.no_waiting >= self.flush_every:
+            self.flush()
+
+    def flush(self):
+        """Write the time points that are waiting to be written."""
+        waiting, self.waiting, self.no_waiting = self.waiting, {}, 0
+        if not waiting:
+            return
         # open the h5 file once for all of the signals
         with self.open_store() as store:
-            for extract_name, df in data.items():
-                dset_path = "/extraction/" + extract_name
-                self.add_df(dataset=dset_path, df=df, store=store)
+            for extract_name, tables in waiting.items():
+                columns = {
+                    name: np.concatenate([table[name] for table in tables])
+                    for name in tables[0]
+                }
+                # number each time point's rows from zero, as they are
+                # when written one time point at a time, so that the
+                # file is the same however many are written together
+                row_numbers = np.concatenate(
+                    [np.arange(len(table["value"])) for table in tables]
+                )
+                self.add_columns(
+                    "/extraction/" + extract_name,
+                    columns,
+                    store=store,
+                    row_numbers=row_numbers,
+                )
 
     def write_pdms_mask(self, mask: NDArray):
         """

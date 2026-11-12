@@ -21,20 +21,22 @@ def parse_legacy_logs(
     """
     Parse acq and log files using the grammar specified.
 
-    Merge results into a single dict.
+    Merge results into a single dict, or return None if the folder does
+    not hold both files.
     """
     log_parser = Parser(log_grammar)
     acq_parser = Parser(acq_grammar)
     log_file = find_file_legacy(root_dir, "*log.txt")
     acq_file = find_file_legacy(root_dir, "*[Aa]cq.txt")
+    if not (log_file and acq_file):
+        # some other text file, such as notes, and not a legacy log
+        return None
     # parse into a single dict
-    parsed = {}
-    if log_file and acq_file:
-        with open(log_file, "r") as f:
-            log_parsed = log_parser.parse(f)
-        with open(acq_file, "r") as f:
-            acq_parsed = acq_parser.parse(f)
-        parsed = {**acq_parsed, **log_parsed}
+    with open(log_file, "r") as f:
+        log_parsed = log_parser.parse(f)
+    with open(acq_file, "r") as f:
+        acq_parsed = acq_parser.parse(f)
+    parsed = {**acq_parsed, **log_parsed}
     # convert data to having time stamps
     for key, value in parsed.items():
         if isinstance(value, datetime):

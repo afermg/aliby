@@ -184,12 +184,10 @@ def test_a_signal_reads_the_same_with_and_without_an_index(tmp_path):
 def test_a_signal_knows_its_number_of_time_points(tmp_path):
     signal = Signal(write_position(tmp_path / "position.h5", ntps=4))
     assert signal.ntimepoints == 4
-    assert signal.ntps == 4
 
 
-def test_available_lists_each_signal_once(tmp_path, capsys):
+def test_available_lists_each_signal_once(tmp_path):
     signal = Signal(write_position(tmp_path / "position.h5"))
-    signal.print_available
     assert signal.available == ["extraction/" + AREA]
 
 
@@ -381,19 +379,6 @@ def cells_with(tmp_path, rows, mothers=None, ntraps=2):
             data=np.array(mothers or [0] * len(rows), dtype="uint16"),
         )
     return Cells(path)
-
-
-def test_cells_with_skipped_labels_keep_their_own_time_points(tmp_path):
-    # labels 1, 3 and 7 in trap 0: three cells, and trap 1 has one
-    rows = [(0, 0, 1), (0, 0, 3), (0, 1, 3), (0, 2, 7), (1, 1, 1)]
-    cells = cells_with(tmp_path, rows)
-    present = cells.cells_vs_tps
-    assert present.shape == (4, 3)
-    expected = {(0, 1): [0], (0, 3): [0, 1], (0, 7): [2], (1, 1): [1]}
-    for row in range(len(present)):
-        cell = cells.index_to_tile_and_cell(row)
-        assert np.flatnonzero(present[row]).tolist() == expected[cell]
-    assert cells.cell_cumlsum.tolist() == [0, 3]
 
 
 def test_a_cell_takes_the_mother_it_was_last_given(tmp_path):

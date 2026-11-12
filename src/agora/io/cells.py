@@ -2,15 +2,34 @@
 
 import logging
 import typing as t
-from functools import cached_property, lru_cache
+from functools import cached_property
 from itertools import groupby
 from pathlib import Path
 
 import h5py
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
 from scipy.sparse import issparse
+
+
+def fill_outline(outline: np.ndarray) -> np.ndarray:
+    """
+    Fill a cell's outline to give its mask.
+
+    Fill only the box that bounds the outline: filling the whole tile
+    gives the same mask and took four times as long.
+    """
+    outline = np.asarray(outline, dtype=bool)
+    mask = np.zeros_like(outline)
+    rows = np.flatnonzero(outline.any(axis=1))
+    if len(rows):
+        columns = np.flatnonzero(outline.any(axis=0))
+        box = (
+            slice(rows[0], rows[-1] + 1),
+            slice(columns[0], columns[-1] + 1),
+        )
+        mask[box] = ndimage.binary_fill_holes(outline[box])
+    return mask
 
 
 class Cells:
@@ -32,15 +51,15 @@ class Cells:
     The "timepoint", "cell_label", and "trap" variables are mutually
     consistent 1D lists.
 
-    Examples are self["timepoint"][self.get_idx(1, 3)] to find the time
-    points where cell 1 was present in trap 3.
+    An example is
+    self["timepoint"][(self["cell_label"] == 1) & (self["trap"] == 3)]
+    to find the time points where cell 1 was present in trap 3.
     """
 
     def __init__(self, filename, path="cell_info"):
         """Initialise from a filename."""
         self.filename: t.Optional[t.Union[str, Path]] = filename
         self.cinfo_path: t.Optional[str] = path
-        self._edgemasks: t.Optional[str] = None
         self._tile_size: tuple[int, int] | None = None
 
     def __getitem__(self, item):
@@ -65,7 +84,7 @@ class Cells:
         """Ensure initiating file is a Path object."""
         return cls(Path(source))
 
-    def log(self, message: str, level: str = "warn"):
+    def log(self, message: str, level: str = "warning"):
         """Log messages in the corresponding level."""
         logger = logging.getLogger("aliby")
         getattr(logger, level)(f"{self.__class__.__name__}: {message}")
@@ -79,27 +98,11 @@ class Cells:
 
     @staticmethod
     def astype(array: np.ndarray, kind: str):
-        """Convert sparse arrays if needed; if kind is 'mask' fill the outline."""
+        """Convert a sparse array and, if kind is 'mask', fill the outline."""
         array = Cells.asdense(array)
         if kind == "mask":
-            array = ndimage.binary_fill_holes(array).astype(bool)
+            array = fill_outline(array)
         return array
-
-    def get_idx(self, cell_id: int, trap_id: int):
-        """Return boolean array giving indices for a cell_id and trap_id."""
-        return (self["cell_label"] == cell_id) & (self["trap"] == trap_id)
-
-    @property
-    def max_labels(self) -> t.List[int]:
-        """Return the maximum cell label per tile."""
-        return [
-            max((0, *self.cell_labels_in_trap(i))) for i in range(self.ntraps)
-        ]
-
-    @property
-    def max_label(self) -> int:
-        """Return the maximum cell label over all tiles."""
-        return sum(self.max_labels)
 
     @property
     def ntraps(self) -> int:
@@ -136,51 +139,11 @@ class Cells:
         """Given a tile, return time points for which cells are available."""
         return set(self["timepoint"][self["trap"] == trap_id])
 
-    @property
-    def edgemasks(self) -> t.List[np.ndarray]:
-        """Return a list of masks for every cell at every trap and time point."""
-        if self._edgemasks is None:
-            edgem_path: str = "edgemasks"
-            self._edgemasks = self.fetch(edgem_path)
-        return self._edgemasks
-
-    @property
-    def labels(self) -> t.List[t.List[int]]:
-        """Return all cell labels per tile as a set for all tiles."""
-        return [self.cell_labels_in_trap(trap) for trap in range(self.ntraps)]
-
-    def max_labels_in_frame(self, final_time_point: int) -> t.List[int]:
-        """Get the maximal cell label for each tile within a frame of time."""
-        max_labels = [
-            self["cell_label"][
-                (self["timepoint"] <= final_time_point)
-                & (self["trap"] == trap_id)
-            ]
-            for trap_id in range(self.ntraps)
-        ]
-        return [max([0, *labels]) for labels in max_labels]
-
-    def where(self, cell_id: int, trap_id: int):
-        """Return time points, indices, and edge masks for a cell and trap."""
-        idx = self.get_idx(cell_id, trap_id)
-        return (
-            self["timepoint"][idx],
-            idx,
-            self.edgemasks_where(cell_id, trap_id),
-        )
-
-    def mask(self, cell_id, trap_id):
-        """Return the times and the filled edge masks for a cell and trap."""
-        times, outlines = self.outline(cell_id, trap_id)
-        return times, np.array(
-            [ndimage.binary_fill_holes(o) for o in outlines]
-        )
-
     def at_time(
         self, timepoint: int, kind="mask"
     ) -> t.List[t.List[np.ndarray]]:
         """
-        Return a dict with traps as keys and cell masks as values for a time point.
+        Return a dict of the cell masks in each trap at a time point.
 
         Return one mask per cell the h5 records, an empty one included.
         The masks are matched to the traps by position here, and to the
@@ -191,18 +154,6 @@ class Cells:
         edgemasks = self.edgemasks_from_idx(idx)
         masks = [Cells.astype(edgemask, kind) for edgemask in edgemasks]
         return self.group_by_traps(traps, masks)
-
-    def at_times(
-        self, timepoints: t.Iterable[int], kind="mask"
-    ) -> t.List[t.List[np.ndarray]]:
-        """Return a list of lists of cell masks one for specified time point."""
-        return [
-            [
-                np.stack(tile_masks) if len(tile_masks) else []
-                for tile_masks in self.at_time(tp, kind=kind).values()
-            ]
-            for tp in timepoints
-        ]
 
     def group_by_traps(
         self, traps: t.Collection, cell_labels: t.Collection
@@ -218,7 +169,7 @@ class Cells:
         return set((self["cell_label"][self["trap"] == trap_id]))
 
     def labels_at_time(self, timepoint: int) -> t.Dict[int, t.List[int]]:
-        """Return a dict with traps as keys and cell labels as values for a time point."""
+        """Return a dict of the cell labels in each trap at a time point."""
         labels = self["cell_label"][self["timepoint"] == timepoint]
         traps = self["trap"][self["timepoint"] == timepoint]
         return self.group_by_traps(traps, labels)
@@ -229,108 +180,15 @@ class Cells:
             edgem = f[self.cinfo_path + "/edgemasks"][idx, ...]
         return edgem
 
-    def edgemasks_where(self, cell_id, trap_id):
-        """Get the edge masks for a given cell and trap for all time points."""
-        idx = self.get_idx(cell_id, trap_id)
-        edgemasks = self.edgemasks_from_idx(idx)
-        return edgemasks
-
-    def outline(self, cell_id: int, trap_id: int):
-        """Get times and edge masks for a given cell and trap."""
-        idx = self.get_idx(cell_id, trap_id)
-        times = self["timepoint"][idx]
-        return times, self.edgemasks_from_idx(idx)
-
     @property
     def ntimepoints(self) -> int:
-        """Return total number of time points in the experiment."""
-        return self["timepoint"].max() + 1
-
-    @cached_property
-    def cell_ids(self) -> np.ndarray:
         """
-        Give the tile and label of every cell, sorted by tile then label.
+        Return the number of time points up to the last with a cell.
 
-        A cell's row here is its row in cells_vs_tps. A cell is found by
-        its own tile and label and not by counting labels up from one:
-        labels are skipped when cells are lost, and a tile whose labels
-        are 1, 3 and 7 has three cells, not seven.
+        Zero for a position where no cell was ever found.
         """
-        return np.unique(
-            np.stack((self["trap"], self["cell_label"]), axis=1), axis=0
-        )
-
-    @cached_property
-    def cells_vs_tps(self):
-        """Boolean matrix showing when cells are present for all time points."""
-        cell_ids, rows = np.unique(
-            np.stack((self["trap"], self["cell_label"]), axis=1),
-            axis=0,
-            return_inverse=True,
-        )
-        cells_vs_tps = np.zeros((len(cell_ids), self.ntimepoints), dtype=bool)
-        cells_vs_tps[rows.ravel(), self["timepoint"]] = True
-        return cells_vs_tps
-
-    @cached_property
-    def cell_cumlsum(self):
-        """Find the number of cells in the tiles before each tile."""
-        ncells_per_tile = np.bincount(
-            self.cell_ids[:, 0], minlength=self.ntraps
-        )
-        cumsum = np.roll(np.cumsum(ncells_per_tile), shift=1)
-        cumsum[0] = 0
-        return cumsum
-
-    def index_to_tile_and_cell(self, idx: int) -> t.Tuple[int, int]:
-        """Convert a row of cells_vs_tps to its tile and cell label."""
-        tile_id, cell_label = self.cell_ids[idx]
-        return int(tile_id), int(cell_label)
-
-    @property
-    def tiles_vs_cells_vs_tps(self):
-        """
-        Boolean matrix showing if a cell is present.
-
-        The matrix is indexed by trap, cell label, and time point.
-        """
-        ncells_mat = np.zeros(
-            (self.ntraps, self["cell_label"].max(), self.ntimepoints),
-            dtype=bool,
-        )
-        ncells_mat[self["trap"], self["cell_label"] - 1, self["timepoint"]] = (
-            True
-        )
-        return ncells_mat
-
-    def cell_tp_where(
-        self,
-        min_consecutive_tps: int = 15,
-        interval: None or t.Tuple[int, int] = None,
-    ):
-        """
-        Find cells present for all time points in a sliding window of time.
-
-        The result can be restricted to a particular interval of time.
-        """
-        window = sliding_window_view(
-            self.cells_vs_tps, min_consecutive_tps, axis=1
-        )
-        tp_min = window.sum(axis=-1) == min_consecutive_tps
-        # apply a filter to restrict to an interval of time
-        if interval is not None:
-            interval = tuple(np.array(interval))
-        else:
-            interval = (0, window.shape[1])
-        low_boundary, high_boundary = interval
-        tp_min[:, :low_boundary] = False
-        tp_min[:, high_boundary:] = False
-        return tp_min
-
-    @lru_cache(20)
-    def mothers_in_trap(self, trap_id: int):
-        """Return mothers at a trap."""
-        return self.mothers[trap_id]
+        timepoints = self["timepoint"]
+        return int(timepoints.max()) + 1 if len(timepoints) else 0
 
     @cached_property
     def mothers(self):
@@ -368,9 +226,10 @@ class Cells:
         labels are 1, 3 and 7, naming the daughter by its place called
         cell 7 cell 3, which is a real cell and the wrong one.
         """
-        # list of arrays, one per tile, giving mothers of each cell in each tile
+        # a list for each tile of the mother of each of its cells
         mothers = self.mothers
-        if sum([x for y in mothers for x in y]):
+        # not their sum, which is a uint16 and wraps, on occasion to zero
+        if any(x for y in mothers for x in y):
             ids = np.unique(
                 np.stack((self["trap"], self["cell_label"]), axis=1), axis=0
             )
@@ -395,53 +254,6 @@ class Cells:
             mothers_daughters = np.array([])
             self.log("No mother-daughters assigned")
         return mothers_daughters
-
-    @staticmethod
-    def mother_assign_to_mb_matrix(ma: t.List[np.array]):
-        """
-        Convert a list of mother-daughters into a boolean sparse matrix.
-
-        Each row in the matrix correspond to daughter buds.
-        If an entry is True, a given cell is a mother cell and a given
-        daughter bud is assigned to the mother cell in the next time point.
-
-        Parameters:
-        -----------
-        ma : list of lists of integers
-            A list of lists of mother-bud assignments.
-            The i-th sublist contains the bud assignments for the i-th tile.
-            The integers in each sublist represent the mother label, with zero
-            implying no mother found.
-
-        Returns:
-        --------
-        mb_matrix : boolean numpy array of shape (n, m)
-            An n x m array where n is the total number of cells (sum
-            of the lengths of all sublists in ma) and m is the maximum
-            number of buds assigned to any mother cell in ma.
-            The value at (i, j) is True if cell i is a daughter cell and
-            cell j is its assigned mother.
-
-        Examples:
-        --------
-        >>> ma = [[0, 0, 1], [0, 1, 0]]
-        >>> Cells(None).mother_assign_to_mb_matrix(ma)
-        >>> array([[False, False, False, False, False, False],
-                   [False, False, False, False, False, False],
-                   [ True, False, False, False, False, False],
-                   [False, False, False, False, False, False],
-                   [False, False, False,  True, False, False],
-                   [False, False, False, False, False, False]])
-        """
-        ncells = sum([len(t) for t in ma])
-        mb_matrix = np.zeros((ncells, ncells), dtype=bool)
-        c = 0
-        for cells in ma:
-            for d, m in enumerate(cells):
-                if m:
-                    mb_matrix[c + d, c + m - 1] = True
-            c += len(cells)
-        return mb_matrix
 
     @staticmethod
     def mother_assign_from_dynamic(

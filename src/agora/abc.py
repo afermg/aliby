@@ -2,24 +2,22 @@ import logging
 import typing as t
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from copy import copy
-from pathlib import Path
-from time import perf_counter
-from typing import Union
+from copy import deepcopy
 
 from flatten_dict import flatten, unflatten
-from yaml import dump, safe_load
 
 from agora.logging_timer import timer
 
-atomic = t.Union[int, float, str, bool]
+# marks a call of to_dict with nothing passed; a value that a parameter
+# could have, as "null" was, sent to_dict round for ever
+whole_instance = object()
 
 
 class ParametersABC(ABC):
     """
     Define parameters typically for a step in the pipeline.
 
-    Outputs can be either a dict or yaml.
+    Output is a dict.
     No attribute should be called "parameters"!
     """
 
@@ -31,7 +29,7 @@ class ParametersABC(ABC):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
-    def to_dict(self, iterable="null") -> t.Dict:
+    def to_dict(self, iterable=whole_instance) -> t.Dict:
         """
         Return a nested dictionary of the attributes of the class instance.
 
@@ -55,27 +53,16 @@ class ParametersABC(ABC):
                 }
             else:
                 return iterable
-        elif iterable == "null":
+        elif iterable is whole_instance:
             # use instance's built-in __dict__ dictionary of attributes
             return self.to_dict(self.__dict__)
         else:
             return iterable
 
-    def to_yaml(self, path: Union[Path, str] = None):
-        """
-        Return a yaml stream of the attributes of the class instance.
-
-        If path is provided, the yaml stream is saved there.
-
-        Parameters
-        ----------
-        path : Union[Path, str]
-            Output path.
-        """
-        if path:
-            with open(Path(path), "w") as f:
-                dump(self.to_dict(), f)
-        return dump(self.to_dict())
+    def log(self, message: str, level: str = "warning"):
+        """Log messages at the corresponding level."""
+        logger = logging.getLogger("aliby")
+        getattr(logger, level)(f"{self.__class__.__name__}: {message}")
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -83,26 +70,15 @@ class ParametersABC(ABC):
         return cls(**d)
 
     @classmethod
-    def from_yaml(cls, source: Union[Path, str]):
-        """Initialise from a yaml filename or stdin."""
-        is_buffer = True
-        try:
-            if Path(source).exists():
-                is_buffer = False
-        except Exception as e:
-            print(e)
-            assert isinstance(source, str), "Invalid source type."
-        if is_buffer:
-            params = safe_load(source)
-        else:
-            with open(source) as f:
-                params = safe_load(f)
-        return cls(**params)
-
-    @classmethod
     def default(cls, **kwargs):
-        """Initialise allowing the default parameters to be potentially replaced."""
-        overriden_defaults = copy(cls._defaults)
+        """
+        Initialise, replacing any of the default parameters.
+
+        Copy the defaults in depth: a list among them, such as the
+        picker's sequence, was shared by every instance, and changing
+        one instance's changed the defaults of all that followed.
+        """
+        overriden_defaults = deepcopy(cls._defaults)
         for k, v in kwargs.items():
             overriden_defaults[k] = v
         return cls.from_dict(overriden_defaults)
@@ -116,26 +92,14 @@ class ParametersABC(ABC):
         if len(names_found) == 1:
             keys = names_found.pop()
             if type(flat_params_dict[keys]) is not type(new_value):
-                print("Warning:Changing type is risky.")
+                self.log(f"Changing the type of {name} is risky.")
             flat_params_dict[keys] = new_value
             params_dict = unflatten(flat_params_dict)
             # replace all old values
             for key, value in params_dict.items():
                 setattr(self, key, value)
         else:
-            print(f"Warning:{name} was neither recognised nor updated.")
-
-
-def add_to_collection(
-    collection: t.Collection, element: t.Union[atomic, t.Collection]
-):
-    """Add elements to a collection, a list or set, in place."""
-    if not isinstance(element, t.Collection):
-        element = [element]
-    if isinstance(collection, list):
-        collection += element
-    elif isinstance(collection, set):
-        collection.update(element)
+            self.log(f"{name} was neither recognised nor updated.")
 
 
 class ProcessABC(ABC):

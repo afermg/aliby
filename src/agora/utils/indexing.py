@@ -35,7 +35,8 @@ def validate_lineage(
     how: str
         If "mothers", matches indicate mothers from mother-bud pairs;
         If "daughters", matches indicate daughters from mother-bud pairs;
-        If "families", matches indicate mothers and daughters in mother-bud pairs.
+        If "families", matches indicate mothers and daughters in
+        mother-bud pairs.
 
     Returns
     -------
@@ -56,10 +57,15 @@ def validate_lineage(
     >>> import numpy as np
     >>> from agora.utils.indexing import validate_lineage
 
-    >>> lineage = np.array([ [[0, 1], [0, 3]], [[0, 1], [0, 4]], [[0, 1], [0, 6]], [[0, 4], [0, 7]] ])
+    >>> lineage = np.array(
+    ...     [[[0, 1], [0, 3]], [[0, 1], [0, 4]], [[0, 1], [0, 6]],
+    ...      [[0, 4], [0, 7]]]
+    ... )
     >>> indices = np.array([ [0, 1], [0, 2], [0, 3]])
 
-    >>> valid_lineage, valid_indices, lineage = validate_lineage(lineage, indices)
+    >>> valid_lineage, valid_indices, lineage = validate_lineage(
+    ...     lineage, indices
+    ... )
 
     >>> print(valid_lineage)
      array([ True, False, False, False])
@@ -70,7 +76,9 @@ def validate_lineage(
 
     >>> lineage = np.array([[[0,3], [0,1]], [[0,2], [0,4]]])
     >>> indices = np.array([[0,1], [0,2], [0,3]])
-    >>> valid_lineage, valid_indices, lineage = validate_lineage(lineage, indices)
+    >>> valid_lineage, valid_indices, lineage = validate_lineage(
+    ...     lineage, indices
+    ... )
     >>> print(valid_lineage)
      array([ True, False])
     >>> print(valid_indices)
@@ -167,20 +175,6 @@ def assoc_indices_to_2d(array: np.ndarray):
             (array[:, 0, :], array[:, 1, 1, np.newaxis]), axis=1
         )
     return result
-
-
-def find_1st_greater(arr, limit):
-    """Find the first index where the array is larger than limit."""
-    indices = np.flatnonzero(arr > limit)
-    first_index = indices[0] if len(indices) > 0 else -1
-    return first_index
-
-
-def find_1st_equal(arr, limit):
-    """Find the first index where the array equals the limit."""
-    indices = np.flatnonzero(arr == limit)
-    first_index = indices[0] if len(indices) > 0 else -1
-    return first_index
 
 
 def wrap_int(x):

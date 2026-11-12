@@ -10,6 +10,7 @@ import os
 import re
 import typing as t
 from collections import deque
+from contextlib import ExitStack
 from pathlib import Path
 from pprint import pprint
 from types import SimpleNamespace
@@ -63,6 +64,12 @@ from aliby.version import __version__
 # PipelineParameters.default and Pipeline.setup each want them, one after
 # the other
 logs_cached = set()
+
+
+# the number of time points whose signals are written to the h5 file
+# together; written one time point at a time, 100 signals took 223 ms a
+# time point in PyTables alone
+signals_written_every = 16
 
 
 def cache_logs_once(conn, expt_id, directory: Path):
@@ -727,12 +734,19 @@ class Pipeline(ProcessABC):
         # start pipeline
         frac_clogged_traps = 0.0
         # image here is the connection to OMERO
-        with dispatch_image(image_id)(image_id, **self.server_info) as image:
+        with (
+            dispatch_image(image_id)(image_id, **self.server_info) as image,
+            ExitStack() as at_the_end,
+        ):
             out_file = self.generate_h5file(image.name)
             # instantiate writers
             tiler_writer = TilerWriter(out_file)
             baby_writer = BabyWriter(out_file)
-            extractor_writer = ExtractorWriter(out_file)
+            extractor_writer = ExtractorWriter(
+                out_file, flush_every=signals_written_every
+            )
+            # write the signals still waiting if an error ends the position
+            at_the_end.callback(extractor_writer.flush)
             postprocessor_writer = PostProcessorWriter(out_file)
             # initialise tiler
             tiler = Tiler.from_image(
@@ -837,7 +851,6 @@ class Pipeline(ProcessABC):
                     )
                     # run extraction
                     result = extractor.run_tp(i)
-                    # before writing, which changes the data frames
                     frac_clogged_traps = clogging_check.update(
                         result.get("general/null/area")
                     )
@@ -859,6 +872,8 @@ class Pipeline(ProcessABC):
                         f"{frac_clogged_traps} clogged traps."
                     )
                     break
+            # the post-processor reads the signals from the h5 file
+            extractor_writer.flush()
             # run post-processing
             if no_completed == 0:
                 self.log(f"Position {image.name} failed.", "info")
