@@ -93,8 +93,10 @@ def test_a_tiff_folder_is_tczyx_with_channels_in_sorted_file_order(tmp_path):
         for t in range(3):
             for z in range(2):
                 assert (data[t, c, z] == plane_value(t, channel, z)).all()
-    # with no log there are no channel names, only a size
-    assert "channels" not in image.metadata
+    # with no log the channels are named by the files, sorted by name;
+    # there used to be no names, only a size, and so no Brightfield for
+    # the Tiler to find
+    assert image.metadata["channels"] == sorted(CHANNELS)
     assert image.metadata["size_c"] == 4
     assert image.name == "pos_001"
     assert image.data.chunksize == (1, 1, 1, 6, 9)

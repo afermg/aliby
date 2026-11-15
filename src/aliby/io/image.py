@@ -216,7 +216,8 @@ class ImageDir(BaseLocalImage):
     We assume that the images are shaped Y times X.
     The data is put in the order of TCZYX. The channels follow the
     microscope's log, if there is one, and are those the log gives the
-    position's group, if it gives any. Each channel is read from the
+    position's group, if it gives any; with no log they are those the
+    files name, sorted by name. Each channel is read from the
     files that name it.
     """
 
@@ -234,7 +235,11 @@ class ImageDir(BaseLocalImage):
         self.source = TiffFolderSource(self.path, channels=channels)
         self.meta = log_meta
         if self.meta is None:
-            self.meta = shape_to_meta(self.source.shape)
+            # no log, so the channels are those the files name, sorted
+            self.meta = {
+                **shape_to_meta(self.source.shape),
+                "channels": list(self.source.channels),
+            }
 
     def get_data_lazy(self) -> da.Array:
         """Return 5D dask array."""
