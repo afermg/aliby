@@ -72,6 +72,10 @@ class TilerParameters(ParametersABC):
         "drift_reference": "first",
         # warn when the two registrations disagree by more pixels than this
         "drift_check_px": 3,
+        # drop a detected trap that is not on a line of at least four, which
+        # removes false matches from a crowded field but also real traps
+        # where a line is cut short by the image's edge; False keeps them
+        "grid_filter": True,
     }
 
     def __init__(self, **kwargs):
@@ -296,6 +300,12 @@ class Tiler(StepABC):
             The tile's size, rows first. One number is a square tile.
             Detection finds square traps, so a rectangular size must come
             with its centres, from an aliby h5 or a curator.
+
+        Notes
+        -----
+        The grid_filter parameter is passed to ``tiler.segment_traps``:
+        True, the default, drops a match that is not on a line of at least
+        four, and False keeps every match.
         """
         # kept, because drift is measured from this image
         initial_image = self.get_ref_plane(self.first_processed_tp)
@@ -310,7 +320,11 @@ class Tiler(StepABC):
             # find the tiles, as (row, column), keeping those clear of the
             # edges with a margin for drift
             tile_locs = keep_away_from_edges(
-                segment_traps(initial_image, height),
+                segment_traps(
+                    initial_image,
+                    height,
+                    grid_filter=getattr(self, "grid_filter", True),
+                ),
                 self.image.shape[-2:],
                 tile_size,
             )

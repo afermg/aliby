@@ -34,11 +34,11 @@ def _fake_image(T=3, C=2, Z=1, Y=128, X=128):
     return da.from_array(arr, chunks=(1, 1, -1, -1, -1))
 
 
-def _make_tiler(T=3, C=2, Y=128, X=128, channels=None):
+def _make_tiler(T=3, C=2, Y=128, X=128, channels=None, **parameters):
     if channels is None:
         channels = ["Brightfield", "GFP"]
     image = _fake_image(T=T, C=C, Y=Y, X=X)
-    params = TilerParameters.default()
+    params = TilerParameters.default(**parameters)
     return Tiler(image, {"channels": channels}, params)
 
 
@@ -204,6 +204,19 @@ def test_initialise_tiles_filters_edge_traps():
     ):
         tiler.initialise_tiles(tile_size=64)
     assert tiler.no_tiles == 1
+
+
+def test_initialise_tiles_filters_by_grid_unless_switched_off():
+    # the grid filter drops real traps where a line of them is cut short
+    # by the image's edge, so it can be switched off; on is the default
+    for parameters, expected in [({}, True), ({"grid_filter": False}, False)]:
+        tiler = _make_tiler(Y=256, X=256, **parameters)
+        with patch(
+            "aliby.tile.tiler.segment_traps",
+            return_value=[[128, 128]],
+        ) as segment:
+            tiler.initialise_tiles(tile_size=64)
+        assert segment.call_args.kwargs == {"grid_filter": expected}
 
 
 def test_initialise_tiles_no_size_one_central_tile():
