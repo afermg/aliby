@@ -3889,7 +3889,7 @@ rich = ["rich (>=12)"]
 [[package]]
 name = "sooth"
 version = "0.1.0"
-description = "Shared cell geometry and lineage format for aliby, bairn and the curation GUI."
+description = "Shared cell geometry and lineage format for segmentation and curation."
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
@@ -3911,7 +3911,7 @@ aliby = ["h5py (>=3.10)"]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/sooth.git"
 reference = "HEAD"
-resolved_reference = "1653dfce907ba392d721f04d5a897f142407f795"
+resolved_reference = "2d0b5b606cc5b558e15e438f4c363feddf3e002c"
 
 [[package]]
 name = "sympy"
@@ -4108,7 +4108,7 @@ zarr = ["zarr (>=3)"]
 type = "git"
 url = "https://git.ecdf.ed.ac.uk/swain-lab/aliby/tiler.git"
 reference = "HEAD"
-resolved_reference = "3d1709285b7a454a0805121a0b87eb6fe61d5071"
+resolved_reference = "2d421193d6d1f4606d3aabf1a509979c7f140d93"
 
 [[package]]
 name = "toolz"
